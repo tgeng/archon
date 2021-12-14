@@ -7,15 +7,15 @@ case class ParseError(message: String, targets: Seq[String])
 given Ordering[ParseError] with
   override def compare(x: ParseError, y: ParseError): Int = x.targets.size.compareTo(x.targets.size)
 
-enum ParseResult[M[_] : MonadPlus, T]:
-  case Success[M[_] : MonadPlus, T](result: M[T]) extends ParseResult[M, T]
-  case Failure[M[_] : MonadPlus, T](errors: Seq[ParseError]) extends ParseResult[M, T]
+enum ParseResult[M[+_] : MonadPlus, +T]:
+  case Success[M[+_] : MonadPlus, +T](result: M[T]) extends ParseResult[M, T]
+  case Failure[M[+_] : MonadPlus, +T](errors: Seq[ParseError]) extends ParseResult[M, T]
 
 import ParseResult.*
 
-type ParseResultM[M[_]] = [T] =>> ParseResult[M, T]
+type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
 
-given[M[_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]]): MonadPlus[ParseResultM[M]] with
+given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]]): MonadPlus[ParseResultM[M]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = f match
     case Success(results) => Success(results.map(g))
     case Failure(errors) => Failure(errors)
@@ -42,9 +42,6 @@ given[M[_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]
       case Success(b) => Success(b)
       case Failure(b) => Failure(a ++ b)
 
-trait ParserT[-I, T, M[_] : MonadPlus]:
-  def parse(index: Int)(input: IndexedSeq[I]): (Int, ParseResult[M, T])
-
 given Distributor[List, ParseResultM[List]] with
   override def distribute[T](m: List[ParseResult[List, T]]): ParseResult[List, List[T]] =
     m.partition(r => r.isInstanceOf[Success[?, ?]]) match
@@ -65,6 +62,8 @@ given Distributor[Option, ParseResultM[Option]] with
       case Failure(e) => Failure(e)
     case None => Failure(Seq())
 
+trait ParserT[-I, +T, M[+_] : MonadPlus]:
+  def parse(index: Int)(input: IndexedSeq[I]): (Int, ParseResult[M, T])
 
 //given[I, R[+_]] (using ParserResult[R]): MonadPlus[[T] =>> ParserT[I, T, R]] with
 //  override def pure[S](s: S): ParserT[I, S, R] = new ParserT[I, S, R] :
