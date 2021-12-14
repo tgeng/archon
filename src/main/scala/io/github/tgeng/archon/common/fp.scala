@@ -8,12 +8,13 @@ trait Functor[F[_]]:
 trait Applicative[A[_]] extends Functor[A] :
   def pure[S](s: S): A[S]
 
-  def starApply[T, S](a: A[T], f: A[T => S]): A[S]
+  def starApply[T, S](a: A[T], f: =>A[T => S]): A[S]
 
 trait Monad[M[_]] extends Applicative[M] :
-  def flatMap[T, S](m: M[T], f: T => M[S]): M[S]
+  def flatMap[T, S](m: M[T], f: T => M[S]): M[S] = flatten(map(m, f))
+  def flatten[T](m: M[M[T]]) : M[T] = flatMap(m, t => t)
 
-  override def starApply[T, S](m: M[T], f: M[T => S]): M[S] = flatMap(m, t => map(f, f => f(t)))
+  override def starApply[T, S](m: M[T], f: =>M[T => S]): M[S] = flatMap(m, t => map(f, f => f(t)))
 
 trait Alternative[A[_]] extends Applicative[A] :
   def empty[S]: A[S]
@@ -26,10 +27,13 @@ extension[T, F[_]] (using env: Functor[F])(f: F[T])
   def map[S](g: T => S): F[S] = env.map(f, g)
 
 extension[T, A[_]] (using env: Applicative[A])(a: A[T])
-  infix def <*>[S](f: A[T => S]): A[S] = env.starApply(a, f)
+  infix def <*>[S](f: =>A[T => S]): A[S] = env.starApply(a, f)
 
 extension[T, M[_]] (using env: Monad[M])(m: M[T])
   def flatMap[S](f: T => M[S]): M[S] = env.flatMap(m, f)
+
+extension[T, M[_]] (using env: Monad[M])(m: M[M[T]])
+  def flatten = env.flatten(m)
 
 extension[T, A[_]] (using env: Alternative[A])(a: A[T])
   infix def <|>(b: A[T]): A[T] = env.or(a, b)
@@ -59,3 +63,5 @@ given MonadPlus[Option] with
 
   override def or[T](a: Option[T], p: => Option[T]): Option[T] = a.orElse(p)
 
+trait Distributor[M1[_], M2[_]]:
+  def distribute[T](m: M1[M2[T]]): M2[M1[T]]
