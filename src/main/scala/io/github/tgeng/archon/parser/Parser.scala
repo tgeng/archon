@@ -74,17 +74,16 @@ private type ParserM[-I, M[+_]] = [T] =>> ParserT[I, T, M]
 given[I, M[+_] : MonadPlus] (using env: MonadPlus[ParseResultM[M]]): MonadPlus[ParserM[I, M]] with
   override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] = new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
-      val result = f.doParse(index)
-      env.map(result, (advance, t) => (advance, g(t)))
+      env.map(f.doParse(index), (advance, t) => (advance, g(t)))
 
   override def pure[S](s: S): ParserT[I, S, M] = new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
-      (env.pure(0, s))
+      env.pure(0, s)
 
   override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]): ParserT[I, S, M] = new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
-      val result = m.doParse(index)
-      env.flatMap(result,
+      env.flatMap(
+        m.doParse(index),
         (advance, t) => env.map(f(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
       )
 
