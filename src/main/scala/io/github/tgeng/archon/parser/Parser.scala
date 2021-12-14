@@ -11,9 +11,9 @@ enum ParseResult[M[+_] : MonadPlus, +T]:
   case Success[M[+_] : MonadPlus, +T](result: M[T]) extends ParseResult[M, T]
   case Failure[M[+_] : MonadPlus, +T](errors: Seq[ParseError]) extends ParseResult[M, T]
 
-import ParseResult.*
+import io.github.tgeng.archon.parser.ParseResult.*
 
-type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
+private type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
 
 given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]]): MonadPlus[ParseResultM[M]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = f match
@@ -45,7 +45,7 @@ given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M
 given Distributor[List, ParseResultM[List]] with
   override def distribute[T](m: List[ParseResult[List, T]]): ParseResult[List, List[T]] =
     m.partition(r => r.isInstanceOf[Success[?, ?]]) match
-      case (Nil, Nil) => Failure(Seq())
+      case (Nil, Nil) => throw IllegalStateException("List in this usage should never be empty. Ideally we should use some type that can be statically known to be non-empty")
       case (Nil, l) => Failure(l.flatMap(e => e match
         case Success(_) => throw IllegalStateException()
         case Failure(errors) => errors
@@ -55,23 +55,42 @@ given Distributor[List, ParseResultM[List]] with
         case Failure(_) => throw IllegalStateException()
       ))
 
-given Distributor[Option, ParseResultM[Option]] with
-  override def distribute[T](m: Option[ParseResult[Option, T]]): ParseResult[Option, Option[T]] = m match
-    case Some(r) => r match
-      case Success(r) => Success(Some(r))
-      case Failure(e) => Failure(e)
-    case None => Failure(Seq())
+given Distributor[Id, ParseResultM[Id]] with
+  override def distribute[T](m: Id[ParseResult[Id, T]]): ParseResult[Id, Id[T]] = m
 
 trait ParserT[-I, +T, M[+_] : MonadPlus]:
-  def parse(index: Int)(input: IndexedSeq[I]): (Int, ParseResult[M, T])
+  final def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): ParseResult[M, (Int, T)] =
+    doParse(index)(using input)(using targets)
 
-//given[I, R[+_]] (using ParserResult[R]): MonadPlus[[T] =>> ParserT[I, T, R]] with
-//  override def pure[S](s: S): ParserT[I, S, R] = new ParserT[I, S, R] :
-//    override def parse(input: Seq[I]): (Seq[I], R[S]) = (input, pure(s))
-//
-//  override def empty[S]: ParserT[I, S, R] = ???
-//
-//  extension[T] (p: ParserT[I, T, R])
-//    override def fmap[S](g: T => S): ParserT[I, S, R] = ???
-//    override def bind[S](g: T => ParserT[I, S, R]): ParserT[I, S, R] = ???
-//    override def <|>(q: => ParserT[I, T, R]): ParserT[I, T, R] = ???
+  final def doParse(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+    parseImpl(index)(using input)(using targetName ++: targets)
+
+  protected def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)]
+
+  def targetName: Option[String] = None
+
+private type ParserM[-I, M[+_]] = [T] =>> ParserT[I, T, M]
+
+given[I, M[+_] : MonadPlus] (using env: MonadPlus[ParseResultM[M]]): MonadPlus[ParserM[I, M]] with
+  override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] = new ParserT[I, S, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
+      val result = f.doParse(index)
+      env.map(result, (advance, t) => (advance, g(t)))
+
+  override def pure[S](s: S): ParserT[I, S, M] = new ParserT[I, S, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
+      (env.pure(0, s))
+
+  override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]): ParserT[I, S, M] = new ParserT[I, S, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
+      val result = m.doParse(index)
+      env.flatMap(result,
+        (advance, t) => env.map(f(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
+      )
+
+  override def empty[S]: ParserT[I, S, M] = new ParserT[I, S, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] = env.empty
+
+  override def or[T](a: ParserT[I, T, M], b: => ParserT[I, T, M]): ParserT[I, T, M] = new ParserT[I, T, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+      env.or(a.doParse(index), b.doParse(index))

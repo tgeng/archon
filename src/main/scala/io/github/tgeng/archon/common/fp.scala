@@ -2,6 +2,8 @@ package io.github.tgeng.archon.common
 
 import scala.collection.IterableFactory
 
+type Id[T] = T
+
 trait Functor[F[+_]]:
   def map[T, S](f: F[T], g: T => S): F[S]
 
