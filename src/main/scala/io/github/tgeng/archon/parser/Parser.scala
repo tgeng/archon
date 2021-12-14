@@ -24,8 +24,7 @@ given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M
 
   override def flatMap[T, S](m: ParseResult[M, T], f: T => ParseResult[M, S]): ParseResult[M, S] = m match
       case Success(results) =>
-        val distributed: ParseResult[M, M[S]] = dist.distribute(results.flatMap(t => env.pure(f(t))))
-        distributed match
+        dist.distribute(results.flatMap(t => env.pure(f(t)))) match
           case Success(results) => Success(results.flatten)
           case Failure(errors) => Failure(errors)
       case Failure(errors) => Failure(errors)
@@ -45,7 +44,7 @@ given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M
 given Distributor[List, ParseResultM[List]] with
   override def distribute[T](m: List[ParseResult[List, T]]): ParseResult[List, List[T]] =
     m.partition(r => r.isInstanceOf[Success[?, ?]]) match
-      case (Nil, Nil) => throw IllegalStateException("List in this usage should never be empty. Ideally we should use some type that can be statically known to be non-empty")
+      case (Nil, Nil) => throw IllegalStateException("List in this usage should never be empty.")
       case (Nil, l) => Failure(l.flatMap(e => e match
         case Success(_) => throw IllegalStateException()
         case Failure(errors) => errors
@@ -55,8 +54,12 @@ given Distributor[List, ParseResultM[List]] with
         case Failure(_) => throw IllegalStateException()
       ))
 
-given Distributor[Id, ParseResultM[Id]] with
-  override def distribute[T](m: Id[ParseResult[Id, T]]): ParseResult[Id, Id[T]] = m
+given Distributor[Option, ParseResultM[Option]] with
+  override def distribute[T](m: Option[ParseResult[Option, T]]): ParseResult[Option, Option[T]] = m match
+    case Some(r) => r match
+      case Success(r) => Success(Some(r))
+      case Failure(e) => Failure(e)
+    case None => throw IllegalStateException("Option in this usage should never be empty.")
 
 trait ParserT[-I, +T, M[+_] : MonadPlus]:
   final def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): ParseResult[M, (Int, T)] =
