@@ -38,32 +38,33 @@ extension[T, M[+_]] (using env: Monad[M])(m: M[M[T]])
   def flatten = env.flatten(m)
 
 extension[T, A[+_]] (using env: Alternative[A])(a: A[T])
-  infix def <|>(b: =>A[T]): A[T] = env.or(a, b)
-
-given[CC[+_] <: Iterable[_]] (using factory: IterableFactory[CC]): MonadPlus[CC] with
-  override def map[T, S](a: CC[T], f: T => S): CC[S] = a.map(f.asInstanceOf[Any => Any]).asInstanceOf[CC[S]]
-
-  override def pure[S](s: S): CC[S] = factory.from(Iterable(s))
-
-  override def flatMap[T, S](b: CC[T], f: T => CC[S]): CC[S] = b.flatMap(f.asInstanceOf[Any => IterableOnce[Any]]).asInstanceOf[CC[S]]
-
-  override def empty[S]: CC[S] = factory.empty
-
-  override def or[T](a: CC[T], b: => CC[T]): CC[T] = (a ++ b).asInstanceOf[CC[T]]
-
-given IterableFactory[List] = List
-given IterableFactory[Set] = Set
-
-given MonadPlus[Option] with
-  override def map[T, S](a: Option[T], g: T => S): Option[S] = a.map(g)
-
-  override def pure[T](t: T): Option[T] = Option(t)
-
-  override def flatMap[T, S](a: Option[T], g: T => Option[S]): Option[S] = a.flatMap(g)
-
-  override def empty[S]: Option[S] = Option.empty
-
-  override def or[T](a: Option[T], p: => Option[T]): Option[T] = a.orElse(p)
+  infix def <|>(b: => A[T]): A[T] = env.or(a, b)
 
 trait Distributor[M1[_], M2[_]]:
   def distribute[T](m: M1[M2[T]]): M2[M1[T]]
+
+object ListGivens {
+  given MonadPlusList: MonadPlus[List] with
+    override def map[T, S](a: List[T], g: T => S): List[S] = a.map(g)
+
+    override def pure[T](t: T): List[T] = List(t)
+
+    override def flatMap[T, S](a: List[T], g: T => List[S]): List[S] = a.flatMap(g)
+
+    override def empty[S]: List[S] = List.empty
+
+    override def or[T](a: List[T], p: => List[T]): List[T] = a ++ p
+}
+
+object OptionGivens {
+  given MonadPlusOption: MonadPlus[Option] with
+    override def map[T, S](a: Option[T], g: T => S): Option[S] = a.map(g)
+
+    override def pure[T](t: T): Option[T] = Option(t)
+
+    override def flatMap[T, S](a: Option[T], g: T => Option[S]): Option[S] = a.flatMap(g)
+
+    override def empty[S]: Option[S] = Option.empty
+
+    override def or[T](a: Option[T], p: => Option[T]): Option[T] = a.orElse(p)
+}

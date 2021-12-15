@@ -1,6 +1,8 @@
 package io.github.tgeng.archon.parser
 
-import io.github.tgeng.archon.common.{*, given}
+import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.common.ListGivens.given
+import io.github.tgeng.archon.common.OptionGivens.given
 
 case class ParseError(index: Int, message: String, targets: Seq[String])
 
@@ -108,6 +110,18 @@ extension[I, T, M[+_]: MonadPlus] (using env: MonadPlus[ParserM[I, M]])(e: P.typ
 //  def satisfy(predicate: I => Boolean)
 
   inline def apply(inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null = null) = createNamedParser(parser, name)
+
+extension[I, T] (p: Parser[I, T])
+  def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], (Int, T)] =
+    p.doParse(index)(using input)(using targets) match
+      case Success(result) => Right(result.get)
+      case Failure(errors) => Left(errors)
+
+extension[I, T] (p: MultiParser[I, T])
+  def multiParse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], List[(Int, T)]] =
+    p.doParse(index)(using input)(using targets) match
+      case Success(results) => Right(results)
+      case Failure(errors) => Left(errors)
 
 private inline def createNamedParser[I, T, M[+_]: MonadPlus](inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null)(using env: MonadPlus[ParserM[I, M]]) =
   val nameToUse = if (name == null) enclosingName(parser) else name
