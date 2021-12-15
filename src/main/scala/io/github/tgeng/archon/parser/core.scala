@@ -68,8 +68,6 @@ package multi:
           case Failure(_) => throw IllegalStateException()
         ))
 
-  given (using env: MonadPlus[List])(using dist: Distributor[List, ParseResultM[List]]): MonadPlus[ParseResultM[List]] = ParseResultMonadPlus
-
 package single:
   given OptionParseResultDistributor: Distributor[Option, ParseResultM[Option]] with
     override def distribute[T](m: Option[ParseResult[Option, T]]): ParseResult[Option, Option[T]] = m match
@@ -77,8 +75,6 @@ package single:
         case Success(r) => Success(Some(r))
         case Failure(e) => Failure(e)
       case None => throw IllegalStateException("Option in this usage should never be empty.")
-
-  given (using env: MonadPlus[Option])(using dist: Distributor[Option, ParseResultM[Option]]): MonadPlus[ParseResultM[Option]] = ParseResultMonadPlus
 
 given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]]): MonadPlus[ParserM[I, M]] with
   override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] = new ParserT[I, S, M] :
@@ -103,7 +99,7 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]]): Monad
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       env.or(a.doParse(index), b.doParse(index))
 
-private given ParseResultMonadPlus [M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]]): MonadPlus[ParseResultM[M]] with
+given ParseResultMonadPlus [M[+_]] (using dist: Distributor[M, ParseResultM[M]])(using env: MonadPlus[M]): MonadPlus[ParseResultM[M]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = f match
     case Success(results) => Success(results.map(g))
     case Failure(errors) => Failure(errors)
