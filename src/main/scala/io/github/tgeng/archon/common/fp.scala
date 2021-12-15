@@ -38,7 +38,7 @@ extension[T, M[+_]] (using env: Monad[M])(m: M[M[T]])
   def flatten = env.flatten(m)
 
 extension[T, A[+_]] (using env: Alternative[A])(a: A[T])
-  infix def <|>(b: A[T]): A[T] = env.or(a, b)
+  infix def <|>(b: =>A[T]): A[T] = env.or(a, b)
 
 given[CC[+_] <: Iterable[_]] (using factory: IterableFactory[CC]): MonadPlus[CC] with
   override def map[T, S](a: CC[T], f: T => S): CC[S] = a.map(f.asInstanceOf[Any => Any]).asInstanceOf[CC[S]]

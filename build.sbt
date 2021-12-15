@@ -7,5 +7,9 @@ lazy val root = (project in file("."))
     name := "archon",
     scalacOptions += "-Yexplicit-nulls",
     scalacOptions += "-Ykind-projector",
-    scalacOptions += "-language:postfixOps"
+    scalacOptions += "-language:postfixOps",
+
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % "3.2.10" % "test",
+    ),
   )

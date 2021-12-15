@@ -2,20 +2,27 @@ package io.github.tgeng.archon.parser
 
 import io.github.tgeng.archon.common.{*, given}
 
-case class ParseError(message: String, targets: Seq[String])
-
-given Ordering[ParseError] with
-  override def compare(x: ParseError, y: ParseError): Int = x.targets.size.compareTo(x.targets.size)
+case class ParseError(index: Int, message: String, targets: Seq[String])
 
 enum ParseResult[M[+_] : MonadPlus, +T]:
   case Success[M[+_] : MonadPlus, +T](result: M[T]) extends ParseResult[M, T]
   case Failure[M[+_] : MonadPlus, +T](errors: Seq[ParseError]) extends ParseResult[M, T]
 
+type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
+
 import io.github.tgeng.archon.parser.ParseResult.*
 
-private type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
+trait ParserT[-I, +T, M[+_] : MonadPlus]:
+  final def doParse(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+    parseImpl(index)(using input)(using targetName ++: targets)
 
-given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]]): MonadPlus[ParseResultM[M]] with
+  def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)]
+
+  def targetName: Option[String] = None
+
+type ParserM[-I, M[+_]] = [T] =>> ParserT[I, T, M]
+
+given ParseResultMonadPlus [M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M]]): MonadPlus[ParseResultM[M]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = f match
     case Success(results) => Success(results.map(g))
     case Failure(errors) => Failure(errors)
@@ -39,9 +46,12 @@ given[M[+_]] (using env: MonadPlus[M])(using dist: Distributor[M, ParseResultM[M
       Success(result)
     case Failure(a) => b match
       case Success(b) => Success(b)
-      case Failure(b) => Failure(a ++ b)
+      case Failure(b) =>
+        val allErrors = a ++ b
+        val maxTargetLength = allErrors.map(_.targets.size).maxOption.getOrElse(0)
+        Failure(allErrors.filter(_.targets.size == maxTargetLength))
 
-given Distributor[List, ParseResultM[List]] with
+given ListParseResultDistributor: Distributor[List, ParseResultM[List]] with
   override def distribute[T](m: List[ParseResult[List, T]]): ParseResult[List, List[T]] =
     m.partition(r => r.isInstanceOf[Success[?, ?]]) match
       case (Nil, Nil) => throw IllegalStateException("List in this usage should never be empty.")
@@ -54,27 +64,14 @@ given Distributor[List, ParseResultM[List]] with
         case Failure(_) => throw IllegalStateException()
       ))
 
-given Distributor[Option, ParseResultM[Option]] with
+given OptionParseResultDistributor: Distributor[Option, ParseResultM[Option]] with
   override def distribute[T](m: Option[ParseResult[Option, T]]): ParseResult[Option, Option[T]] = m match
     case Some(r) => r match
       case Success(r) => Success(Some(r))
       case Failure(e) => Failure(e)
     case None => throw IllegalStateException("Option in this usage should never be empty.")
 
-trait ParserT[-I, +T, M[+_] : MonadPlus]:
-  final def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): ParseResult[M, (Int, T)] =
-    doParse(index)(using input)(using targets)
-
-  final def doParse(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
-    parseImpl(index)(using input)(using targetName ++: targets)
-
-  protected def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)]
-
-  def targetName: Option[String] = None
-
-private type ParserM[-I, M[+_]] = [T] =>> ParserT[I, T, M]
-
-given[I, M[+_] : MonadPlus] (using env: MonadPlus[ParseResultM[M]]): MonadPlus[ParserM[I, M]] with
+given ParserTMonadPlus [I, M[+_] : MonadPlus] (using env: MonadPlus[ParseResultM[M]]): MonadPlus[ParserM[I, M]] with
   override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] = new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
       env.map(f.doParse(index), (advance, t) => (advance, g(t)))
@@ -96,3 +93,35 @@ given[I, M[+_] : MonadPlus] (using env: MonadPlus[ParseResultM[M]]): MonadPlus[P
   override def or[T](a: ParserT[I, T, M], b: => ParserT[I, T, M]): ParserT[I, T, M] = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       env.or(a.doParse(index), b.doParse(index))
+
+object P
+
+type Parser[-I, +T] = ParserT[I, T, Option]
+type MultiParser[-I, +T] = ParserT[I, T, List]
+
+extension[I, T, M[+_]: MonadPlus] (using env: MonadPlus[ParserM[I, M]])(e: P.type)
+  def pure(t: T) = env.pure(t)
+  def fail(message: String) = new ParserT[I, T, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+      Failure(Seq(ParseError(index, message, targets)))
+
+//  def satisfy(predicate: I => Boolean)
+
+  inline def apply(inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null = null) = createNamedParser(parser, name)
+
+private inline def createNamedParser[I, T, M[+_]: MonadPlus](inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null)(using env: MonadPlus[ParserM[I, M]]) =
+  val nameToUse = if (name == null) enclosingName(parser) else name
+  new ParserT[I, T, M]:
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] = parser.parseImpl(index)
+    override def targetName: Option[String] = Some(nameToUse)
+
+private inline def enclosingName(inline e: Any): String = ${
+enclosingNameImpl('e)
+}
+
+import scala.quoted.*
+
+private def enclosingNameImpl(e: Expr[Any])(using Quotes) : Expr[String] = {
+  import quotes.reflect.*
+  Expr(Symbol.spliceOwner.owner.owner.name)
+}
