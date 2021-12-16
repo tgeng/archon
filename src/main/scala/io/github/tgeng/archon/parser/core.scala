@@ -27,15 +27,14 @@ object P
 type Parser[-I, +T] = ParserT[I, T, Option]
 type MultiParser[-I, +T] = ParserT[I, T, List]
 
-extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(e: P.type)
+extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
   inline def apply(inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null = null) = createNamedParser(parser, name)
-  def pure(t: T) = pm.pure(t)
+  def pure(t: T) : ParserT[I, T, M] = pm.pure(t)
   def fail(description: String) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       Failure(Seq(ParseError(index, description, targets)))
 
-extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
-  def satisfy(description: String)(action: IndexedSeq[I] => Option[(Int, T)]) = new ParserT[I, T, M] :
+  def satisfy(description: String, action: IndexedSeq[I] => Option[(Int, T)]) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       action(input.slice(index, input.length)) match
         case Some((advance, t)) => Success(mm.pure((advance, t)))
