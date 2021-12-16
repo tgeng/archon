@@ -27,19 +27,19 @@ object P
 type Parser[-I, +T] = ParserT[I, T, Option]
 type MultiParser[-I, +T] = ParserT[I, T, List]
 
-extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
+extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(e: P.type)
+  inline def apply(inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null = null) = createNamedParser(parser, name)
   def pure(t: T) = pm.pure(t)
   def fail(description: String) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       Failure(Seq(ParseError(index, description, targets)))
 
+extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
   def satisfy(description: String)(action: IndexedSeq[I] => Option[(Int, T)]) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       action(input.slice(index, input.length)) match
         case Some((advance, t)) => Success(mm.pure((advance, t)))
         case None => Failure(Seq(ParseError(index, description, targets)))
-
-  inline def apply(inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null = null) = createNamedParser(parser, name)
 
 extension[I, T] (p: Parser[I, T])
   def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], (Int, T)] =
@@ -132,14 +132,3 @@ private inline def createNamedParser[I, T, M[+_]](inline parser: MonadPlus[Parse
   new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] = parser.parseImpl(index)
     override def targetName: Option[String] = Some(nameToUse)
-
-private inline def enclosingName(inline e: Any): String = ${
-enclosingNameImpl('e)
-}
-
-import scala.quoted.*
-
-private def enclosingNameImpl(e: Expr[Any])(using Quotes) : Expr[String] = {
-  import quotes.reflect.*
-  Expr(Symbol.spliceOwner.owner.owner.name)
-}

@@ -7,8 +7,14 @@ import org.scalatest.freespec.AnyFreeSpec
 
 class ParserTest extends AnyFreeSpec {
   "name" in {
-    val foobar = P(P.pure("a"))
+    val foobar = P(
+      for
+        a <- P.pure("a")
+        if a == "b"
+      yield
+        "x"
+    )
     assert(foobar.targetName == Some("foobar"))
-    foobar.parse("")
+    println(foobar.parse("").toString())
   }
 }
