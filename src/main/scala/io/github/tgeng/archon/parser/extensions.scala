@@ -81,6 +81,8 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
     yield
       runtime.Tuples.fromArray(xs.toArray.asInstanceOf[Array[Object]]).asInstanceOf[ExtractT[I, Ps, M]]
 
+given [I, Ps <: Tuple, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M]): Conversion[Ps, ParserT[I, ExtractT[I, Ps, M], M]] = P.lift(_)
+
 /**
  * Example:
  * (ParserT[I, A, M], ParserT[I, B, M]) -> (A, B)

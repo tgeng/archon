@@ -9,11 +9,11 @@ class ParserTest extends AnyFreeSpec {
   "name" in {
     val foobar: Parser[Any, String] = P(
       for
-        (a, b) <- P.lift((P.pure("a"), P.pure("b")))
+        (a, b) <- (P.pure("aa"), P.pure("bb"))
       yield
         a + b
     )
     assert(foobar.targetName == Some("foobar"))
-    println(foobar.parse("ab").toString())
+    println(foobar.parse("").toString())
   }
 }
