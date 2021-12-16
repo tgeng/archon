@@ -100,15 +100,15 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]]): Monad
 
 given ParseResultMonadPlus [M[+_]] (using dist: Distributor[M, ParseResultM[M]])(using env: MonadPlus[M]): MonadPlus[ParseResultM[M]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = f match
-    case Success(results) => Success(results.map(g))
+    case Success(results) => Success(env.map(results, g))
     case Failure(errors) => Failure(errors)
 
   override def pure[T](t: T): ParseResult[M, T] = Success(env.pure(t))
 
   override def flatMap[T, S](m: ParseResult[M, T], f: T => ParseResult[M, S]): ParseResult[M, S] = m match
     case Success(results) =>
-      dist.distribute(results.flatMap(t => env.pure(f(t)))) match
-        case Success(results) => Success(results.flatten)
+      dist.distribute(env.flatMap(results, t => env.pure(f(t)))) match
+        case Success(results) => Success(env.flatten(results))
         case Failure(errors) => Failure(errors)
     case Failure(errors) => Failure(errors)
 
@@ -116,7 +116,7 @@ given ParseResultMonadPlus [M[+_]] (using dist: Distributor[M, ParseResultM[M]])
 
   override def or[T](a: ParseResult[M, T], b: => ParseResult[M, T]): ParseResult[M, T] = a match
     case Success(a) =>
-      val result = a <|> (b match
+      val result = env.or(a, b match
         case Success(b) => b
         case Failure(_) => env.empty)
       Success(result)

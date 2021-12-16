@@ -25,21 +25,6 @@ trait Alternative[A[+_]] extends Applicative[A] :
 
 trait MonadPlus[M[+_]] extends Monad[M] with Alternative[M]
 
-extension[T, F[+_]] (using env: Functor[F])(f: F[T])
-  def map[S](g: T => S): F[S] = env.map(f, g)
-
-extension[T, A[+_]] (using env: Applicative[A])(a: A[T])
-  infix def <*>[S](f: =>A[T => S]): A[S] = env.starApply(a, f)
-
-extension[T, M[+_]] (using env: Monad[M])(m: M[T])
-  def flatMap[S](f: T => M[S]): M[S] = env.flatMap(m, f)
-
-extension[T, M[+_]] (using env: Monad[M])(m: M[M[T]])
-  def flatten = env.flatten(m)
-
-extension[T, A[+_]] (using env: Alternative[A])(a: A[T])
-  infix def <|>(b: => A[T]): A[T] = env.or(a, b)
-
 trait Distributor[M1[_], M2[_]]:
   def distribute[T](m: M1[M2[T]]): M2[M1[T]]
 
