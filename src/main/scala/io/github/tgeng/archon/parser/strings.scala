@@ -17,6 +17,31 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
   def whitespace = P.anyOf(" \n\t\r") as ()
   def whitespaces = P.whitespace.*
 
+  def digit = P.satisfySingle("digit", Character.isDigit)
+  def alphabetic = P.satisfySingle("alphabetic", Character.isAlphabetic)
+  def upper = P.satisfySingle("upper", Character.isUpperCase)
+  def lower = P.satisfySingle("upper", Character.isLowerCase)
+  def alphanum = P.digit | P.alphabetic
+
+  def quoted(quoteSymbol: Char = '"',
+              escapeSymbol: Char = '\\',
+              additionalEscapeMapping: Map[Char, Char] = Map(
+                'n' -> '\n',
+                'r' -> '\r',
+                't' -> '\t',
+                'b' -> '\b',
+                'f' -> '\f',
+              )
+            ) =
+    val allEscapeMapping = additionalEscapeMapping + (quoteSymbol -> quoteSymbol) + (escapeSymbol -> escapeSymbol)
+    val needEscaping = allEscapeMapping.values.toSet
+    val literal = P.satisfySingle(s"none of $needEscaping", !needEscaping(_))
+    val special = escapeSymbol >> P.satisfySingle(s"one of ${allEscapeMapping.keySet}", allEscapeMapping.keySet).map(allEscapeMapping)
+
+    quoteSymbol >> (literal | special).*.map(_.mkString("")) << quoteSymbol
+
+  def from(c: Char) : ParserT[Char, Char, M] = P.satisfySingle(s"'$c'", _ == c)
+
   def from(s: String) : ParserT[Char, String, M] = P.satisfy(
     s"'$s'",
     input => if (input.startsWith(s)) Some(s.length, s) else None
@@ -30,5 +55,6 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
   )
 
 
+given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Char, ParserT[Char, Char, M]] = P.from(_)
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[String, ParserT[Char, String, M]] = P.from(_)
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)

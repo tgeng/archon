@@ -66,12 +66,14 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
     current => if current.isEmpty then Some(0, ()) else None
   )
 
+  def satisfySingle(description: String, predicate: I => Boolean) = P.satisfy(
+    description,
+    current => if current.isEmpty || !predicate(current(0)) then None else Some((1, current(0)))
+  )
+
   def anyOf(collection: IterableOnce[I]) =
     val set = Set.from(collection)
-    P.satisfy(
-    s"any of $set",
-    current => if current.isEmpty || !set.contains(current(0)) then None else Some(1, current(0))
-  )
+    P.satisfySingle(s"any of $set", i => set.contains(i))
 
   def lift[T](ps: List[ParserT[I, T, M]]) : ParserT[I, List[T], M] =
     ps match
