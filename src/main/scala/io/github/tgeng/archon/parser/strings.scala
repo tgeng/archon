@@ -70,4 +70,4 @@ extension (failure: ParseResult.Failure[?, ?])
         sb.append(s"when parsing ${targets.mkString("/")}:\n")
         sb.append(s"$lineAndColumn ${lines(line)}\n")
         sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).mkString(" | ")}\n")
-    sb.toString
+    sb.toString.trim.!!

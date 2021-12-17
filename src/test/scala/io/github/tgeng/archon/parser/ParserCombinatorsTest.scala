@@ -14,7 +14,7 @@ import scala.util.Using
 class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   def doubleQuoted = P(P.quoted())
 
-class ParserTest extends AnyFreeSpec {
+class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
     import io.github.tgeng.archon.parser.single.given
     testParsers(false)
@@ -50,23 +50,23 @@ class ParserTest extends AnyFreeSpec {
       source.mkString.replace(System.lineSeparator(), "\n").!!
     }
     val actualParts = ArrayBuffer[String]()
-    for testCase <- testDataString.split("\n====\n").asInstanceOf[Array[String]]
+    for testCase <- testDataString.split("\n\n").asInstanceOf[Array[String]]
       do
         val actualPart = StringBuilder()
         val parts = testCase.split("\n----\n").asInstanceOf[Array[String]]
-        if parts.size < 2 then fail(s"incomplete test case in $testDataFile")
+        if parts.size < 1 then fail(s"incomplete test case in $testDataFile")
         val input = parts.head
         actualPart.append(input)
         actualPart.append("\n----\n")
         p.doParse(0)(using input)(using Nil) match
           case ParseResult.Success(results) => results match
             case Some((advance, t)) =>
-              actualPart.append(s"$advance\n$t")
+              actualPart.append(s"$advance | $t")
             case l: List[(Int, Any)] =>
-              actualPart.append(l.map((advance, t) => s"$advance\n$t").mkString("\n----\n"))
+              actualPart.append(l.map((advance, t) => s"$advance | $t").mkString("\n----\n"))
             case _ => fail("impossible")
           case f: ParseResult.Failure[?, ?] =>
             actualPart.append(f.mkString(input))
         actualParts.append(actualPart.toString)
-    (testDataString, actualParts.mkString("\n====\n"))
+    (testDataString, actualParts.mkString("\n\n"))
 }

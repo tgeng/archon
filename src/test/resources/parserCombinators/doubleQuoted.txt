@@ -3,3 +3,24 @@ abc
 when parsing doubleQuoted:
 [1:1] abc
       ^ expect '"'
+
+"a"
+----
+3 | a
+
+"a\nb"
+----
+6 | a
+b
+
+'foo'
+----
+when parsing doubleQuoted:
+[1:1] 'foo'
+      ^ expect '"'
+
+"foo'
+----
+when parsing doubleQuoted:
+[1:6] "foo'
+           ^ expect '"'

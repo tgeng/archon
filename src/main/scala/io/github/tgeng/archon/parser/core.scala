@@ -57,10 +57,10 @@ package multi:
     override def distribute[T](m: List[ParseResult[List, T]]): ParseResult[List, List[T]] =
       m.partition(r => r.isInstanceOf[Success[?, ?]]) match
         case (Nil, Nil) => throw IllegalStateException("List in this usage should never be empty.")
-        case (Nil, l) => Failure(l.flatMap(e => e match
+        case (Nil, l) => Failure(trimErrors(l.flatMap(e => e match
           case Success(_) => throw IllegalStateException()
           case Failure(errors) => errors
-        ))
+        )))
         case (l, _) => Success(l.map(r => r match
           case Success(results) => results
           case Failure(_) => throw IllegalStateException()
@@ -123,11 +123,14 @@ given ParseResultMonadPlus [M[+_]] (using dist: Distributor[M, ParseResultM[M]])
       case Success(b) => Success(b)
       case Failure(b) =>
         val allErrors = a ++ b
-        val maxTargetLength = allErrors.map(_.targets.size).maxOption.getOrElse(0)
-        Failure(allErrors.filter(_.targets.size == maxTargetLength))
+        Failure(trimErrors(allErrors))
 
 private inline def createNamedParser[I, T, M[+_]](inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null)(using env: MonadPlus[ParserM[I, M]]) =
   val nameToUse = if (name == null) enclosingName(parser) else name
   new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] = parser.parseImpl(index)
     override def targetName: Option[String] = Some(nameToUse)
+
+private def trimErrors(errors: Seq[ParseError]) : Seq[ParseError] =
+  val maxTargetProgress = errors.map(e => (e.index, e.targets.size)).maxOption.getOrElse((0, 0))
+  errors.filter(e => (e.index, e.targets.size) == maxTargetProgress)
