@@ -53,6 +53,8 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
 
   infix def sepBy[S](delimiter: ParserT[I, S, M]) = (p sepBy1 delimiter) | P.pure(Nil)
 
+  infix def as[S](s: S) = p.map(_ => s)
+
 extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
   def any: ParserT[I, I, M] = P.satisfy(
     "any",
@@ -62,6 +64,13 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
   def eos: ParserT[I, Unit, M] = P.satisfy(
     "eos",
     current => if current.isEmpty then Some(0, ()) else None
+  )
+
+  def anyOf(collection: IterableOnce[I]) =
+    val set = Set.from(collection)
+    P.satisfy(
+    s"any of $set",
+    current => if current.isEmpty || !set.contains(current(0)) then None else Some(1, current(0))
   )
 
   def lift[T](ps: List[ParserT[I, T, M]]) : ParserT[I, List[T], M] =
