@@ -1,6 +1,6 @@
 package io.github.tgeng.archon.parser
 
-import io.github.tgeng.archon.common.MonadPlus
+import io.github.tgeng.archon.common.*
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 
@@ -58,3 +58,16 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Char, ParserT[Char, Char, M]] = P.from(_)
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[String, ParserT[Char, String, M]] = P.from(_)
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)
+
+extension (failure: ParseResult.Failure[?, ?])
+  def mkString(input: String) : String =
+    val lines = input.linesIterator.toIndexedSeq
+    val sb = StringBuilder()
+    for ((targets, index), es) <- failure.errors.groupBy(e => (e.targets, e.index))
+      do
+        val (line, column) = indexToLineColumn(input, index)
+        val lineAndColumn = s"[${line + 1}:${column + 1}]"
+        sb.append(s"when parsing ${targets.mkString("/")}:\n")
+        sb.append(s"$lineAndColumn ${lines(line)}\n")
+        sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).mkString(" | ")}\n")
+    sb.toString
