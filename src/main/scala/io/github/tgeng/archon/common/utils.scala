@@ -14,3 +14,10 @@ def indexToLineColumn(input: IndexedSeq[Char], index: Int): (Int, Int) =
     if (input(i) == '\n' || input(i) == '\r') column = 0
   }
   (line, column)
+
+extension[T <: AutoCloseable] (t: T)
+  def use[S](block:T => S) : S =
+    try
+      block(t)
+    finally
+      t.close()

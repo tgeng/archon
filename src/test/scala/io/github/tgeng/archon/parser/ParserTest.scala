@@ -8,17 +8,18 @@ import java.net.URL
 import java.io.File
 import scala.annotation.nowarn
 import scala.io.Source
+import scala.util.Using
 
 class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   def doubleQuoted = P(P.quoted())
 
 class ParserTest extends AnyFreeSpec {
-  "single" in {
+  "single" - {
     import io.github.tgeng.archon.parser.single.given
     testParsers()
   }
 
-  "multi" in {
+  "multi" - {
     import io.github.tgeng.archon.parser.multi.given
     testParsers()
   }
@@ -30,13 +31,17 @@ class ParserTest extends AnyFreeSpec {
     for parser <- parsers
       do
         val parserName = parser.targetName.get
-        val testDataUrl = getClass.getResource(s"/parserCombinators/$parserName.txt")
-        if (testDataUrl == null) fail(s"no test data for $parserName")
-        testParser(parser, testDataUrl)
+        parserName in {
+          val testDataUrl = getClass.getResource(s"/parserCombinators/$parserName.txt")
+          if (testDataUrl == null) fail(s"no test data for $parserName")
+          testParser(parser, testDataUrl)
+        }
 
   @nowarn
-  private def testParser[M[+_]](p: ParserT[Char, Any, M], testData: URL) =
-    val testDataString = Source.fromURL(testData).mkString
+  private def testParser[M[+_]](p: ParserT[Char, Any, M], testData: URL) : Unit =
+    val testDataString = Source.fromURL(testData).use { source =>
+      source.mkString.replace(System.lineSeparator(), "\n").!!
+    }
     for testCase <- testDataString.split("\n====").asInstanceOf[Array[String]]
       do
         val parts = testCase.split("\n----").asInstanceOf[Array[String]]
@@ -48,6 +53,6 @@ class ParserTest extends AnyFreeSpec {
             case Some((advance, t)) => assert(s"$advance\n$t" == outputs.head)
             case l: List[(Int, Any)] => assert(l.map((advance, t) => s"$advance\n$t") == outputs)
             case _ => fail("impossible")
-          case f: ParseResult.Failure[?, ?] => assert(f.mkString(input) == outputs.head)
-
+          case f: ParseResult.Failure[?, ?] =>
+            assert(f.mkString(input) == outputs.head)
 }
