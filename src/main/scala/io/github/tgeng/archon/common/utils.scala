@@ -1,5 +1,7 @@
 package io.github.tgeng.archon.common
 
+import java.io.{BufferedWriter, File, FileWriter}
+
 extension[T] (t: T | Null)
   def !! : T =
     assert(t != null)
@@ -21,3 +23,7 @@ extension[T <: AutoCloseable] (t: T)
       block(t)
     finally
       t.close()
+
+extension (f: File)
+  infix def / (subPath: String) = new File(f, subPath)
+  def write(text: String) = new BufferedWriter(FileWriter(f)).use { writer => writer.write(text) }
