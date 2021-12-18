@@ -46,6 +46,7 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
       } << P.spaces
   }
   def expressionEos = P(expression << P.eos)
+  def ambiguous = P("ab" | "a" << "b" | "a" >> "b" | "a" << "X")
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {

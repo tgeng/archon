@@ -1,0 +1,13 @@
+ab
+----
+2 | ab
+----
+2 | a
+----
+2 | b
+
+ac
+----
+when parsing ambiguous:
+[1:2] ac
+       ^ expect 'b' | 'X'
