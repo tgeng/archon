@@ -167,5 +167,5 @@ private inline def createNamedParser[I, T, M[+_]](inline parser: MonadPlus[Parse
     override def targetName: Option[String] = Some(nameToUse)
 
 private def trimErrors(errors: Seq[ParseError]) : Seq[ParseError] =
-  val maxTargetProgress = errors.map(e => (e.index, e.targets.size)).maxOption.getOrElse((0, 0))
-  errors.filter(e => (e.index, e.targets.size) == maxTargetProgress)
+  val maxTargetProgress = errors.map(e => (e.targets.size, e.index)).maxOption.getOrElse((0, 0))
+  errors.filter(e => (e.targets.size, e.index) == maxTargetProgress)

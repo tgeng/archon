@@ -22,20 +22,24 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   )
   def integer = P(P.integer)
   def decimal = P(P.decimal)
-  def expression : ParserT[Char, Any, M] = P {
-    def atom = P(decimal | "(" >> expression << ")")
-
-    def factor = P(atom sepBy P.anyOf("*/"))
-
-    (factor sepBy P.anyOf("+-")) << P.eos
-  }
-
   def simpleCommitCase = P("a" << !"b" | "a")
   def commitHasLimitedEffects = P {
     def b = P(!"b")
     "a" << b | "a"
   }
+  def expression : ParserT[Char, String, M] = P {
+    def atom = P(decimal.map(_.toString) | "(" >> expression << ")")
 
+    def factor = P(atom chainedLeftBy
+      P.spaces >> P.anyOf("*/").map {
+        op => (a: String, b: String) => s"($a $op $b)"
+      } << P.spaces)
+    factor chainedLeftBy
+      P.spaces >> P.anyOf("+-").map {
+        op => (a: String, b: String) => s"($a $op $b)"
+      } << P.spaces
+  }
+  def expressionEos = P(expression << P.eos)
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
@@ -99,7 +103,7 @@ class ParserCombinatorsTest extends AnyFreeSpec {
             case _ => fail("impossible")
           case f: ParseResult.Failure[?, ?] =>
             actualPart.append(f.mkString(input))
-            expectedPart.append(outputs(0))
+            expectedPart.append(outputs.lift(0).getOrElse(""))
         expectedParts.append(expectedPart.toString)
         actualParts.append(actualPart.toString)
     (expectedParts.mkString("\n\n"), actualParts.mkString("\n\n"))

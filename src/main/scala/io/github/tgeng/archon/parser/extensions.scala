@@ -55,7 +55,12 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
 
   infix def as[S](s: S) = p.map(_ => s)
 
+  infix def chainedLeftBy(op: ParserT[I, (T, T) => T, M]) : ParserT[I, T, M] = P.foldLeft(p, op, p)
+  infix def chainedRightBy(op: ParserT[I, (T, T) => T, M]) : ParserT[I, T, M] = P.foldRight(p, op, p)
+
 extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
+  def nothing: ParserT[I, Unit, M] = P.satisfy("<nothing>", _ => Some(0, ()))
+
   def any: ParserT[I, I, M] = P.satisfy(
     "<any>",
     current => if current.isEmpty then None else Some(1, current(0))
@@ -74,6 +79,26 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
   def anyOf(collection: IterableOnce[I]) =
     val set = Set.from(collection)
     P.satisfySingle(s"<any of $set>", i => set.contains(i))
+
+  def foldLeft[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
+    for
+      acc <- acc
+      opElems <- (op, elem)*
+    yield
+      opElems.foldLeft(acc) { (acc, opElem) =>
+        val (op, elem) = opElem
+        op(acc, elem)
+      }
+
+  def foldRight[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
+    for
+      opElems <- (elem, op).*
+      acc <- acc
+    yield
+      opElems.foldRight(acc) { (elemOp, acc) =>
+        val (elem, op) = elemOp
+        op(elem, acc)
+      }
 
   def lift[T](ps: List[ParserT[I, T, M]]) : ParserT[I, List[T], M] =
     ps match
