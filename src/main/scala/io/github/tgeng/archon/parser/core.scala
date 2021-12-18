@@ -1,11 +1,12 @@
 package io.github.tgeng.archon.parser
 
 import io.github.tgeng.archon.common.{*, given}
+import scala.math.min
 
 case class ParseError(index: Int, description: String, targets: Seq[String])
 
 enum ParseResult[M[+_], +T]:
-  case Success[M[+_], +T](result: M[T]) extends ParseResult[M, T]
+  case Success[M[+_], +T](result: M[T], commitLevel: Int = Int.MaxValue) extends ParseResult[M, T]
 
   /**
    * [[commitLevel]] means at which level backtracking should be disabled. Levels correspond to
@@ -13,7 +14,7 @@ enum ParseResult[M[+_], +T]:
    * than upper levels because a lower level means back tracking is disabled closer to the root of
    * the parser hierarchy.
    */
-  case Failure[M[+_], +T](errors: Seq[ParseError], commitLevel: Int) extends ParseResult[M, T]
+  case Failure[M[+_], +T](errors: Seq[ParseError], commitLevel: Int = Int.MaxValue) extends ParseResult[M, T]
 
 type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
 
@@ -39,39 +40,44 @@ extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M
   def pure(t: T) : ParserT[I, T, M] = pm.pure(t)
   def fail(description: String) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
-      Failure(Seq(ParseError(index, description, targets)), Int.MaxValue)
+      Failure(Seq(ParseError(index, description, targets)))
 
   def satisfy(description: String, action: IndexedSeq[I] => Option[(Int, T)]) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       action(input.slice(index, input.length)) match
         case Some((advance, t)) => Success(mm.pure((advance, t)))
-        case None => Failure(Seq(ParseError(index, description, targets)), Int.MaxValue)
+        case None => Failure(Seq(ParseError(index, description, targets)))
 
 extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
   infix def withDescription(description: String) = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       p.parseImpl(index) match
-        case Success(results) => Success(results)
-        case Failure(_, _) => Failure(Seq(ParseError(index, description, targets)), Int.MaxValue)
+        case Success(results, commitLevel) => Success(results, commitLevel)
+        case Failure(_, commitLevel) => Failure(Seq(ParseError(index, description, targets)), commitLevel)
 
   def unary_! = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       p.parseImpl(index) match
-        case Success(results) => Success(results)
-        case Failure(errors, _) =>
-          Failure(errors, targets.size)
+        case Success(results, commitLevel) => Success(results, commitLevel)
+        case Failure(errors, _) => Failure(errors, targets.size)
+
+  def ! = new ParserT[I, T, M]:
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+      p.parseImpl(index) match
+        case Success(results, _) => Success(results, targets.size)
+        case Failure(errors, commitLevel) => Failure(errors, commitLevel)
 
 extension[I, T] (p: Parser[I, T])
   def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], (Int, T)] =
     p.doParse(index)(using input)(using targets) match
-      case Success(result) => Right(result.get)
-      case Failure(errors, commitLevel) => Left(errors)
+      case Success(result, _) => Right(result.get)
+      case Failure(errors, _) => Left(errors)
 
 extension[I, T] (p: MultiParser[I, T])
   def multiParse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], List[(Int, T)]] =
     p.doParse(index)(using input)(using targets) match
-      case Success(results) => Right(results)
-      case Failure(errors, commitLevel) => Left(errors)
+      case Success(results, _) => Right(results)
+      case Failure(errors, _) => Left(errors)
 
 package multi:
   given ListParseResultDistributor: Distributor[List, ParseResultM[List]] with
@@ -80,25 +86,33 @@ package multi:
         case (Nil, Nil) => throw IllegalStateException("List in this usage should never be empty.")
         case (Nil, l) => Failure(
           trimErrors(l.flatMap(e => e match
-            case Success(_) => throw IllegalStateException()
+            case Success(_, _) => throw IllegalStateException()
             case Failure(errors, _) => errors
           )),
           l.map(
             e => e match
-              case Success(_) => throw IllegalStateException()
-              case Failure(_, commitLevel) => commitLevel
-          ).maxOption.getOrElse(Int.MaxValue)
+              case Success(_, _) => throw IllegalStateException()
+              case Failure(_, commitLevel) => commitLevel)
+            // use max to allow collecting all possible results
+           .maxOption.getOrElse(Int.MaxValue)
         )
-        case (l, _) => Success(l.map(r => r match
-          case Success(results) => results
-          case Failure(_, _) => throw IllegalStateException()
-        ))
+        case (l, _) => Success(
+          l.map(r => r match
+            case Success(results, _) => results
+            case Failure(_, _) => throw IllegalStateException()),
+          l.map(
+            e => e match
+              case Success(_, commitLevel) => commitLevel
+              case Failure(_, _) => throw IllegalStateException())
+           // use max to allow collecting all possible results
+           .maxOption.getOrElse(Int.MaxValue)
+        )
 
 package single:
   given OptionParseResultDistributor: Distributor[Option, ParseResultM[Option]] with
     override def distribute[T](m: Option[ParseResult[Option, T]]): ParseResult[Option, Option[T]] = m match
       case Some(r) => r match
-        case Success(r) => Success(Some(r))
+        case Success(r, l) => Success(Some(r), l)
         case Failure(e, l) => Failure(e, l)
       case None => throw IllegalStateException("Option in this usage should never be empty.")
 
@@ -124,7 +138,9 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]]): Monad
   override def or[T](a: ParserT[I, T, M], b: => ParserT[I, T, M]): ParserT[I, T, M] = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       a.doParse(index) match
-        case s: Success[?, ?] => env.or(s, b.doParse(index))
+        case s:Success[_, _] => env.or(s, b.doParse(index)) match
+          case Success(results, l) => Success(results, l)
+          case Failure(errors, l) => Failure(errors, l)
         case f@Failure(errors, commitLevel) =>
           // If commit level is lower or equal to the current level (i.e. targets.size), don't back
           // track and just return the first failure
@@ -133,32 +149,30 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]]): Monad
 
 given ParseResultMonadPlus [M[+_]] (using dist: Distributor[M, ParseResultM[M]])(using env: MonadPlus[M]): MonadPlus[ParseResultM[M]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = f match
-    case Success(results) => Success(env.map(results, g))
+    case Success(results, commitLevel) => Success(env.map(results, g), commitLevel)
     case Failure(errors, commitLevel) => Failure(errors, commitLevel)
 
   override def pure[T](t: T): ParseResult[M, T] = Success(env.pure(t))
 
   override def flatMap[T, S](m: ParseResult[M, T], f: T => ParseResult[M, S]): ParseResult[M, S] = m match
-    case Success(results) =>
+    case Success(results, commitLevel) =>
       dist.distribute(env.flatMap(results, t => env.pure(f(t)))) match
-        case Success(results) => Success(env.flatten(results))
-        case Failure(errors, commitLevel) => Failure(errors, commitLevel)
+        case Success(results, commitLevel2) => Success(env.flatten(results), min(commitLevel, commitLevel2))
+        case Failure(errors, commitLevel2) => Failure(errors, min(commitLevel, commitLevel2))
     case Failure(errors, commitLevel) => Failure(errors, commitLevel)
 
-  override def empty[T]: ParseResult[M, T] = Failure(Seq(), Int.MaxValue)
+  override def empty[T]: ParseResult[M, T] = Failure(Seq())
 
   override def or[T](a: ParseResult[M, T], b: => ParseResult[M, T]): ParseResult[M, T] = a match
-    case Success(a) =>
+    case Success(a, la) =>
       val result = env.or(a, b match
-        case Success(b) => b
+        case Success(b, _) => b
         case Failure(_, _) => env.empty)
-      Success(result)
+      Success(result, la)
     case Failure(a, la) => b match
-      case Success(b) => Success(b)
-      case Failure(b, lb) =>
-        val allErrors = a ++ b
-        // respect the more severe error
-        Failure(trimErrors(allErrors), scala.math.min(la, lb))
+      // respect the more severe error
+      case Success(b, lb) => Success(b, min(la, lb))
+      case Failure(b, lb) => Failure(trimErrors(a ++ b), min(la, lb))
 
 private inline def createNamedParser[I, T, M[+_]](inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null)(using env: MonadPlus[ParserM[I, M]]) =
   val nameToUse = if (name == null) enclosingName(parser) else name

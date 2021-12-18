@@ -22,20 +22,26 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   )
   def integer = P(P.integer)
   def decimal = P(P.decimal)
-  def simpleCommitCase = P("a" << !"b" | "a")
-  def commitHasLimitedEffects = P {
+  def prefixCommit = P("a" << !"b" | "a")
+  def prefixCommitHasLimitedEffects = P {
     def b = P(!"b")
+    "a" << b | "a"
+  }
+
+  def postfixCommit = P("a".! << "b" | "a")
+  def postfixCommitHasLimitedEffects = P {
+    def b = P("b".!)
     "a" << b | "a"
   }
   def expression : ParserT[Char, String, M] = P {
     def atom = P(decimal.map(_.toString) | "(" >> expression << ")")
 
-    def factor = P(!atom chainedLeftBy
-      P.spaces >> P.anyOf("*/").map {
+    def factor = P(atom chainedLeftBy
+      P.spaces >> P.anyOf("*/").!.map {
         op => (a: String, b: String) => s"($a $op $b)"
       } << P.spaces)
-    !factor chainedLeftBy
-      P.spaces >> P.anyOf("+-").map {
+    factor chainedLeftBy
+      P.spaces >> P.anyOf("+-").!.map {
         op => (a: String, b: String) => s"($a $op $b)"
       } << P.spaces
   }
@@ -93,7 +99,7 @@ class ParserCombinatorsTest extends AnyFreeSpec {
         expectedPart.append(input)
         expectedPart.append("\n----\n")
         p.doParse(0)(using input)(using Nil) match
-          case ParseResult.Success(results) => results match
+          case ParseResult.Success(results, _) => results match
             case Some((advance, t)) =>
               actualPart.append(s"$advance | $t")
               expectedPart.append(outputs(0))

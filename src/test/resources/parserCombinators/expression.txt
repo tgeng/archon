@@ -24,7 +24,7 @@
 
 1 + 2 +
 ----
-when parsing decimal/expression:
+when parsing decimal/atom/factor/expression:
 [1:8] 1 + 2 +
              ^ expect <decimal>
 

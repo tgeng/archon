@@ -1,0 +1,11 @@
+a
+----
+when parsing prefixCommit:
+[1:2] a
+       ^ expect 'b'
+
+b
+----
+when parsing prefixCommit:
+[1:1] b
+      ^ expect 'a'

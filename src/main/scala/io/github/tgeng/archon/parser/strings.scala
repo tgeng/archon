@@ -72,5 +72,5 @@ extension (failure: ParseResult.Failure[?, ?])
         val lineAndColumn = s"[${line + 1}:${column + 1}]"
         sb.append(s"when parsing ${targets.mkString("/")}:\n")
         sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
-        sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).mkString(" | ")}\n")
+        sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
     sb.toString.trim.!!
