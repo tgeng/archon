@@ -12,7 +12,13 @@ import scala.io.Source
 import scala.util.Using
 
 class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
-  def doubleQuoted = P(P.quoted())
+  def any = P(P.any << P.eos)
+  def doubleQuoted = P(P.quoted() << P.eos)
+  def abc = P(P.anyOf("abc") << P.eos)
+  def threeWords = P(
+    for (first, _, second, _, third) <- (P.word, P.spaces, P.word, P.spaces, P.word)
+    yield (first, second, third)
+  )
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
@@ -28,13 +34,15 @@ class ParserCombinatorsTest extends AnyFreeSpec {
   private def testParsers[M[+_]](updateTestData: Boolean)(using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]) =
     import scala.io.Source
     val obj = Parsers()
-    val parsers = obj.getClass.getDeclaredMethods.!!.map(_.!!.invoke(obj).asInstanceOf[ParserT[Char, Any, M]])
+    val parsers = obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$")).map(_.!!.invoke(obj).asInstanceOf[ParserT[Char, Any, M]])
     for parser <- parsers
       do
         val parserName = parser.targetName.get
         parserName in {
           val testDataFile = TestDataConstants.testResourcesRoot / s"/parserCombinators/$parserName.txt"
-          if !testDataFile.exists() then fail(s"no test data for $parserName")
+          if !testDataFile.exists() then
+            testDataFile.write("TODO: add test data")
+            fail(s"No test data for $parserName. Created placeholder file.")
           val (expected, actual) = testParser(parser, testDataFile)
           if expected != actual then
             if updateTestData then

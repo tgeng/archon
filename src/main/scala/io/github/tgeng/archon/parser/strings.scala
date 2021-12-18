@@ -17,11 +17,12 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
   def whitespace = P.anyOf(" \n\t\r") as ()
   def whitespaces = P.whitespace.*
 
-  def digit = P.satisfySingle("digit", Character.isDigit)
-  def alphabetic = P.satisfySingle("alphabetic", Character.isAlphabetic)
-  def upper = P.satisfySingle("upper", Character.isUpperCase)
-  def lower = P.satisfySingle("upper", Character.isLowerCase)
+  def digit = P.satisfySingle("<digit>", Character.isDigit)
+  def alphabetic = P.satisfySingle("<alphabetic>", Character.isAlphabetic)
+  def upper = P.satisfySingle("<upper case>", Character.isUpperCase)
+  def lower = P.satisfySingle("<lower case>", Character.isLowerCase)
   def alphanum = P.digit | P.alphabetic
+  def word = P.from("""\p{Alpha}+""".r)
 
   def quoted(quoteSymbol: Char = '"',
               escapeSymbol: Char = '\\',
@@ -35,8 +36,8 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
             ) =
     val allEscapeMapping = additionalEscapeMapping + (quoteSymbol -> quoteSymbol) + (escapeSymbol -> escapeSymbol)
     val needEscaping = allEscapeMapping.values.toSet
-    val literal = P.satisfySingle(s"none of $needEscaping", !needEscaping(_))
-    val special = escapeSymbol >> P.satisfySingle(s"one of ${allEscapeMapping.keySet}", allEscapeMapping.keySet).map(allEscapeMapping)
+    val literal = P.satisfySingle(s"<none of $needEscaping>", !needEscaping(_))
+    val special = escapeSymbol >> P.satisfySingle(s"<one of ${allEscapeMapping.keySet}>", allEscapeMapping.keySet).map(allEscapeMapping)
 
     quoteSymbol >> (literal | special).*.map(_.mkString("")) << quoteSymbol
 
@@ -68,6 +69,6 @@ extension (failure: ParseResult.Failure[?, ?])
         val (line, column) = indexToLineColumn(input, index)
         val lineAndColumn = s"[${line + 1}:${column + 1}]"
         sb.append(s"when parsing ${targets.mkString("/")}:\n")
-        sb.append(s"$lineAndColumn ${lines(line)}\n")
+        sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
         sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).mkString(" | ")}\n")
     sb.toString.trim.!!

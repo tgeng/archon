@@ -19,8 +19,21 @@ when parsing doubleQuoted:
 [1:1] 'foo'
       ^ expect '"'
 
-"foo'
+"foo
 ----
 when parsing doubleQuoted:
-[1:6] "foo'
-           ^ expect '"'
+[1:5] "foo
+          ^ expect '"'
+
+"foo
+bar"
+----
+when parsing doubleQuoted:
+[1:5] "foo
+          ^ expect '"'
+
+"abc"d
+----
+when parsing doubleQuoted:
+[1:6] "abc"d
+           ^ expect <eos>

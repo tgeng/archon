@@ -1,0 +1,15 @@
+f
+----
+1 | f
+
+foo
+----
+when parsing any:
+[1:2] foo
+       ^ expect <eos>
+
+
+----
+when parsing any:
+[1:1] 
+      ^ expect <any>
