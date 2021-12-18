@@ -30,6 +30,12 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
     (factor sepBy P.anyOf("+-")) << P.eos
   }
 
+  def simpleCommitCase = P("a" << !"b" | "a")
+  def commitHasLimitedEffects = P {
+    def b = P(!"b")
+    "a" << b | "a"
+  }
+
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
