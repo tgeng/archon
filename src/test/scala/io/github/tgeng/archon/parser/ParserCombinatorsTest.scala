@@ -30,11 +30,11 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   def expression : ParserT[Char, String, M] = P {
     def atom = P(decimal.map(_.toString) | "(" >> expression << ")")
 
-    def factor = P(atom chainedLeftBy
+    def factor = P(!atom chainedLeftBy
       P.spaces >> P.anyOf("*/").map {
         op => (a: String, b: String) => s"($a $op $b)"
       } << P.spaces)
-    factor chainedLeftBy
+    !factor chainedLeftBy
       P.spaces >> P.anyOf("+-").map {
         op => (a: String, b: String) => s"($a $op $b)"
       } << P.spaces
