@@ -40,6 +40,13 @@ extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M
         case Some((advance, t)) => Success(mm.pure((advance, t)))
         case None => Failure(Seq(ParseError(index, description, targets)))
 
+extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
+  infix def withDescription(description: String) = new ParserT[I, T, M]:
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+      p.parseImpl(index) match
+        case Success(results) => Success(results)
+        case Failure(_) => Failure(Seq(ParseError(index, description, targets)))
+
 extension[I, T] (p: Parser[I, T])
   def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], (Int, T)] =
     p.doParse(index)(using input)(using targets) match

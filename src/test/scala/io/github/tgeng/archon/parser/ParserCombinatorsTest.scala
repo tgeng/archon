@@ -2,6 +2,7 @@ package io.github.tgeng.archon.parser
 
 import io.github.tgeng.archon.common.{*, given}
 import io.github.tgeng.archon.parser.{*, given}
+import junit.framework.ComparisonFailure
 import org.scalatest.freespec.AnyFreeSpec
 
 import java.net.URL
@@ -19,6 +20,16 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
     for (first, _, second, _, third) <- (P.word, P.spaces, P.word, P.spaces, P.word)
     yield (first, second, third)
   )
+  def integer = P(P.integer)
+  def decimal = P(P.decimal)
+  def expression : ParserT[Char, Any, M] = P {
+    def atom = P(decimal | "(" >> expression << ")")
+
+    def factor = P(atom sepBy P.anyOf("*/"))
+
+    (factor sepBy P.anyOf("+-")) << P.eos
+  }
+
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
@@ -49,7 +60,7 @@ class ParserCombinatorsTest extends AnyFreeSpec {
               testDataFile.write(actual)
               fail(s"Test comparison failed for $parserName. Test data has been updated.")
             else
-              fail(s"Test comparison failed for $parserName.")
+              throw new ComparisonFailure(s"Test comparison failed for $parserName.", expected, actual)
         }
 
   @nowarn
@@ -58,23 +69,32 @@ class ParserCombinatorsTest extends AnyFreeSpec {
       source.mkString.replace(System.lineSeparator(), "\n").!!
     }
     val actualParts = ArrayBuffer[String]()
+    val expectedParts = ArrayBuffer[String]()
     for testCase <- testDataString.split("\n\n").asInstanceOf[Array[String]]
       do
         val actualPart = StringBuilder()
+        val expectedPart = StringBuilder()
         val parts = testCase.split("\n----\n").asInstanceOf[Array[String]]
         if parts.size < 1 then fail(s"incomplete test case in $testDataFile")
         val input = parts.head
+        val outputs = parts.tail
         actualPart.append(input)
         actualPart.append("\n----\n")
+        expectedPart.append(input)
+        expectedPart.append("\n----\n")
         p.doParse(0)(using input)(using Nil) match
           case ParseResult.Success(results) => results match
             case Some((advance, t)) =>
               actualPart.append(s"$advance | $t")
+              expectedPart.append(outputs(0))
             case l: List[(Int, Any)] =>
               actualPart.append(l.map((advance, t) => s"$advance | $t").mkString("\n----\n"))
+              expectedPart.append(outputs.mkString("\n----\n"))
             case _ => fail("impossible")
           case f: ParseResult.Failure[?, ?] =>
             actualPart.append(f.mkString(input))
+            expectedPart.append(outputs(0))
+        expectedParts.append(expectedPart.toString)
         actualParts.append(actualPart.toString)
-    (testDataString, actualParts.mkString("\n\n"))
+    (expectedParts.mkString("\n\n"), actualParts.mkString("\n\n"))
 }
