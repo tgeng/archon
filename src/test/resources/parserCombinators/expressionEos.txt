@@ -16,12 +16,24 @@
 
 1 + 2 +
 ----
-when parsing decimal/atom/factor/expression/expressionEos:
+when parsing expressionEos->expression->factor->atom->decimal:
 [1:8] 1 + 2 +
              ^ expect <decimal>
 
 1 + (2 *) + 4
 ----
-when parsing decimal/atom/factor/expression/atom/factor/expression/expressionEos:
+when parsing expressionEos->expression->factor->atom->expression->factor->atom->decimal:
 [1:9] 1 + (2 *) + 4
+              ^ expect <decimal>
+
+1 + 2a
+----
+when parsing expressionEos:
+[1:6] 1 + 2a
+           ^ expect <eos>
+
+1 + 2 * a
+----
+when parsing expressionEos->expression->factor->atom->decimal:
+[1:9] 1 + 2 * a
               ^ expect <decimal>
