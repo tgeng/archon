@@ -2,7 +2,6 @@ package io.github.tgeng.archon.parser
 
 import io.github.tgeng.archon.common.{*, given}
 import io.github.tgeng.archon.parser.{*, given}
-import junit.framework.ComparisonFailure
 import org.scalatest.freespec.AnyFreeSpec
 
 import java.net.URL
@@ -77,7 +76,7 @@ class ParserCombinatorsTest extends AnyFreeSpec {
               testDataFile.write(actual)
               fail(s"Test comparison failed for $parserName. Test data has been updated.")
             else
-              throw new ComparisonFailure(s"Test comparison failed for $parserName.", expected, actual)
+              assert(expected == actual)
         }
 
   @nowarn

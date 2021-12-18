@@ -11,7 +11,6 @@ lazy val root = (project in file("."))
 
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.10" % "test",
-      "junit" % "junit" % "4.11" % Test,
     ),
     Test / envVars := Map(
       "TEST_RESOURCES_ROOT" -> file("src/test/resources").getAbsolutePath,
