@@ -49,7 +49,7 @@ extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M
         case None => Failure(Seq(ParseError(index, description, targets)))
 
 extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
-  infix def withDescription(description: String) = new ParserT[I, T, M]:
+  infix def asAtom(description: String) = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
       p.parseImpl(index) match
         case Success(results, commitLevel) => Success(results, commitLevel)
@@ -181,5 +181,5 @@ private inline def createNamedParser[I, T, M[+_]](inline parser: MonadPlus[Parse
     override def targetName: Option[String] = Some(nameToUse)
 
 private def trimErrors(errors: Seq[ParseError]) : Seq[ParseError] =
-  val maxTargetProgress = errors.map(e => (e.targets.size, e.index)).maxOption.getOrElse((0, 0))
-  errors.filter(e => (e.targets.size, e.index) == maxTargetProgress)
+  val maxTargetProgress = errors.map(e => e.index).maxOption.getOrElse(0)
+  errors.filter(e => e.index == maxTargetProgress)

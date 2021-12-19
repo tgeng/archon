@@ -24,6 +24,9 @@
 
 1 + 2 +
 ----
+when parsing expression->factor->atom:
+[1:8] 1 + 2 +
+             ^ expect '('
 when parsing expression->factor->atom->decimal:
 [1:8] 1 + 2 +
              ^ expect <decimal>

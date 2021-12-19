@@ -5,11 +5,11 @@ import io.github.tgeng.archon.parser.ParseResult.*
 import io.github.tgeng.archon.parser.{*, given}
 
 extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
-  def map[S](g: T => S) = env.map(p, g)
+  infix def map[S](g: T => S) = env.map(p, g)
 
   infix def <*>[S](f: => ParserT[I, T => S, M]) = env.starApply(p, f)
 
-  def flatMap[S](f: T => ParserT[I, S, M]) = env.flatMap(p, f)
+  infix def flatMap[S](f: T => ParserT[I, S, M]) = env.flatMap(p, f)
 
   infix def |(q: => ParserT[I, T, M]) = env.or(p, q)
 

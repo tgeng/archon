@@ -7,14 +7,19 @@ import scala.util.matching.Regex.Match
 type StrParser[T] = ParserT[Char, T, Option]
 type MultiStrParser[T] = ParserT[Char, T, List]
 
+extension[T, M[+_]] (using env: MonadPlus[ParserM[Char, M]])(using MonadPlus[M])(p: ParserT[Char, T, M])
+  def <%<[S](q: ParserT[Char, S, M]) = p << P.whitespaces << q
+  def >%>[S](q: ParserT[Char, S, M]) = p >> P.whitespaces >> q
+  def % = P.whitespaces >> p << P.whitespaces
+
 extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])(e: P.type)
-  def space = P.anyOf(" ") withDescription "' '"
+  def space = P.anyOf(" ") asAtom "' '"
   def spaces = P.space.*.map(_.size)
-  def cr = P.from("\r") withDescription "'\r'"
-  def lf = P.from("\n") withDescription "'\n'"
-  def newline = "\r\n" | P.lf withDescription "<newline>"
+  def cr = P.from("\r") asAtom "'\r'"
+  def lf = P.from("\n") asAtom "'\n'"
+  def newline = "\r\n" | P.lf asAtom "<newline>"
   def newlines = P.newline.*.map(_.size)
-  def whitespace = P.anyOf(" \n\t\r") as () withDescription "<whitespace>"
+  def whitespace = P.anyOf(" \n\t\r") as () asAtom "<whitespace>"
   def whitespaces = P.whitespace.*
 
   def digit = P.satisfySingle("<digit>", Character.isDigit)
@@ -23,8 +28,8 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
   def lower = P.satisfySingle("<lower case>", Character.isLowerCase)
   def alphanum = P.digit | P.alphabetic
   def word = P.from("""\p{Alpha}+""".r).map(_.matched)
-  def integer = P.from("""\d+""".r).map(_.matched.toInt) withDescription "<integer>"
-  def decimal = P.from("""[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?""".r).map(_.matched.toDouble) withDescription "<decimal>"
+  def integer = P.from("""\d+""".r).map(_.matched.toInt) asAtom "<integer>"
+  def decimal = P.from("""[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?""".r).map(_.matched.toDouble) asAtom "<decimal>"
 
   def quoted(quoteSymbol: Char = '"',
               escapeSymbol: Char = '\\',

@@ -1,0 +1,38 @@
+1
+----
+1 | JNumber(1.0)
+
+"abc"
+----
+5 | JString(abc)
+
+[1, "abc", true, null]
+----
+22 | JArray(Vector(JNumber(1.0), JString(abc), JBoolean(true), JNull))
+
+{
+  "a" : 1,
+  "b" : true,
+  "c" : ["a", 1, {}],
+  "d" : { "e" : [{}, {}] }
+}
+----
+77 | JObject(Map(a -> JNumber(1.0), b -> JBoolean(true), c -> JArray(Vector(JString(a), JNumber(1.0), JObject(Map()))), d -> JObject(Map(e -> JArray(Vector(JObject(Map()), JObject(Map())))))))
+
+[1
+----
+when parsing json->jArray:
+[1:3] [1
+        ^ expect ']'
+
+[1 2
+----
+when parsing json->jArray:
+[1:4] [1 2
+         ^ expect ']'
+
+{"a": 1 "b": 2}
+----
+when parsing json->jObject:
+[1:9] {"a": 1 "b": 2}
+              ^ expect '}'

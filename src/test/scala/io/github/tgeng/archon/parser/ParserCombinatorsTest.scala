@@ -11,6 +11,15 @@ import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 import scala.util.Using
 
+enum JValue {
+  case JNull
+  case JBoolean(value: Boolean)
+  case JNumber(value: Double)
+  case JString(value: String)
+  case JArray(value: IndexedSeq[JValue])
+  case JObject(value: Map[String, JValue])
+}
+
 class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   def any = P(P.any << P.eos)
   def doubleQuoted = P(P.quoted() << P.eos)
@@ -46,6 +55,21 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   }
   def expressionEos = P(expression << P.eos)
   def ambiguous = P("ab" | "a" << "b" | "a" >> "b" | "a" << "X")
+
+  def json = P {
+    import JValue.*
+    def jValue : ParserT[Char, JValue, M] = jNull | jBoolean | jNumber | jString | jArray | jObject
+    def jNull = P("null".! as JNull)
+    def jBoolean = P(("true".! as JBoolean(true)) | ("false".! as JBoolean(false)))
+    def jNumber = P(P.decimal map JNumber.apply)
+    def jString = P(P.quoted() map JString.apply)
+    def jArray = P("[".! >%> (jValue sepBy ",".!.% map (a => JArray(a.toIndexedSeq))) <%< "]")
+    def jObject = P {
+      def jObjectEntry = P((P.quoted() << ":".% , jValue))
+      "{".! >%> (jObjectEntry sepBy ",".!.% map (m => JObject(m.toMap))) <%< "}"
+    }
+    jValue << P.eos
+  }
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
