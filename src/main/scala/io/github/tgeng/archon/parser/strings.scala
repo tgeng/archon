@@ -43,7 +43,7 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
             ) =
     val allEscapeMapping = additionalEscapeMapping + (quoteSymbol -> quoteSymbol) + (escapeSymbol -> escapeSymbol)
     val needEscaping = allEscapeMapping.values.toSet
-    val literal = P.satisfySingle(s"<none of ${allEscapeMapping.keys.map(c => s"${escapeSymbol}$c").mkString("")}>", !needEscaping(_))
+    val literal = P.satisfySingle(s"<char other than ${allEscapeMapping.keys.map(c => s"${escapeSymbol}$c").mkString("")}>", !needEscaping(_))
     val special = escapeSymbol >> P.satisfySingle(s"<one of ${allEscapeMapping.keySet}>", allEscapeMapping.keySet).map(allEscapeMapping)
 
     quoteSymbol >> (literal | special).*.map(_.mkString("")) << quoteSymbol

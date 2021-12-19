@@ -23,14 +23,14 @@ when parsing doubleQuoted:
 ----
 when parsing doubleQuoted:
 [1:5] "foo
-          ^ expect <none of \"\b\f\t\n\\\r> | '\' | '"'
+          ^ expect <char other than \"\b\f\t\n\\\r> | '\' | '"'
 
 "foo
 bar"
 ----
 when parsing doubleQuoted:
 [1:5] "foo
-          ^ expect <none of \"\b\f\t\n\\\r> | '\' | '"'
+          ^ expect <char other than \"\b\f\t\n\\\r> | '\' | '"'
 
 "abc"d
 ----
