@@ -1,8 +1,7 @@
-package io.github.tgeng.archon.parser
+package io.github.tgeng.archon.parser.combinators
 
 import io.github.tgeng.archon.common.{*, given}
-import io.github.tgeng.archon.parser.ParseResult.*
-import io.github.tgeng.archon.parser.{*, given}
+import io.github.tgeng.archon.parser.combinators.{*, given}
 
 extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
   infix def map[S](g: T => S) = env.map(p, g)

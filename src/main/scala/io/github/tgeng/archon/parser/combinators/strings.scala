@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.parser
+package io.github.tgeng.archon.parser.combinators
 
 import io.github.tgeng.archon.common.*
 import scala.util.matching.Regex

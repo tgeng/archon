@@ -1,11 +1,11 @@
-package io.github.tgeng.archon.parser
+package io.github.tgeng.archon.parser.combinators
 
 import io.github.tgeng.archon.common.{*, given}
-import io.github.tgeng.archon.parser.{*, given}
+import io.github.tgeng.archon.parser.combinators.{*, given}
 import org.scalatest.freespec.AnyFreeSpec
 
-import java.net.URL
 import java.io.File
+import java.net.URL
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
@@ -19,6 +19,8 @@ enum JValue {
   case JArray(value: IndexedSeq[JValue])
   case JObject(value: Map[String, JValue])
 }
+
+import JValue.*
 
 class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   def any = P(P.any << P.eos)
@@ -73,12 +75,12 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
 
 class ParserCombinatorsTest extends AnyFreeSpec {
   "single" - {
-    import io.github.tgeng.archon.parser.single.given
+    import io.github.tgeng.archon.parser.combinators.single.given
     testParsers(false)
   }
 
   "multi" - {
-    import io.github.tgeng.archon.parser.multi.given
+    import io.github.tgeng.archon.parser.combinators.multi.given
     testParsers(true)
   }
 
