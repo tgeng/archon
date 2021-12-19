@@ -43,7 +43,7 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
             ) =
     val allEscapeMapping = additionalEscapeMapping + (quoteSymbol -> quoteSymbol) + (escapeSymbol -> escapeSymbol)
     val needEscaping = allEscapeMapping.values.toSet
-    val literal = P.satisfySingle(s"<none of $needEscaping>", !needEscaping(_))
+    val literal = P.satisfySingle(s"<none of ${allEscapeMapping.keys.map(c => s"${escapeSymbol}$c").mkString("")}>", !needEscaping(_))
     val special = escapeSymbol >> P.satisfySingle(s"<one of ${allEscapeMapping.keySet}>", allEscapeMapping.keySet).map(allEscapeMapping)
 
     quoteSymbol >> (literal | special).*.map(_.mkString("")) << quoteSymbol
@@ -67,8 +67,8 @@ given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): C
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[String, ParserT[Char, String, M]] = P.from(_)
 given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)
 
-extension (failure: ParseResult.Failure[?, ?])
-  def mkString(input: String) : String =
+extension (failure: ParseResult[?, ?])
+  def mkErrorString(input: String) : String =
     val lines = input.linesIterator.toIndexedSeq
     val sb = StringBuilder()
     for ((targets, index), es) <- failure.errors.groupBy(e => (e.targets, e.index))

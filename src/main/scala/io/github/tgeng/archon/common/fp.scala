@@ -25,9 +25,6 @@ trait Alternative[A[+_]] extends Applicative[A] :
 
 trait MonadPlus[M[+_]] extends Monad[M] with Alternative[M]
 
-trait Distributor[M1[_], M2[_]]:
-  def distribute[T](m: M1[M2[T]]): M2[M1[T]]
-
 given MonadPlusList: MonadPlus[List] with
   override def map[T, S](a: List[T], g: T => S): List[S] = a.map(g)
 

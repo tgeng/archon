@@ -123,7 +123,10 @@ class ParserCombinatorsTest extends AnyFreeSpec {
         expectedPart.append(input)
         expectedPart.append("\n----\n")
         p.doParse(0)(using input)(using Nil) match
-          case ParseResult.Success(results, _) => results match
+          case r@ParseResult(results, errors, _) => results match
+            case Nil | None =>
+              actualPart.append(r.mkErrorString(input))
+              expectedPart.append(outputs.lift(0).getOrElse(""))
             case Some((advance, t)) =>
               actualPart.append(s"$advance | $t")
               expectedPart.append(outputs(0))
@@ -131,9 +134,6 @@ class ParserCombinatorsTest extends AnyFreeSpec {
               actualPart.append(l.map((advance, t) => s"$advance | $t").mkString("\n----\n"))
               expectedPart.append(outputs.mkString("\n----\n"))
             case _ => fail("impossible")
-          case f: ParseResult.Failure[?, ?] =>
-            actualPart.append(f.mkString(input))
-            expectedPart.append(outputs.lift(0).getOrElse(""))
         expectedParts.append(expectedPart.toString)
         actualParts.append(actualPart.toString)
     (expectedParts.mkString("\n\n"), actualParts.mkString("\n\n"))
