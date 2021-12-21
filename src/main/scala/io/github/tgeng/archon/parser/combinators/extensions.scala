@@ -97,7 +97,7 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
     val set = Set.from(collection)
     P.satisfySingle(s"<any of $set>", i => set.contains(i))
 
-  def exact(i: I) = P.satisfySingle(s"<exact $i>", e => e == i)
+  def exactly(i: I) = P.satisfySingle(s"<exactly $i>", e => e == i)
 
   def foldLeft[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for
@@ -112,6 +112,26 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
   def foldRight[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
     for
       opElems <- (elem, op).*
+      acc <- acc
+    yield
+      opElems.foldRight(acc) { (elemOp, acc) =>
+        val (elem, op) = elemOp
+        op(elem, acc)
+      }
+
+  def foldLeft1[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
+    for
+      acc <- acc
+      opElems <- (op, elem)+
+    yield
+      opElems.foldLeft(acc) { (acc, opElem) =>
+        val (op, elem) = opElem
+        op(acc, elem)
+      }
+
+  def foldRight1[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
+    for
+      opElems <- (elem, op).+
       acc <- acc
     yield
       opElems.foldRight(acc) { (elemOp, acc) =>
