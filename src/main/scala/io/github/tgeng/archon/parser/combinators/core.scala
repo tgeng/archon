@@ -11,6 +11,9 @@ case class ParseError(index: Int, description: String, targets: Seq[String])
  * than upper levels because a lower level means back tracking is disabled closer to the root of
  * the parser hierarchy.
  */
+// TODO: consider generalizing `Seq` to some traversable so that one can provide an implementation
+//  that simply drops any error message for fast passing. Then failure messages can be recovered
+//  by running the parser again, with possible a `Boolean` monad plus that drops parse result.
 case class ParseResult[M[+_], +T](result: M[T], errors: Seq[ParseError], commitLevel: Int) :
   def withLevel(level: Int): ParseResult[M, T] = ParseResult(result, errors, level)
 
@@ -30,6 +33,9 @@ type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
 
 trait ParserT[-I, +T, M[+_]]:
   final def doParse(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+    // TODO: consider adding caching for created parsers and parsed results. For the latter `targets`
+    // probably need to be removed and commit depth should be implemented as an index that is
+    // lowered each time a named parser returns.
     parseImpl(index)(using input)(using targetName ++: targets)
 
   def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)]

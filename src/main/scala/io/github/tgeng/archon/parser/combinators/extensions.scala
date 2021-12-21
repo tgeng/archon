@@ -29,28 +29,46 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
     yield
       first :: rest
 
-  infix def >>[S](q: ParserT[I, S, M]) =
+  infix def >>[S](q: =>ParserT[I, S, M]) =
     for
       _ <- p
       result <- q
     yield
       result
 
-  infix def <<[S](q: ParserT[I, S, M]) =
+  infix def <<(q: =>ParserT[I, ?, M]) =
     for
       result <- p
       _ <- q
     yield
       result
 
-  infix def sepBy1[S](delimiter: ParserT[I, S, M]) =
+  infix def sepBy1(delimiter: =>ParserT[I, ?, M]) =
     for
       first <- p
       rest <- (delimiter >> p) *
     yield
       first :: rest
 
-  infix def sepBy[S](delimiter: ParserT[I, S, M]) = (p sepBy1 delimiter) | P.pure(Nil)
+  infix def sepBy(delimiter: =>ParserT[I, ?, M]) = (p sepBy1 delimiter) | P.pure(Nil)
+
+  infix def sepByN(delimiters: List[ParserT[I, ?, M]]) =
+    for
+      first <- p
+      rest <- p.sepByNImpl(delimiters)
+    yield
+      first :: rest
+
+  private def sepByNImpl(delimiters: List[ParserT[I, ?, M]]) : ParserT[I, List[T], M] =
+    delimiters match
+      case Nil => P.pure(Nil)
+      case q :: ps =>
+        for
+          _ <- q
+          first <- p
+          rest <- p.sepByNImpl(ps)
+        yield
+          first :: rest
 
   infix def as[S](s: S) = p.map(_ => s)
 
@@ -78,6 +96,8 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
   def anyOf(collection: IterableOnce[I]) =
     val set = Set.from(collection)
     P.satisfySingle(s"<any of $set>", i => set.contains(i))
+
+  def exact(i: I) = P.satisfySingle(s"<exact $i>", e => e == i)
 
   def foldLeft[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for

@@ -8,8 +8,8 @@ type StrParser[T] = ParserT[Char, T, Option]
 type MultiStrParser[T] = ParserT[Char, T, List]
 
 extension[T, M[+_]] (using env: MonadPlus[ParserM[Char, M]])(using MonadPlus[M])(p: ParserT[Char, T, M])
-  def <%<[S](q: ParserT[Char, S, M]) = p << P.whitespaces << q
-  def >%>[S](q: ParserT[Char, S, M]) = p >> P.whitespaces >> q
+  def <%<(q: =>ParserT[Char, ?, M]) = p << P.whitespaces << q
+  def >%>[S](q: =>ParserT[Char, S, M]) = p >> P.whitespaces >> q
   def % = P.whitespaces >> p << P.whitespaces
 
 extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])(e: P.type)
