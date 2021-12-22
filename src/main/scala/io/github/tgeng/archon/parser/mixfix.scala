@@ -8,7 +8,6 @@ import io.github.tgeng.archon.parser.combinators.{*, given}
 // This implementation follows from this paper https://www.cse.chalmers.se/~nad/publications/danielsson-norell-mixfix.pdf
 enum Associativity:
   case Left, Right, Non
-import io.github.tgeng.archon.parser.Associativity.*
 
 enum Fixity:
   case Prefix
@@ -34,13 +33,14 @@ object Operator:
 trait PrecedenceNode:
   def getOperators(fixity: Fixity): Set[Operator[fixity.type]]
 
-  /** Operators in neighbor nodes binds tighter than operators in this node */
+  /**
+   * Operators in neighbor nodes binds tighter than operators in this node. Note that there must
+   * not be cycles.
+   */
   def neighbors: Seq[PrecedenceNode]
+  final def allNeighbors: IterableOnce[PrecedenceNode] = neighbors.bfs(_.neighbors)
 
-/**
- * @param nodes values nodes have higher precedence (binds tighter) than keys
- */
-type PrecedenceGraph = List[PrecedenceNode]
+trait PrecedenceGraph extends Iterable[PrecedenceNode]
 
 trait NamePart[N]:
   def asString(n: N): String
@@ -52,22 +52,26 @@ enum MixfixAst[N]:
 
 import io.github.tgeng.archon.parser.MixfixAst.*
 
+/**
+ * Comparing to the paper, this implementation follows neighbor edges and hence the nodes forms a
+ * partial relation containing the given DAG.
+ */
 def createMixfixParser[N, M[+_]](g: PrecedenceGraph)(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using nn: NamePart[N]): ParserT[N, MixfixAst[N], M] =
   def expr: ParserT[N, MixfixAst[N], M] = g.map(pHat).reduce(_ | _) | closedPlus
 
   extension (node: PrecedenceNode)
     def pHat: ParserT[N, MixfixAst[N], M] = P(
-      (node.pUp, node.op(Infix(Non)), node.pUp).map((preArg, t, postArg) => OperatorCall(node, t(0), preArg +: t(1) :+ postArg, t(2))) |
+      (node.pUp, node.op(Infix(Associativity.Non)), node.pUp).map((preArg, t, postArg) => OperatorCall(node, t(0), preArg +: t(1) :+ postArg, t(2))) |
         P.foldRight1(pRight, P.pure((t, postArg) => OperatorCall(node, t(0), t(1) :+ postArg, t(2))), pUp) |
         // somehow type inferencing is not working here and requires explicit type arguments
         P.foldLeft1[MixfixAst[N], (Operator[?], List[MixfixAst[N]], List[N])](pUp, P.pure((preArg, t) => OperatorCall(node, t(0), preArg +: t(1), t(2))), pLeft)
     )
 
-    def pRight: ParserT[N, (Operator[?], List[MixfixAst[N]], List[N]), M] = P(node.op(Prefix) | (node.pUp, node.op(Infix(Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2))))
+    def pRight: ParserT[N, (Operator[?], List[MixfixAst[N]], List[N]), M] = P(node.op(Prefix) | (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2))))
 
-    def pLeft: ParserT[N, (Operator[?], List[MixfixAst[N]], List[N]), M] = P(node.op(Postfix) | (node.op(Infix(Right)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2))))
+    def pLeft: ParserT[N, (Operator[?], List[MixfixAst[N]], List[N]), M] = P(node.op(Postfix) | (node.op(Infix(Associativity.Right)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2))))
 
-    def pUp: ParserT[N, MixfixAst[N], M] = P(node.neighbors.map(_.pHat).reduce(_ | _) | closedPlus)
+    def pUp: ParserT[N, MixfixAst[N], M] = P(node.allNeighbors.map(_.pHat).reduce(_ | _) | closedPlus)
 
     def op(fix: Fixity): ParserT[N, (Operator[?], List[MixfixAst[N]], List[N]), M] = P(
       node.getOperators(fix)
