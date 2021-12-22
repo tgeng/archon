@@ -92,7 +92,7 @@ class ParserCombinatorsTest extends AnyFreeSpec {
       do
         val parserName = parser.targetName.get
         parserName in {
-          val testDataFile = TestDataConstants.testResourcesRoot / s"/parserCombinators/$parserName.txt"
+          val testDataFile = TestDataConstants.testResourcesRoot / s"/parser/combinators/$parserName.txt"
           if !testDataFile.exists() then
             testDataFile.write("TODO: add test data")
             fail(s"No test data for $parserName. Created placeholder file.")
