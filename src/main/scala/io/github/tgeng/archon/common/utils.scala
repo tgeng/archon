@@ -39,3 +39,16 @@ extension[E] (it: IterableOnce[E])
           val e = queue.dequeue()
           queue.enqueueAll(gen(e).iterator.filter(e => seen.add(e)))
           e
+
+def detectLoop[T](nodes: IterableOnce[T], getNeighbors: T => IterableOnce[T]): Option[Seq[T]] =
+  val stack = mutable.Stack[(T, Int)](nodes.iterator.map(n => (n, 0)).toSeq : _*)
+  val parents = mutable.LinkedHashSet[T]()
+  while stack.nonEmpty do
+    val (t, index) = stack.pop()
+    if parents.contains(t) then
+      return Some(parents.dropWhile(_ != t).toSeq)
+    while index != parents.size do
+      parents.remove(parents.last)
+    parents.add(t)
+    getNeighbors(t).iterator.foreach(t => stack.push((t, index + 1)))
+  None

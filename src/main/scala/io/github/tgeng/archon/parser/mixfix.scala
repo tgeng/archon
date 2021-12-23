@@ -30,9 +30,11 @@ object Operator:
 
 /**
  * Operators in neighbor nodes binds tighter than operators in this node. Note that there must
- * not be cycles.
+ * not be cycles. Implementation should be immutable.
  */
-class PrecedenceNode(val operators: Map[Fixity, Set[Operator]], val neighbors: Set[PrecedenceNode])
+trait PrecedenceNode:
+  def operators: Map[Fixity, Set[Operator]]
+  def neighbors: Set[PrecedenceNode]
 
 /**
  * A DAG.
