@@ -32,6 +32,7 @@ extension (f: File)
 extension[E] (it: IterableOnce[E])
   def bfs(gen: E => IterableOnce[E], seen: mutable.Set[E] = mutable.Set[E]()) : IterableOnce[E] =
       val queue = mutable.Queue(it.iterator.toSeq : _*)
+      seen.addAll(queue)
       new Iterator[E]:
         def hasNext: Boolean = queue.nonEmpty
         def next(): E =
