@@ -73,7 +73,7 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
     jValue << P.eos
   }
 
-class ParserCombinatorsTest extends AnyFreeSpec {
+class ParserCombinatorsTest extends AnyFreeSpec:
   "single" - {
     import io.github.tgeng.archon.parser.combinators.single.given
     testParsers(false)
@@ -139,4 +139,3 @@ class ParserCombinatorsTest extends AnyFreeSpec {
         expectedParts.append(expectedPart.toString)
         actualParts.append(actualPart.toString)
     (expectedParts.mkString("\n\n"), actualParts.mkString("\n\n"))
-}
