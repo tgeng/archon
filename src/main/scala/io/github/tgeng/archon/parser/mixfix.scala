@@ -9,7 +9,7 @@ enum Associativity:
 
 enum Fixity:
   case Prefix
-  case Infix[A <: Associativity](val associativity: A)
+  case Infix(val associativity: Associativity)
   case Postfix
 
   /**
