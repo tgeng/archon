@@ -58,6 +58,10 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
   def expressionEos = P(expression << P.eos)
   def ambiguous = P("ab" | "a" << "b" | "a" >> "b" | "a" << "X")
 
+  def indentedBlock = P(P.indentedBlock {
+    (P.word sepBy1 P.newlineWithIndent) << P.eob
+  })
+
   def json = P {
     import JValue.*
     def jValue : ParserT[Char, JValue, M] = jNull | jBoolean | jNumber | jString | jArray | jObject
@@ -92,7 +96,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
       do
         val parserName = parser.targetName.get
         parserName in {
-          val testDataFile = TestDataConstants.testResourcesRoot / s"/parser/combinators/$parserName.txt"
+          val testDataFile = TestDataConstants.testResourcesRoot / s"parser/combinators/$parserName.txt"
           if !testDataFile.exists() then
             testDataFile.write("TODO: add test data")
             fail(s"No test data for $parserName. Created placeholder file.")

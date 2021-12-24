@@ -12,10 +12,15 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
 
   infix def |(q: => ParserT[I, T, M]) = env.or(p, q)
 
-  inline def withFilter(inline predicate: T => Boolean) =
+  inline def withFilter(inline predicate: T => Boolean, description: String | Null = null) =
     for
       t <- p
-      filtered <- if predicate(t) then P.pure(t) else P.fail(s"'$t' need to satisfy `${stringify(predicate)}`")
+      filtered <-
+        if predicate(t) then P.pure(t)
+        else P.fail(
+          if (description == null) then s"'$t' need to satisfy `${stringify(predicate)}`"
+          else description
+        )
     yield filtered
 
   def ? = p.map(Some.apply) | P.pure(None)
@@ -28,6 +33,17 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
       rest <- p *
     yield
       first :: rest
+
+  infix def repeat(count: Int) : ParserT[I, List[T], M] =
+    assert(count >= 0)
+    count match
+      case 0 => P.pure(Nil)
+      case n =>
+        for
+          first <- p
+          rest <- p repeat n - 1
+        yield
+          first :: rest
 
   infix def >>[S](q: =>ParserT[I, S, M]) =
     for
@@ -95,7 +111,11 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
 
   def anyOf(collection: IterableOnce[I]) =
     val set = Set.from(collection)
-    P.satisfySingle(s"<any of $set>", i => set.contains(i))
+    P.satisfySingle(s"<any of $set>", set)
+
+  def noneOf(collection: IterableOnce[I]) =
+    val set = Set.from(collection)
+    P.satisfySingle(s"<none of $set>", i => !set(i))
 
   def exactly(i: I) = P.satisfySingle(s"<exactly $i>", e => e == i)
 

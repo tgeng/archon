@@ -1,6 +1,7 @@
 package io.github.tgeng.archon.parser.combinators
 
 import io.github.tgeng.archon.common.*
+
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 
@@ -8,19 +9,69 @@ type StrParser[T] = ParserT[Char, T, Option]
 type MultiStrParser[T] = ParserT[Char, T, List]
 
 extension[T, M[+_]] (using env: MonadPlus[ParserM[Char, M]])(using MonadPlus[M])(p: ParserT[Char, T, M])
-  def <%<(q: =>ParserT[Char, ?, M]) = p << P.whitespaces << q
-  def >%>[S](q: =>ParserT[Char, S, M]) = p >> P.whitespaces >> q
+  def <%<(q: => ParserT[Char, ?, M]) = p << P.whitespaces << q
+  def >%>[S](q: => ParserT[Char, S, M]) = p >> P.whitespaces >> q
+  def <%%<(q: => ParserT[Char, ?, M])(using indent: Indent) = p << P.whitespacesWithIndent << q
+  def >%%>[S](q: => ParserT[Char, S, M])(using indent: Indent) = p >> P.whitespacesWithIndent >> q
   def % = P.whitespaces >> p << P.whitespaces
 
+opaque type Indent = Int
+
 extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])(e: P.type)
-  def space = P.anyOf(" ") asAtom "' '"
+  def getColumn: ParserT[Char, Int, M] = P.info((input, index) =>
+    val lineStart = input.lastIndexOf('\n', index) + 1
+      index - lineStart
+  )
+
+  def getIndent: ParserT[Char, Int, M] = P.info((input, index) =>
+    val lineStart = input.lastIndexOf('\n', index) + 1
+    val result = input.indexWhere(_ != ' ', lineStart)
+    if result == -1 then input.length - lineStart
+    else result - lineStart
+  )
+
+  def space = P.from(" ")
   def spaces = P.space.*.map(_.size)
+  def spaceOrTab = P.anyOf(" \t") asAtom "<space or tab>"
   def cr = P.from("\r") asAtom "'\r'"
   def lf = P.from("\n") asAtom "'\n'"
   def newline = "\r\n" | P.lf asAtom "<newline>"
   def newlines = P.newline.*.map(_.size)
-  def whitespace = P.anyOf(" \n\t\r") as () asAtom "<whitespace>"
+  def whitespace = P.anyOf(" \n\t\r") as() asAtom "<whitespace>"
   def whitespaces = P.whitespace.*
+
+  def indentedBlock[T](p: Indent ?=> ParserT[Char, T, M]): ParserT[Char, T, M] =
+    for
+      _ <- P.whitespaces
+      indent <- P.getIndent
+      r <- p(using indent)
+    yield r
+
+  def indentedBlockFromHere[T](p: Indent ?=> ParserT[Char, T, M]): ParserT[Char, T, M] =
+    for
+      indent <- P.getColumn
+      r <- p(using indent)
+    yield r
+
+  def indent(using indent: Indent) = P.space.repeat(indent)
+
+  def newlineWithIndent(using indent: Indent) =
+    (for
+      _ <- P.newline sepBy1 P.spaceOrTab.*
+      _ <- P.indent
+    yield ()) asAtom "<newlinesWithIndent>"
+
+  def whitespacesWithIndent(using indent: Indent) = P.newlineWithIndent.? >> P.spaceOrTab.* asAtom "<whitespacesWithIndent>"
+
+  def eob(using indent: Indent) =
+    (for
+      _ <- P.newline sepBy1 P.spaceOrTab.*
+      currentIndent <- P.getIndent
+      r <- if currentIndent < indent then
+        P.pure(())
+      else
+        P.fail("whatever, doesn't matter")
+    yield r) | P.eos asAtom "<eob>"
 
   def digit = P.satisfySingle("<digit>", Character.isDigit)
   def alphabetic = P.satisfySingle("<alphabetic>", Character.isAlphabetic)

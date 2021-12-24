@@ -1,0 +1,13 @@
+closed (_)
+infixl + -
+  looser than (_)
+infixl * /
+  tighter than +
+prefix + -
+  tighter than *
+infixl || &&
+  looser than +
+infix == < > <= >= !=
+  looser than +
+prefix !
+  same as ||

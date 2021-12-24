@@ -1,13 +1,12 @@
 package io.github.tgeng.archon.parser
 
 import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.*
+import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.ErrorKind.*
+import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.Precedence.*
+import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.PrecedenceKind.*
 
 import scala.collection.mutable
-
-case class Precedence(operator: Operator, kind: PrecedenceKind)
-
-enum PrecedenceKind:
-  case TighterThan, LooserThan, SameAs
 
 class PrecedenceGraphBuilder
 (
@@ -18,11 +17,6 @@ class PrecedenceGraphBuilder
    */
   private val precedenceMap: mutable.Map[Operator, mutable.Set[Operator]] = mutable.Map()
 ):
-
-  import Precedence.*
-  import PrecedenceGraphBuilder.*
-  import PrecedenceGraphBuilder.ErrorKind.*
-  import PrecedenceKind.*
 
   def add(operator: Operator, precedences: Seq[Precedence]): Either[Error, Unit] =
     def error(kind: ErrorKind) = Left(new Error(operator, kind))
@@ -80,11 +74,44 @@ class PrecedenceGraphBuilder
 
   override def clone(): PrecedenceGraphBuilder = new PrecedenceGraphBuilder(representatives.clone(), precedenceMap.clone())
 
-object PrecedenceGraphBuilder {
+object PrecedenceGraphBuilder:
   class Error(operator: Operator, kind: ErrorKind)
 
   enum ErrorKind:
     case AlreadyExist
     case ConflictingAdd(distinctOperators: Set[Operator])
     case LoopDetected(loop: Seq[Operator])
-}
+
+  case class Precedence(operator: Operator, kind: PrecedenceKind)
+
+  enum PrecedenceKind:
+    case TighterThan, LooserThan, SameAs
+
+type OperatorName = Seq[String]
+
+case class PrecedenceRule(fixity: Fixity, operatorNames: Seq[OperatorName], precedences: List[(PrecedenceKind, OperatorName)])
+
+object PrecedenceRule:
+
+  import io.github.tgeng.archon.common.given
+  import io.github.tgeng.archon.parser.combinators.single.given
+  import io.github.tgeng.archon.parser.combinators.{*, given}
+
+  val precedenceRuleParser: StrParser[PrecedenceRule] = P {
+    val operatorName = "[^_]+".r.map(_.matched) sepBy1 "_"
+    val operatorNames = P.indentedBlockFromHere((operatorName sepBy1 P.whitespaces) <%%< P.eob)
+    val precedences: StrParser[List[(PrecedenceKind, OperatorName)]] = P.indentedBlock {
+      "looser than " >%%> operatorNames.map(_.map((LooserThan, _))) |
+        "tighter than " >%%> operatorNames.map(_.map((TighterThan, _))) |
+        "same as " >%%> operatorNames.map(_.map((SameAs, _)))
+    }
+    import Fixity.*
+    import Associativity.*
+    val fixity = ("closed " as Closed) | ("infixl " as Infix(Left)) | ("infixr " as Infix(Right)) |
+      ("infix " as Infix(Non)) | ("prefix " as Prefix) | ("postfix " as Postfix)
+    P.indentedBlock {
+      (fixity << P.whitespacesWithIndent, operatorNames, P.indent >> P.space.+ >> precedences)
+        .map(t => PrecedenceRule(t(0), t(1), t(2)))
+    }
+  }
+

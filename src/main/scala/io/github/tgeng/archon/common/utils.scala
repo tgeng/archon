@@ -52,3 +52,9 @@ def detectLoop[T](nodes: IterableOnce[T], getNeighbors: T => IterableOnce[T]): O
     parents.add(t)
     getNeighbors(t).iterator.foreach(t => stack.push((t, index + 1)))
   None
+
+extension (s: String)
+  def removeSuffix(suffix: String) = if s.endsWith(suffix) then s.dropRight(suffix.length) else s
+
+inline def debug(inline a: Any) =
+  println(stringify(a) + " = " + a)

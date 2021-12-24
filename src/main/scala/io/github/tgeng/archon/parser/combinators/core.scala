@@ -62,6 +62,10 @@ extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M
         case Some((advance, t)) => success(mm.pure((advance, t)))
         case None => failure(Seq(ParseError(index, description, targets)))
 
+  def info(action: (IndexedSeq[I], Int) => T) : ParserT[I, T, M] = new ParserT[I, T, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+      success(mm.pure((0, action(input, index))))
+
 extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using m: MonadPlus[M])(p: ParserT[I, T, M])
   infix def asAtom(description: String) = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
@@ -164,7 +168,7 @@ given ParseResultMonadPlus [M[+_]] (using flattener: Flattener[M])(using env: Mo
       case _ => a
 
 private inline def createNamedParser[I, T, M[+_]](inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null)(using env: MonadPlus[ParserM[I, M]]) =
-  val nameToUse = if (name == null) enclosingName(parser) else name
+  val nameToUse = if (name == null) enclosingName(parser).removeSuffix("Parser") else name
   new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] = parser.parseImpl(index)
     override def targetName: Option[String] = Some(nameToUse)
