@@ -1,10 +1,10 @@
-package io.github.tgeng.archon.parser
+package io.github.tgeng.archon.parser.mixfix
 
 import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.*
-import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.ErrorKind.*
-import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.Precedence.*
-import io.github.tgeng.archon.parser.PrecedenceGraphBuilder.PrecedenceKind.*
+import io.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.*
+import io.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.ErrorKind.*
+import io.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence.*
+import io.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.PrecedenceKind.*
 
 import scala.collection.mutable
 
@@ -87,9 +87,7 @@ object PrecedenceGraphBuilder:
   enum PrecedenceKind:
     case TighterThan, LooserThan, SameAs
 
-type OperatorName = Seq[String]
-
-case class PrecedenceRule(fixity: Fixity, operatorNames: Seq[OperatorName], precedences: List[(PrecedenceKind, OperatorName)])
+case class PrecedenceRule(fixity: Fixity, operatorNames: Seq[String], precedences: List[(PrecedenceKind, String)])
 
 object PrecedenceRule:
 
@@ -98,9 +96,9 @@ object PrecedenceRule:
   import io.github.tgeng.archon.parser.combinators.{*, given}
 
   val precedenceRuleParser: StrParser[PrecedenceRule] = P {
-    val operatorName = "[^_]+".r.map(_.matched) sepBy1 "_"
+    val operatorName = "\\p{Graph}+".r.map(_.matched)
     val operatorNames = P.indentedBlockFromHere((operatorName sepBy1 P.whitespaces) <%%< P.eob)
-    val precedences: StrParser[List[(PrecedenceKind, OperatorName)]] = P.indentedBlock {
+    val precedences = P.indentedBlock {
       "looser than " >%%> operatorNames.map(_.map((LooserThan, _))) |
         "tighter than " >%%> operatorNames.map(_.map((TighterThan, _))) |
         "same as " >%%> operatorNames.map(_.map((SameAs, _)))

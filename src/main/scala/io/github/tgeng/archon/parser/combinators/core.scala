@@ -93,6 +93,18 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using m: MonadPlus[
       else
         parseResult.withLevel(targets.size)
 
+extension[I, T, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using m: MonadPlus[M])(p: ParserT[I, T, M])
+  /**
+   * Similar to `or` in `MonadPlus[ParserT]`, but this operator does not invoke the second parser
+   * if the first is successful, even if `M` is a `List` for non-deterministic parsing.
+   */
+  infix def ||(q: ParserT[I, T, M]) = new ParserT[I, T, M]:
+    override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =
+      val pResult = p.doParse(index)
+      // Only continue if first failed and commitLevel says do not abort
+      if pResult.result == m.empty && pResult.commitLevel > targets.size then env.or(pResult, q.doParse(index))
+      else pResult
+
 extension[I, T] (p: Parser[I, T])
   def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], (Int, T)] =
     val ParseResult(result, errors, _) = p.doParse(index)(using input)(using targets)

@@ -1,6 +1,8 @@
 package io.github.tgeng.archon.common
 
 import java.io.{BufferedWriter, File, FileWriter}
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import scala.collection.mutable
 
 extension[T] (t: T | Null)
@@ -27,6 +29,7 @@ extension[T <: AutoCloseable] (t: T)
 
 extension (f: File)
   infix def / (subPath: String) = new File(f, subPath)
+  def read() = String.join("\n", Files.readAllLines(f.toPath, StandardCharsets.UTF_8)).!!
   def write(text: String) = new BufferedWriter(FileWriter(f)).use { writer => writer.write(text) }
 
 extension[E] (it: IterableOnce[E])
@@ -55,6 +58,7 @@ def detectLoop[T](nodes: IterableOnce[T], getNeighbors: T => IterableOnce[T]): O
 
 extension (s: String)
   def removeSuffix(suffix: String) = if s.endsWith(suffix) then s.dropRight(suffix.length) else s
+  def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
 
 inline def debug(inline a: Any) =
   println(stringify(a) + " = " + a)
