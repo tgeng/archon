@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.parser
+package io.github.tgeng.archon.parser.mixfix
 
 import io.github.tgeng.archon.common.*
 import io.github.tgeng.archon.parser.combinators.{*, given}
@@ -19,7 +19,7 @@ enum Fixity:
    */
   case Closed
 
-import io.github.tgeng.archon.parser.Fixity.*
+import io.github.tgeng.archon.parser.mixfix.Fixity.*
 
 case class Operator(namespace: QualifiedName, fixity: Fixity, nameParts: List[String])
 object Operator:
@@ -49,7 +49,7 @@ enum MixfixAst[N]:
   case ApplyCall(args: List[MixfixAst[N]])
   case Identifier(name: N)
 
-import io.github.tgeng.archon.parser.MixfixAst.*
+import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 
 def createMixfixParser[N, M[+_]](g: PrecedenceGraph)(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using nn: NamePart[N]): ParserT[N, MixfixAst[N], M] =
   def expr: ParserT[N, MixfixAst[N], M] = g.map(pHat).reduce(_ | _) | closedPlus
