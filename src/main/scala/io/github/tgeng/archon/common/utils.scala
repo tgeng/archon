@@ -32,35 +32,37 @@ extension (f: File)
   def read() = String.join("\n", Files.readAllLines(f.toPath, StandardCharsets.UTF_8)).!!
   def write(text: String) = new BufferedWriter(FileWriter(f)).use { writer => writer.write(text) }
 
-extension[E] (it: IterableOnce[E])
-  def bfs(gen: E => IterableOnce[E], seen: mutable.Set[E] = mutable.Set[E]()) : IterableOnce[E] =
-      val queue = mutable.Queue(it.iterator.toSeq : _*)
+extension[E] (nodes: IterableOnce[E])
+  def bfs(getNeighbors: E => IterableOnce[E], seen: mutable.Set[E] = mutable.Set[E]()) : IterableOnce[E] =
+      val queue = mutable.Queue(nodes.iterator.toSeq : _*)
       seen.addAll(queue)
       new Iterator[E]:
         def hasNext: Boolean = queue.nonEmpty
         def next(): E =
           val e = queue.dequeue()
-          queue.enqueueAll(gen(e).iterator.filter(e => seen.add(e)))
+          queue.enqueueAll(getNeighbors(e).iterator.filter(e => seen.add(e)))
           e
 
-def detectLoop[T](nodes: IterableOnce[T], getNeighbors: T => IterableOnce[T]): Option[Seq[T]] =
-  val stack = mutable.Stack[(T, Int)](nodes.iterator.map(n => (n, 0)).toSeq : _*)
-  val parents = mutable.LinkedHashSet[T]()
-  val safeNodes = mutable.Set[T]()
-  while stack.nonEmpty do
-    val (t, index) = stack.pop()
-    while index != parents.size do
-      safeNodes.add(parents.last)
-      parents.remove(parents.last)
-    if parents.contains(t) then
-      return Some(parents.dropWhile(_ != t).toSeq)
-    parents.add(t)
-    getNeighbors(t).iterator.filterNot(safeNodes).foreach(t => stack.push((t, index + 1)))
-  None
+  def detectLoop(getNeighbors: E => IterableOnce[E]): Option[Seq[E]] =
+    val stack = mutable.Stack[(E, Int)](nodes.iterator.map(n => (n, 0)).toSeq : _*)
+    val parents = mutable.LinkedHashSet[E]()
+    val safeNodes = mutable.Set[E]()
+    while stack.nonEmpty do
+      val (t, index) = stack.pop()
+      while index != parents.size do
+        safeNodes.add(parents.last)
+        parents.remove(parents.last)
+      if parents.contains(t) then
+        return Some(parents.dropWhile(_ != t).toSeq)
+      parents.add(t)
+      getNeighbors(t).iterator.filterNot(safeNodes).foreach(t => stack.push((t, index + 1)))
+    None
 
 extension (s: String)
   def removeSuffix(suffix: String) = if s.endsWith(suffix) then s.dropRight(suffix.length) else s
   def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
 
-inline def debug(inline a: Any) =
-  println(stringify(a) + " = " + a)
+extension[T] (inline t: T)
+  inline def debug : T =
+    println(stringify(t) + " = " + t)
+    t

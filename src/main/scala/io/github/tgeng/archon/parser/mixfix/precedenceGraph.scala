@@ -40,7 +40,7 @@ class PrecedenceGraphBuilder
       case _ => Set()
     ).toSet
 
-    val loop = detectLoop(precedenceMap.keys, op =>
+    val loop = precedenceMap.keys.detectLoop(op =>
       val neighbors = precedenceMap.get(op).getOrElse(Set()).to(mutable.Set)
       if op == representative then neighbors.addAll(looserThanOperators)
       if tighterThanOperators.contains(op) then neighbors.add(representative)
@@ -74,7 +74,7 @@ class PrecedenceGraphBuilder
     )
     // TODO: topologically sort this so that lower nodes are visited first. This makes it faster to
     // yield the correct AST with the mixfix parser.
-    representatives.values.map(operatorToNodeMap).toSeq
+    nodes.keys.map(operatorToNodeMap).toSeq
 
   override def clone(): PrecedenceGraphBuilder = new PrecedenceGraphBuilder(representatives.clone(), precedenceMap.clone())
 

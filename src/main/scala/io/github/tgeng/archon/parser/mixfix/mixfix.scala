@@ -76,16 +76,27 @@ import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 // TODO: filter operators by name part. This can be done by creating another info parser for
 //  querying available name parts in the input and then create the second parser based on this info.
 def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N, L, M])(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using env: MonadPlus[ParseResultM[M]])(using nn: NamePart[N]): ParserT[N, MixfixAst[N, L], M] =
-  def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] = parsers.reduceOption(_ | _).getOrElse(P.fail("<tighter ops>"))
-  def expr: ParserT[N, MixfixAst[N, L], M] = union(g.map(pHat)) | closedPlus
+  def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
+    parsers.reduceOption(_ | _).getOrElse(P.fail("<tighter ops>"))
+  // TODO: use `||` for this union after topological sort is implemented
+  def expr: ParserT[N, MixfixAst[N, L], M] = union(g.map(pHat)) || closedPlus
 
   extension (node: PrecedenceNode)
-    def pHat: ParserT[N, MixfixAst[N, L], M] = P(
-      (node.pUp, node.op(Infix(Associativity.Non)), node.pUp).map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
+    def pHat: ParserT[N, MixfixAst[N, L], M] = P {
+      (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
+        .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
         // somehow type inferencing is not working here and requires explicit type arguments
-        P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](pRight, P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))), pUp) |
-        P.foldLeft1[MixfixAst[N, L], (Operator, List[MixfixAst[N, L]], List[N])](pUp, P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))), pLeft)
-    )
+        P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](
+          pRight,
+          P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
+          pUp
+        ) |
+        P.foldLeft1[MixfixAst[N, L], (Operator, List[MixfixAst[N, L]], List[N])](
+          pUp,
+          P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
+          pLeft
+        )
+    }
 
     def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(node.op(Prefix) |
       (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2))))
