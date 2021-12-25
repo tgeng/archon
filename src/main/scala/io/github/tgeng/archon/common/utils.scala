@@ -46,14 +46,16 @@ extension[E] (it: IterableOnce[E])
 def detectLoop[T](nodes: IterableOnce[T], getNeighbors: T => IterableOnce[T]): Option[Seq[T]] =
   val stack = mutable.Stack[(T, Int)](nodes.iterator.map(n => (n, 0)).toSeq : _*)
   val parents = mutable.LinkedHashSet[T]()
+  val safeNodes = mutable.Set[T]()
   while stack.nonEmpty do
     val (t, index) = stack.pop()
+    while index != parents.size do
+      safeNodes.add(parents.last)
+      parents.remove(parents.last)
     if parents.contains(t) then
       return Some(parents.dropWhile(_ != t).toSeq)
-    while index != parents.size do
-      parents.remove(parents.last)
     parents.add(t)
-    getNeighbors(t).iterator.foreach(t => stack.push((t, index + 1)))
+    getNeighbors(t).iterator.filterNot(safeNodes).foreach(t => stack.push((t, index + 1)))
   None
 
 extension (s: String)

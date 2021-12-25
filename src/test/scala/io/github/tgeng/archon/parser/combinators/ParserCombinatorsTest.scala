@@ -77,6 +77,9 @@ class Parsers[M[+_]](using MonadPlus[ParserM[Char, M]])(using MonadPlus[M]):
     jValue << P.eos
   }
 
+  import io.github.tgeng.archon.parser.mixfix.PrecedenceRule
+  def precedenceRule = PrecedenceRule.precedenceRuleParser
+
 class ParserCombinatorsTest extends AnyFreeSpec:
   "single" - {
     import io.github.tgeng.archon.parser.combinators.single.given
@@ -135,7 +138,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
               expectedPart.append(outputs.lift(0).getOrElse(""))
             case Some((advance, t)) =>
               actualPart.append(s"$advance | $t")
-              expectedPart.append(outputs(0))
+              expectedPart.append(outputs.lift(0).getOrElse(""))
             case l: List[(Int, Any)] =>
               actualPart.append(l.map((advance, t) => s"$advance | $t").mkString("\n----\n"))
               expectedPart.append(outputs.mkString("\n----\n"))

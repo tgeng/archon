@@ -41,7 +41,7 @@ class PrecedenceGraphBuilder
     ).toSet
 
     val loop = detectLoop(precedenceMap.keys, op =>
-      val neighbors = precedenceMap(op).to(mutable.Set)
+      val neighbors = precedenceMap.get(op).getOrElse(Set()).to(mutable.Set)
       if op == representative then neighbors.addAll(looserThanOperators)
       if tighterThanOperators.contains(op) then neighbors.add(representative)
       neighbors
@@ -58,24 +58,28 @@ class PrecedenceGraphBuilder
   def build(filter: Operator => Boolean = _ => true): PrecedenceGraph =
     val nodes: Map[Operator, Iterable[Operator]] = this.representatives.groupMap(_ (1))(_ (0))
     val precedenceMap = this.precedenceMap.view.mapValues(_.toSet).toMap
-    val nodePrecedenceMap = mutable.Map[PrecedenceNode, Set[PrecedenceNode]]()
+    val nodePrecedenceMap = mutable.Map[PrecedenceNode, Set[PrecedenceNode]]().withDefaultValue(Set())
     val operatorToNodeMap = nodes.map((representative, operators) =>
       val operatorsMap = operators.toSet.filter(filter).groupBy(_.fixity)
       (representative, new PrecedenceNode {
         override def operators: Map[Fixity, Set[Operator]] = operatorsMap
 
         override def neighbors: Set[PrecedenceNode] = nodePrecedenceMap(this).bfs(nodePrecedenceMap).iterator.toSet
+
+        override def toString: String = representative.toString
       })
     )
     precedenceMap.foreach((k, v) =>
       nodePrecedenceMap(operatorToNodeMap(k)) = v.map(operatorToNodeMap)
     )
-    nodePrecedenceMap.keys.toSet
+    // TODO: topologically sort this so that lower nodes are visited first. This makes it faster to
+    // yield the correct AST with the mixfix parser.
+    representatives.values.map(operatorToNodeMap).toSeq
 
   override def clone(): PrecedenceGraphBuilder = new PrecedenceGraphBuilder(representatives.clone(), precedenceMap.clone())
 
 object PrecedenceGraphBuilder:
-  class Error(operator: Operator, kind: ErrorKind)
+  case class Error(operator: Operator, kind: ErrorKind)
 
   enum ErrorKind:
     case AlreadyExist
@@ -94,10 +98,11 @@ object PrecedenceRule:
   import io.github.tgeng.archon.common.given
   import io.github.tgeng.archon.parser.combinators.single.given
   import io.github.tgeng.archon.parser.combinators.{*, given}
+  import Fixity.*
 
   val precedenceRuleParser: StrParser[PrecedenceRule] = P {
-    val operatorName = "\\p{Graph}+".r.map(_.matched)
-    val operatorNames = P.indentedBlockFromHere((operatorName sepBy1 P.whitespaces) <%%< P.eob)
+    val operatorName = "\\p{Graph}+".r.map(_.matched).withFilter(s => !s.contains("__"), "<no consecutive _>")
+    val operatorNames = P.indentedBlockFromHere((operatorName sepBy1 P.whitespacesWithIndent) <%%< P.eob)
     val precedences = P.indentedBlock {
       "looser than " >%%> operatorNames.map(_.map((LooserThan, _))) |
         "tighter than " >%%> operatorNames.map(_.map((TighterThan, _))) |
@@ -108,8 +113,16 @@ object PrecedenceRule:
     val fixity = ("closed " as Closed) | ("infixl " as Infix(Left)) | ("infixr " as Infix(Right)) |
       ("infix " as Infix(Non)) | ("prefix " as Prefix) | ("postfix " as Postfix)
     P.indentedBlock {
-      (fixity << P.whitespacesWithIndent, operatorNames, P.indent >> P.space.+ >> precedences)
-        .map(t => PrecedenceRule(t(0), t(1), t(2)))
+      (fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.+ >> precedences)?)
+        .map(t => PrecedenceRule(t(0), t(1), t(2).getOrElse(Nil)))
     }
   }
+
+  def normalizeOperatorName(name: String, fixity: Fixity) : String =
+    val noUnderscore = name.stripPrefix("_").stripSuffix("_")
+    fixity match
+      case Closed => noUnderscore
+      case Infix(_) => s"_${noUnderscore}_"
+      case Prefix => s"_${noUnderscore}"
+      case Postfix => s"_${noUnderscore}"
 
