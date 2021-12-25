@@ -42,8 +42,8 @@ object Operator:
  * not be cycles. Implementation should be immutable.
  */
 trait PrecedenceNode:
-  def operators: Map[Fixity, Set[Operator]]
-  def neighbors: Set[PrecedenceNode]
+  def operators: Map[Fixity, Seq[Operator]]
+  def neighbors: Seq[PrecedenceNode]
 
 /**
  * A DAG.
@@ -107,7 +107,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
     def pUp: ParserT[N, MixfixAst[N, L], M] = P(union(node.neighbors.map(_.pHat)) | closedPlus)
 
     def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(
-      union(node.operators.getOrElse(fix, Set())
+      union(node.operators.getOrElse(fix, Seq())
         .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
     )
 

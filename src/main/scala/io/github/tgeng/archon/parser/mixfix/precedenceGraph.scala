@@ -15,33 +15,33 @@ class PrecedenceGraphBuilder
   /**
    * Maps from a representative operator to the representative of the tighter node.
    */
-  private val precedenceMap: mutable.Map[Operator, mutable.Set[Operator]] = mutable.Map()
+  private val precedenceMap: mutable.Map[Operator, mutable.ArrayBuffer[Operator]] = mutable.Map()
 ):
 
   def add(operator: Operator, precedences: Seq[Precedence]): Either[Error, Unit] =
-    def error(kind: ErrorKind) = Left(new Error(operator, kind))
+    def error(kind: ErrorKind) = Left(Error(operator, kind))
 
     if representatives.contains(operator) then return error(AlreadyExist)
     val sameAsOperators = precedences.flatMap(p => p.kind match
-      case SameAs => Set(representatives(p.operator))
-      case _ => Set()
+      case SameAs => Seq(representatives(p.operator))
+      case _ => Seq()
     )
     val representative = sameAsOperators.size match
       case 0 => operator
       case 1 => representatives(sameAsOperators.head)
-      case _ => return error(ConflictingAdd(sameAsOperators.toSet))
+      case _ => return error(ConflictingAdd(sameAsOperators))
 
     val tighterThanOperators = precedences.flatMap(p => p.kind match
-      case TighterThan => Set(representatives(p.operator))
-      case _ => Set()
-    ).toSet
+      case TighterThan => Seq(representatives(p.operator))
+      case _ => Seq()
+    )
     val looserThanOperators = precedences.flatMap(p => p.kind match
-      case LooserThan => Set(representatives(p.operator))
-      case _ => Set()
-    ).toSet
+      case LooserThan => Seq(representatives(p.operator))
+      case _ => Seq()
+    )
 
     val loop = precedenceMap.keys.detectLoop(op =>
-      val neighbors = precedenceMap.get(op).getOrElse(Set()).to(mutable.Set)
+      val neighbors = precedenceMap.getOrElse(op, Set()).to(mutable.Set)
       if op == representative then neighbors.addAll(looserThanOperators)
       if tighterThanOperators.contains(op) then neighbors.add(representative)
       neighbors
@@ -51,20 +51,20 @@ class PrecedenceGraphBuilder
       case _ => ()
 
     representatives(operator) = representative
-    tighterThanOperators.foreach(o => precedenceMap.getOrElseUpdate(o, mutable.Set()).add(representative))
-    looserThanOperators.foreach(o => precedenceMap.getOrElseUpdate(representative, mutable.Set()).add(o))
+    tighterThanOperators.foreach(o => precedenceMap.getOrElseUpdate(o, mutable.ArrayBuffer()).append(representative))
+    looserThanOperators.foreach(o => precedenceMap.getOrElseUpdate(representative, mutable.ArrayBuffer()).append(o))
     Right(())
 
   def build(filter: Operator => Boolean = _ => true): PrecedenceGraph =
     val nodes: Map[Operator, Iterable[Operator]] = this.representatives.groupMap(_ (1))(_ (0))
-    val precedenceMap = this.precedenceMap.view.mapValues(_.toSet).toMap
-    val nodePrecedenceMap = mutable.Map[PrecedenceNode, Set[PrecedenceNode]]().withDefaultValue(Set())
+    val precedenceMap = this.precedenceMap.view.mapValues(_.toSeq).toMap
+    val nodePrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]().withDefaultValue(Seq())
     val operatorToNodeMap = nodes.map((representative, operators) =>
-      val operatorsMap = operators.toSet.filter(filter).groupBy(_.fixity)
+      val operatorsMap = operators.toSeq.filter(filter).groupBy(_.fixity)
       (representative, new PrecedenceNode {
-        override def operators: Map[Fixity, Set[Operator]] = operatorsMap
+        override def operators: Map[Fixity, Seq[Operator]] = operatorsMap
 
-        override def neighbors: Set[PrecedenceNode] = nodePrecedenceMap(this).bfs(nodePrecedenceMap).iterator.toSet
+        override def neighbors: Seq[PrecedenceNode] = nodePrecedenceMap(this).bfs(nodePrecedenceMap).iterator.toSeq
 
         override def toString: String = representative.toString
       })
@@ -83,7 +83,7 @@ object PrecedenceGraphBuilder:
 
   enum ErrorKind:
     case AlreadyExist
-    case ConflictingAdd(distinctOperators: Set[Operator])
+    case ConflictingAdd(distinctOperators: Seq[Operator])
     case LoopDetected(loop: Seq[Operator])
 
   case class Precedence(operator: Operator, kind: PrecedenceKind)

@@ -4,6 +4,7 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import scala.collection.mutable
+import scala.math.max
 
 extension[T] (t: T | Null)
   def !! : T =
@@ -32,9 +33,9 @@ extension (f: File)
   def read() = String.join("\n", Files.readAllLines(f.toPath, StandardCharsets.UTF_8)).!!
   def write(text: String) = new BufferedWriter(FileWriter(f)).use { writer => writer.write(text) }
 
-extension[E] (nodes: IterableOnce[E])
+extension[E] (startingNodes: IterableOnce[E])
   def bfs(getNeighbors: E => IterableOnce[E], seen: mutable.Set[E] = mutable.Set[E]()) : IterableOnce[E] =
-      val queue = mutable.Queue(nodes.iterator.toSeq : _*)
+      val queue = mutable.Queue(startingNodes.iterator.toSeq : _*)
       seen.addAll(queue)
       new Iterator[E]:
         def hasNext: Boolean = queue.nonEmpty
@@ -43,6 +44,8 @@ extension[E] (nodes: IterableOnce[E])
           queue.enqueueAll(getNeighbors(e).iterator.filter(e => seen.add(e)))
           e
 
+/** [[nodes]] may or may not contain every single nodes in the graph. */
+extension[E] (nodes: IterableOnce[E])
   def detectLoop(getNeighbors: E => IterableOnce[E]): Option[Seq[E]] =
     val stack = mutable.Stack[(E, Int)](nodes.iterator.map(n => (n, 0)).toSeq : _*)
     val parents = mutable.LinkedHashSet[E]()
@@ -57,6 +60,24 @@ extension[E] (nodes: IterableOnce[E])
       parents.add(t)
       getNeighbors(t).iterator.filterNot(safeNodes).foreach(t => stack.push((t, index + 1)))
     None
+
+extension[E] (allNodes: IterableOnce[E])
+  def getMaxIncomingPathLength(getNeighbors: E => IterableOnce[E]): Map[E, Int] =
+    val inDegree = mutable.Map[E, Int]().withDefaultValue(0)
+    for node <- allNodes do
+      for neighbor <- getNeighbors(node) do
+        inDegree(neighbor) += 1
+    val maxIncomingPathLenghts = mutable.Map[E, Int]().withDefaultValue(0)
+    val queue = mutable.Queue(inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq : _*)
+    assert(queue.nonEmpty)
+    val maxDegreeForDag = inDegree.size * (inDegree.size - 1)
+    while queue.nonEmpty do
+      val node = queue.dequeue()
+      for neighbor <- getNeighbors(node) do
+        maxIncomingPathLenghts(neighbor) = max(maxIncomingPathLenghts(node) + 1, maxIncomingPathLenghts(neighbor))
+        if maxIncomingPathLenghts(neighbor) > maxDegreeForDag then throw IllegalArgumentException()
+        queue.enqueue(node)
+    maxIncomingPathLenghts.toMap
 
 extension (s: String)
   def removeSuffix(suffix: String) = if s.endsWith(suffix) then s.dropRight(suffix.length) else s
