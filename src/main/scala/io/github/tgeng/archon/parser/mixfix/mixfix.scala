@@ -73,6 +73,8 @@ enum MixfixAst[N, L]:
 
 import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 
+// TODO: filter operators by name part. This can be done by creating another info parser for
+//  querying available name parts in the input and then create the second parser based on this info.
 def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N, L, M])(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using env: MonadPlus[ParseResultM[M]])(using nn: NamePart[N]): ParserT[N, MixfixAst[N, L], M] =
   def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] = parsers.reduceOption(_ | _).getOrElse(P.fail("<tighter ops>"))
   def expr: ParserT[N, MixfixAst[N, L], M] = union(g.map(pHat)) | closedPlus
