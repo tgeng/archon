@@ -25,7 +25,7 @@ object ParseResult:
 
   private def trimErrors(errors: Seq[ParseError]) : Seq[ParseError] =
     val maxTargetProgress = errors.map(e => e.index).maxOption.getOrElse(0)
-    errors.filter(e => e.index == maxTargetProgress)
+    errors.filter(e => e.index == maxTargetProgress).take(5)
 
 import ParseResult.*
 

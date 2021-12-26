@@ -69,7 +69,7 @@ class PrecedenceGraphBuilder
 
         override def neighbors: Seq[PrecedenceNode] = nodePrecedenceMap(this).bfs(nodePrecedenceMap).iterator.toSeq
 
-        override def toString: String = representative.toString
+        override def toString: String = representative.toString + "->" + precedenceMap.getOrElse(representative, Nil)
       })
     )
     precedenceMap.foreach((k, v) =>

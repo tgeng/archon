@@ -76,14 +76,14 @@ import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 // TODO: filter operators by name part. This can be done by creating another info parser for
 //  querying available name parts in the input and then create the second parser based on this info.
 def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N, L, M])(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using env: MonadPlus[ParseResultM[M]])(using nn: NamePart[N]): ParserT[N, MixfixAst[N, L], M] =
-  val illegalIdentifierNames = g.flatMap(node => node.operators.values.flatMap(ops => ops.map(op => op.nameParts.head))).toSet
+  val illegalIdentifierNames = g.flatMap(node => node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts))).toSet
   def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ | _).getOrElse(P.fail("<tighter ops>"))
 
   def unionBiased[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ || _).getOrElse(P.fail("<tighter ops>"))
 
-  def expr: ParserT[N, MixfixAst[N, L], M] = unionBiased(g.map(pHat)) || closedPlus
+  def expr: ParserT[N, MixfixAst[N, L], M] = union(g.map(pHat)) | closedPlus
 
   extension (node: PrecedenceNode)
     def pHat: ParserT[N, MixfixAst[N, L], M] = P {
@@ -118,7 +118,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def closedPlus: ParserT[N, MixfixAst[N, L], M] = P(closed.+.map(args => if args.size == 1 then args(0) else ApplyCall(args)))
 
   def closed: ParserT[N, MixfixAst[N, L], M] = P(
-    // prefer literal over closed operator and literal
+    // prefer literal over closed operator and identifiers
     literalParser.map(Literal.apply) ||
     union(g.map(node => node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)))) ||
     P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)
@@ -132,8 +132,8 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
           firstNamePart <- namePart(firstName)
           argsAndRestNameParts <- P.lift(names.map(name => P.lift((p, namePart(name)))))
         yield
-          (argsAndRestNameParts.map(_ (0)), firstNamePart :: argsAndRestNameParts.map(_ (1)))
+          (argsAndRestNameParts.map(_(0)), firstNamePart :: argsAndRestNameParts.map(_(1)))
 
-  def namePart(s: String) = P.satisfySingle(s"'$s'", n => nn.asString(n) == s)
+  def namePart(s: String) = P.satisfySingle(s"'$s'", n => nn.asString(n) == s).!
   
   expr << P.eos
