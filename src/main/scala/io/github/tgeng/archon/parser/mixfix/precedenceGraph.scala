@@ -57,6 +57,9 @@ class PrecedenceGraphBuilder
 
   def build(filter: Operator => Boolean = _ => true): PrecedenceGraph =
     val nodes: Map[Operator, Iterable[Operator]] = this.representatives.groupMap(_ (1))(_ (0))
+    val maxIncomingPathLengths = nodes.keys.getMaxIncomingPathLength(this.precedenceMap.withDefaultValue(mutable.ArrayBuffer()))
+    // Remove unnecessary edges in the graph
+    this.precedenceMap.foreach((op, ops) => ops.subtractAll(ops.filter(o => maxIncomingPathLengths(o) != maxIncomingPathLengths(op) + 1)))
     val precedenceMap = this.precedenceMap.view.mapValues(_.toSeq).toMap
     val nodePrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]().withDefaultValue(Seq())
     val operatorToNodeMap = nodes.map((representative, operators) =>
@@ -74,7 +77,7 @@ class PrecedenceGraphBuilder
     )
     // TODO: topologically sort this so that lower nodes are visited first. This makes it faster to
     // yield the correct AST with the mixfix parser.
-    nodes.keys.map(operatorToNodeMap).toSeq
+    nodes.keys.toSeq.sortBy(maxIncomingPathLengths).map(operatorToNodeMap)
 
   override def clone(): PrecedenceGraphBuilder = new PrecedenceGraphBuilder(representatives.clone(), precedenceMap.clone())
 
@@ -103,7 +106,7 @@ object PrecedenceRule:
   val precedenceRuleParser: StrParser[PrecedenceRule] = P {
     val operatorName = "\\p{Graph}+".r.map(_.matched).withFilter(s => !s.contains("__"), "<no consecutive _>")
     val operatorNames = P.indentedBlockFromHere((operatorName sepBy1 P.whitespacesWithIndent) <%%< P.eob)
-    val precedences = P.indentedBlock {
+    val precedence = P.indentedBlock {
       "looser than " >%%> operatorNames.map(_.map((LooserThan, _))) |
         "tighter than " >%%> operatorNames.map(_.map((TighterThan, _))) |
         "same as " >%%> operatorNames.map(_.map((SameAs, _)))
@@ -113,7 +116,7 @@ object PrecedenceRule:
     val fixity = ("closed " as Closed) | ("infixl " as Infix(Left)) | ("infixr " as Infix(Right)) |
       ("infix " as Infix(Non)) | ("prefix " as Prefix) | ("postfix " as Postfix)
     P.indentedBlock {
-      (fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.+ >> precedences)?)
+      (fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.+ >> precedence.+.map(_.flatten))?)
         .map(t => PrecedenceRule(t(0), t(1), t(2).getOrElse(Nil)))
     }
   }

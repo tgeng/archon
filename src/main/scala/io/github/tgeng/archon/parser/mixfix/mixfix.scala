@@ -76,10 +76,14 @@ import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 // TODO: filter operators by name part. This can be done by creating another info parser for
 //  querying available name parts in the input and then create the second parser based on this info.
 def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N, L, M])(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using env: MonadPlus[ParseResultM[M]])(using nn: NamePart[N]): ParserT[N, MixfixAst[N, L], M] =
+  val illegalIdentifierNames = g.flatMap(node => node.operators.values.flatMap(ops => ops.map(op => op.nameParts.head))).toSet
   def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ | _).getOrElse(P.fail("<tighter ops>"))
-  // TODO: use `||` for this union after topological sort is implemented
-  def expr: ParserT[N, MixfixAst[N, L], M] = union(g.map(pHat)) || closedPlus
+
+  def unionBiased[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
+    parsers.reduceOption(_ || _).getOrElse(P.fail("<tighter ops>"))
+
+  def expr: ParserT[N, MixfixAst[N, L], M] = unionBiased(g.map(pHat)) || closedPlus
 
   extension (node: PrecedenceNode)
     def pHat: ParserT[N, MixfixAst[N, L], M] = P {
@@ -104,7 +108,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
     def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(node.op(Postfix) |
       (node.op(Infix(Associativity.Left)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2))))
 
-    def pUp: ParserT[N, MixfixAst[N, L], M] = P(union(node.neighbors.map(_.pHat)) | closedPlus)
+    def pUp: ParserT[N, MixfixAst[N, L], M] = P(unionBiased(node.neighbors.map(_.pHat)) | closedPlus)
 
     def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(
       union(node.operators.getOrElse(fix, Seq())
@@ -117,7 +121,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
     // prefer literal over closed operator and literal
     literalParser.map(Literal.apply) ||
     union(g.map(node => node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)))) ||
-    P.any.map(Identifier.apply)
+    P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)
   )
 
   def between[T](p: => ParserT[N, T, M], nameParts: List[String]): ParserT[N, (List[T], List[N]), M] =
@@ -131,5 +135,5 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
           (argsAndRestNameParts.map(_ (0)), firstNamePart :: argsAndRestNameParts.map(_ (1)))
 
   def namePart(s: String) = P.satisfySingle(s"'$s'", n => nn.asString(n) == s)
-
+  
   expr << P.eos

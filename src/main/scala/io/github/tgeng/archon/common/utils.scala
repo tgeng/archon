@@ -67,17 +67,18 @@ extension[E] (allNodes: IterableOnce[E])
     for node <- allNodes do
       for neighbor <- getNeighbors(node) do
         inDegree(neighbor) += 1
-    val maxIncomingPathLenghts = mutable.Map[E, Int]().withDefaultValue(0)
+      if !inDegree.contains(node) then inDegree(node) = 0
+    val maxIncomingPathLengths = mutable.Map[E, Int]().withDefaultValue(0)
     val queue = mutable.Queue(inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq : _*)
     assert(queue.nonEmpty)
     val maxDegreeForDag = inDegree.size * (inDegree.size - 1)
     while queue.nonEmpty do
       val node = queue.dequeue()
       for neighbor <- getNeighbors(node) do
-        maxIncomingPathLenghts(neighbor) = max(maxIncomingPathLenghts(node) + 1, maxIncomingPathLenghts(neighbor))
-        if maxIncomingPathLenghts(neighbor) > maxDegreeForDag then throw IllegalArgumentException()
-        queue.enqueue(node)
-    maxIncomingPathLenghts.toMap
+        maxIncomingPathLengths(neighbor) = max(maxIncomingPathLengths(node) + 1, maxIncomingPathLengths(neighbor))
+        if maxIncomingPathLengths(neighbor) > maxDegreeForDag then throw IllegalArgumentException()
+        queue.enqueue(neighbor)
+    maxIncomingPathLengths.toMap.withDefaultValue(0)
 
 extension (s: String)
   def removeSuffix(suffix: String) = if s.endsWith(suffix) then s.dropRight(suffix.length) else s
