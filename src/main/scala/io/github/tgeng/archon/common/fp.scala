@@ -10,13 +10,13 @@ trait Functor[F[+_]]:
 trait Applicative[A[+_]] extends Functor[A] :
   def pure[S](s: S): A[S]
 
-  def starApply[T, S](a: A[T], f: =>A[T => S]): A[S]
+  def starApply[T, S](f: A[T => S], a: A[T]): A[S]
 
 trait Monad[M[+_]] extends Applicative[M] :
   def flatMap[T, S](m: M[T], f: T => M[S]): M[S] = flatten(map(m, f))
   def flatten[T](m: M[M[T]]) : M[T] = flatMap(m, t => t)
 
-  override def starApply[T, S](m: M[T], f: =>M[T => S]): M[S] = flatMap(m, t => map(f, f => f(t)))
+  override def starApply[T, S](f: M[T => S], m: M[T]): M[S] = flatMap(f, f => map(m, m => f(m)))
 
 trait Alternative[A[+_]] extends Applicative[A] :
   def empty[S]: A[S]

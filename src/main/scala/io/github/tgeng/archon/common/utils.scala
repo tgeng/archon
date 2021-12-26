@@ -81,10 +81,17 @@ extension[E] (allNodes: IterableOnce[E])
     maxIncomingPathLengths.toMap.withDefaultValue(0)
 
 extension (s: String)
-  def removeSuffix(suffix: String) = if s.endsWith(suffix) then s.dropRight(suffix.length) else s
   def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
 
 extension[T] (inline t: T)
-  inline def debug : T =
+  inline def debug: T =
     println(stringify(t) + " = " + t)
+    t
+
+  inline def print: T =
+    println(t)
+    t
+
+  inline def printIf(condition: Boolean): T =
+    if condition then println(t)
     t

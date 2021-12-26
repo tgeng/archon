@@ -24,9 +24,15 @@
 
 1 + 2 +
 ----
-5 | (1.0 + 2.0)
-----
-1 | 1.0
+when parsing expression->factor->atom:
+[1:8] 1 + 2 +
+             ^ expect '('
+when parsing expression->factor->atom->decimal:
+[1:8] 1 + 2 +
+             ^ expect <decimal>
+when parsing expression:
+[1:8] 1 + 2 +
+             ^ expect ' '
 
 1 + 2 * 3 / 4 - 5
 ----

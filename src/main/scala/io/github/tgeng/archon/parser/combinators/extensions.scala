@@ -3,10 +3,11 @@ package io.github.tgeng.archon.parser.combinators
 import io.github.tgeng.archon.common.{*, given}
 import io.github.tgeng.archon.parser.combinators.{*, given}
 
+extension[I, T, S, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(f: ParserT[I, T => S, M])
+  infix def <*>(p: ParserT[I, T, M]) = env.starApply(f, p)
+
 extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
   infix def map[S](g: T => S) = env.map(p, g)
-
-  infix def <*>[S](f: => ParserT[I, T => S, M]) = env.starApply(p, f)
 
   infix def flatMap[S](f: T => ParserT[I, S, M]) = env.flatMap(p, f)
 
@@ -45,46 +46,20 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
         yield
           first :: rest
 
-  infix def >>[S](q: =>ParserT[I, S, M]) =
-    for
-      _ <- p
-      result <- q
-    yield
-      result
+  infix def >>[S](q: ParserT[I, S, M]) = P.pure((a: T) => (b: S) => b) <*> p <*> q
 
-  infix def <<(q: =>ParserT[I, ?, M]) =
-    for
-      result <- p
-      _ <- q
-    yield
-      result
+  infix def <<(q: ParserT[I, ?, M]) = P.pure((a: T) => (b: Any) => a) <*> p <*> q
 
-  infix def sepBy1(delimiter: =>ParserT[I, ?, M]) =
-    for
-      first <- p
-      rest <- (delimiter >> p) *
-    yield
-      first :: rest
+  infix def sepBy1(delimiter: ParserT[I, ?, M]) = P.pure((a: T) => (b : List[T]) => a :: b) <*> p <*> (delimiter >> p).*
 
-  infix def sepBy(delimiter: =>ParserT[I, ?, M]) = (p sepBy1 delimiter) | P.pure(Nil)
+  infix def sepBy(delimiter: ParserT[I, ?, M]) = (p sepBy1 delimiter) | P.pure(Nil)
 
-  infix def sepByN(delimiters: List[ParserT[I, ?, M]]) =
-    for
-      first <- p
-      rest <- p.sepByNImpl(delimiters)
-    yield
-      first :: rest
+  infix def sepByN(delimiters: List[ParserT[I, ?, M]]) = P.pure((a: T) => (b : List[T]) => a :: b) <*> p <*> p.sepByNImpl(delimiters)
 
   private def sepByNImpl(delimiters: List[ParserT[I, ?, M]]) : ParserT[I, List[T], M] =
     delimiters match
       case Nil => P.pure(Nil)
-      case q :: ps =>
-        for
-          _ <- q
-          first <- p
-          rest <- p.sepByNImpl(ps)
-        yield
-          first :: rest
+      case q :: ps => P.pure((_: Any) => (first: T) => (rest: List[T]) => first :: rest) <*> q <*> p <*> p.sepByNImpl(ps)
 
   infix def as[S](s: S) = p.map(_ => s)
 
@@ -121,8 +96,7 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
 
   def foldLeft[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for
-      acc <- acc
-      opElems <- (op, elem)*
+      (acc, opElems) <- (acc, (op, elem)*)
     yield
       opElems.foldLeft(acc) { (acc, opElem) =>
         val (op, elem) = opElem
@@ -131,8 +105,7 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
 
   def foldRight[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
     for
-      opElems <- (elem, op).*
-      acc <- acc
+      (opElems, acc) <- ((elem, op).*, acc)
     yield
       opElems.foldRight(acc) { (elemOp, acc) =>
         val (elem, op) = elemOp
@@ -141,8 +114,7 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
 
   def foldLeft1[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for
-      acc <- acc
-      opElems <- (op, elem)+
+      (acc, opElems) <- (acc, (op, elem)+)
     yield
       opElems.foldLeft(acc) { (acc, opElem) =>
         val (op, elem) = opElem
@@ -151,8 +123,7 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
 
   def foldRight1[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
     for
-      opElems <- (elem, op).+
-      acc <- acc
+      (opElems, acc) <- ((elem, op).+, acc)
     yield
       opElems.foldRight(acc) { (elemOp, acc) =>
         val (elem, op) = elemOp
@@ -162,12 +133,7 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
   def lift[T](ps: List[ParserT[I, T, M]]) : ParserT[I, List[T], M] =
     ps match
       case Nil => P.pure(Nil)
-      case x :: xs =>
-        for
-          x <- x
-          xs <- P.lift(xs)
-        yield
-          x :: xs
+      case x :: xs => P.pure((x: T) => (xs: List[T]) => x :: xs) <*> x <*> P.lift(xs)
 
   def lift[Ps <: Tuple](ps: Ps) : ParserT[I, ExtractT[I, Ps, M], M] =
     val parsers = ps.toList.asInstanceOf[List[ParserT[I, Any, M]]]

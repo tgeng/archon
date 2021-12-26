@@ -83,7 +83,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def unionBiased[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ || _).getOrElse(P.fail("<tighter ops>"))
 
-  def expr: ParserT[N, MixfixAst[N, L], M] = union(g.map(pHat)) | closedPlus
+  def expr: ParserT[N, MixfixAst[N, L], M] = P(union(g.map(pHat)) | closedPlus)
 
   extension (node: PrecedenceNode)
     def pHat: ParserT[N, MixfixAst[N, L], M] = P {
@@ -129,8 +129,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
       case Nil => throw IllegalArgumentException()
       case firstName :: names =>
         for
-          firstNamePart <- namePart(firstName)
-          argsAndRestNameParts <- P.lift(names.map(name => P.lift((p, namePart(name)))))
+          (firstNamePart, argsAndRestNameParts) <- (namePart(firstName), P.lift(names.map(name => P.lift((p, namePart(name))))))
         yield
           (argsAndRestNameParts.map(_(0)), firstNamePart :: argsAndRestNameParts.map(_(1)))
 

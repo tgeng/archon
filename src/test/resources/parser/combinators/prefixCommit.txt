@@ -1,6 +1,8 @@
 a
 ----
-1 | a
+when parsing prefixCommit:
+[1:2] a
+       ^ expect 'b'
 
 b
 ----
