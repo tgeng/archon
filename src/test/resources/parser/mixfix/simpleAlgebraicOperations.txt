@@ -48,6 +48,14 @@ if a then if b then c else d
 ----
 9 | [if `a` then [if `b` then `c`] else `d`]
 
+if a then ( if b then c else d )
+----
+11 | [if `a` then [( [if `b` then `c` else `d`] )]]
+
+if a then ( if b then c ) else d
+----
+11 | [if `a` then [( [if `b` then `c`] )] else `d`]
+
 if a then b
 ----
 4 | [if `a` then `b`]

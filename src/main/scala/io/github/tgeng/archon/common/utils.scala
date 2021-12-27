@@ -92,6 +92,6 @@ extension[T] (inline t: T)
     println(t)
     t
 
-  inline def printIf(condition: Boolean): T =
-    if condition then println(t)
+  inline def printIf(predicate: T => Boolean): T =
+    if predicate(t) then println(t)
     t

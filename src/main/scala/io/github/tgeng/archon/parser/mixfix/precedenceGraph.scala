@@ -56,6 +56,7 @@ class PrecedenceGraphBuilder
     Right(())
 
   def build(filter: Operator => Boolean = _ => true): PrecedenceGraph =
+    import math.Ordering.Implicits.seqOrdering
     val nodes: Map[Operator, Iterable[Operator]] = this.representatives.groupMap(_ (1))(_ (0))
     val maxIncomingPathLengths = nodes.keys.getMaxIncomingPathLength(this.precedenceMap.withDefaultValue(mutable.ArrayBuffer()))
     // Remove unnecessary edges in the graph
@@ -63,7 +64,7 @@ class PrecedenceGraphBuilder
     val precedenceMap = this.precedenceMap.view.mapValues(_.toSeq).toMap
     val nodePrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]().withDefaultValue(Seq())
     val operatorToNodeMap = nodes.map((representative, operators) =>
-      val operatorsMap = operators.toSeq.filter(filter).groupBy(_.fixity)
+      val operatorsMap = operators.filter(filter).toSeq.sortBy(_.nameParts).groupBy(_.fixity)
       (representative, new PrecedenceNode {
         override def operators: Map[Fixity, Seq[Operator]] = operatorsMap
 

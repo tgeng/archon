@@ -132,6 +132,6 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
         yield
           (argsAndRestNameParts.map(_(0)), firstNamePart :: argsAndRestNameParts.map(_(1)))
 
-  def namePart(s: String) = P.satisfySingle(s"'$s'", n => nn.asString(n) == s).!
+  def namePart(s: String) = P.satisfySingle(s"'$s'", n => nn.asString(n) == s)
   
   expr << P.eos
