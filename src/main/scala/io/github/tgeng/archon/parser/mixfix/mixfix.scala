@@ -83,11 +83,11 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def unionBiased[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ || _).getOrElse(P.fail("<tighter ops>"))
 
-  def expr: ParserT[N, MixfixAst[N, L], M] = P(union(g.map(pHat)) | closedPlus)
+  def expr: ParserT[N, MixfixAst[N, L], M] = P(unionBiased(g.map(pHat)) | closedPlus)
 
   extension (node: PrecedenceNode)
     // Note: somehow removing the `P {}` call below would significantly slow down parsing.
-    def pHat: ParserT[N, MixfixAst[N, L], M] = P {
+    def pHat: ParserT[N, MixfixAst[N, L], M] = P({
       (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
         .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
         // somehow type inferencing is not working here and requires explicit type arguments
@@ -101,7 +101,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
           P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
           pLeft
         )
-    }
+    }, node.operators.values.flatMap(_.map(_.nameParts.mkString("_"))).mkString("{", ", ", "}"))
 
     def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Prefix) |
       (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
