@@ -87,7 +87,6 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def expr: ParserT[N, MixfixAst[N, L], M] = P(unionBiased(g.map(pHat)) | closedPlus)
 
   extension (node: PrecedenceNode)
-    // Note: somehow removing the `P {}` call below would significantly slow down parsing.
     def pHat: ParserT[N, MixfixAst[N, L], M] = P({
       (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
         .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
@@ -102,7 +101,9 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
           P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
           pLeft
         )
-    }, getNodeTargetName(node))
+    },
+      getNodeTargetName(node),
+      lazily = true)
 
     def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Prefix) |
       (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
@@ -116,7 +117,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
       union(node.operators.getOrElse(fix, Seq())
         .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
 
-  def closedPlus: ParserT[N, MixfixAst[N, L], M] = closed.+.map(args => if args.size == 1 then args(0) else ApplyCall(args))
+  def closedPlus: ParserT[N, MixfixAst[N, L], M] = closed.+.map(args => if args.size == 1 then args.head else ApplyCall(args))
 
   def closed: ParserT[N, MixfixAst[N, L], M] =
     // prefer literal over closed operator and identifiers
@@ -131,7 +132,8 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
       case Nil => throw IllegalArgumentException()
       case firstName :: names =>
         for
-          (firstNamePart, argsAndRestNameParts) <- (namePart(firstName), P.lift(names.map(name => P.lift((p, namePart(name))))))
+          firstNamePart <- namePart(firstName)
+          argsAndRestNameParts <- P.lift(names.map(name => P.lift((p, namePart(name)))))
         yield
           (argsAndRestNameParts.map(_(0)), firstNamePart :: argsAndRestNameParts.map(_(1)))
 

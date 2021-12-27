@@ -95,3 +95,17 @@ extension[T] (inline t: T)
   inline def printIf(predicate: T => Boolean): T =
     if predicate(t) then println(t)
     t
+
+def cacheLastOutput[A, B](f: A => B): A => B =
+  var lastPair : Option[(A, B)] = None
+  a =>
+    lastPair match
+      case Some((lastA, lastB)) => if a == lastA then lastB else
+        val newB = f(a)
+        lastPair = Some((a, newB))
+        newB
+      case _ =>
+        val newB = f(a)
+        lastPair = Some((a, newB))
+        newB
+

@@ -52,14 +52,17 @@ object P
 type Parser[-I, +T] = ParserT[I, T, Option]
 type MultiParser[-I, +T] = ParserT[I, T, List]
 
-extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
-  inline def apply(inline parser: MonadPlus[ParserM[I, M]] ?=> ParserT[I, T, M], name : String | Null = null) =
+extension[I, T, M[+_]](e: P.type)
+  inline def apply(inline parser: =>ParserT[I, T, M], name : String | Null = null, lazily: Boolean = false) : ParserT[I, T, M] =
     val nameToUse = if (name == null) enclosingName(parser).stripSuffix("Parser") else name
-    new ParserT[I, T, M]:
-      override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] = parser.parseImpl(index)
+    lazy val p = parser
+    if !lazily && p.isFailureParser then parser
+    else new ParserT[I, T, M]:
+      override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] = p.parseImpl(index)
 
       override def targetName: Option[String] = Some(nameToUse)
 
+extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
   def pure(t: T) : ParserT[I, T, M] = pm.pure(t)
   def fail(description: String) = FailureParser(description)(using mm)
 
@@ -168,17 +171,19 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using 
 
 
   override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]): ParserT[I, S, M] =
+    val cachedF = cacheLastOutput(f)
     if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
     else new ParserT[I, S, M] :
       override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, S)] =
         env.flatMap(
           m.doParse(index),
-          (advance, t) => env.map(f(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
+          (advance, t) => env.map(cachedF(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
         )
 
   override def empty[S]: ParserT[I, S, M] = FailureParser()
 
-  override def or[T](a: ParserT[I, T, M], b: => ParserT[I, T, M]): ParserT[I, T, M] =
+  override def or[T](a: ParserT[I, T, M], lazyB: => ParserT[I, T, M]): ParserT[I, T, M] =
+    lazy val b = lazyB
     if a.isFailureParser then b
     else new ParserT[I, T, M] :
       override def parseImpl(index: Int)(using input: IndexedSeq[I])(using targets: List[String]): ParseResult[M, (Int, T)] =

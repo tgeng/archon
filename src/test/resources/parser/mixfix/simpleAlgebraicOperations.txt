@@ -78,21 +78,15 @@ when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}->ex
 
 a )
 ----
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{&&}:
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}:
 [1:2] a )
-       ^ expect <tighter ops>
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{||}:
+       ^ expect '('
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}:
 [1:2] a )
-       ^ expect <tighter ops>
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{if_then, if_then_else}:
+       ^ expect <none of HashSet(if, <, ), -, ==, then, +, (, *, <=, else, !, ||, >=, !=, &&, /, >)> | '*' | '/'
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{(_)}:
 [1:2] a )
-       ^ expect <tighter ops>
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{!}:
-[1:2] a )
-       ^ expect <tighter ops>
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{!=, <, <=, ==, >, >=}:
-[1:2] a )
-       ^ expect <tighter ops>
+       ^ expect '('
 
 a + b +
 ----

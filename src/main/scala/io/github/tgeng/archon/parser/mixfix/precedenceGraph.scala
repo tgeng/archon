@@ -117,7 +117,10 @@ object PrecedenceRule:
     val fixity: StrParser[Fixity] = ("closed " as Closed) | ("infixl " as Infix(Left)) | ("infixr " as Infix(Right)) |
       ("infix " as Infix(Non)) | ("prefix " as Prefix) | ("postfix " as Postfix)
     P.indentedBlock {
-      (fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.+ >> precedence.+.map(_.flatten))?)
+      P.lift((fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.+ >> precedence.+.map(_.flatten))?))
+        // Somehow type inference fails here and thinks the above yields `StrParser[Nothing, ...]`
+        // instead of `StrParser[Char, ...]`
+        .asInstanceOf[StrParser[(Fixity, List[String], Option[List[(PrecedenceKind, String)]])]]
         .map(t => PrecedenceRule(t(0), t(1), t(2).getOrElse(Nil)))
     }
   }
