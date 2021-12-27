@@ -14,6 +14,8 @@ infixl _&&_
   looser than !_
 infixl _||_
   looser than _&&_
+prefix if_then_else_ if_then_
+  looser than _||_
 
 ====
 a + b * c / d - e
@@ -32,6 +34,20 @@ a b + c d * e f g
 ----
 9 | [[@ `a` `b`] + [[@ `c` `d`] * [@ `e` `f` `g`]]]
 
-( a )
+( a + b ) * c / ( d - - e ) >= f || A && B
 ----
-3 | [( `a` )]
+20 | [[[[[( [`a` + `b`] )] * `c`] / [( [`d` - [- `e`]] )]] >= `f`] || [`A` && `B`]]
+
+( if a == b * c then a + b / c else a - b * c ) + d
+----
+22 | [[( [if [`a` == [`b` * `c`]] then [`a` + [`b` / `c`]] else [`a` - [`b` * `c`]]] )] + `d`]
+
+if a then if b then c else d
+----
+9 | [if `a` then [if `b` then `c` else `d`]]
+----
+9 | [if `a` then [if `b` then `c`] else `d`]
+
+if a then b
+----
+4 | [if `a` then `b`]
