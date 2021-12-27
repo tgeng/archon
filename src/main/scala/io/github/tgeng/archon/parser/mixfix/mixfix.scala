@@ -86,6 +86,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def expr: ParserT[N, MixfixAst[N, L], M] = P(union(g.map(pHat)) | closedPlus)
 
   extension (node: PrecedenceNode)
+    // Note: somehow removing the `P {}` call below would significantly slow down parsing.
     def pHat: ParserT[N, MixfixAst[N, L], M] = P {
       (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
         .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
@@ -102,26 +103,25 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
         )
     }
 
-    def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(node.op(Prefix) |
-      (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2))))
+    def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Prefix) |
+      (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
 
-    def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(node.op(Postfix) |
-      (node.op(Infix(Associativity.Left)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2))))
+    def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Postfix) |
+      (node.op(Infix(Associativity.Left)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2)))
 
-    def pUp: ParserT[N, MixfixAst[N, L], M] = P(unionBiased(node.neighbors.map(_.pHat)) | closedPlus)
+    def pUp: ParserT[N, MixfixAst[N, L], M] = unionBiased(node.neighbors.map(_.pHat)) | closedPlus
 
     def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
       union(node.operators.getOrElse(fix, Seq())
         .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
 
-  def closedPlus: ParserT[N, MixfixAst[N, L], M] = P(closed.+.map(args => if args.size == 1 then args(0) else ApplyCall(args)))
+  def closedPlus: ParserT[N, MixfixAst[N, L], M] = closed.+.map(args => if args.size == 1 then args(0) else ApplyCall(args))
 
-  def closed: ParserT[N, MixfixAst[N, L], M] = P(
+  def closed: ParserT[N, MixfixAst[N, L], M] =
     // prefer literal over closed operator and identifiers
     literalParser.map(Literal.apply) ||
     union(g.map(node => node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)))) ||
     P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)
-  )
 
   def between[T](p: => ParserT[N, T, M], nameParts: List[String]): ParserT[N, (List[T], List[N]), M] =
     nameParts match
