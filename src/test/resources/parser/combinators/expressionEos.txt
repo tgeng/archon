@@ -16,48 +16,48 @@
 
 1 + 2 +
 ----
-when parsing expressionEos->expression->factor->atom->decimal:
-[1:8] 1 + 2 +
-             ^ expect <decimal>
 when parsing expressionEos->expression:
 [1:8] 1 + 2 +
              ^ expect ' '
+when parsing expressionEos->expression->factor->atom->decimal:
+[1:8] 1 + 2 +
+             ^ expect <decimal>
 when parsing expressionEos->expression->factor->atom:
 [1:8] 1 + 2 +
              ^ expect '('
 
 1 + (2 *) + 4
 ----
+when parsing expressionEos->expression->factor->atom->expression->factor->atom->decimal:
+[1:9] 1 + (2 *) + 4
+              ^ expect <decimal>
 when parsing expressionEos->expression->factor->atom->expression->factor:
 [1:9] 1 + (2 *) + 4
               ^ expect ' '
 when parsing expressionEos->expression->factor->atom->expression->factor->atom:
 [1:9] 1 + (2 *) + 4
               ^ expect '('
-when parsing expressionEos->expression->factor->atom->expression->factor->atom->decimal:
-[1:9] 1 + (2 *) + 4
-              ^ expect <decimal>
 
 1 + 2a
 ----
+when parsing expressionEos->expression->factor:
+[1:6] 1 + 2a
+           ^ expect ' ' | <any of Set(*, /)>
 when parsing expressionEos:
 [1:6] 1 + 2a
            ^ expect <eos>
 when parsing expressionEos->expression:
 [1:6] 1 + 2a
            ^ expect ' ' | <any of Set(+, -)>
-when parsing expressionEos->expression->factor:
-[1:6] 1 + 2a
-           ^ expect ' ' | <any of Set(*, /)>
 
 1 + 2 * a
 ----
 when parsing expressionEos->expression->factor:
 [1:9] 1 + 2 * a
               ^ expect ' '
-when parsing expressionEos->expression->factor->atom->decimal:
-[1:9] 1 + 2 * a
-              ^ expect <decimal>
 when parsing expressionEos->expression->factor->atom:
 [1:9] 1 + 2 * a
               ^ expect '('
+when parsing expressionEos->expression->factor->atom->decimal:
+[1:9] 1 + 2 * a
+              ^ expect <decimal>

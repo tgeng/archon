@@ -131,7 +131,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
         actualPart.append("\n----\n")
         expectedPart.append(input)
         expectedPart.append("\n----\n")
-        p.doParse(0)(using input)(using Nil) match
+        p.doParse(0)(using input) match
           case r@ParseResult(results, errors, _) => results match
             case Nil | None =>
               actualPart.append(r.mkErrorString(input))

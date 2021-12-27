@@ -50,7 +50,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
         val outputs = parts.tail
         actualPart.append(input)
         actualPart.append("\n----\n")
-        p.doParse(0)(using input.split2("\\s"))(using Nil) match
+        p.doParse(0)(using input.split2("\\s")) match
           case r@ParseResult(results, errors, _) => results match
             case Nil =>
               actualPart.append(r.mkErrorString(input))

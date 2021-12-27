@@ -126,7 +126,7 @@ extension (failure: ParseResult[?, ?])
       do
         val (line, column) = indexToLineColumn(input, index)
         val lineAndColumn = s"[${line + 1}:${column + 1}]"
-        sb.append(s"when parsing ${targets.reverse.mkString("->")}:\n")
+        sb.append(s"when parsing ${targets.mkString("->")}:\n")
         sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
         sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
     sb.toString.trim.!!
