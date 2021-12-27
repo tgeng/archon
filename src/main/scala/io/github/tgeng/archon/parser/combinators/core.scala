@@ -2,6 +2,7 @@ package io.github.tgeng.archon.parser.combinators
 
 import io.github.tgeng.archon.common.{*, given}
 
+import scala.collection.mutable
 import scala.math.min
 
 case class ParseError(index: Int, description: String, targets: Seq[String] = Nil)
@@ -49,11 +50,8 @@ import ParseResult.*
 
 type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
 
-trait ParserT[-I, +T, M[+_]]:
+abstract class ParserT[-I, +T, M[+_]]:
   final def doParse(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
-    // TODO: consider adding caching for created parsers and parsed results. For the latter `targets`
-    // probably need to be removed and commit depth should be implemented as an index that is
-    // lowered each time a named parser returns.
     parseImpl(index).onExitFromTarget(targetName)
 
   def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)]
@@ -186,13 +184,13 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using 
 
 
   override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]): ParserT[I, S, M] =
-    val cachedF = cacheLastOutput(f)
+    val cachingF = caching(f)
     if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
     else new ParserT[I, S, M] :
       override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
         env.flatMap(
           m.doParse(index),
-          (advance, t) => env.map(cachedF(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
+          (advance, t) => env.map(cachingF(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
         )
 
   override def empty[S]: ParserT[I, S, M] = FailureParser()
@@ -238,3 +236,13 @@ given ParseResultMonadPlus [M[+_]] (using flattener: Flattener[M])(using env: Mo
     evaluatedB match
       case Some(b) => ParseResult(result, a.errors ++ b.errors, a.committed || b.committed)
       case _ => a
+
+class ParserCache[I, M[+_]](using pm: MonadPlus[ParserM[I, M]]):
+  private val map = mutable.WeakHashMap[IndexedSeq[I], mutable.Map[(Any, Int), ParseResult[M, (Int, ?)]]]()
+  def load[T](key: Any, index: Int, action: => ParseResult[M, (Int, T)])(using input: IndexedSeq[I]) : ParseResult[M, (Int, T)] =
+    map.getOrElseUpdate(input, mutable.WeakHashMap()).getOrElseUpdate((key, index), action).asInstanceOf[ParseResult[M, (Int, T)]]
+
+extension[I, T, M[+_]](e: P.type)(using cache: ParserCache[I, M])
+  inline def cached(key: Any, p: =>ParserT[I, T, M]) : ParserT[I, T, M] = new ParserT[I, T, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
+      cache.load(key, index, p.parseImpl(index))

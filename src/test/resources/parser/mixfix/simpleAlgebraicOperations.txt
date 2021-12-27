@@ -16,6 +16,7 @@ infixl _||_
   looser than _&&_
 prefix if_then_else_ if_then_
   looser than _||_
+
 ====
 a + b * c / d - e
 ----
@@ -69,30 +70,54 @@ f a b + f c d * f x y == f ( a + c * x ) ( b + d * y )
 
 (
 ----
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}->expr->{||}->{&&}->{!}:
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{(_)}->expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{||}:
 [1:2] (
-       ^ expect '!'
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}->expr->{if_then, if_then_else}:
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{(_)}->expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{!}:
 [1:2] (
-       ^ expect 'if' | <tighter ops>
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{(_)}->expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{if_then, if_then_else}:
+[1:2] (
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{(_)}->expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{&&}:
+[1:2] (
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{(_)}->expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{!=, <, <=, ==, >, >=}:
+[1:2] (
+       ^ expect <tighter ops>
 
 a )
 ----
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}:
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{||}:
 [1:2] a )
-       ^ expect <none of HashSet(if, <, ), -, ==, then, +, (, *, <=, else, !, ||, >=, !=, &&, /, >)> | '*' | '/'
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}:
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{!}:
 [1:2] a )
-       ^ expect '('
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{(_)}:
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{!=, <, <=, ==, >, >=}:
 [1:2] a )
-       ^ expect '('
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{if_then, if_then_else}:
+[1:2] a )
+       ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{&&}:
+[1:2] a )
+       ^ expect <tighter ops>
 
 a + b +
 ----
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}:
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{!}:
 [1:5] a + b +
           ^ expect <tighter ops>
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}:
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{!=, <, <=, ==, >, >=}:
 [1:5] a + b +
-          ^ expect '+' | '-' | <tighter ops>
+          ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{||}:
+[1:5] a + b +
+          ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{&&}:
+[1:5] a + b +
+          ^ expect <tighter ops>
+when parsing expr->{if_then, if_then_else}->{||}->{&&}->{!}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{+, -}->{(_)}->{if_then, if_then_else}:
+[1:5] a + b +
+          ^ expect <tighter ops>

@@ -37,26 +37,29 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
 
     given NamePart[String] with
       override def asString(n: String): String = n
+    given ParserCache[String, List] = ParserCache()
     val p = createMixfixParser[String, List, Unit](g, P.fail("<literal>"))
 
     val testCases = parts(1).split2("\n\n")
     val actualParts = ArrayBuffer[String]()
-    for testCase <- testCases
-      do
-        val actualPart = StringBuilder()
-        val parts = testCase.split("\n----\n").asInstanceOf[Array[String]]
-        if parts.size < 1 then fail(s"incomplete test case in $file")
-        val input = parts.head
-        val outputs = parts.tail
-        actualPart.append(input)
-        actualPart.append("\n----\n")
-        p.doParse(0)(using input.split2("\\s")) match
-          case r@ParseResult(results, errors, _) => results match
-            case Nil =>
-              actualPart.append(r.mkErrorString(input))
-            case l: List[(Int, Any)] =>
-              actualPart.append(l.map((advance, t) => s"$advance | $t").mkString("\n----\n"))
-        actualParts.append(actualPart.toString)
+    timed(file.getName.!!) {
+      for testCase <- testCases
+        do
+          val actualPart = StringBuilder()
+          val parts = testCase.split("\n----\n").asInstanceOf[Array[String]]
+          if parts.size < 1 then fail(s"incomplete test case in $file")
+          val input = parts.head
+          val outputs = parts.tail
+          actualPart.append(input)
+          actualPart.append("\n----\n")
+          p.doParse(0)(using input.split2("\\s")) match
+            case r@ParseResult(results, errors, _) => results match
+              case Nil =>
+                actualPart.append(r.mkErrorString(input))
+              case l: List[(Int, Any)] =>
+                actualPart.append(l.map((advance, t) => s"$advance | $t").mkString("\n----\n"))
+          actualParts.append(actualPart.toString)
+    }
 
     val actual = parts(0) + "\n====\n" + actualParts.mkString("\n\n")
     if expected != actual then

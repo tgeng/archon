@@ -75,7 +75,13 @@ import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 
 // TODO: filter operators by name part. This can be done by creating another info parser for
 //  querying available name parts in the input and then create the second parser based on this info.
-def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N, L, M])(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using env: MonadPlus[ParseResultM[M]])(using nn: NamePart[N]): ParserT[N, MixfixAst[N, L], M] =
+def createMixfixParser[N, M[+_], L]
+  (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
+  (using pm: MonadPlus[ParserM[N, M]])
+  (using mm: MonadPlus[M])
+  (using env: MonadPlus[ParseResultM[M]])
+  (using nn: NamePart[N])
+  (using cache: ParserCache[N, M]): ParserT[N, MixfixAst[N, L], M] =
   val illegalIdentifierNames = g.flatMap(node => node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts))).toSet
   def getNodeTargetName(node: PrecedenceNode) = node.operators.values.flatMap(_.map(_.nameParts.mkString("_"))).mkString("{", ", ", "}")
   def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
@@ -84,48 +90,61 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def unionBiased[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ || _).getOrElse(P.fail("<tighter ops>"))
 
-  def expr: ParserT[N, MixfixAst[N, L], M] = P(unionBiased(g.map(pHat)) | closedPlus)
+  def expr: ParserT[N, MixfixAst[N, L], M] = P(P.cached(g, unionBiased(g.map(pHat)) | closedPlus))
 
   extension (node: PrecedenceNode)
-    def pHat: ParserT[N, MixfixAst[N, L], M] = P({
-      (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
-        .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
-        // somehow type inferencing is not working here and requires explicit type arguments
-        P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](
-          pRight,
-          P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
-          pUp
-        ) |
-        P.foldLeft1[MixfixAst[N, L], (Operator, List[MixfixAst[N, L]], List[N])](
-          pUp,
-          P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
-          pLeft
-        )
-    },
-      getNodeTargetName(node),
-      lazily = true)
+    def pHat: ParserT[N, MixfixAst[N, L], M] =
+      P(
+        P.cached(
+          node,
+          (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
+            .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
+              // somehow type inferencing is not working here and requires explicit type arguments
+              P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](
+                pRight,
+                P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
+                pUp
+              ) |
+              P.foldLeft1[MixfixAst[N, L], (Operator, List[MixfixAst[N, L]], List[N])](
+                pUp,
+                P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
+                pLeft
+              )
+        ),
+        getNodeTargetName(node),
+        lazily = true)
 
-    def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Prefix) |
-      (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
+    def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
+      P.cached((node, "right"),
+        node.op(Prefix) | (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
+      )
 
-    def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Postfix) |
-      (node.op(Infix(Associativity.Left)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2)))
+    def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
+      P.cached((node, "left"),
+        node.op(Postfix) | (node.op(Infix(Associativity.Left)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2)))
+      )
 
-    def pUp: ParserT[N, MixfixAst[N, L], M] = unionBiased(node.neighbors.map(_.pHat)) | closedPlus
+    def pUp: ParserT[N, MixfixAst[N, L], M] =
+      P.cached((node, "up"),
+        unionBiased(node.neighbors.map(_.pHat)) | closedPlus
+      )
 
     def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
-      union(node.operators.getOrElse(fix, Seq())
-        .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
+      P.cached((node, fix),
+        union(node.operators.getOrElse(fix, Seq())
+          .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
+      )
 
   def closedPlus: ParserT[N, MixfixAst[N, L], M] = closed.+.map(args => if args.size == 1 then args.head else ApplyCall(args))
 
   def closed: ParserT[N, MixfixAst[N, L], M] =
+    P.cached((g, "closed"),
+      union(g.map(node =>
     // prefer literal over closed operator and identifiers
-    literalParser.map(Literal.apply) ||
-    union(g.map(node =>
-      P(node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)), getNodeTargetName(node))
-    )) ||
-    P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)
+      literalParser.map(Literal.apply) ||
+      P(node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)), getNodeTargetName(node)))) ||
+      P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)
+    )
 
   def between[T](p: => ParserT[N, T, M], nameParts: List[String]): ParserT[N, (List[T], List[N]), M] =
     nameParts match
