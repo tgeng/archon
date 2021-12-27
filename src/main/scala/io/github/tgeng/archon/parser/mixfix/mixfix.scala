@@ -110,10 +110,9 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
 
     def pUp: ParserT[N, MixfixAst[N, L], M] = P(unionBiased(node.neighbors.map(_.pHat)) | closedPlus)
 
-    def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = P(
+    def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
       union(node.operators.getOrElse(fix, Seq())
         .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
-    )
 
   def closedPlus: ParserT[N, MixfixAst[N, L], M] = P(closed.+.map(args => if args.size == 1 then args(0) else ApplyCall(args)))
 
