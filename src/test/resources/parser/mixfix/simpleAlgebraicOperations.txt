@@ -16,7 +16,6 @@ infixl _||_
   looser than _&&_
 prefix if_then_else_ if_then_
   looser than _||_
-
 ====
 a + b * c / d - e
 ----
@@ -70,21 +69,30 @@ f a b + f c d * f x y == f ( a + c * x ) ( b + d * y )
 
 (
 ----
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->expr->{||}->{&&}->{!}:
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}->expr->{||}->{&&}->{!}:
 [1:2] (
        ^ expect '!'
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->expr->{if_then, if_then_else}:
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{(_)}->expr->{if_then, if_then_else}:
 [1:2] (
        ^ expect 'if' | <tighter ops>
 
 a )
 ----
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}:
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{&&}:
 [1:2] a )
-       ^ expect '('
-when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}:
+       ^ expect <tighter ops>
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{||}:
 [1:2] a )
-       ^ expect '(' | <none of HashSet(if, <, ), -, ==, then, +, (, *, <=, else, !, ||, >=, !=, &&, /, >)> | '*' | '/'
+       ^ expect <tighter ops>
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{if_then, if_then_else}:
+[1:2] a )
+       ^ expect <tighter ops>
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{!}:
+[1:2] a )
+       ^ expect <tighter ops>
+when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->{!=, <, <=, ==, >, >=}:
+[1:2] a )
+       ^ expect <tighter ops>
 
 a + b +
 ----

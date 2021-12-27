@@ -77,6 +77,7 @@ import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 //  querying available name parts in the input and then create the second parser based on this info.
 def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N, L, M])(using pm: MonadPlus[ParserM[N, M]])(using mm: MonadPlus[M])(using env: MonadPlus[ParseResultM[M]])(using nn: NamePart[N]): ParserT[N, MixfixAst[N, L], M] =
   val illegalIdentifierNames = g.flatMap(node => node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts))).toSet
+  def getNodeTargetName(node: PrecedenceNode) = node.operators.values.flatMap(_.map(_.nameParts.mkString("_"))).mkString("{", ", ", "}")
   def union[T](parsers: Iterable[ParserT[N, T, M]]) : ParserT[N, T, M] =
     parsers.reduceOption(_ | _).getOrElse(P.fail("<tighter ops>"))
 
@@ -101,7 +102,7 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
           P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
           pLeft
         )
-    }, node.operators.values.flatMap(_.map(_.nameParts.mkString("_"))).mkString("{", ", ", "}"))
+    }, getNodeTargetName(node))
 
     def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] = node.op(Prefix) |
       (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
@@ -120,7 +121,9 @@ def createMixfixParser[N, M[+_], L](g: PrecedenceGraph, literalParser: ParserT[N
   def closed: ParserT[N, MixfixAst[N, L], M] =
     // prefer literal over closed operator and identifiers
     literalParser.map(Literal.apply) ||
-    union(g.map(node => node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)))) ||
+    union(g.map(node =>
+      P(node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)), getNodeTargetName(node))
+    )) ||
     P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)
 
   def between[T](p: => ParserT[N, T, M], nameParts: List[String]): ParserT[N, (List[T], List[N]), M] =
