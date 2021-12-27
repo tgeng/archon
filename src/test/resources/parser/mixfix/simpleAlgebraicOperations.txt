@@ -64,6 +64,10 @@ if a + b == c then ! A else if a + b == d then ! B else e
 ----
 21 | [if [[`a` + `b`] == `c`] then [! `A`] else [if [[`a` + `b`] == `d`] then [! `B`] else `e`]]
 
+f a b + f c d * f x y == f ( a + c * x ) ( b + d * y )
+----
+27 | [[[@ `f` `a` `b`] + [[@ `f` `c` `d`] * [@ `f` `x` `y`]]] == [@ `f` [( [`a` + [`c` * `x`]] )] [( [`b` + [`d` * `y`]] )]]]
+
 (
 ----
 when parsing expr->{||}->{&&}->{!=, <, <=, ==, >, >=}->{+, -}->{*, /}->expr->{||}->{&&}->{!}:
