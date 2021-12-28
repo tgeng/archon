@@ -2,6 +2,7 @@ package io.github.tgeng.archon.parser.mixfix
 
 import io.github.tgeng.archon.common.*
 import io.github.tgeng.archon.parser.combinators.{*, given}
+import scala.collection.mutable
 
 // This implementation follows from this paper https://www.cse.chalmers.se/~nad/publications/danielsson-norell-mixfix.pdf
 enum Associativity:
@@ -73,9 +74,39 @@ enum MixfixAst[N, L]:
 
 import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 
-// TODO: filter operators by name part. This can be done by creating another info parser for
-//  querying available name parts in the input and then create the second parser based on this info.
 def createMixfixParser[N, M[+_], L]
+  (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
+  (using pm: MonadPlus[ParserM[N, M]])
+  (using mm: MonadPlus[M])
+  (using env: MonadPlus[ParseResultM[M]])
+  (using nn: NamePart[N])
+  (using cache: ParserCache[N, M]): ParserT[N, MixfixAst[N, L], M] =
+  // Filter out operators that does not appear in the input.
+  for
+    nameParts <- P.info((input, _) => input.map(n => nn.asString(n)).toSet)
+    r <- createMixfixParserImpl(trimGraph(g, nameParts), literalParser)
+  yield
+    r
+
+def trimGraph(g: PrecedenceGraph, nameParts: Set[String]): PrecedenceGraph =
+  // key is old node, value is new node
+  val nodeMap = mutable.Map[PrecedenceNode, PrecedenceNode]()
+  val newPrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]()
+  def isOperatorRelevant(op: Operator) = op.nameParts.exists(nameParts)
+  def isNodeRelevant(node: PrecedenceNode) = node.operators.values.flatten.exists(isOperatorRelevant)
+  for oldNode <- g.filter(isNodeRelevant) do
+    nodeMap(oldNode) = new PrecedenceNode:
+      override val operators: Map[Fixity, Seq[Operator]] = oldNode.operators.map((fixity, operators) => (fixity, operators.filter(isOperatorRelevant)))
+
+      override def neighbors: Seq[PrecedenceNode] = newPrecedenceMap(this)
+
+      override def toString: String = operators.head.toString + "->" + operators
+
+  for (oldNode, newNode) <- nodeMap do
+    newPrecedenceMap(newNode) = oldNode.neighbors.filter(isNodeRelevant).map(nodeMap)
+  g.flatMap(nodeMap.lift).toSeq
+
+def createMixfixParserImpl[N, M[+_], L]
   (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
   (using pm: MonadPlus[ParserM[N, M]])
   (using mm: MonadPlus[M])

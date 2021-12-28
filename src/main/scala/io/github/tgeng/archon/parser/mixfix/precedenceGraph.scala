@@ -65,13 +65,13 @@ class PrecedenceGraphBuilder
     val nodePrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]().withDefaultValue(Seq())
     val operatorToNodeMap = nodes.map((representative, operators) =>
       val operatorsMap = operators.filter(filter).toSeq.sortBy(_.nameParts).groupBy(_.fixity)
-      (representative, new PrecedenceNode {
+      (representative, new PrecedenceNode:
         override def operators: Map[Fixity, Seq[Operator]] = operatorsMap
 
         override def neighbors: Seq[PrecedenceNode] = nodePrecedenceMap(this).bfs(nodePrecedenceMap).iterator.toSeq
 
         override def toString: String = representative.toString + "->" + precedenceMap.getOrElse(representative, Nil)
-      })
+      )
     )
     precedenceMap.foreach((k, v) =>
       nodePrecedenceMap(operatorToNodeMap(k)) = v.map(operatorToNodeMap)
