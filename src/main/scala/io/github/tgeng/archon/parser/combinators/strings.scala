@@ -8,7 +8,15 @@ import scala.util.matching.Regex.Match
 type StrParser[T] = ParserT[Char, T, Option]
 type MultiStrParser[T] = ParserT[Char, T, List]
 
-extension[T, M[+_]] (using env: MonadPlus[ParserM[Char, M]])(using MonadPlus[M])(p: ParserT[Char, T, M])
+extension[T, M[+_]]
+  (using Functor[ParserM[Char, M]])
+  (using Applicative[ParserM[Char, M]])
+  (using Monad[ParserM[Char, M]])
+  (using Alternative[ParserM[Char, M]])
+  (using Applicative[M])
+  (using Monad[M])
+  (using Alternative[M])
+  (p: ParserT[Char, T, M])
   def <%<(q: => ParserT[Char, ?, M]) = p << P.whitespaces << q
   def >%>[S](q: => ParserT[Char, S, M]) = p >> P.whitespaces >> q
   def <%%<(q: => ParserT[Char, ?, M])(using indent: Indent) = p << P.whitespacesWithIndent << q
@@ -17,7 +25,15 @@ extension[T, M[+_]] (using env: MonadPlus[ParserM[Char, M]])(using MonadPlus[M])
 
 opaque type Indent = Int
 
-extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])(e: P.type)
+extension[M[+_]]
+  (using Functor[ParserM[Char, M]])
+  (using Applicative[ParserM[Char, M]])
+  (using Monad[ParserM[Char, M]])
+  (using Alternative[ParserM[Char, M]])
+  (using Applicative[M])
+  (using Monad[M])
+  (using Alternative[M])
+  (e: P.type)
   def getColumn: ParserT[Char, Int, M] = P.info((input, index) =>
     val lineStart = input.lastIndexOf('\n', index) + 1
       index - lineStart
@@ -37,7 +53,7 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
   def lf = P.from("\n") asAtom "'\n'"
   def newline = "\r\n" | P.lf asAtom "<newline>"
   def newlines = P.newline.*.map(_.size)
-  def whitespace = P.anyOf(" \n\t\r") as() asAtom "<whitespace>"
+  def whitespace = P.anyOf(" \n\t\r") as () asAtom "<whitespace>"
   def whitespaces = P.whitespace.*
 
   def indentedBlock[T](p: Indent ?=> ParserT[Char, T, M]): ParserT[Char, T, M] =
@@ -114,9 +130,24 @@ extension[M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M])
   )
 
 
-given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Char, ParserT[Char, Char, M]] = P.from(_)
-given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[String, ParserT[Char, String, M]] = P.from(_)
-given [M[+_]] (using pm: MonadPlus[ParserM[Char, M]])(using mm: MonadPlus[M]): Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)
+given [M[+_] : Alternative : Monad : Applicative]
+  (using Functor[ParserM[Char, M]])
+  (using Applicative[ParserM[Char, M]])
+  (using Monad[ParserM[Char, M]])
+  (using Alternative[ParserM[Char, M]])
+  : Conversion[Char, ParserT[Char, Char, M]] = P.from(_)
+given [M[+_] : Alternative : Monad : Applicative]
+  (using Functor[ParserM[Char, M]])
+  (using Applicative[ParserM[Char, M]])
+  (using Monad[ParserM[Char, M]])
+  (using Alternative[ParserM[Char, M]])
+  : Conversion[String, ParserT[Char, String, M]] = P.from(_)
+given [M[+_] : Alternative : Monad : Applicative]
+  (using Functor[ParserM[Char, M]])
+  (using Applicative[ParserM[Char, M]])
+  (using Monad[ParserM[Char, M]])
+  (using Alternative[ParserM[Char, M]])
+  : Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)
 
 extension (failure: ParseResult[?, ?])
   def mkErrorString(input: String) : String =

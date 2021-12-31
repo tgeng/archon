@@ -3,15 +3,20 @@ package io.github.tgeng.archon.parser.combinators
 import io.github.tgeng.archon.common.{*, given}
 import io.github.tgeng.archon.parser.combinators.{*, given}
 
-extension[I, T, S, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(f: ParserT[I, T => S, M])
-  infix def <*>(p: ParserT[I, T, M]) = env.starApply(f, p)
+extension[I, T, S, M[+_]] (using ap: Applicative[ParserM[I, M]])(f: ParserT[I, T => S, M])
+  infix def <*>(p: ParserT[I, T, M]) = ap.starApply(f, p)
 
-extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])(p: ParserT[I, T, M])
-  infix def map[S](g: T => S) = env.map(p, g)
+extension[I, T, M[+_] : Alternative : Monad : Applicative]
+  (using atp: Alternative[ParserM[I, M]])
+  (using mp: Monad[ParserM[I, M]])
+  (using app: Applicative[ParserM[I, M]])
+  (using fp: Functor[ParserM[I, M]])
+  (p: ParserT[I, T, M])
+  infix def map[S](g: T => S) = fp.map(p, g)
 
-  infix def flatMap[S](f: T => ParserT[I, S, M]) = env.flatMap(p, f)
+  infix def flatMap[S](f: T => ParserT[I, S, M]) = mp.flatMap(p, f)
 
-  infix def |(q: => ParserT[I, T, M]) = env.or(p, q)
+  infix def |(q: => ParserT[I, T, M]) = atp.or(p, q)
 
   inline def withFilter(inline predicate: T => Boolean, description: String | Null = null) =
     for
@@ -66,7 +71,12 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using MonadPlus[M])
   infix def chainedLeftBy(op: ParserT[I, (T, T) => T, M]) : ParserT[I, T, M] = P.foldLeft(p, op, p)
   infix def chainedRightBy(op: ParserT[I, (T, T) => T, M]) : ParserT[I, T, M] = P.foldRight(p, op, p)
 
-extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
+extension[I, M[+_] : Alternative : Monad : Applicative]
+  (using fp: Functor[ParserM[I, M]])
+  (using app: Applicative[ParserM[I, M]])
+  (using mp: Monad[ParserM[I, M]])
+  (using atp: Alternative[ParserM[I, M]])
+  (e: P.type)
   def nothing: ParserT[I, Unit, M] = P.satisfy("<nothing>", _ => Some(0, ()))
 
   def any: ParserT[I, I, M] = P.satisfy(
@@ -142,7 +152,15 @@ extension[I, M[+_]] (using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])
     yield
       runtime.Tuples.fromArray(xs.toArray.asInstanceOf[Array[Object]]).asInstanceOf[ExtractT[I, Ps, M]]
 
-given [I, Ps <: Tuple, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M]): Conversion[Ps, ParserT[I, ExtractT[I, Ps, M], M]] = P.lift(_)
+given [I, Ps <: Tuple, M[+_]]
+  (using Functor[ParserM[I, M]])
+  (using Applicative[ParserM[I, M]])
+  (using Monad[ParserM[I, M]])
+  (using Alternative[ParserM[I, M]])
+  (using Monad[M])
+  (using Applicative[M])
+  (using Alternative[M])
+  : Conversion[Ps, ParserT[I, ExtractT[I, Ps, M], M]] = P.lift(_)
 
 /**
  * Example:

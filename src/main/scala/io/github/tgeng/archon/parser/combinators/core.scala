@@ -28,7 +28,7 @@ abstract class ParseResult[M[+_], +T] :
 
 object ParseResult:
   def success[M[+_], T](result: M[T], committed: Boolean = false): ParseResult[M, T] = ParseResult(result, Seq(), committed)
-  def failure[M[+_], T](errors: Seq[ParseError], committed: Boolean = false)(using m: MonadPlus[M]): ParseResult[M, Nothing] = ParseResult(m.empty, errors, committed)
+  def failure[M[+_] : Monad : Alternative, T](errors: Seq[ParseError], committed: Boolean = false): ParseResult[M, Nothing] = ParseResult(Alternative.empty, errors, committed)
   def apply[M[+_], T](result: M[T], errors: Seq[ParseError], committed: Boolean = false) : ParseResult[M, T] =
     new SimpleParseResult(result, trimErrors(errors), committed)
   def unapply[M[+_], T](r: ParseResult[M, T]): Option[(M[T], Seq[ParseError], Boolean)] = Some((r.result, r.errors, r.committed))
@@ -77,25 +77,25 @@ extension[I, T, M[+_]](e: P.type)
 
       override def targetName: Option[String] = Some(nameToUse)
 
-extension[I, T, M[+_]](using pm: MonadPlus[ParserM[I, M]])(using mm: MonadPlus[M])(e: P.type)
-  def pure(t: T) : ParserT[I, T, M] = pm.pure(t)
-  def fail(description: String) = FailureParser(description)(using mm)
+extension[I, T, M[+_]](using ap: Applicative[ParserM[I, M]])(using mm: Monad[M])(using am: Applicative[M])(using Alternative[M])(e: P.type)
+  def pure(t: T) : ParserT[I, T, M] = ap.pure(t)
+  def fail(description: String) = FailureParser(description)
 
   def satisfy(description: String, action: IndexedSeq[I] => Option[(Int, T)]) = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
       action(input.slice(index, input.length)) match
-        case Some((advance, t)) => success(mm.pure((advance, t)))
+        case Some((advance, t)) => success(am.pure((advance, t)))
         case None => failure(Seq(ParseError(index, description)))
 
   def info(action: (IndexedSeq[I], Int) => T) : ParserT[I, T, M] = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
-      success(mm.pure((0, action(input, index))))
+      success(am.pure((0, action(input, index))))
 
-extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using m: MonadPlus[M])(p: ParserT[I, T, M])
+extension[I, T, M[+_] : Alternative : Monad](p: ParserT[I, T, M])
   infix def asAtom(description: String) = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
       val ParseResult(results, errors, committed) = p.parseImpl(index)
-      if results == m.empty then
+      if results == Alternative.empty then
         failure(Seq(ParseError(index, description)), committed)
       else
         success(results, committed)
@@ -104,7 +104,7 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using m: MonadPlus[
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
       val parseResult = p.parseImpl(index)
       val ParseResult(results, errors, committed) = parseResult
-      if results == m.empty then
+      if results == Alternative.empty then
         parseResult.commit
       else
         parseResult
@@ -113,7 +113,7 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using m: MonadPlus[
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
       val parseResult = p.parseImpl(index)
       val ParseResult(results, errors, committed) = parseResult
-      if results == m.empty then
+      if results == Alternative.empty then
         parseResult
       else
         parseResult.commit
@@ -124,9 +124,11 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParserM[I, M]])(using m: MonadPlus[
       println(parseResult)
       parseResult
 
-extension[I, T, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using m: MonadPlus[M])(p: ParserT[I, T, M])
+extension[I, T, M[+_]]
+  (using ap: Alternative[ParseResultM[M]])
+  (using am: Alternative[M])(p: ParserT[I, T, M])
   /**
-   * Similar to `or` in `MonadPlus[ParserT]`, but this operator does not invoke the second parser
+   * Similar to `or` in `Alternative[ParserT]`, but this operator does not invoke the second parser
    * if the first is successful, even if `M` is a `List` for non-deterministic parsing.
    */
   infix def ||(q: =>ParserT[I, T, M]) : ParserT[I, T, M] =
@@ -135,7 +137,7 @@ extension[I, T, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using m: MonadPlu
       override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
         val pResult = p.doParse(index)
         // Only continue if first failed and is not committed says do not abort
-        if pResult.result == m.empty && !pResult.committed then env.or(pResult, q.doParse(index))
+        if pResult.result == am.empty && !pResult.committed then ap.or(pResult, q.doParse(index))
         else pResult
 
 extension[I, T] (p: Parser[I, T])
@@ -166,33 +168,49 @@ package single:
 
     override def or(m: Option[Boolean], base: Boolean): Boolean = base || m.getOrElse(false)
 
-given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using m: MonadPlus[M]): MonadPlus[ParserM[I, M]] with
+given [I, M[+_]] (using Functor[ParseResultM[M]]): Functor[ParserM[I, M]] with
   override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] =
     if f.isFailureParser then f.asInstanceOf[ParserT[I, S, M]]
     else new ParserT[I, S, M] :
       override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
-        env.map(f.doParse(index), (advance, t) => (advance, g(t)))
+        Functor.map(f.doParse(index), (advance, t) => (advance, g(t)))
 
+given [I, M[+_]] (using Functor[ParseResultM[M]])(using Applicative[ParseResultM[M]])(using Monad[ParseResultM[M]]): Applicative[ParserM[I, M]] with
   override def pure[S](s: S): ParserT[I, S, M] = new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
-      env.pure(0, s)
+      Applicative.pure(0, s)
 
   override def starApply[T, S](f: ParserM[I, M][T => S], m: ParserM[I, M][T]): ParserT[I, S, M] =
     if f.isFailureParser then f.asInstanceOf[ParserT[I, S, M]]
     else if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
-    else super.starApply(f, m)
+    else flatMapImpl(f, f => Functor.map(m, m => f(m)))
 
+given [I, M[+_]] (using Functor[ParseResultM[M]])(using Applicative[ParseResultM[M]])(using Monad[ParseResultM[M]]): Monad[ParserM[I, M]] with
+  override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]) : ParserT[I, S, M] = flatMapImpl(m, f)
 
-  override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]): ParserT[I, S, M] =
-    val cachingF = caching(f)
-    if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
-    else new ParserT[I, S, M] :
-      override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
-        env.flatMap(
-          m.doParse(index),
-          (advance, t) => env.map(cachingF(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
-        )
+private def flatMapImpl[I, M[+_], T, S]
+  (m: ParserT[I, T, M], f: T => ParserT[I, S, M])
+  (using fp: Functor[ParseResultM[M]])
+  (using ap: Applicative[ParseResultM[M]])
+  (using mp: Monad[ParseResultM[M]])
+  : ParserT[I, S, M] =
+  val cachingF = caching(f)
+  if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
+  else new ParserT[I, S, M] :
+    override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
+      mp.flatMap(
+        m.doParse(index),
+        (advance, t) => fp.map(cachingF(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
+      )
 
+given [I, M[+_]]
+  (using Applicative[ParserM[I, M]])
+  (using Applicative[ParseResultM[M]])
+  (using ap: Alternative[ParseResultM[M]])
+  (using Applicative[M])
+  (using Monad[M])
+  (using am: Alternative[M])
+  : Alternative[ParserM[I, M]] with
   override def empty[S]: ParserT[I, S, M] = FailureParser()
 
   override def or[T](a: ParserT[I, T, M], lazyB: => ParserT[I, T, M]): ParserT[I, T, M] =
@@ -202,10 +220,10 @@ given ParserTMonadPlus [I, M[+_]] (using env: MonadPlus[ParseResultM[M]])(using 
       override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
         val aResult = a.doParse(index)
         // Do not continue if commit level from `a` says we should abort
-        if aResult.result == m.empty && aResult.committed then aResult
-        else env.or(aResult, b.doParse(index))
+        if aResult.result == am.empty && aResult.committed then aResult
+        else ap.or(aResult, b.doParse(index))
 
-private class FailureParser[-I, M[+_]](description: String | Null = null)(using m: MonadPlus[M]) extends ParserT[I, Nothing, M] :
+private class FailureParser[-I, M[+_]: Monad : Alternative](description: String | Null = null) extends ParserT[I, Nothing, M] :
   override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, Nothing)] =
     if description == null then failure(Seq())
     else failure(Seq(ParseError(index, description)))
@@ -216,20 +234,38 @@ trait Flattener[M[_]]:
   def flatten[T](seqs: M[Seq[T]]) : Seq[T]
   def or(m: M[Boolean], base: Boolean) : Boolean
 
-given ParseResultMonadPlus [M[+_]] (using flattener: Flattener[M])(using env: MonadPlus[M]): MonadPlus[ParseResultM[M]] with
-  override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = ParseResult(env.map(f.result, g), f.errors, f.committed)
+given [M[+_]] (using flattener: Flattener[M])(using Functor[M]): Functor[ParseResultM[M]] with
+  override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = ParseResult(Functor.map(f.result, g), f.errors, f.committed)
 
-  override def pure[T](t: T): ParseResult[M, T] = success(env.pure(t))
+given [M[+_]] (using Functor[ParseResultM[M]])(using flattener: Flattener[M])(using Functor[M])(using Applicative[M])(using Monad[M]): Applicative[ParseResultM[M]] with
+  override def pure[T](t: T): ParseResult[M, T] = success(Applicative.pure(t))
 
-  override def flatMap[T, S](m: ParseResult[M, T], f: T => ParseResult[M, S]): ParseResult[M, S] =
-    val parseResults = env.flatMap(m.result, r => env.pure(f(r)))
-    ParseResult(env.flatMap(parseResults, r => r.result), m.errors ++ flattener.flatten(env.flatMap(parseResults, r => env.pure(r.errors))), flattener.or(env.map(parseResults, _.committed), m.committed))
+  override def starApply[T, S](f: ParseResult[M, T => S], m: ParseResult[M, T]): ParseResult[M, S] =
+    flatMapImpl(f, f => Functor.map(m, m => f(m)))
 
+given [M[+_]] (using Functor[ParseResultM[M]])(using Applicative[ParseResultM[M]])(using flattener: Flattener[M])(using Functor[M])(using Applicative[M])(using Monad[M]): Monad[ParseResultM[M]] with
+  override def flatMap[T, S](m: ParseResult[M, T], f: T => ParseResult[M, S]): ParseResult[M, S] = flatMapImpl(m, f)
+
+private def flatMapImpl[M[+_], T, S]
+  (m: ParseResult[M, T], f: T => ParseResult[M, S])
+  (using flattener: Flattener[M])
+  (using Functor[M])
+  (using Monad[M])
+  (using Applicative[M])
+  : ParseResult[M, S] =
+  val parseResults = Monad.flatMap(m.result, r => Applicative.pure(f(r)))
+  ParseResult(
+    Monad.flatMap(parseResults, r => r.result),
+    m.errors ++ flattener.flatten(Monad.flatMap(parseResults, r => Applicative.pure(r.errors))),
+    flattener.or(Functor.map(parseResults, _.committed), m.committed)
+  )
+
+given [M[+_]] (using Applicative[ParseResultM[M]])(using flattener: Flattener[M])(using Monad[M])(using Alternative[M]): Alternative[ParseResultM[M]] with
   override def empty[T]: ParseResult[M, T] = failure(Seq())
 
   override def or[T](a: ParseResult[M, T], b: => ParseResult[M, T]): ParseResult[M, T] =
     var evaluatedB: Option[ParseResult[M, T]] = None
-    val result = env.or(a.result, {
+    val result = Alternative.or(a.result, {
       evaluatedB = Some(b)
       evaluatedB.get.result
     })
@@ -237,7 +273,7 @@ given ParseResultMonadPlus [M[+_]] (using flattener: Flattener[M])(using env: Mo
       case Some(b) => ParseResult(result, a.errors ++ b.errors, a.committed || b.committed)
       case _ => a
 
-class ParserCache[I, M[+_]](using pm: MonadPlus[ParserM[I, M]]):
+class ParserCache[I, M[+_]]:
   private val map = mutable.WeakHashMap[IndexedSeq[I], mutable.Map[(Any, Int), ParseResult[M, (Int, ?)]]]()
   def load[T](key: Any, index: Int, action: => ParseResult[M, (Int, T)])(using input: IndexedSeq[I]) : ParseResult[M, (Int, T)] =
     map.getOrElseUpdate(input, mutable.WeakHashMap()).getOrElseUpdate((key, index), action).asInstanceOf[ParseResult[M, (Int, T)]]
