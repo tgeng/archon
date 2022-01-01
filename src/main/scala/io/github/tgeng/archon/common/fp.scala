@@ -1,7 +1,9 @@
 package io.github.tgeng.archon.common
 
 import scala.collection.IterableFactory
+import scala.deriving.Mirror
 
+type Const = [A] =>> [T] =>> A
 type Id[T] = T
 
 trait Functor[F[_]]:
@@ -10,11 +12,47 @@ trait Functor[F[_]]:
 object Functor:
   def map[F[_], T, S](f: F[T], g: T => S)(using tc: Functor[F]): F[S] = tc.map(f, g)
 
+  inline given derived[F[_]](using m: K1[F]): Functor[F] =
+    lazy val functors = summonKindAsList[LiftP[Functor, m.MirroredElemTypes], Functor]
+    inline m match
+      case s: K1Sum[F] => functorCoproduct(s,  functors)
+      case p: K1Product[F] => functorProduct(p, functors)
+
+  private def functorCoproduct[F[_]](s: K1Sum[F], functors: => List[Functor[[X]=>> Any]]): Functor[F] =
+    new Functor[F]:
+      override def map[A, B](fa: F[A], f: A => B): F[B] =
+        val ord = s.ordinal(fa.asInstanceOf[s.MirroredMonoType])
+        functors(ord).map(fa, f).asInstanceOf[F[B]]
+
+  private def functorProduct[F[_], T](p: K1Product[F], functors: => List[Functor[[X] =>> Any]]): Functor[F] =
+    new Functor[F]:
+      override def map[A, B](fa: F[A], f: A => B): F[B] =
+        val mapped = fa.asInstanceOf[Product].productIterator.zip(functors.iterator).map{
+          (fa, F) =>
+            F.map(fa, f)
+        }
+        p.fromProduct(Tuple.fromArray(mapped.toArray)).asInstanceOf[F[B]]
+
+  given Functor[Set] with
+    override def map[T, S](a: Set[T], g: T => S): Set[S] = a.map(g)
+
   given Functor[List] with
     override def map[T, S](a: List[T], g: T => S): List[S] = a.map(g)
 
   given Functor[Option] with
     override def map[T, S](a: Option[T], g: T => S): Option[S] = a.map(g)
+
+  given [E]: Functor[Either[E, *]] with
+    override def map[A, B](ea: Either[E, A], f: A => B): Either[E, B] = ea.map(f)
+
+  given [T]: Functor[T => *] with
+    override def map[A, B](g: T => A, f: A => B): T => B = t => f(g(t))
+
+  given Functor[Id] with
+    override def map[A, B](a: A, f: A => B): B = f(a)
+
+  given [T]: Functor[Const[T]] with
+    override def map[A, B](t: T, f: A => B) : T = t
 
 trait Applicative[A[_] : Functor]:
   def pure[S](s: S): A[S]
