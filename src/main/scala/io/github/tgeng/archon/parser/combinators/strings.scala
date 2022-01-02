@@ -9,10 +9,10 @@ type StrParser[T] = ParserT[Char, T, Option]
 type MultiStrParser[T] = ParserT[Char, T, List]
 
 extension[T, M[+_]]
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]])
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
   (using Applicative[M])
   (using Monad[M])
   (using Alternative[M])
@@ -26,10 +26,10 @@ extension[T, M[+_]]
 opaque type Indent = Int
 
 extension[M[+_]]
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]])
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
   (using Applicative[M])
   (using Monad[M])
   (using Alternative[M])
@@ -131,22 +131,22 @@ extension[M[+_]]
 
 
 given [M[+_] : Alternative : Monad : Applicative]
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]])
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
   : Conversion[Char, ParserT[Char, Char, M]] = P.from(_)
 given [M[+_] : Alternative : Monad : Applicative]
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]])
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
   : Conversion[String, ParserT[Char, String, M]] = P.from(_)
 given [M[+_] : Alternative : Monad : Applicative]
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]])
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
   : Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)
 
 extension (failure: ParseResult[?, ?])

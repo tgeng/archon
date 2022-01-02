@@ -23,10 +23,10 @@ enum JValue {
 import JValue.*
 
 class Parsers[M[+_] : Alternative : Monad : Applicative : Functor]
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]])
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
   :
   def any = P(P.any << P.eos)
   def doubleQuoted = P(P.quoted() << P.eos)
@@ -97,10 +97,10 @@ class ParserCombinatorsTest extends AnyFreeSpec:
   }
 
   private def testParsers[M[+_] : Alternative : Monad : Applicative : Functor](updateTestData: Boolean)
-  (using Functor[ParserM[Char, M]])
-  (using Applicative[ParserM[Char, M]])
-  (using Monad[ParserM[Char, M]])
-  (using Alternative[ParserM[Char, M]]) =
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]]) =
     import scala.io.Source
     val obj = Parsers()
     val parsers = obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$")).map(_.!!.invoke(obj).asInstanceOf[ParserT[Char, Any, M]])

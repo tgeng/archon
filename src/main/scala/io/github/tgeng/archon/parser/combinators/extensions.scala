@@ -3,14 +3,14 @@ package io.github.tgeng.archon.parser.combinators
 import io.github.tgeng.archon.common.{*, given}
 import io.github.tgeng.archon.parser.combinators.{*, given}
 
-extension[I, T, S, M[+_]] (using ap: Applicative[ParserM[I, M]])(f: ParserT[I, T => S, M])
+extension[I, T, S, M[+_]] (using ap: Applicative[ParserT[I, *, M]])(f: ParserT[I, T => S, M])
   infix def <*>(p: ParserT[I, T, M]) = ap.starApply(f, p)
 
 extension[I, T, M[+_] : Alternative : Monad : Applicative]
-  (using atp: Alternative[ParserM[I, M]])
-  (using mp: Monad[ParserM[I, M]])
-  (using app: Applicative[ParserM[I, M]])
-  (using fp: Functor[ParserM[I, M]])
+  (using atp: Alternative[ParserT[I, *, M]])
+  (using mp: Monad[ParserT[I, *, M]])
+  (using app: Applicative[ParserT[I, *, M]])
+  (using fp: Functor[ParserT[I, *, M]])
   (p: ParserT[I, T, M])
   infix def map[S](g: T => S) = fp.map(p, g)
 
@@ -72,10 +72,10 @@ extension[I, T, M[+_] : Alternative : Monad : Applicative]
   infix def chainedRightBy(op: ParserT[I, (T, T) => T, M]) : ParserT[I, T, M] = P.foldRight(p, op, p)
 
 extension[I, M[+_] : Alternative : Monad : Applicative]
-  (using fp: Functor[ParserM[I, M]])
-  (using app: Applicative[ParserM[I, M]])
-  (using mp: Monad[ParserM[I, M]])
-  (using atp: Alternative[ParserM[I, M]])
+  (using fp: Functor[ParserT[I, *, M]])
+  (using app: Applicative[ParserT[I, *, M]])
+  (using mp: Monad[ParserT[I, *, M]])
+  (using atp: Alternative[ParserT[I, *, M]])
   (e: P.type)
   def nothing: ParserT[I, Unit, M] = P.satisfy("<nothing>", _ => Some(0, ()))
 
@@ -153,10 +153,10 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
       runtime.Tuples.fromArray(xs.toArray.asInstanceOf[Array[Object]]).asInstanceOf[ExtractT[I, Ps, M]]
 
 given [I, Ps <: Tuple, M[+_]]
-  (using Functor[ParserM[I, M]])
-  (using Applicative[ParserM[I, M]])
-  (using Monad[ParserM[I, M]])
-  (using Alternative[ParserM[I, M]])
+  (using Functor[ParserT[I, *, M]])
+  (using Applicative[ParserT[I, *, M]])
+  (using Monad[ParserT[I, *, M]])
+  (using Alternative[ParserT[I, *, M]])
   (using Monad[M])
   (using Applicative[M])
   (using Alternative[M])

@@ -48,8 +48,6 @@ object ParseResult:
 
 import ParseResult.*
 
-type ParseResultM[M[+_]] = [T] =>> ParseResult[M, T]
-
 abstract class ParserT[-I, +T, M[+_]]:
   final def doParse(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
     parseImpl(index).onExitFromTarget(targetName)
@@ -59,8 +57,6 @@ abstract class ParserT[-I, +T, M[+_]]:
   def targetName: Option[String] = None
 
   def isFailureParser: Boolean = false
-
-type ParserM[-I, M[+_]] = [T] =>> ParserT[I, T, M]
 
 object P
 
@@ -77,7 +73,7 @@ extension[I, T, M[+_]](e: P.type)
 
       override def targetName: Option[String] = Some(nameToUse)
 
-extension[I, T, M[+_]](using ap: Applicative[ParserM[I, M]])(using mm: Monad[M])(using am: Applicative[M])(using Alternative[M])(e: P.type)
+extension[I, T, M[+_]](using ap: Applicative[ParserT[I, *, M]])(using mm: Monad[M])(using am: Applicative[M])(using Alternative[M])(e: P.type)
   def pure(t: T) : ParserT[I, T, M] = ap.pure(t)
   def fail(description: String) = FailureParser(description)
 
@@ -125,7 +121,7 @@ extension[I, T, M[+_] : Alternative : Monad](p: ParserT[I, T, M])
       parseResult
 
 extension[I, T, M[+_]]
-  (using ap: Alternative[ParseResultM[M]])
+  (using ap: Alternative[ParseResult[M, *]])
   (using am: Alternative[M])(p: ParserT[I, T, M])
   /**
    * Similar to `or` in `Alternative[ParserT]`, but this operator does not invoke the second parser
@@ -168,31 +164,31 @@ package single:
 
     override def or(m: Option[Boolean], base: Boolean): Boolean = base || m.getOrElse(false)
 
-given [I, M[+_]] (using Functor[ParseResultM[M]]): Functor[ParserM[I, M]] with
+given [I, M[+_]] (using Functor[ParseResult[M, *]]): Functor[ParserT[I, *, M]] with
   override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] =
     if f.isFailureParser then f.asInstanceOf[ParserT[I, S, M]]
     else new ParserT[I, S, M] :
       override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
         Functor.map(f.doParse(index), (advance, t) => (advance, g(t)))
 
-given [I, M[+_]] (using Functor[ParseResultM[M]])(using Applicative[ParseResultM[M]])(using Monad[ParseResultM[M]]): Applicative[ParserM[I, M]] with
+given [I, M[+_]] (using Functor[ParseResult[M, *]])(using Applicative[ParseResult[M, *]])(using Monad[ParseResult[M, *]]): Applicative[ParserT[I, *, M]] with
   override def pure[S](s: S): ParserT[I, S, M] = new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
       Applicative.pure(0, s)
 
-  override def starApply[T, S](f: ParserM[I, M][T => S], m: ParserM[I, M][T]): ParserT[I, S, M] =
+  override def starApply[T, S](f: ParserT[I, T => S, M], m: ParserT[I, T, M]): ParserT[I, S, M] =
     if f.isFailureParser then f.asInstanceOf[ParserT[I, S, M]]
     else if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
-    else flatMapImpl(f, f => Functor.map(m, m => f(m)))
+    else flatMapImpl(f, f => summon[Functor[ParserT[I, *, M]]].map(m, m => f(m)))
 
-given [I, M[+_]] (using Functor[ParseResultM[M]])(using Applicative[ParseResultM[M]])(using Monad[ParseResultM[M]]): Monad[ParserM[I, M]] with
+given [I, M[+_]] (using Functor[ParseResult[M, *]])(using Applicative[ParseResult[M, *]])(using Monad[ParseResult[M, *]]): Monad[ParserT[I, *, M]] with
   override def flatMap[T, S](m: ParserT[I, T, M], f: T => ParserT[I, S, M]) : ParserT[I, S, M] = flatMapImpl(m, f)
 
 private def flatMapImpl[I, M[+_], T, S]
   (m: ParserT[I, T, M], f: T => ParserT[I, S, M])
-  (using fp: Functor[ParseResultM[M]])
-  (using ap: Applicative[ParseResultM[M]])
-  (using mp: Monad[ParseResultM[M]])
+  (using fp: Functor[ParseResult[M, *]])
+  (using ap: Applicative[ParseResult[M, *]])
+  (using mp: Monad[ParseResult[M, *]])
   : ParserT[I, S, M] =
   val cachingF = caching(f)
   if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
@@ -204,13 +200,13 @@ private def flatMapImpl[I, M[+_], T, S]
       )
 
 given [I, M[+_]]
-  (using Applicative[ParserM[I, M]])
-  (using Applicative[ParseResultM[M]])
-  (using ap: Alternative[ParseResultM[M]])
+  (using Applicative[ParserT[I, *, M]])
+  (using Applicative[ParseResult[M, *]])
+  (using ap: Alternative[ParseResult[M, *]])
   (using Applicative[M])
   (using Monad[M])
   (using am: Alternative[M])
-  : Alternative[ParserM[I, M]] with
+  : Alternative[ParserT[I, *, M]] with
   override def empty[S]: ParserT[I, S, M] = FailureParser()
 
   override def or[T](a: ParserT[I, T, M], lazyB: => ParserT[I, T, M]): ParserT[I, T, M] =
@@ -234,16 +230,16 @@ trait Flattener[M[_]]:
   def flatten[T](seqs: M[Seq[T]]) : Seq[T]
   def or(m: M[Boolean], base: Boolean) : Boolean
 
-given [M[+_]] (using flattener: Flattener[M])(using Functor[M]): Functor[ParseResultM[M]] with
+given [M[+_]] (using flattener: Flattener[M])(using Functor[M]): Functor[ParseResult[M, *]] with
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] = ParseResult(Functor.map(f.result, g), f.errors, f.committed)
 
-given [M[+_]] (using Functor[ParseResultM[M]])(using flattener: Flattener[M])(using Functor[M])(using Applicative[M])(using Monad[M]): Applicative[ParseResultM[M]] with
+given [M[+_]] (using Functor[ParseResult[M, *]])(using flattener: Flattener[M])(using Functor[M])(using Applicative[M])(using Monad[M]): Applicative[ParseResult[M, *]] with
   override def pure[T](t: T): ParseResult[M, T] = success(Applicative.pure(t))
 
   override def starApply[T, S](f: ParseResult[M, T => S], m: ParseResult[M, T]): ParseResult[M, S] =
     flatMapImpl(f, f => Functor.map(m, m => f(m)))
 
-given [M[+_]] (using Functor[ParseResultM[M]])(using Applicative[ParseResultM[M]])(using flattener: Flattener[M])(using Functor[M])(using Applicative[M])(using Monad[M]): Monad[ParseResultM[M]] with
+given [M[+_]] (using Functor[ParseResult[M, *]])(using Applicative[ParseResult[M, *]])(using flattener: Flattener[M])(using Functor[M])(using Applicative[M])(using Monad[M]): Monad[ParseResult[M, *]] with
   override def flatMap[T, S](m: ParseResult[M, T], f: T => ParseResult[M, S]): ParseResult[M, S] = flatMapImpl(m, f)
 
 private def flatMapImpl[M[+_], T, S]
@@ -260,7 +256,7 @@ private def flatMapImpl[M[+_], T, S]
     flattener.or(Functor.map(parseResults, _.committed), m.committed)
   )
 
-given [M[+_]] (using Applicative[ParseResultM[M]])(using flattener: Flattener[M])(using Monad[M])(using Alternative[M]): Alternative[ParseResultM[M]] with
+given [M[+_]] (using Applicative[ParseResult[M, *]])(using flattener: Flattener[M])(using Monad[M])(using Alternative[M]): Alternative[ParseResult[M, *]] with
   override def empty[T]: ParseResult[M, T] = failure(Seq())
 
   override def or[T](a: ParseResult[M, T], b: => ParseResult[M, T]): ParseResult[M, T] =

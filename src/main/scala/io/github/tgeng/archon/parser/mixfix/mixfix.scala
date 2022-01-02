@@ -76,11 +76,11 @@ import io.github.tgeng.archon.parser.mixfix.MixfixAst.*
 
 def createMixfixParser[N, M[+_] : Alternative : Monad : Applicative : Functor, L]
   (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
-  (using Functor[ParserM[N, M]])
-  (using Applicative[ParserM[N, M]])
-  (using Monad[ParserM[N, M]])
-  (using Alternative[ParserM[N, M]])
-  (using Alternative[ParseResultM[M]])
+  (using Functor[ParserT[N, *, M]])
+  (using Applicative[ParserT[N, *, M]])
+  (using Monad[ParserT[N, *, M]])
+  (using Alternative[ParserT[N, *, M]])
+  (using Alternative[ParseResult[M, *]])
   (using nn: NamePart[N])
   (using cache: ParserCache[N, M]): ParserT[N, MixfixAst[N, L], M] =
   // Filter out operators that does not appear in the input.
@@ -110,11 +110,11 @@ def trimGraph(g: PrecedenceGraph, nameParts: Set[String]): PrecedenceGraph =
 
 def createMixfixParserImpl[N, M[+_] : Alternative : Monad : Applicative : Functor, L]
   (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
-  (using Functor[ParserM[N, M]])
-  (using Applicative[ParserM[N, M]])
-  (using Monad[ParserM[N, M]])
-  (using Alternative[ParserM[N, M]])
-  (using Alternative[ParseResultM[M]])
+  (using Functor[ParserT[N, *, M]])
+  (using Applicative[ParserT[N, *, M]])
+  (using Monad[ParserT[N, *, M]])
+  (using Alternative[ParserT[N, *, M]])
+  (using Alternative[ParseResult[M, *]])
   (using nn: NamePart[N])
   (using cache: ParserCache[N, M]): ParserT[N, MixfixAst[N, L], M] =
   val illegalIdentifierNames = g.flatMap(node => node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts))).toSet
