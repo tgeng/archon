@@ -15,7 +15,16 @@ class FunctorDerivationSpec extends AnyFreeSpec:
     )
   }
 
-  case class Blob[T](s: String, t: T, listT: List[T], setT: Set[T], optionT: Option[T], eitherT: Either[String, T], i: Int, listInt: List[Int])
+  case class Blob[T](
+    s: String,
+    t: T,
+    listT: List[T],
+    setT: Set[T],
+    optionT: Option[T],
+    eitherT: Either[String, T],
+    i: Int,
+    listInt: List[Int]
+  ) derives Functor
 
   "blob" in {
     assert(

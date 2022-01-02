@@ -13,7 +13,7 @@ object Functor:
   def map[F[_], T, S](f: F[T], g: T => S)(using tc: Functor[F]): F[S] = tc.map(f, g)
 
   inline given derived[F[_]](using m: K1[F]): Functor[F] =
-    lazy val functors = summonKindAsList[LiftP[Functor, m.MirroredElemTypes], Functor]
+    lazy val functors = summonK1AsList[LiftK1[Functor, m.MirroredElemTypes], Functor]
     inline m match
       case s: K1Sum[F] => functorCoproduct(s,  functors)
       case p: K1Product[F] => functorProduct(p, functors)
