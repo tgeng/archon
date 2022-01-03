@@ -6,6 +6,54 @@ import scala.deriving.Mirror
 type Const = [A] =>> [T] =>> A
 type Id[T] = T
 
+trait Recursive[T]:
+  def transform(t: T, f: Any => Option[T]): T
+
+object Recursive:
+  inline def transform[T](t: T, f: T => Option[T])(using r: Recursive[T]): T =
+    r.transform(t, t => t match
+      case t: T => f(t)
+      case _ => None
+    )
+
+  import scala.deriving.*
+  import scala.compiletime.*
+
+  inline given derived[T](using m: Mirror.Of[T]) : Recursive[T] =
+    lazy val recursiveIfPossible = summonAll[T, LiftK0[Recursive, m.MirroredElemTypes]]
+    inline m match
+      case s: Mirror.SumOf[T] => recursiveSum(s, recursiveIfPossible)
+      case p: Mirror.ProductOf[T] => recursiveProduct(p, recursiveIfPossible)
+
+  def recursiveSum[T](
+    s: Mirror.SumOf[T],
+    recursives: => List[Option[Recursive[T]]]): Recursive[T] = new Recursive[T]:
+    override def transform(t: T, f: Any => Option[T]): T =
+      f(t) match
+        case Some(t) => t
+        case None => recursives(s.ordinal(t)) match
+          case Some(r) => r.transform(t, f)
+          case None => t
+
+  def recursiveProduct[T](
+    p: Mirror.ProductOf[T],
+    recursives: => List[Option[Recursive[T]]]): Recursive[T] = new Recursive[T]:
+    override def transform(t: T, f: Any => Option[T]): T =
+      val transformed = t.asInstanceOf[Product].productIterator.zip(recursives).map {
+        case (t, Some(r)) => r.transform(t.asInstanceOf[T], f)
+        case (e, None) => e
+      }
+      p.fromProduct(Tuple.fromArray(transformed.toArray))
+
+  inline def summonAll[T, Tu <: Tuple] : List[Option[Recursive[T]]] =
+    inline erasedValue[Tu] match
+      case _: EmptyTuple => Nil
+      case _: (t *: ts) => summonFrom {
+        case r: t => Some(r.asInstanceOf[Recursive[T]])
+        case _ => None
+      } :: summonAll[T, ts]
+
+
 trait Functor[F[_]]:
   def map[T, S](f: F[T], g: T => S): F[S]
 

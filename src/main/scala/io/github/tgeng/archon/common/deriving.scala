@@ -22,3 +22,11 @@ inline def summonK1AsList[T <: Tuple, K[_[+_]]]: List[K[[X]=>> Any]] =
     case _: EmptyTuple => Nil
     case _: (t *: ts) =>
       summonInline[t].asInstanceOf[K[[X]=>>Any]] :: summonK1AsList[ts, K]
+
+inline def summonK1AsListIfPossible[T <: Tuple, K[_[+_]]]: List[Option[K[[X]=>> Any]]] =
+  inline erasedValue[T] match
+    case _: EmptyTuple => Nil
+    case _: (t *: ts) => summonFrom {
+      case f : t => Some(f.asInstanceOf[K[[X]=>>Any]])
+      case _ => None
+    } :: summonK1AsListIfPossible[ts, K]
