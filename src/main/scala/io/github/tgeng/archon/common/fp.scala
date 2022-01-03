@@ -7,41 +7,40 @@ type Const = [A] =>> [T] =>> A
 type Id[T] = T
 
 trait Recursive[T]:
-  def transform(t: T, f: Any => Option[T]): T
+  def transform(recursiveT: =>Recursive[T], isT: Any => Boolean, t: T, f: T => Option[T]): T
 
 object Recursive:
-  inline def transform[T](t: T, f: T => Option[T])(using r: Recursive[T]): T =
-    r.transform(t, t => t match
-      case t: T => f(t)
-      case _ => None
-    )
-
   import scala.deriving.*
   import scala.compiletime.*
+
+  inline def transform[T](t: T, f: T => Option[T])(using r: Recursive[T]): T =
+    def isT(a: Any) = a.isInstanceOf[T]
+    r.transform(summonInline[Recursive[T]], isT, t, f)
 
   inline given derived[T](using m: Mirror.Of[T]) : Recursive[T] =
     lazy val recursiveIfPossible = summonAll[T, LiftK0[Recursive, m.MirroredElemTypes]]
     inline m match
       case s: Mirror.SumOf[T] => recursiveSum(s, recursiveIfPossible)
-      case p: Mirror.ProductOf[T] => recursiveProduct(p, recursiveIfPossible)
+      case p: Mirror.ProductOf[T] => recursiveProduct(p)
 
   def recursiveSum[T](
     s: Mirror.SumOf[T],
-    recursives: => List[Option[Recursive[T]]]): Recursive[T] = new Recursive[T]:
-    override def transform(t: T, f: Any => Option[T]): T =
+    recursives: => List[Option[Recursive[T]]]
+  ): Recursive[T] = new Recursive[T]:
+    override def transform(recursiveT: =>Recursive[T], isT: Any => Boolean, t: T, f: T => Option[T]): T =
       f(t) match
         case Some(t) => t
         case None => recursives(s.ordinal(t)) match
-          case Some(r) => r.transform(t, f)
+          case Some(r) => r.transform(recursiveT, isT, t, f)
           case None => t
 
   def recursiveProduct[T](
-    p: Mirror.ProductOf[T],
-    recursives: => List[Option[Recursive[T]]]): Recursive[T] = new Recursive[T]:
-    override def transform(t: T, f: Any => Option[T]): T =
-      val transformed = t.asInstanceOf[Product].productIterator.zip(recursives).map {
-        case (t, Some(r)) => r.transform(t.asInstanceOf[T], f)
-        case (e, None) => e
+    p: Mirror.ProductOf[T]
+  ): Recursive[T] = new Recursive[T]:
+    override def transform(recursiveT: =>Recursive[T], isT: Any => Boolean, t: T, f: T => Option[T]): T =
+      val transformed = t.asInstanceOf[Product].productIterator.map {
+        case t if isT(t) => recursiveT.transform(recursiveT, isT, t.asInstanceOf[T], f)
+        case e => e
       }
       p.fromProduct(Tuple.fromArray(transformed.toArray))
 
