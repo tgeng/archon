@@ -13,6 +13,12 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
     case Node2(left: Tree2, right: Tree)
   import Tree2.*
 
+  enum WideTree derives Recursive:
+    case WNode(children: List[WideTree])
+    case WTupleNode(t: (Int, WideTree))
+    case WLeaf(i: Int)
+  import WideTree.*
+
   "recursive tree" in {
     assert(
       Recursive.transform(Node(Leaf(1), Node(Leaf(2), Leaf(3))), {
@@ -36,5 +42,19 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
             None
         case _ => None
       }) == Node2(Leaf2(2), Node(Leaf(2), Leaf(3)))
+    )
+  }
+
+  "wide tree" in {
+      assert(Recursive.transform(
+        WNode(List(WLeaf(1), WNode(List(WLeaf(2), WLeaf(3))), WTupleNode((1, WLeaf(5))))),
+        {
+          case WLeaf(i) =>
+            if i % 2 == 1 then
+              Some(WLeaf(i * 2))
+            else
+              None
+          case _ => None
+        }) == WNode(List(WLeaf(2), WNode(List(WLeaf(2), WLeaf(6))), WTupleNode((1, WLeaf(10)))))
     )
   }

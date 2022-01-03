@@ -18,14 +18,15 @@ object Recursive:
     r.transform(summonInline[Recursive[T]], isT, t, f)
 
   inline given derived[T](using m: Mirror.Of[T]) : Recursive[T] =
-    lazy val recursiveIfPossible = summonAll[T, LiftK0[Recursive, m.MirroredElemTypes]]
+    lazy val recursiveIfPossible = summonAll[T, LiftK0[Recursive, m.MirroredElemTypes], Recursive[T]]
+    lazy val functorsIfPossible = summonAll[T, ExtractFunctors[m.MirroredElemTypes], Functor[?]]
     inline m match
       case s: Mirror.SumOf[T] => recursiveSum(s, recursiveIfPossible)
-      case p: Mirror.ProductOf[T] => recursiveProduct(p)
+      case p: Mirror.ProductOf[T] => recursiveProduct(p, functorsIfPossible)
 
   def recursiveSum[T](
     s: Mirror.SumOf[T],
-    recursives: => List[Option[Recursive[T]]]
+    recursives: =>List[Option[Recursive[T]]]
   ): Recursive[T] = new Recursive[T]:
     override def transform(recursiveT: =>Recursive[T], isT: Any => Boolean, t: T, f: T => Option[T]): T =
       f(t) match
@@ -35,26 +36,44 @@ object Recursive:
           case None => t
 
   def recursiveProduct[T](
-    p: Mirror.ProductOf[T]
+    p: Mirror.ProductOf[T],
+    functors: =>List[Option[Functor[?]]]
   ): Recursive[T] = new Recursive[T]:
     override def transform(recursiveT: =>Recursive[T], isT: Any => Boolean, t: T, f: T => Option[T]): T =
-      val transformed = t.asInstanceOf[Product].productIterator.map {
-        case t if isT(t) => recursiveT.transform(recursiveT, isT, t.asInstanceOf[T], f)
-        case e => e
+      val transformed = t.asInstanceOf[Product].productIterator.zip(functors).map {
+        case (t, _) if isT(t) => recursiveT.transform(recursiveT, isT, t.asInstanceOf[T], f)
+        case (functorInstance, Some(functor)) => functor.mapAny(
+          functorInstance,
+          t => if isT(t) then recursiveT.transform(recursiveT, isT, t.asInstanceOf[T], f) else t
+        )
+        case (e, _) => e
       }
       p.fromProduct(Tuple.fromArray(transformed.toArray))
 
-  inline def summonAll[T, Tu <: Tuple] : List[Option[Recursive[T]]] =
+  inline def summonAll[T, Tu <: Tuple, Tc] : List[Option[Tc]] =
     inline erasedValue[Tu] match
       case _: EmptyTuple => Nil
       case _: (t *: ts) => summonFrom {
-        case r: t => Some(r.asInstanceOf[Recursive[T]])
+        case r: t => Some(r.asInstanceOf[Tc])
         case _ => None
-      } :: summonAll[T, ts]
+      } :: summonAll[T, ts, Tc]
 
+  type ExtractFunctors[Tu <: Tuple] <: Tuple =
+    Tu match
+      case List[_] *: ts => Functor[List] *: ExtractFunctors[ts]
+      case Option[_] *: ts => Functor[Option] *: ExtractFunctors[ts]
+      case Set[_] *: ts => Functor[Set] *: ExtractFunctors[ts]
+      case Either[l, _] *: ts => Functor[Either[l, *]] *: ExtractFunctors[ts]
+      case (a => _) *: ts => Functor[a => *] *: ExtractFunctors[ts]
+      case (a, _) *: ts => Functor[(a, *)] *: ExtractFunctors[ts]
+      case _ *: ts => Nothing *: ExtractFunctors[ts]
+      case _ => EmptyTuple
 
 trait Functor[F[_]]:
   def map[T, S](f: F[T], g: T => S): F[S]
+
+  @deprecated("hack around type check so that Recursive can work")
+  def mapAny[T, S](a: Any, g: T => S) = map(a.asInstanceOf[F[T]], g)
 
 object Functor:
   def map[F[_], T, S](f: F[T], g: T => S)(using tc: Functor[F]): F[S] = tc.map(f, g)
@@ -91,6 +110,12 @@ object Functor:
 
   given [E]: Functor[Either[E, *]] with
     override def map[A, B](ea: Either[E, A], f: A => B): Either[E, B] = ea.map(f)
+
+  given Functor[Tuple1] with
+    override def map[A, B](a: Tuple1[A], f: A => B): Tuple1[B] = Tuple1(f(a.head))
+
+  given [E]: Functor[(E, *)] with
+    override def map[A, B](t: (E, A), f: A => B): (E, B) = (t(0), f(t(1)))
 
   given [T]: Functor[T => *] with
     override def map[A, B](g: T => A, f: A => B): T => B = t => f(g(t))
