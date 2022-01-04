@@ -14,8 +14,8 @@ object Recursive:
   inline given derived[T](using m: Mirror.Of[T]) : Recursive[T] =
     inline m match
       case s: Mirror.SumOf[T] =>
-        lazy val recursiveIfPossible = summonAllRecursive[m.MirroredElemTypes]
-        recursiveSum(s, recursiveIfPossible.asInstanceOf[List[Recursive[T]]])
+        lazy val recursives = summonAllRecursive[m.MirroredElemTypes]
+        recursiveSum(s, recursives.asInstanceOf[List[Recursive[T]]])
       case p: Mirror.ProductOf[T] =>
         lazy val functorsIfPossible = summonAllIfPossible[ExtractFunctors[m.MirroredElemTypes], Functor[?]]
         recursiveProduct(p, functorsIfPossible)
