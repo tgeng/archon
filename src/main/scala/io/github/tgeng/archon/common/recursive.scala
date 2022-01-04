@@ -14,9 +14,14 @@ object Recursive:
   inline given derived[T](using m: Mirror.Of[T]) : Recursive[T] =
     inline m match
       case s: Mirror.SumOf[T] =>
+        // For sum, each element is known to be a subtype of `T`.
         lazy val recursives = summonAllRecursive[m.MirroredElemTypes]
         recursiveSum(s, recursives.asInstanceOf[List[Recursive[T]]])
       case p: Mirror.ProductOf[T] =>
+        // For product, we do not need to collect `Recursive[T]` because we always want to use the
+        // fixed `Recursive[P]` that's passed along through `transform` instead. However, we want to
+        // collect `Functor`s because we need to recursively transform anything wrapped inside a
+        // functor.
         lazy val functorsIfPossible = summonAllIfPossible[ExtractFunctors[m.MirroredElemTypes], Functor[?]]
         recursiveProduct(p, functorsIfPossible)
 
@@ -25,8 +30,10 @@ object Recursive:
     recursives: => List[Recursive[T]]
   ): Recursive[T] = new Recursive[T] :
     override def transform[P >: T](recursiveParent: => Recursive[P], isCurrentRecursive: Any => Boolean, t: T, f: P => Option[P]): P =
+      // always start by invoking the caller-specified transformer `f`.
       f(t) match
         case Some(t) => t
+        // then fallback to recursively transforming each branch
         case None => recursives(s.ordinal(t)).transform(recursiveParent, isCurrentRecursive, t, f)
 
   def recursiveProduct[T](
@@ -35,11 +42,14 @@ object Recursive:
   ): Recursive[T] = new Recursive[T] :
     override def transform[P >: T](recursiveParent: => Recursive[P], isCurrentRecursive: Any => Boolean, t: T, f: P => Option[P]): P =
       val transformed = t.asInstanceOf[Product].productIterator.zip(functors).map {
+        // first, invoke `Recursive.transform`
         case (t, _) if isCurrentRecursive(t) => recursiveParent.transform(recursiveParent, isCurrentRecursive, t.asInstanceOf[T], f)
+        // second, fallback to invoke `Functor.map`
         case (functorInstance, Some(functor)) => functor.mapAny(
           functorInstance,
           t => if isCurrentRecursive(t) then recursiveParent.transform(recursiveParent, isCurrentRecursive, t.asInstanceOf[T], f) else t
         )
+        // finally, if none works, leave the field as it is
         case (e, _) => e
       }
       p.fromProduct(Tuple.fromArray(transformed.toArray))
