@@ -58,3 +58,29 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
         }) == WNode(List(WLeaf(2), WNode(List(WLeaf(2), WLeaf(6))), WTupleNode((1, WLeaf(10)))))
     )
   }
+
+//  enum ParameterizedTree[T] derives Functor:
+//    case PNode(left: ParameterizedTree[T], right: ParameterizedTree[T])
+//    case PLeaf(t: T)
+//  import ParameterizedTree.*
+//  opaque type IntTree = ParameterizedTree[Int]
+//
+//  "parameterized tree" in {
+//        assert(
+//          Functor.map(PNode(PLeaf(1), PNode(PLeaf(2), PLeaf(3))), - _) ==
+//            PNode(PLeaf(-1), PNode(PLeaf(-2), PLeaf(-3)))
+//        )
+//    given Recursive[ParameterizedTree[Int]] = Recursive.derived
+//    val input : IntTree = PNode(PLeaf(1), PNode(PLeaf(2), PLeaf(3)))
+//    val output : IntTree = PNode(PLeaf(2), PNode(PLeaf(2), PLeaf(6)))
+//    assert(
+//      Recursive.transform(input, {
+//        case PLeaf(i) =>
+//          if i % 2 == 1 then
+//            Some(PLeaf(i * 2))
+//          else
+//            None
+//        case _ => None
+//      }) == output
+//    )
+//  }
