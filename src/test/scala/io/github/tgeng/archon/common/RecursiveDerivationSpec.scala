@@ -59,6 +59,11 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
     )
   }
 
+// The following test should work. Actually if `summonAllRecursive` in recursive.scala is hoisted
+// out of the `match` clause, then summoning recursive can work correctly. However, that causes
+// other problems because summoning outside would then also run for products, in which case the
+// code would try to summon `Recursive[Int]`, etc, which is not needed.
+
 //  enum ParameterizedTree[T] derives Recursive:
 //    case PNode(left: ParameterizedTree[T], right: ParameterizedTree[T])
 //    case PLeaf(t: T)
