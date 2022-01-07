@@ -22,7 +22,7 @@ object Recursive:
         // fixed `Recursive[P]` that's passed along through `transform` instead. However, we want to
         // collect `Functor`s because we need to recursively transform anything wrapped inside a
         // functor.
-        lazy val functorsIfPossible = summonAllIfPossible[ExtractFunctors[m.MirroredElemTypes], Functor[?]]
+        lazy val functorsIfPossible = summonAllBoundFunctors[m.MirroredElemTypes]
         recursiveProduct(p, functorsIfPossible)
 
   def recursiveSum[T](
@@ -38,14 +38,14 @@ object Recursive:
 
   def recursiveProduct[T](
     p: Mirror.ProductOf[T],
-    functors: => List[Option[Functor[?]]]
+    functors: => List[Option[BoundFunctor[?]]]
   ): Recursive[T] = new Recursive[T] :
     override def transform[P >: T](recursiveParent: => Recursive[P], isCurrentRecursive: Any => Boolean, t: T, f: P => Option[P]): P =
       val transformed = t.asInstanceOf[Product].productIterator.zip(functors).map {
         // first, invoke `Recursive.transform`
         case (t, _) if isCurrentRecursive(t) => recursiveParent.transform(recursiveParent, isCurrentRecursive, t.asInstanceOf[T], f)
         // second, fallback to invoke `Functor.map`
-        case (functorInstance, Some(functor)) => functor.mapAny(
+        case (functorInstance, Some(functor)) => functor.bMap(
           functorInstance,
           t => if isCurrentRecursive(t) then recursiveParent.transform(recursiveParent, isCurrentRecursive, t.asInstanceOf[T], f) else t
         )
@@ -59,21 +59,16 @@ object Recursive:
       case _: EmptyTuple => Nil
       case _: (t *: ts) => summonInline[Recursive[t]] :: summonAllRecursive[ts]
 
-private inline def summonAllIfPossible[Tu <: Tuple, Tc] : List[Option[Tc]] =
-  inline erasedValue[Tu] match
-    case _: EmptyTuple => Nil
-    case _: (t *: ts) => summonFrom {
-      case r: t => Some(r.asInstanceOf[Tc])
-      case _ => None
-    } :: summonAllIfPossible[ts, Tc]
+  given [F[_]: Functor, T]: BoundFunctor[F[T]] with
+    override def bMap(b: Any, f: Any => Any): F[T] = f(b).asInstanceOf[F[T]]
 
-private type ExtractFunctors[Tu <: Tuple] <: Tuple =
-  Tu match
-    case List[_] *: ts => Functor[List] *: ExtractFunctors[ts]
-    case Option[_] *: ts => Functor[Option] *: ExtractFunctors[ts]
-    case Set[_] *: ts => Functor[Set] *: ExtractFunctors[ts]
-    case Either[l, _] *: ts => Functor[Either[l, *]] *: ExtractFunctors[ts]
-    case (a => _) *: ts => Functor[a => *] *: ExtractFunctors[ts]
-    case (a, _) *: ts => Functor[(a, *)] *: ExtractFunctors[ts]
-    case _ *: ts => Nothing *: ExtractFunctors[ts]
-    case _ => EmptyTuple
+  private inline def summonAllBoundFunctors[Tu <: Tuple] : List[Option[BoundFunctor[?]]] =
+    inline erasedValue[Tu] match
+      case _: EmptyTuple => Nil
+      case _: (t *: ts) => summonFrom {
+        case r: BoundFunctor[t] => Some(r)
+        case _ => None
+      } :: summonAllBoundFunctors[ts]
+
+private trait BoundFunctor[F]:
+  def bMap(b: Any, f: Any => Any): F
