@@ -37,6 +37,8 @@ enum VTerm:
   case CompoundLevel(offset: Nat, operands: ListSet[VTerm])
 
   case HeapType
+  /** Any need for leaky heap usage goes here. */
+  case GlobalHeap
 
   case CellType(heap: VTerm, ty: VTerm)
   case Cell(id: Any)
@@ -123,11 +125,10 @@ enum CTerm:
 
     /**
      * This is the output type. The resulted handler has type
-     * `(h : HeapType) -> U (inputType h) -> outputType`. Note that we allow heap to be leaked
-     * through `outputType` by existential types like (t: Type, x: t) where `t` can be `HeapType`.
-     * This is OK because there is nothing can be done with such heap variables: set, get, or alloc
-     * with such heap variables would create an unhandleable heap effect and hence fail type
-     * checking.
+     * `(h : HeapType) -> U (inputType h) -> outputType`. Note that we do not allow heap to be
+     * leaked through `outputType` by existential types like (t: Type, x: t) where `t` can be
+     * `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
+     * flexibility is needed, one should use `GlobalHeap` instead.
      */
     outputType: CTerm,
   )
