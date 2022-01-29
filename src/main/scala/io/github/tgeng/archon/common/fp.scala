@@ -48,6 +48,9 @@ object Functor:
   given [E]: Functor[Either[E, *]] with
     override def map[A, B](ea: Either[E, A], f: A => B): Either[E, B] = ea.map(f)
 
+  given [E]: Functor[(E, *)] with
+    override def map[A, B](ea: (E, A), f: A => B): (E, B) = (ea(0), f(ea(1)))
+
   given Functor[Tuple1] with
     override def map[A, B](a: Tuple1[A], f: A => B): Tuple1[B] = Tuple1(f(a.head))
 
