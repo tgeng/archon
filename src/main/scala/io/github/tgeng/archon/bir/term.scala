@@ -13,32 +13,39 @@ import io.github.tgeng.archon.common.*
 type Nat = Int
 
 enum VTerm:
+  /** archon.builtin.VUniverse */
   case VUniverse(level: VTerm)
 
   case LocalVariable(idx: Nat)
   case GlobalVariable(qn: QualifiedName)
 
+  /** archon.builtin.U */
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
   case DataType(qn: QualifiedName, params: List[VTerm])
   case Con(name: String, args: List[VTerm])
 
+  /** archon.builtin.Equality */
   case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
   case Refl
 
+  /** archon.builtin.Effects */
   case EffectsType
   case EffectsLiteral(effects: ListSet[(QualifiedName, List[VTerm])])
   case EffectsUnion(effects1: VTerm, effects2: VTerm)
 
+  /** archon.builtin.Level */
   case LevelType
   case LevelLiteral(value: Nat)
   case CompoundLevel(offset: Nat, operands: ListSet[VTerm])
 
+  /** archon.builtin.Heap */
   case HeapType
   /** Any need for leaky heap usage goes here. */
   case GlobalHeap
 
+  /** archon.builtin.Cell */
   case CellType(heap: VTerm, ty: VTerm)
   case Cell(id: Any)
 
@@ -49,8 +56,10 @@ enum CTerm:
   /** used for interpreting terms as an abstract stack machine */
   case Hole
 
+  /** archon.builtin.CUniverse */
   case CUniverse(level: VTerm, effects: VTerm) extends CTerm, CType
 
+  /** archon.builtin.F */
   case F(vTerm: VTerm, effects: VTerm) extends CTerm, CType
   case Return(v: VTerm)
   case Force(v: VTerm)
@@ -58,6 +67,7 @@ enum CTerm:
   case Let(t: CTerm, ctx: CTerm)
   case DLet(t: CTerm, ctx: CTerm)
 
+  /** archon.builtin.Function */
   case FunctionType(argTy: VTerm, bodyTy: CTerm, effects: VTerm) extends CTerm, CType
   case Lambda(body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
@@ -66,6 +76,7 @@ enum CTerm:
   case Record(fields: List[CTerm])
   case Projection(rec: CTerm, name: String)
 
+  case TypeCase(arg: VTerm, cases: Map[QualifiedName, CTerm])
   case DataCase(arg: VTerm, cases: Map[String, CTerm])
   case EqualityCase(arg: VTerm, body: CTerm)
 
