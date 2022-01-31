@@ -16,6 +16,8 @@ infixl _||_
   looser than _&&_
 prefix if_then_else_ if_then_
   looser than _||_
+postfix _#
+  looser than (_)
 
 ====
 a + b * c / d - e
@@ -75,13 +77,13 @@ when parsing expr->{(_)}->{(_)}->expr->{(_)}->{(_)}:
        ^ expect '('
 when parsing expr->{(_)}->{(_)}->expr->{(_)}:
 [1:2] (
-       ^ expect <none of Set((, ))> | <tighter ops>
+       ^ expect <quoted identifier> | <literal> | <none of Set((, ))> | <tighter ops>
 
 a )
 ----
 when parsing expr->{(_)}:
 [1:2] a )
-       ^ expect <none of Set((, ))> | <tighter ops>
+       ^ expect <quoted identifier> | <literal> | <none of Set((, ))> | <tighter ops>
 when parsing expr->{(_)}->{(_)}:
 [1:2] a )
        ^ expect '('
@@ -93,4 +95,12 @@ when parsing expr->{+}->{+}->{+}:
           ^ expect <tighter ops>
 when parsing expr->{+}->{+}:
 [1:5] a + b +
-          ^ expect <none of Set(+)> | '+'
+          ^ expect <quoted identifier> | <literal>
+
+a # b c d
+----
+5 | [@ [`a` #] `b` `c` `d`]
+
+a `+` b * c
+----
+5 | [[@ `a` ``+`` `b`] * `c`]

@@ -132,19 +132,23 @@ def createMixfixParserImpl[N, M[+_] : Alternative : Monad : Applicative : Functo
       P(
         P.cached(
           node,
-          (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
-            .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
-              // somehow type inferencing is not working here and requires explicit type arguments
-              P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](
-                pRight,
-                P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
-                pUp
-              ) |
-              P.foldLeft1[MixfixAst[N, L], (Operator, List[MixfixAst[N, L]], List[N])](
-                pUp,
-                P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
-                pLeft
-              )
+          for
+            ops <- (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
+              .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
+                // somehow type inferencing is not working here and requires explicit type arguments
+                P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](
+                  pRight,
+                  P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
+                  pUp
+                ) |
+                P.foldLeft1[MixfixAst[N, L], (Operator, List[MixfixAst[N, L]], List[N])](
+                  pUp,
+                  P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
+                  pLeft
+                )
+            args <- closed.**
+          yield
+            if args.isEmpty then ops else ApplyCall(ops +: args)
         ),
         getNodeTargetName(node),
         lazily = true)
@@ -170,12 +174,16 @@ def createMixfixParserImpl[N, M[+_] : Alternative : Monad : Applicative : Functo
           .map(operator => between(expr, operator.nameParts).map((args, nameParts) => (operator, args, nameParts))))
       )
 
-  def closedPlus: ParserT[N, MixfixAst[N, L], M] = closed.+.map(args => if args.size == 1 then args.head else ApplyCall(args))
+  def closedPlus: ParserT[N, MixfixAst[N, L], M] = closed.++.map(args => if args.size == 1 then args.head else ApplyCall(args))
 
   def closed: ParserT[N, MixfixAst[N, L], M] =
     P.cached((g, "closed"),
       union(g.map(node =>
-    // prefer literal over closed operator and identifiers
+      // prefer literal over closed operator and identifiers
+      P.satisfySingle("<quoted identifier>", n =>
+         val s = nn.asString(n)
+         s.startsWith("`") && s.endsWith("`")
+      ).map(Identifier.apply) ||
       literalParser.map(Literal.apply) ||
       P(node.op(Closed).map((op, args, nameParts) => OperatorCall(op, args, nameParts)), getNodeTargetName(node)))) ||
       P.satisfySingle(s"<none of $illegalIdentifierNames>", n => !illegalIdentifierNames.contains(nn.asString(n))).map(Identifier.apply)

@@ -11,6 +11,31 @@ extension[I, T, M[+_] : Alternative : Monad : Applicative]
   (using mp: Monad[ParserT[I, *, M]])
   (using app: Applicative[ParserT[I, *, M]])
   (using fp: Functor[ParserT[I, *, M]])
+  (using ap: Alternative[ParseResult[M, *]])
+  (p: ParserT[I, T, M])
+
+  /**
+   * Like normal `*` but greedy for non-deterministic parsing. That is, shorter matches are
+   * discarded.
+   */
+  def ** : ParserT[I, List[T], M] = p.++ || P.pure(Nil)
+
+  /**
+   * Like normal `+` but greedy for non-deterministic parsing. That is, shorter matches are
+   * discarded.
+   */
+  def ++ : ParserT[I, List[T], M] =
+    for
+      first <- p
+      rest <- p.**
+    yield
+      first :: rest
+
+extension[I, T, M[+_] : Alternative : Monad : Applicative]
+  (using atp: Alternative[ParserT[I, *, M]])
+  (using mp: Monad[ParserT[I, *, M]])
+  (using app: Applicative[ParserT[I, *, M]])
+  (using fp: Functor[ParserT[I, *, M]])
   (p: ParserT[I, T, M])
   infix def map[S](g: T => S) = fp.map(p, g)
 
