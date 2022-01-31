@@ -12,9 +12,6 @@ import io.github.tgeng.archon.common.*
  */
 type Nat = Int
 
-/**
- * Eliminators of positive types are omitted because they are defined through pattern matching
- */
 enum VTerm:
   case VUniverse(level: VTerm)
 
@@ -24,9 +21,11 @@ enum VTerm:
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
-  case DataTypeCon(qn: QualifiedName, params: List[VTerm])
-  case EqualityTypeCon(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
-  case ValueCon(name: String, args: List[VTerm])
+  case DataType(qn: QualifiedName, params: List[VTerm])
+  case Con(name: String, args: List[VTerm])
+
+  case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
+  case Refl
 
   case EffectsType
   case EffectsLiteral(effects: ListSet[(QualifiedName, List[VTerm])])
@@ -46,13 +45,8 @@ enum VTerm:
 trait CType:
   def effects: VTerm
 
-/**
- *  Introduction of negative types are omitted because they are defined through copattern matching
- */
 enum CTerm:
-  /**
-   * used for interpreting terms as an abstract stack machine
-   */
+  /** used for interpreting terms as an abstract stack machine */
   case Hole
 
   case CUniverse(level: VTerm, effects: VTerm) extends CTerm, CType
@@ -64,11 +58,16 @@ enum CTerm:
   case Let(t: CTerm, ctx: CTerm)
   case DLet(t: CTerm, ctx: CTerm)
 
-  case FunctionTypeCon(argTy: VTerm, bodyTy: CTerm, effects: VTerm) extends CTerm, CType
+  case FunctionType(argTy: VTerm, bodyTy: CTerm, effects: VTerm) extends CTerm, CType
+  case Lambda(body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordTypeCon(qn: QualifiedName, params: List[VTerm], effects: VTerm) extends CTerm, CType
+  case RecordType(qn: QualifiedName, params: List[VTerm], effects: VTerm) extends CTerm, CType
+  case Record(fields: List[CTerm])
   case Projection(rec: CTerm, name: String)
+
+  case DataCase(arg: VTerm, cases: Map[String, CTerm])
+  case EqualityCase(arg: VTerm, body: CTerm)
 
   case Operator(eff: VTerm, name: String)
 
