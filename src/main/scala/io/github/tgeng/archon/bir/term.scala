@@ -7,6 +7,13 @@ import io.github.tgeng.archon.common.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
+case class Binding[T](ty: T)(name: String)
+
+/**
+ * Head is on the left, e.g. x: Nat :: y: Vector String x :: []
+ */
+type Telescope = List[Binding[VTerm]]
+
 /**
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.
  */
@@ -16,15 +23,15 @@ enum VTerm:
   /** archon.builtin.VUniverse */
   case VUniverse(level: VTerm)
 
-  case LocalVariable(idx: Nat)
-  case GlobalVariable(qn: QualifiedName)
+  case LocalRef(idx: Nat)
+  case GlobalRef(qn: QualifiedName)
 
   /** archon.builtin.U */
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
-  case DataType(qn: QualifiedName, params: List[VTerm])
-  case Con(name: String, args: List[VTerm])
+  case DataType(qn: QualifiedName, params: Telescope)
+  case Con(name: String, args: Telescope)
 
   /** archon.builtin.Equality */
   case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
@@ -32,7 +39,7 @@ enum VTerm:
 
   /** archon.builtin.Effects */
   case EffectsType
-  case EffectsLiteral(effects: ListSet[(QualifiedName, List[VTerm])])
+  case EffectsLiteral(effects: ListSet[(QualifiedName, Telescope)])
   case EffectsUnion(effects1: VTerm, effects2: VTerm)
 
   /** archon.builtin.Level */
@@ -68,11 +75,11 @@ enum CTerm:
   case DLet(t: CTerm, ctx: CTerm)
 
   /** archon.builtin.Function */
-  case FunctionType(argTy: VTerm, bodyTy: CTerm, effects: VTerm) extends CTerm, CType
+  case FunctionType(binding: Binding[VTerm], bodyTy: CTerm, effects: VTerm) extends CTerm, CType
   case Lambda(body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(qn: QualifiedName, params: List[VTerm], effects: VTerm) extends CTerm, CType
+  case RecordType(qn: QualifiedName, params: Telescope, effects: VTerm) extends CTerm, CType
   case Record(fields: List[CTerm])
   case Projection(rec: CTerm, name: String)
 
@@ -110,9 +117,9 @@ enum CTerm:
     outputType: CTerm,
 
     /**
-     * The transformer that transforms variable of `U inputType` to `outputType`.
+     * The transformer that transforms a ref at DeBrujin index 0 of type `U inputType` to `outputType`.
      * for cases where `inputType` equals `outputType`, a sensible default value
-     * is simply `force (var 0)`
+     * is simply `force (ref 0)`
      */
     transform: CTerm,
 
