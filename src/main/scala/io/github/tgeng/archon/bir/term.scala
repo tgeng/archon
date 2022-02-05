@@ -19,6 +19,9 @@ type Telescope = List[Binding[VTerm]]
  */
 type Nat = Int
 
+type HeapKey = Any
+type CellKey = Any
+
 enum VTerm:
   /** archon.builtin.VUniverse */
   case VUniverse(level: VTerm)
@@ -52,9 +55,18 @@ enum VTerm:
   /** Any need for leaky heap usage goes here. */
   case GlobalHeap
 
+  /**
+   * Internal only, created by [[CTerm.HeapHandler]]
+   */
+  case Heap(key: HeapKey)
+
   /** archon.builtin.Cell */
   case CellType(heap: VTerm, ty: VTerm)
-  case Cell(id: Any)
+
+  /**
+   * Internal only, created by [[CTerm.Alloc]]
+   */
+  case Cell(key: CellKey)
 
 trait CType:
   def effects: VTerm
@@ -87,7 +99,7 @@ enum CTerm:
   case DataCase(arg: VTerm, cases: Map[String, CTerm])
   case EqualityCase(arg: VTerm, body: CTerm)
 
-  case Operator(eff: VTerm, name: String)
+  case Operator(eff: QualifiedName, operationIndex: Int)
 
   /**
    * Marker that signifies the computation that generates the effect containing the current
@@ -128,7 +140,7 @@ enum CTerm:
      * parameters plus a last continuation parameter of type
      * `parameterType -> declared operator output type -> outputType`
      */
-    handlers: List[CTerm])
+    handlers: Vector[CTerm])
 
   case Set(cell: VTerm, value: VTerm)
   case Get(cell: VTerm)
