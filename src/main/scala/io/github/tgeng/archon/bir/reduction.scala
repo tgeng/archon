@@ -4,19 +4,21 @@ import io.github.tgeng.archon.common.QualifiedName
 
 import scala.collection.mutable
 
-class StackMachine(val stack: mutable.ArrayBuffer[CTerm],
-                   val handlerIndex: mutable.Map[QualifiedName, Int],
+class StackMachine(val stack: mutable.Stack[CTerm],
                    val heap: mutable.Map[HeapKey, mutable.Map[CellKey, VTerm]],
                    val signature: Signature,
                    val useCaseTree: Boolean):
 
-  def reduce(): CTerm = ???
+  def run(): CTerm =
+    while(stack.nonEmpty) {
+    }
+    ???
+
 
 extension (c: CTerm)
   def reduce(useCaseTree: Boolean = false)(using signature: Signature) = StackMachine(
-    mutable.ArrayBuffer(c),
-    mutable.Map(),
+    mutable.Stack(c),
     mutable.Map(),
     signature,
     useCaseTree
-  ).reduce()
+  ).run()

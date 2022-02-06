@@ -13,6 +13,7 @@ case class Binding[T](ty: T)(name: String)
  * Head is on the left, e.g. x: Nat :: y: Vector String x :: []
  */
 type Telescope = List[Binding[VTerm]]
+type Arguments = List[VTerm]
 
 /**
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.
@@ -21,6 +22,8 @@ type Nat = Int
 
 type HeapKey = Any
 type CellKey = Any
+
+type Effect = (QualifiedName, Arguments)
 
 enum VTerm:
   /** archon.builtin.VUniverse */
@@ -33,8 +36,8 @@ enum VTerm:
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
-  case DataType(qn: QualifiedName, params: Telescope)
-  case Con(name: String, args: Telescope)
+  case DataType(qn: QualifiedName, params: Arguments)
+  case Con(name: String, args: Arguments)
 
   /** archon.builtin.Equality */
   case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
@@ -42,7 +45,7 @@ enum VTerm:
 
   /** archon.builtin.Effects */
   case EffectsType
-  case EffectsLiteral(effects: ListSet[(QualifiedName, Telescope)])
+  case EffectsLiteral(effects: ListSet[Effect])
   case EffectsUnion(effects1: VTerm, effects2: VTerm)
 
   /** archon.builtin.Level */
@@ -91,7 +94,7 @@ enum CTerm:
   case Lambda(body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(qn: QualifiedName, params: Telescope, effects: VTerm) extends CTerm, CType
+  case RecordType(qn: QualifiedName, params: Arguments, effects: VTerm) extends CTerm, CType
   case Record(fields: List[CTerm])
   case Projection(rec: CTerm, name: String)
 
@@ -99,7 +102,7 @@ enum CTerm:
   case DataCase(arg: VTerm, cases: Map[String, CTerm])
   case EqualityCase(arg: VTerm, body: CTerm)
 
-  case Operator(eff: QualifiedName, operationIndex: Int)
+  case Operator(eff: Effect, operationIndex: Int)
 
   /**
    * Marker that signifies the computation that generates the effect containing the current
@@ -110,7 +113,7 @@ enum CTerm:
    */
   case OperatorEffectMarker(outputType: CTerm)
   case Handler(
-    eff: VTerm,
+    eff: Effect,
 
     /**
      * Inner parameter of the handler, also passed in resume function
