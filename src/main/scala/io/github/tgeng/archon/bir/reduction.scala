@@ -28,7 +28,7 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
     pc match
       case Hole => throw IllegalArgumentException("invalid CTerm construction: Hole should only appear as a sub CTerm")
       // terminal cases
-      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: RecordType | _: Record | _: Operator =>
+      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: RecordType | _: Record =>
         if stack.isEmpty then
           Right(pc)
         else
@@ -55,16 +55,12 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Application(fun, arg) =>
         fun match
           case Lambda(body) => run(subst(body, 0, arg))
-          case Operator(eff, name) => ???
-          case Set(cell, value) => ???
-          case Get(cell) => ???
-          case Alloc(heap, ty) => ???
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Application(Hole, arg))
             run(fun)
       case Projection(rec, name) => ???
-      case TypeCase(arg, cases) => ???
+      case TypeCase(arg, cases, default) => ???
       case DataCase(arg, cases) => ???
       case EqualityCase(arg, body) =>
         arg match
@@ -72,11 +68,12 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
           case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case _ => throw IllegalArgumentException("type error")
       case OperatorEffectMarker(outputType) => run(outputType)
-      case Handler(body, eff, parameterType, inputType, outputType, transform, handlers) => ???
+      case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => ???
+      case OperatorCall(eff, name, args) => ???
       case Set(cell, value) => ???
       case Get(cell) => ???
       case Alloc(heap, ty) => ???
-      case HeapHandler(key, body, inputType, outputType) => ???
+      case HeapHandler(inputType, outputType, key, input) => ???
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ???
   private def subst(ctx: CTerm, index: Nat, t: VTerm) : CTerm = ???

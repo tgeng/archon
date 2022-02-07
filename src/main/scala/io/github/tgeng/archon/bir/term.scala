@@ -7,12 +7,8 @@ import io.github.tgeng.archon.common.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[T](ty: T)(name: String)
-
-/**
- * Head is on the left, e.g. x: Nat :: y: Vector String x :: []
- */
-type Telescope = List[Binding[VTerm]]
+case class Binding[T](ty: T)(name: Name):
+  def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
 
 /**
  * Head is on the left, e.g. Z :: S Z :: []
@@ -40,7 +36,7 @@ enum VTerm:
   case Thunk(c: CTerm)
 
   case DataType(qn: QualifiedName, args: Arguments)
-  case Con(name: String, args: Arguments)
+  case Con(name: Name, args: Arguments)
 
   /** archon.builtin.Equality */
   case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
@@ -96,19 +92,26 @@ enum CTerm:
   case DLet(t: CTerm, ctx: CTerm)
 
   /** archon.builtin.Function */
-  case FunctionType(binding: Binding[VTerm], bodyTy: CTerm, effects: VTerm) extends CTerm, CType
-  case Lambda(body: CTerm)
+  case FunctionType(
+    binding: Binding[VTerm],
+    /* binding + 1 */ bodyTy: CTerm,
+    effects: VTerm) extends CTerm, CType
+  case Lambda(/* binding + 1 */ body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
   case RecordType(qn: QualifiedName, args: Arguments, effects: VTerm) extends CTerm, CType
   case Record(fields: List[CTerm])
-  case Projection(rec: CTerm, name: String)
+  case Projection(rec: CTerm, name: Name)
 
-  case TypeCase(arg: VTerm, cases: Map[QualifiedName, CTerm])
-  case DataCase(arg: VTerm, cases: Map[String, CTerm])
-  case EqualityCase(arg: VTerm, body: CTerm)
+  case TypeCase(
+    arg: VTerm,
+    cases: Map[QualifiedName, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)],
+    /* binding + 1 */ default: CTerm
+  )
+  case DataCase(arg: VTerm, cases: Map[Name, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)])
+  case EqualityCase(arg: VTerm, /* binding + 1 (for whole arg) */ body: CTerm)
 
-  case Operator(eff: Effect, name: String)
+  case OperatorCall(eff: Effect, name: Name, args: Arguments)
 
   /**
    * Marker that signifies the computation that generates the effect containing the current
@@ -119,7 +122,6 @@ enum CTerm:
    */
   case OperatorEffectMarker(outputType: CTerm)
   case Handler(
-    body: CTerm,
     eff: Effect,
 
     /**
@@ -143,28 +145,30 @@ enum CTerm:
      * for cases where `inputType` equals `outputType`, a sensible default value
      * is simply `force (ref 0)`
      */
-    transform: CTerm,
+    /* binding + 1 */ transform: CTerm,
 
     /**
-     * All handler implementations declared by the effect. Each handler takes all declared
-     * parameters plus a last continuation parameter of type
-     * `parameterType -> declared operator output type -> outputType`
+     * All handler implementations declared by the effect. Each handler is a function that takes the following
+     * arguments
+     *  - all declared parameters
+     *  - a continuation parameter of type `parameterType -> declared operator output type -> outputType`
+     * and outputs `outputType`
      */
-    handlers: Map[String, CTerm]
+    handlers: Map[Name, CTerm],
+
+    parameter: VTerm,
+    input: CTerm,
   )
 
   case Set(cell: VTerm, value: VTerm)
   case Get(cell: VTerm)
   case Alloc(heap: VTerm, ty: VTerm)
   case HeapHandler(
-    key: HeapKey,
-    body: CTerm,
-
     /**
      * A handler is a computation transformer. this is input computation type that accepts a heap
      * argument, which will be bound by this handler to the new heap created by this handler.
      */
-    inputType: CTerm,
+    /* binding + 1 */ inputType: CTerm,
 
     /**
      * This is the output type. The resulted handler has type
@@ -174,6 +178,9 @@ enum CTerm:
      * flexibility is needed, one should use `GlobalHeap` instead.
      */
     outputType: CTerm,
+
+    key: HeapKey,
+    /* binding + 1 */ input: CTerm,
   )
 
 // TODO: support array operations on heap
