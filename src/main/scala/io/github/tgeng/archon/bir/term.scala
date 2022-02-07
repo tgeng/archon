@@ -13,6 +13,10 @@ case class Binding[T](ty: T)(name: String)
  * Head is on the left, e.g. x: Nat :: y: Vector String x :: []
  */
 type Telescope = List[Binding[VTerm]]
+
+/**
+ * Head is on the left, e.g. Z :: S Z :: []
+ */
 type Arguments = List[VTerm]
 
 /**
@@ -30,13 +34,12 @@ enum VTerm:
   case VUniverse(level: VTerm)
 
   case LocalRef(idx: Nat)
-  case GlobalRef(qn: QualifiedName)
 
   /** archon.builtin.U */
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
-  case DataType(qn: QualifiedName, params: Arguments)
+  case DataType(qn: QualifiedName, args: Arguments)
   case Con(name: String, args: Arguments)
 
   /** archon.builtin.Equality */
@@ -55,6 +58,7 @@ enum VTerm:
 
   /** archon.builtin.Heap */
   case HeapType
+
   /** Any need for leaky heap usage goes here. */
   case GlobalHeap
 
@@ -81,11 +85,13 @@ enum CTerm:
   /** archon.builtin.CUniverse */
   case CUniverse(level: VTerm, effects: VTerm) extends CTerm, CType
 
+  case GlobalRef(qn: QualifiedName)
+
+  case Force(v: VTerm)
+
   /** archon.builtin.F */
   case F(vTerm: VTerm, effects: VTerm) extends CTerm, CType
   case Return(v: VTerm)
-  case Force(v: VTerm)
-
   case Let(t: CTerm, ctx: CTerm)
   case DLet(t: CTerm, ctx: CTerm)
 
@@ -94,7 +100,7 @@ enum CTerm:
   case Lambda(body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(qn: QualifiedName, params: Arguments, effects: VTerm) extends CTerm, CType
+  case RecordType(qn: QualifiedName, args: Arguments, effects: VTerm) extends CTerm, CType
   case Record(fields: List[CTerm])
   case Projection(rec: CTerm, name: String)
 
@@ -102,7 +108,7 @@ enum CTerm:
   case DataCase(arg: VTerm, cases: Map[String, CTerm])
   case EqualityCase(arg: VTerm, body: CTerm)
 
-  case Operator(eff: Effect, operationIndex: Int)
+  case Operator(eff: Effect, name: String)
 
   /**
    * Marker that signifies the computation that generates the effect containing the current
@@ -113,6 +119,7 @@ enum CTerm:
    */
   case OperatorEffectMarker(outputType: CTerm)
   case Handler(
+    body: CTerm,
     eff: Effect,
 
     /**
@@ -143,12 +150,16 @@ enum CTerm:
      * parameters plus a last continuation parameter of type
      * `parameterType -> declared operator output type -> outputType`
      */
-    handlers: Vector[CTerm])
+    handlers: Map[String, CTerm]
+  )
 
   case Set(cell: VTerm, value: VTerm)
   case Get(cell: VTerm)
   case Alloc(heap: VTerm, ty: VTerm)
   case HeapHandler(
+    key: HeapKey,
+    body: CTerm,
+
     /**
      * A handler is a computation transformer. this is input computation type that accepts a heap
      * argument, which will be bound by this handler to the new heap created by this handler.
@@ -165,7 +176,7 @@ enum CTerm:
     outputType: CTerm,
   )
 
-  // TODO: support array operations on heap
+// TODO: support array operations on heap
 
 /* References:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,
