@@ -25,6 +25,9 @@ type CellKey = Any
 
 type Effect = (QualifiedName, Arguments)
 
+extension (eff: Effect)
+  def map[S](f: VTerm => VTerm) : Effect = (eff._1, eff._2.map(f))
+
 enum VTerm:
   /** archon.builtin.VUniverse */
   case VUniverse(level: VTerm)

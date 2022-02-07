@@ -16,7 +16,7 @@ import CTerm.*
 
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int): VTerm = v match
-    case Refl | EffectsType | _: EffectsLiteral | LevelType | _: LevelLiteral | HeapType | GlobalHeap | _: Heap | _: Cell => v
+    case Refl | EffectsType | LevelType | _: LevelLiteral | HeapType | GlobalHeap | _: Heap | _: Cell => v
     case VUniverse(level) => VUniverse(raise(level, amount, bar))
     case LocalRef(idx) => if idx >= bar then LocalRef(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
@@ -30,6 +30,7 @@ given RaisableVTerm: Raisable[VTerm] with
       raise(right, amount, bar)
     )
     case EffectsUnion(effects1, effects2) => EffectsUnion(raise(effects1, amount, bar), raise(effects2, amount, bar))
+    case EffectsLiteral(effects) => EffectsLiteral(effects.map(_.map(raise(_, amount, bar))))
     case CompoundLevel(offset, operands) => CompoundLevel(offset, operands.map((v: VTerm) => raise(v, amount, bar)))
     case CellType(heap, ty) => CellType(raise(heap, amount, bar), raise(ty, amount, bar))
 
@@ -72,10 +73,10 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(arg, amount, bar),
       raise(body, amount, bar + 1)
     )
-    case OperatorCall(eff, name, args) => OperatorCall(eff, name, args.map(RaisableVTerm.raise(_, amount, bar)))
+    case OperatorCall(eff, name, args) => OperatorCall(eff.map(RaisableVTerm.raise(_, amount, bar)), name, args.map(RaisableVTerm.raise(_, amount, bar)))
     case OperatorEffectMarker(outputType) => OperatorEffectMarker(raise(outputType, amount, bar))
     case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => Handler(
-      eff,
+      eff.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(parameterType, amount, bar),
       raise(inputType, amount, bar),
       raise(outputType, amount, bar),
