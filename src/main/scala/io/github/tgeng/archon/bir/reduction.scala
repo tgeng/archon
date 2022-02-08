@@ -12,6 +12,10 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
                    val heap: mutable.Map[HeapKey, mutable.Map[CellKey, VTerm]],
                    val signature: Signature,
                    val useCaseTree: Boolean):
+  import CTerm.*
+  import VTerm.*
+  import Error.ReductionStuck
+
   /**
    * @param pc
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
@@ -22,9 +26,6 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
    */
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false): Either[Error, CTerm] =
-    import CTerm.*
-    import VTerm.*
-    import Error.ReductionStuck
     pc match
       case Hole => throw IllegalArgumentException("invalid CTerm construction: Hole should only appear as a sub CTerm")
       // terminal cases
@@ -40,21 +41,21 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
         case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
-          case Return(v) => run(subst(ctx, 0, v))
+          case Return(v) => run(ctx.subst(Map((0, v))))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Let(Hole, ctx))
             run(t)
       case DLet(t, ctx) =>
         t match
-          case Return(v) => run(subst(ctx, 0, v))
+          case Return(v) => run(ctx.subst(Map((0, v))))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Let(Hole, ctx))
             run(t)
       case Application(fun, arg) =>
         fun match
-          case Lambda(body) => run(subst(body, 0, arg))
+          case Lambda(body) => run(body.subst(Map((0, arg))))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Application(Hole, arg))
@@ -75,8 +76,15 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Alloc(heap, ty) => ???
       case HeapHandler(inputType, outputType, key, input) => ???
 
-  private def substHole(ctx: CTerm, c: CTerm): CTerm = ???
-  private def subst(ctx: CTerm, index: Nat, t: VTerm) : CTerm = ???
+  private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
+    case Let(t, ctx) if t == Hole => Let(c, ctx)
+    case DLet(t, ctx) if t == Hole => DLet(c, ctx)
+    case Application(fun, arg) if fun == Hole => Application(c, arg)
+    case Projection(rec, name) if rec == Hole => Projection(c, name)
+    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) if input == Hole =>
+      Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, c)
+    case HeapHandler(inputType, outputType, key, input) if input == Hole => HeapHandler(inputType, outputType, key, c)
+    case _ => throw IllegalArgumentException("unexpected context")
   private def reconstructTermFromStack(pc: CTerm): CTerm = ???
 
 given Reducible[CTerm] with

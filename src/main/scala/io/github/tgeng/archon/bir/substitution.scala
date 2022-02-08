@@ -177,3 +177,9 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       key,
       substitute(input, substitutor, offset + 1)
     )
+
+extension (c: CTerm)
+  def subst(substitutor: Substitutor) = SubstitutableCTerm.substitute(c, substitutor)
+
+extension (c: VTerm)
+  def subst(substitutor: Substitutor) = SubstitutableVTerm.substitute(c, substitutor)
