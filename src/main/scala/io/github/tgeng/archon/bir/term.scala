@@ -3,6 +3,8 @@ package io.github.tgeng.archon.bir
 import scala.collection.immutable.ListSet
 import io.github.tgeng.archon.common.*
 
+import QualifiedName.*
+
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
@@ -25,12 +27,16 @@ type CellKey = Any
 
 type Effect = (QualifiedName, Arguments)
 
+sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
+  def qualifiedName: QualifiedName = _qualifiedName
+
+def foo(q: QualifiedNameOwner) = q.qualifiedName
+
 extension (eff: Effect)
   def map[S](f: VTerm => VTerm) : Effect = (eff._1, eff._2.map(f))
 
 enum VTerm:
-  /** archon.builtin.VUniverse */
-  case VUniverse(level: VTerm)
+  case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(Builtin / "VUniverse")
 
   case LocalRef(idx: Nat)
 
@@ -38,25 +44,22 @@ enum VTerm:
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
-  case DataType(qn: QualifiedName, args: Arguments)
+  case DataType(qn: QualifiedName, args: Arguments) extends VTerm, QualifiedNameOwner(qn)
   case Con(name: Name, args: Arguments)
 
-  /** archon.builtin.Equality */
-  case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm)
+  case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm) extends VTerm, QualifiedNameOwner(Builtin / "Equality")
   case Refl
 
-  /** archon.builtin.Effects */
-  case EffectsType
+  case EffectsType extends VTerm, QualifiedNameOwner(Builtin / "Effects")
   case EffectsLiteral(effects: ListSet[Effect])
   case EffectsUnion(effects1: VTerm, effects2: VTerm)
 
-  /** archon.builtin.Level */
-  case LevelType
+  case LevelType extends VTerm, QualifiedNameOwner(Builtin / "Level")
   case LevelLiteral(value: Nat)
   case CompoundLevel(offset: Nat, operands: ListSet[VTerm])
 
   /** archon.builtin.Heap */
-  case HeapType
+  case HeapType extends VTerm, QualifiedNameOwner(Builtin / "Heap")
 
   /** Any need for leaky heap usage goes here. */
   case GlobalHeap
@@ -74,7 +77,7 @@ enum VTerm:
    */
   case Cell(key: CellKey)
 
-trait CType:
+sealed trait CType:
   def effects: VTerm
 
 enum CTerm:

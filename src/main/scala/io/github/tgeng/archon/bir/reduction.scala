@@ -61,11 +61,34 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
             stack.push(Application(Hole, arg))
             run(fun)
       case Projection(rec, name) => ???
-      case TypeCase(arg, cases, default) => ???
-      case DataCase(arg, cases) => ???
+      case TypeCase(arg, cases, default) => arg match
+        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
+          val (count, body) = cases(q.qualifiedName)
+          q match
+            case VUniverse(level) =>
+              assert(count == 1)
+              run(body.substHead(arg, level))
+            case DataType(qn, args) =>
+              assert(count == args.length)
+              run(body.substHead(arg +: args : _*))
+            case EqualityType(level, ty, left, right) =>
+              assert(count == 4)
+              run(body.substHead(arg, level, ty, left, right))
+            case EffectsType | LevelType | HeapType =>
+              assert(count == 1)
+              run(body.substHead(arg))
+        case _ => run(default.substHead(arg))
+      case DataCase(arg, cases) => arg match
+        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        case Con(name, args) if cases.contains(name) =>
+          val (count, body) = cases(name)
+          assert(count == args.length)
+          run(body.substHead(arg +: args : _*))
+        case _ => throw IllegalArgumentException("type error")
       case EqualityCase(arg, body) =>
         arg match
-          case Refl => run(body)
+          case Refl => run(body.substHead(Refl))
           case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case _ => throw IllegalArgumentException("type error")
       case OperatorEffectMarker(outputType) => run(outputType)

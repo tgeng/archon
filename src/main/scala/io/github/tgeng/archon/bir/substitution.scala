@@ -209,13 +209,13 @@ extension (c: CTerm)
   def weaken(amount: Nat, at: Nat) = RaisableCTerm.raise(c, amount, at)
   def strengthen(amount: Nat, at: Nat) = RaisableCTerm.raise(c, -amount, at)
 
-  def substHead(vTerm: VTerm) = c
+  def substHead(vTerms: VTerm*) = c
     // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
-    .strengthen(1, 0)
-    .substitute {
-      case -1 => Some(vTerm)
-      case _ => None
-    }
+    .strengthen(vTerms.length, 0)
+    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBrujin index
+    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
+    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
+    .substitute(i => vTerms.lift(-(i + 1)))
 
 extension (v: VTerm)
   def subst(substitutor: PartialSubstitution) = SubstitutableVTerm.substitute(v, substitutor)
