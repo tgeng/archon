@@ -17,7 +17,7 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
   import Error.ReductionStuck
 
   /**
-   * @param pc
+   * @param pc "program counter"
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
    *                   This is useful so that the run logic does not spin into infinite loop if the given term has type
    *                   errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
@@ -41,21 +41,21 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
         case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
-          case Return(v) => run(ctx.subst(Map((0, v))))
+          case Return(v) => run(ctx.substHead(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Let(Hole, ctx))
             run(t)
       case DLet(t, ctx) =>
         t match
-          case Return(v) => run(ctx.subst(Map((0, v))))
+          case Return(v) => run(ctx.substHead(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Let(Hole, ctx))
             run(t)
       case Application(fun, arg) =>
         fun match
-          case Lambda(body) => run(body.subst(Map((0, arg))))
+          case Lambda(body) => run(body.substHead(arg))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(Application(Hole, arg))
