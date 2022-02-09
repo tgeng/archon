@@ -5,6 +5,9 @@ package io.github.tgeng.archon.bir
  */
 type Telescope = List[Binding[VTerm]]
 
+/**
+ * Head is the last element. Hence, resolving DeBruijn index is done from the end.
+ */
 type Context = Vector[Binding[VTerm]]
 
 extension [T] (v: Vector[T])

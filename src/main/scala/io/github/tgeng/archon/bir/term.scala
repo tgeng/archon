@@ -147,7 +147,7 @@ enum CTerm:
     outputType: CTerm,
 
     /**
-     * The transformer that transforms a ref at DeBrujin index 0 of type `U inputType` to `outputType`.
+     * The transformer that transforms a ref at DeBruijn index 0 of type `U inputType` to `outputType`.
      * for cases where `inputType` equals `outputType`, a sensible default value
      * is simply `force (ref 0)`
      */

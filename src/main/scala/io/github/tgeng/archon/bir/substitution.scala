@@ -212,7 +212,7 @@ extension (c: CTerm)
   def substHead(vTerms: VTerm*) = c
     // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
     .strengthen(vTerms.length, 0)
-    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBrujin index
+    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
     // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
     // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
     .substitute(i => vTerms.lift(-(i + 1)))
