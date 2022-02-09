@@ -97,9 +97,10 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
           case Refl => run(body.substHead(Refl))
           case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case _ => throw IllegalArgumentException("type error")
+      case Resume(parameter, result) => ???
+      case OperatorCall(eff, name, args) => ???
       case OperatorEffectMarker(outputType) => run(outputType)
       case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => ???
-      case OperatorCall(eff, name, args) => ???
       case Set(cell, value) => ???
       case Get(cell) => ???
       case Alloc(heap, ty) => ???

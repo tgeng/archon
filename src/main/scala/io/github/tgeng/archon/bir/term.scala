@@ -116,6 +116,7 @@ enum CTerm:
   case DataCase(arg: VTerm, cases: Map[Name, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)])
   case EqualityCase(arg: VTerm, /* binding + 1 (for whole arg) */ body: CTerm)
 
+  case Resume(parameter: VTerm, result: VTerm)
   case OperatorCall(eff: Effect, name: Name, args: Arguments)
 
   /**

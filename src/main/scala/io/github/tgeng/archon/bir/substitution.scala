@@ -73,6 +73,10 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(arg, amount, bar),
       raise(body, amount, bar + 1)
     )
+    case Resume(parameter, result) => Resume(
+      RaisableVTerm.raise(parameter, amount, bar),
+      RaisableVTerm.raise(result, amount, bar),
+    )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
       name,
@@ -171,6 +175,10 @@ given SubstitutableCTerm: Substitutable[CTerm] with
     case EqualityCase(arg, body) => EqualityCase(
       SubstitutableVTerm.substitute(arg, substitutor, offset),
       substitute(body, substitutor, offset + 1)
+    )
+    case Resume(parameter, result) => Resume(
+      SubstitutableVTerm.substitute(parameter, substitutor, offset),
+      SubstitutableVTerm.substitute(result, substitutor, offset),
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
