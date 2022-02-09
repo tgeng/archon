@@ -1,8 +1,7 @@
 package io.github.tgeng.archon.bir
 
-import scala.collection.immutable.ListSet
+import scala.collection.immutable.{ListMap, ListSet}
 import io.github.tgeng.archon.common.*
-
 import QualifiedName.*
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
@@ -106,7 +105,7 @@ enum CTerm:
   case Application(fun: CTerm, arg: VTerm)
 
   case RecordType(qn: QualifiedName, args: Arguments, effects: VTerm) extends CTerm, CType
-  case Record(fields: List[CTerm])
+  case Record(fields: Map[Name, CTerm])
   case Projection(rec: CTerm, name: Name)
 
   case TypeCase(

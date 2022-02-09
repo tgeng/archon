@@ -1,6 +1,6 @@
 package io.github.tgeng.archon.bir
 
-import io.github.tgeng.archon.common.QualifiedName
+import io.github.tgeng.archon.common.*
 
 enum Declaration:
   case Data(val qn: QualifiedName)(val paramTys: Telescope, val ty: VTerm, val cons: Vector[Constructor])
@@ -12,9 +12,9 @@ enum Declaration:
 
 import Declaration._
 
-case class Constructor(name: String, argTys: List[Binding[VTerm]])
-case class Operation(name: String, ty: CTerm)
-case class Field(name: String, ty: CTerm)
+case class Constructor(name: Name, argTys: List[Binding[VTerm]])
+case class Operation(name: Name, ty: CTerm)
+case class Field(name: Name, ty: CTerm)
 case class CheckedClause(bindings: Telescope, lhs: List[Pattern], rhs: CTerm, ty: CTerm)
 
 trait Signature:

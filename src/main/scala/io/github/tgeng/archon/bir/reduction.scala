@@ -60,7 +60,13 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
           case _ =>
             stack.push(Application(Hole, arg))
             run(fun)
-      case Projection(rec, name) => ???
+      case Projection(rec, name) =>
+        rec match
+          case Record(fields) if fields.contains(name) => run(fields(name))
+          case _ if reduceDown => throw IllegalArgumentException("type error")
+          case _ =>
+            stack.push(Projection(Hole, name))
+            run(rec)
       case TypeCase(arg, cases, default) => arg match
         case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
         case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>

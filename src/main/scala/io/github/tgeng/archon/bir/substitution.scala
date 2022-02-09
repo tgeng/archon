@@ -58,7 +58,7 @@ given RaisableCTerm: Raisable[CTerm] with
       args.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(effects, amount, bar)
     )
-    case Record(fields) => Record(fields.map(raise(_, amount, bar)))
+    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
     case Projection(rec, name) => Projection(raise(rec, amount, bar), name)
     case TypeCase(arg, cases, default) => TypeCase(
       RaisableVTerm.raise(arg, amount, bar),
@@ -157,7 +157,7 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       SubstitutableVTerm.substitute(effects, substitutor, offset)
     )
-    case Record(fields) => Record(fields.map(substitute(_, substitutor, offset)))
+    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitutor, offset)).toMap)
     case Projection(rec, name) => Projection(substitute(rec, substitutor, offset), name)
     case TypeCase(arg, cases, default) => TypeCase(
       SubstitutableVTerm.substitute(arg, substitutor, offset),
