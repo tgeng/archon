@@ -27,8 +27,9 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false): Either[Error, CTerm] =
     pc match
+      case Hole => throw IllegalStateException()
       // terminal cases
-      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: RecordType | _: Record =>
+      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: Continuation | _: RecordType | _: Record =>
         if stack.isEmpty then
           Right(pc)
         else
@@ -58,6 +59,7 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Application(fun, arg) =>
         fun match
           case Lambda(body) => run(body.substHead(arg))
+          case Continuation(inputType, outputType, stack) => ??? // TODO: explode the stack here
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -99,11 +101,14 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
           case Refl => run(body.substHead(Refl))
           case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case _ => throw IllegalArgumentException("type error")
-      case Resume(parameter, result) => ???
-      case OperatorCall(eff, name, args) => ???
+      case OperatorCall(eff, name, args) => ??? // TODO: construct a continuation here inside two lambdas, which bind
+                                                //  1. the handler parameter
+                                                //  2. the operation result
       case OperatorEffectMarker(outputType) => run(outputType)
       case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
         input match
+          case Return(v) => run(transform.substHead(v))
+          case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(input)

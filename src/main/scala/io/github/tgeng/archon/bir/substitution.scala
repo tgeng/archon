@@ -36,7 +36,7 @@ given RaisableVTerm: Raisable[VTerm] with
 
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
-    case _: GlobalRef => c
+    case Hole | _: GlobalRef => c
     case CUniverse(effects, level) => CUniverse(
       RaisableVTerm.raise(effects, amount, bar),
       RaisableVTerm.raise(level, amount, bar)
@@ -73,9 +73,10 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(arg, amount, bar),
       raise(body, amount, bar + 1)
     )
-    case Resume(parameter, result) => Resume(
-      RaisableVTerm.raise(parameter, amount, bar),
-      RaisableVTerm.raise(result, amount, bar),
+    case Continuation(inputType, outputType, stack) => Continuation(
+      RaisableVTerm.raise(inputType, amount, bar),
+      raise(outputType, amount, bar),
+      stack.map(raise(_, amount, bar)),
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
@@ -90,7 +91,7 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(inputType, amount, bar),
       raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
-      handlers.view.mapValues(raise(_, amount, bar)).toMap,
+      handlers.view.mapValues{ case (n, c) => (n, raise(c, amount, bar + n + 2))}.toMap,
       RaisableVTerm.raise(parameter, amount, bar),
       raise(input, amount, bar),
     )
@@ -135,7 +136,7 @@ given SubstitutableVTerm: Substitutable[VTerm] with
 
 given SubstitutableCTerm: Substitutable[CTerm] with
   override def substitute(c: CTerm, substitutor: PartialSubstitution, offset: Int): CTerm = c match
-    case _: GlobalRef => c
+    case Hole | _: GlobalRef => c
     case CUniverse(effects, level) => CUniverse(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
       SubstitutableVTerm.substitute(level, substitutor, offset)
@@ -178,9 +179,10 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       SubstitutableVTerm.substitute(arg, substitutor, offset),
       substitute(body, substitutor, offset + 1)
     )
-    case Resume(parameter, result) => Resume(
-      SubstitutableVTerm.substitute(parameter, substitutor, offset),
-      SubstitutableVTerm.substitute(result, substitutor, offset),
+    case Continuation(inputType, outputType, stack) => Continuation(
+      SubstitutableVTerm.substitute(inputType, substitutor, offset),
+      substitute(outputType, substitutor, offset),
+      stack.map(substitute(_, substitutor, offset))
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
@@ -195,7 +197,7 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       SubstitutableVTerm.substitute(inputType, substitutor, offset),
       substitute(outputType, substitutor, offset),
       substitute(transform, substitutor, offset + 1),
-      handlers.view.mapValues(substitute(_, substitutor, offset)).toMap,
+      handlers.view.mapValues{ case (n, c) => (n, substitute(c, substitutor, offset + n + 2)) }.toMap,
       SubstitutableVTerm.substitute(parameter, substitutor, offset),
       substitute(input, substitutor, offset),
     )

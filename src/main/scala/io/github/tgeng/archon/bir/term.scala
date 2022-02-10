@@ -3,6 +3,7 @@ package io.github.tgeng.archon.bir
 import scala.collection.immutable.{ListMap, ListSet}
 import io.github.tgeng.archon.common.*
 import QualifiedName.*
+import io.github.tgeng.archon.bir.CTerm.Continuation
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -80,6 +81,9 @@ sealed trait CType:
   def effects: VTerm
 
 enum CTerm:
+  /** Used in stack representation of computation. */
+  case Hole
+  
   /** archon.builtin.CUniverse */
   case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
 
@@ -113,8 +117,14 @@ enum CTerm:
   case DataCase(arg: VTerm, cases: Map[Name, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)])
   case EqualityCase(arg: VTerm, /* binding + 1 (for whole arg) */ body: CTerm)
 
-  case Resume(parameter: VTerm, result: VTerm)
   case OperatorCall(eff: Effect, name: Name, args: Arguments)
+
+  /**
+   * @param stack stack containing the delimited continuation from the tip (right below operator call) to the
+   *              corresponding handler, inclusively. Note that the handler should have the parameter pointing to a
+   *              lambda-bound variable so that it can be updated when invoked through `resume`.
+   */
+  case Continuation(inputType: VTerm, outputType: CTerm, stack: Seq[CTerm])
 
   /**
    * Marker that signifies the computation that generates the effect containing the current
@@ -146,18 +156,19 @@ enum CTerm:
     /**
      * The transformer that transforms a ref at DeBruijn index 0 of type `U inputType` to `outputType`.
      * for cases where `inputType` equals `outputType`, a sensible default value
-     * is simply `force (ref 0)`
+     * is simply `return (ref 0)`
      */
     /* binding + 1 */ transform: CTerm,
 
     /**
-     * All handler implementations declared by the effect. Each handler is a function that takes the following
-     * arguments
+     * All handler implementations declared by the effect. Each handler is essentially a function body that takes the
+     * following arguments
      *  - all declared parameters
+     *  - handler parameter
      *  - a continuation parameter of type `parameterType -> declared operator output type -> outputType`
      * and outputs `outputType`
      */
-    handlers: Map[Name, CTerm],
+    handlers: Map[Name, (Nat, /* binding + n + 1 (for parameter) + 1 (for resume) */ CTerm)],
 
     parameter: VTerm,
     input: CTerm,
