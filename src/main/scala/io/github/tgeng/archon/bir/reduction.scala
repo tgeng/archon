@@ -34,7 +34,10 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
           Right(pc)
         else
           run(substHole(stack.pop(), pc), true)
-      case GlobalRef(qn) => ???
+      case GlobalRef(qn) =>
+        if useCaseTree then
+          run(signature.getDef(qn).caseTree)
+        else ??? // TODO: implement strict first clause match semantic by inspecting tip of the stack
       case Force(v) => v match
         case Thunk(c) => run(c)
         case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
