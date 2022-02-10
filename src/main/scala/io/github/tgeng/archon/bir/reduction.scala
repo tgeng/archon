@@ -103,20 +103,24 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Resume(parameter, result) => ???
       case OperatorCall(eff, name, args) => ???
       case OperatorEffectMarker(outputType) => run(outputType)
-      case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => ???
+      case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
+        input match
+          case _ =>
+            stack.push(Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, Hole))
+            run(input)
       case Set(cell, value) => ???
       case Get(cell) => ???
       case Alloc(heap, ty) => ???
-      case HeapHandler(inputType, outputType, key, input) => ???
+      case HeapHandler(otherEffects, inputType, outputType, key, input) => ???
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) if t == Hole => Let(c, ctx)
     case DLet(t, ctx) if t == Hole => DLet(c, ctx)
     case Application(fun, arg) if fun == Hole => Application(c, arg)
     case Projection(rec, name) if rec == Hole => Projection(c, name)
-    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) if input == Hole =>
-      Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, c)
-    case HeapHandler(inputType, outputType, key, input) if input == Hole => HeapHandler(inputType, outputType, key, c)
+    case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) if input == Hole =>
+      Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, c)
+    case HeapHandler(otherEffects, inputType, outputType, key, input) if input == Hole => HeapHandler(otherEffects, inputType, outputType, key, c)
     case _ => throw IllegalArgumentException("unexpected context")
   private def reconstructTermFromStack(pc: CTerm): CTerm = ???
 

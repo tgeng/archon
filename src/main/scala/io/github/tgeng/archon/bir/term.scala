@@ -84,27 +84,27 @@ enum CTerm:
   case Hole
 
   /** archon.builtin.CUniverse */
-  case CUniverse(level: VTerm, effects: VTerm) extends CTerm, CType
+  case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
 
   case GlobalRef(qn: QualifiedName)
 
   case Force(v: VTerm)
 
   /** archon.builtin.F */
-  case F(vTerm: VTerm, effects: VTerm) extends CTerm, CType
+  case F(effects: VTerm, vTerm: VTerm) extends CTerm, CType
   case Return(v: VTerm)
   case Let(t: CTerm, ctx: CTerm)
   case DLet(t: CTerm, ctx: CTerm)
 
   /** archon.builtin.Function */
   case FunctionType(
-    binding: Binding[VTerm],
-    /* binding + 1 */ bodyTy: CTerm,
-    effects: VTerm) extends CTerm, CType
+    effects: VTerm,
+    /* binding + 1 */ binding: Binding[VTerm],
+    bodyTy: CTerm) extends CTerm, CType
   case Lambda(/* binding + 1 */ body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(qn: QualifiedName, args: Arguments, effects: VTerm) extends CTerm, CType
+  case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments) extends CTerm, CType
   case Record(fields: Map[Name, CTerm])
   case Projection(rec: CTerm, name: Name)
 
@@ -129,6 +129,7 @@ enum CTerm:
   case OperatorEffectMarker(outputType: CTerm)
   case Handler(
     eff: Effect,
+    otherEffects: VTerm,
 
     /**
      * Inner parameter of the handler, also passed in resume function
@@ -136,13 +137,12 @@ enum CTerm:
     parameterType: VTerm,
 
     /**
-     * A handler is a computation transformer. this is input computation type
+     * A handler is a computation transformer. The input computation type is then `F ({eff} ⊎ otherEffects) inputType`
      */
-    inputType: CTerm,
+    inputType: VTerm,
 
     /**
-     * This is the output type. The resulted handler has type
-     * `parameterType -> U inputType -> outputType`
+     * This is the output type. The effects of the output type should be exactly `otherEffects`.
      */
     outputType: CTerm,
 
@@ -170,17 +170,19 @@ enum CTerm:
   case Get(cell: VTerm)
   case Alloc(heap: VTerm, ty: VTerm)
   case HeapHandler(
-    /**
-     * A handler is a computation transformer. this is input computation type that accepts a heap
-     * argument, which will be bound by this handler to the new heap created by this handler.
-     */
-    /* binding + 1 */ inputType: CTerm,
+    otherEffects: VTerm,
 
     /**
-     * This is the output type. The resulted handler has type
-     * `(h : HeapType) -> U (inputType h) -> outputType`. Note that we do not allow heap to be
-     * leaked through `outputType` by existential types like (t: Type, x: t) where `t` can be
-     * `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
+     * A handler is a computation transformer. this is input type that has `ref 0` bound to a heap
+     * argument, which will be bound by this handler to the new heap created by this handler. The input computation type
+     * is then `F ({heap (ref 0)} ⊎ otherEffects) inputType`
+     */
+    /* binding + 1 */ inputType: VTerm,
+
+    /**
+     * This is the output type. The effects of the output type should be exactly `otherEffects`.
+     * Note that we do not allow heap to be leaked through `outputType` by existential types like (t: Type, x: t) where
+     * `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
      * flexibility is needed, one should use `GlobalHeap` instead.
      */
     outputType: CTerm,
