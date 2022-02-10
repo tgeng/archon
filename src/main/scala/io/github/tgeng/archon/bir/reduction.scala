@@ -27,7 +27,6 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false): Either[Error, CTerm] =
     pc match
-      case Hole => throw IllegalArgumentException("invalid CTerm construction: Hole should only appear as a sub CTerm")
       // terminal cases
       case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: RecordType | _: Record =>
         if stack.isEmpty then
@@ -47,28 +46,28 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
           case Return(v) => run(ctx.substHead(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
-            stack.push(Let(Hole, ctx))
+            stack.push(pc)
             run(t)
       case DLet(t, ctx) =>
         t match
           case Return(v) => run(ctx.substHead(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
-            stack.push(Let(Hole, ctx))
+            stack.push(pc)
             run(t)
       case Application(fun, arg) =>
         fun match
           case Lambda(body) => run(body.substHead(arg))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
-            stack.push(Application(Hole, arg))
+            stack.push(pc)
             run(fun)
       case Projection(rec, name) =>
         rec match
           case Record(fields) if fields.contains(name) => run(fields(name))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
-            stack.push(Projection(Hole, name))
+            stack.push(pc)
             run(rec)
       case TypeCase(arg, cases, default) => arg match
         case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
@@ -106,7 +105,7 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
         input match
           case _ =>
-            stack.push(Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, Hole))
+            stack.push(pc)
             run(input)
       case Set(cell, value) => ???
       case Get(cell) => ???
@@ -114,13 +113,13 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case HeapHandler(otherEffects, inputType, outputType, key, input) => ???
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
-    case Let(t, ctx) if t == Hole => Let(c, ctx)
-    case DLet(t, ctx) if t == Hole => DLet(c, ctx)
-    case Application(fun, arg) if fun == Hole => Application(c, arg)
-    case Projection(rec, name) if rec == Hole => Projection(c, name)
-    case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) if input == Hole =>
+    case Let(t, ctx) => Let(c, ctx)
+    case DLet(t, ctx) => DLet(c, ctx)
+    case Application(fun, arg) => Application(c, arg)
+    case Projection(rec, name) => Projection(c, name)
+    case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
       Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, c)
-    case HeapHandler(otherEffects, inputType, outputType, key, input) if input == Hole => HeapHandler(otherEffects, inputType, outputType, key, c)
+    case HeapHandler(otherEffects, inputType, outputType, key, input) => HeapHandler(otherEffects, inputType, outputType, key, c)
     case _ => throw IllegalArgumentException("unexpected context")
   private def reconstructTermFromStack(pc: CTerm): CTerm = ???
 

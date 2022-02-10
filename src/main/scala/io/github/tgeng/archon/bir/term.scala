@@ -80,9 +80,6 @@ sealed trait CType:
   def effects: VTerm
 
 enum CTerm:
-  /** used for interpreting terms as an abstract stack machine */
-  case Hole
-
   /** archon.builtin.CUniverse */
   case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
 

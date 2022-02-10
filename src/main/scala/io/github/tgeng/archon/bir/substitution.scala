@@ -36,7 +36,7 @@ given RaisableVTerm: Raisable[VTerm] with
 
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
-    case Hole | _: GlobalRef => c
+    case _: GlobalRef => c
     case CUniverse(effects, level) => CUniverse(
       RaisableVTerm.raise(effects, amount, bar),
       RaisableVTerm.raise(level, amount, bar)
@@ -135,7 +135,7 @@ given SubstitutableVTerm: Substitutable[VTerm] with
 
 given SubstitutableCTerm: Substitutable[CTerm] with
   override def substitute(c: CTerm, substitutor: PartialSubstitution, offset: Int): CTerm = c match
-    case Hole | _: GlobalRef => c
+    case _: GlobalRef => c
     case CUniverse(effects, level) => CUniverse(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
       SubstitutableVTerm.substitute(level, substitutor, offset)
