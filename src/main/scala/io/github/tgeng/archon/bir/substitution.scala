@@ -73,10 +73,9 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(arg, amount, bar),
       raise(body, amount, bar + 1)
     )
-    case Continuation(inputType, outputType, stack) => Continuation(
-      RaisableVTerm.raise(inputType, amount, bar),
-      raise(outputType, amount, bar),
+    case ContinuationCall(stack, result) => ContinuationCall(
       stack.map(raise(_, amount, bar)),
+      RaisableVTerm.raise(result, amount, bar)
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
@@ -176,10 +175,9 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       SubstitutableVTerm.substitute(arg, substitutor, offset),
       substitute(body, substitutor, offset + 1)
     )
-    case Continuation(inputType, outputType, stack) => Continuation(
-      SubstitutableVTerm.substitute(inputType, substitutor, offset),
-      substitute(outputType, substitutor, offset),
-      stack.map(substitute(_, substitutor, offset))
+    case ContinuationCall(stack, result) => ContinuationCall(
+      stack.map(substitute(_, substitutor, offset)),
+      SubstitutableVTerm.substitute(result, substitutor, offset)
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),

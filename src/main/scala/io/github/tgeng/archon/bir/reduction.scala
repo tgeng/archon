@@ -29,7 +29,7 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
-      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: Continuation | _: RecordType | _: Record =>
+      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: RecordType | _: Record =>
         if stack.isEmpty then
           Right(pc)
         else
@@ -59,9 +59,6 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Application(fun, arg) =>
         fun match
           case Lambda(body) => run(body.substHead(arg))
-          case Continuation(inputType, outputType, cStack) =>
-            stack.pushAll(cStack)
-            run(Return(arg))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -106,6 +103,9 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case OperatorCall(eff, name, args) => ??? // TODO: construct a continuation here inside two lambdas, which bind
                                                 //  1. the handler parameter
                                                 //  2. the operation result
+      case ContinuationCall(continuation, result) =>
+        stack.pushAll(continuation)
+        run(Force(result))
       case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
         if reduceDown then
           run(transform.substHead(Thunk(input)))

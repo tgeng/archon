@@ -13,7 +13,7 @@ enum Declaration:
 import Declaration._
 
 case class Constructor(name: Name, argTys: Telescope)
-case class Operator(name: Name, argTys: Telescope, resultTy: VTerm)
+case class Operator(name: Name, argTys: Telescope, resultTy: CTerm)
 case class Field(name: Name, ty: CTerm)
 case class CheckedClause(bindings: Telescope, lhs: List[Pattern], rhs: CTerm, ty: CTerm)
 

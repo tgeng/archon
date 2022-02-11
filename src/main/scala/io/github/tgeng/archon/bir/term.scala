@@ -3,7 +3,6 @@ package io.github.tgeng.archon.bir
 import scala.collection.immutable.{ListMap, ListSet}
 import io.github.tgeng.archon.common.*
 import QualifiedName.*
-import io.github.tgeng.archon.bir.CTerm.Continuation
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -123,8 +122,11 @@ enum CTerm:
    * @param stack stack containing the delimited continuation from the tip (right below operator call) to the
    *              corresponding handler, inclusively. Note that the handler should have the parameter pointing to a
    *              lambda-bound variable so that it can be updated when invoked through `resume`.
+   * @param result the result passed to this continuation call. It must be of type `U c` for some computation type `c`.
+   *               during evaluation, it's forced and the resulted computation is pushed on top of the stack, above
+   *               [[continuation]]
    */
-  case Continuation(inputType: VTerm, outputType: CTerm, stack: Seq[CTerm])
+  case ContinuationCall(continuation: Seq[CTerm], result: VTerm)
 
   case Handler(
     eff: Effect,
