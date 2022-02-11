@@ -1,6 +1,6 @@
 package io.github.tgeng.archon.bir
 
-import io.github.tgeng.archon.common.QualifiedName
+import io.github.tgeng.archon.common.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -8,16 +8,19 @@ import scala.collection.mutable
 trait Reducible[T]:
   def reduce(t: T, useCaseTree: Boolean = false)(using signature: Signature): Either[Error, T]
 
-private final class StackMachine(val stack: mutable.Stack[CTerm],
-                   val heap: mutable.Map[HeapKey, mutable.Map[CellKey, VTerm]],
-                   val signature: Signature,
-                   val useCaseTree: Boolean):
+private final class StackMachine(
+  val stack: mutable.Stack[CTerm],
+  val heap: mutable.Map[HeapKey, mutable.Map[CellKey, VTerm]],
+  val signature: Signature,
+  val useCaseTree: Boolean
+):
+
   import CTerm.*
   import VTerm.*
   import Error.ReductionStuck
 
   /**
-   * @param pc "program counter"
+   * @param pc         "program counter"
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
    *                   This is useful so that the run logic does not spin into infinite loop if the given term has type
    *                   errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
@@ -80,7 +83,7 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
               run(body.substHead(arg, level))
             case DataType(qn, args) =>
               assert(count == args.length)
-              run(body.substHead(arg +: args : _*))
+              run(body.substHead(arg +: args: _*))
             case EqualityType(level, ty, left, right) =>
               assert(count == 4)
               run(body.substHead(arg, level, ty, left, right))
@@ -93,16 +96,57 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
         case Con(name, args) if cases.contains(name) =>
           val (count, body) = cases(name)
           assert(count == args.length)
-          run(body.substHead(arg +: args : _*))
+          run(body.substHead(arg +: args: _*))
         case _ => throw IllegalArgumentException("type error")
       case EqualityCase(arg, body) =>
         arg match
           case Refl => run(body.substHead(Refl))
           case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case _ => throw IllegalArgumentException("type error")
-      case OperatorCall(eff, name, args) => ??? // TODO: construct a continuation here inside two lambdas, which bind
-                                                //  1. the handler parameter
-                                                //  2. the operation result
+      case OperatorCall(eff, name, args) =>
+        val cterms = mutable.ArrayBuffer[CTerm]()
+        var nextComputation: CTerm | Null = null
+        while (nextComputation == null) {
+          val c = stack.pop()
+          c match
+            case Handler(
+            hEff,
+            parameterType,
+            inputType,
+            outputType,
+            transform,
+            handlers,
+            parameter,
+            input
+            ) if eff == hEff =>
+              val (count, handlerBody) = handlers(name)
+              val continuation = Handler(
+                hEff.map(_.weaken(2, 0)),
+                parameterType.weaken(2, 0),
+                inputType.weaken(2, 0),
+                outputType.weaken(2, 0),
+                transform.weaken(2, 0),
+                handlers.view.mapValues { case (n, c) => (n, c.weaken(2, 0)) }.toMap,
+                LocalRef(1), // reference the handler parameter
+                Hole
+              ) +: cterms.reverseIterator.map(_.weaken(2, 0)).toSeq
+
+              val resume = Thunk(
+                Lambda( // handler parameter
+                  Lambda( // operation result
+                    ContinuationCall(
+                      continuation,
+                      LocalRef(0) // reference the operation result
+                    ),
+                  )
+                )
+              )
+              nextComputation = handlerBody.substHead(args :+ parameter :+ resume: _*)
+            case _ if stack.isEmpty => throw IllegalArgumentException("type error")
+            // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
+            case _ => cterms.addOne(substHole(c, Hole))
+        }
+        run(nextComputation.!!)
       case ContinuationCall(continuation, result) =>
         stack.pushAll(continuation)
         run(Force(result))
@@ -126,9 +170,11 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, c)
     case HeapHandler(inputType, outputType, key, input) => HeapHandler(inputType, outputType, key, c)
     case _ => throw IllegalArgumentException("unexpected context")
+
   private def reconstructTermFromStack(pc: CTerm): CTerm = ???
 
 given Reducible[CTerm] with
+
   /**
    * It's assumed that `t` is effect-free.
    */
