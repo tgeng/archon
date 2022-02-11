@@ -83,7 +83,7 @@ sealed trait CType:
 enum CTerm:
   /** Used in stack representation of computation. */
   case Hole
-  
+
   /** archon.builtin.CUniverse */
   case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
 
@@ -128,7 +128,6 @@ enum CTerm:
 
   case Handler(
     eff: Effect,
-    otherEffects: VTerm,
 
     /**
      * Inner parameter of the handler, also passed in resume function
@@ -136,19 +135,20 @@ enum CTerm:
     parameterType: VTerm,
 
     /**
-     * A handler is a computation transformer. The input computation type is then `F ({eff} ⊎ otherEffects) inputType`
+     * A handler is a computation transformer. The input value type is then `U inputType`. Note that the effects of
+     * input should be `eff ⊎ effect of outputType`.
      */
-    inputType: VTerm,
+    inputType: CTerm,
 
     /**
-     * This is the output type. The effects of the output type should be exactly `otherEffects`.
+     * This is the output type..
      */
     outputType: CTerm,
 
     /**
      * The transformer that transforms a ref at DeBruijn index 0 of type `U inputType` to `outputType`.
      * for cases where `inputType` equals `outputType`, a sensible default value
-     * is simply `return (ref 0)`
+     * is simply `force (ref 0)`
      */
     /* binding + 1 */ transform: CTerm,
 
@@ -170,14 +170,12 @@ enum CTerm:
   case Get(cell: VTerm)
   case Alloc(heap: VTerm, ty: VTerm)
   case HeapHandler(
-    otherEffects: VTerm,
-
     /**
      * A handler is a computation transformer. this is input type that has `ref 0` bound to a heap
-     * argument, which will be bound by this handler to the new heap created by this handler. The input computation type
-     * is then `F ({heap (ref 0)} ⊎ otherEffects) inputType`
+     * argument, which will be bound by this handler to the new heap created by this handler. The input type
+     * should have effect `{heap (ref 0)} ⊎ effect of outputType`.
      */
-    /* binding + 1 */ inputType: VTerm,
+    /* binding + 1 */ inputType: CTerm,
 
     /**
      * This is the output type. The effects of the output type should be exactly `otherEffects`.

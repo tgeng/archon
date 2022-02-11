@@ -83,11 +83,10 @@ given RaisableCTerm: Raisable[CTerm] with
       name,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-    case Handler(eff, parameterType, inputEffects, inputType, outputType, transform, handlers, parameter, input) => Handler(
+    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => Handler(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(parameterType, amount, bar),
-      RaisableVTerm.raise(inputEffects, amount, bar),
-      RaisableVTerm.raise(inputType, amount, bar),
+      raise(inputType, amount, bar),
       raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
       handlers.view.mapValues{ case (n, c) => (n, raise(c, amount, bar + n + 2))}.toMap,
@@ -97,9 +96,8 @@ given RaisableCTerm: Raisable[CTerm] with
     case Set(call, value) => Set(RaisableVTerm.raise(call, amount, bar), RaisableVTerm.raise(value, amount, bar))
     case Get(cell) => Get(RaisableVTerm.raise(cell, amount, bar))
     case Alloc(heap, ty) => Alloc(RaisableVTerm.raise(heap, amount, bar), RaisableVTerm.raise(ty, amount, bar))
-    case HeapHandler(otherEffects, inputType, outputType, key, input) => HeapHandler(
-      RaisableVTerm.raise(otherEffects, amount, bar),
-      RaisableVTerm.raise(inputType, amount, bar + 1),
+    case HeapHandler(inputType, outputType, key, input) => HeapHandler(
+      raise(inputType, amount, bar + 1),
       raise(outputType, amount, bar),
       key,
       raise(input, amount, bar + 1)
@@ -188,11 +186,10 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       name,
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
-    case Handler(eff, parameterType, inputEffects, inputType, outputType, transform, handlers, parameter, input) => Handler(
+    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => Handler(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       SubstitutableVTerm.substitute(parameterType, substitutor, offset),
-      SubstitutableVTerm.substitute(inputEffects, substitutor, offset),
-      SubstitutableVTerm.substitute(inputType, substitutor, offset),
+      substitute(inputType, substitutor, offset),
       substitute(outputType, substitutor, offset),
       substitute(transform, substitutor, offset + 1),
       handlers.view.mapValues{ case (n, c) => (n, substitute(c, substitutor, offset + n + 2)) }.toMap,
@@ -208,9 +205,8 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       SubstitutableVTerm.substitute(heap, substitutor, offset),
       SubstitutableVTerm.substitute(ty, substitutor, offset)
     )
-    case HeapHandler(otherEffects, inputType, outputType, key, input) => HeapHandler(
-      SubstitutableVTerm.substitute(otherEffects, substitutor, offset),
-      SubstitutableVTerm.substitute(inputType, substitutor, offset + 1),
+    case HeapHandler(inputType, outputType, key, input) => HeapHandler(
+      substitute(inputType, substitutor, offset + 1),
       substitute(outputType, substitutor, offset),
       key,
       substitute(input, substitutor, offset + 1)

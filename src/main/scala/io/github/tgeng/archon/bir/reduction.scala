@@ -106,26 +106,25 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case OperatorCall(eff, name, args) => ??? // TODO: construct a continuation here inside two lambdas, which bind
                                                 //  1. the handler parameter
                                                 //  2. the operation result
-      case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
-        input match
-          case Return(v) => run(transform.substHead(v))
-          case _ if reduceDown => throw IllegalArgumentException("type error")
-          case _ =>
-            stack.push(pc)
-            run(input)
+      case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
+        if reduceDown then
+          run(transform.substHead(Thunk(input)))
+        else
+          stack.push(input)
+          run(input)
       case Set(cell, value) => ???
       case Get(cell) => ???
       case Alloc(heap, ty) => ???
-      case HeapHandler(otherEffects, inputType, outputType, key, input) => ???
+      case HeapHandler(inputType, outputType, key, input) => ???
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) => Let(c, ctx)
     case DLet(t, ctx) => DLet(c, ctx)
     case Application(fun, arg) => Application(c, arg)
     case Projection(rec, name) => Projection(c, name)
-    case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
-      Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, c)
-    case HeapHandler(otherEffects, inputType, outputType, key, input) => HeapHandler(otherEffects, inputType, outputType, key, c)
+    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
+      Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, c)
+    case HeapHandler(inputType, outputType, key, input) => HeapHandler(inputType, outputType, key, c)
     case _ => throw IllegalArgumentException("unexpected context")
   private def reconstructTermFromStack(pc: CTerm): CTerm = ???
 
