@@ -83,7 +83,6 @@ given RaisableCTerm: Raisable[CTerm] with
       name,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-    case OperatorEffectMarker(outputType) => OperatorEffectMarker(raise(outputType, amount, bar))
     case Handler(eff, parameterType, inputEffects, inputType, outputType, transform, handlers, parameter, input) => Handler(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(parameterType, amount, bar),
@@ -189,7 +188,6 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       name,
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
-    case OperatorEffectMarker(outputType) => OperatorEffectMarker(substitute(outputType, substitutor, offset))
     case Handler(eff, parameterType, inputEffects, inputType, outputType, transform, handlers, parameter, input) => Handler(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       SubstitutableVTerm.substitute(parameterType, substitutor, offset),

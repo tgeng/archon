@@ -4,7 +4,7 @@ import io.github.tgeng.archon.common.*
 
 enum Declaration:
   case Data(val qn: QualifiedName)(val paramTys: Telescope, val ty: VTerm, val cons: Vector[Constructor])
-  case Effect(val qn: QualifiedName)(val paramTys: Telescope, operations: Vector[Operation])
+  case Effect(val qn: QualifiedName)(val paramTys: Telescope, operations: Vector[Operator])
   case Record(val qn: QualifiedName)(val paramTys: Telescope, val ty: CTerm, val fields: Vector[Field])
   case Definition(val qn: QualifiedName)(val ty: CTerm, val clauses: Vector[CheckedClause], val caseTree: CTerm)
 
@@ -12,8 +12,8 @@ enum Declaration:
 
 import Declaration._
 
-case class Constructor(name: Name, argTys: List[Binding[VTerm]])
-case class Operation(name: Name, ty: CTerm)
+case class Constructor(name: Name, argTys: Telescope)
+case class Operator(name: Name, argTys: Telescope, resultTy: VTerm)
 case class Field(name: Name, ty: CTerm)
 case class CheckedClause(bindings: Telescope, lhs: List[Pattern], rhs: CTerm, ty: CTerm)
 

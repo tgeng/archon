@@ -126,14 +126,6 @@ enum CTerm:
    */
   case Continuation(inputType: VTerm, outputType: CTerm, stack: Seq[CTerm])
 
-  /**
-   * Marker that signifies the computation that generates the effect containing the current
-   * operator. This construct is only used when typing operators. For example an operator of type
-   * `Nat -> OperatorEffectMarker (Nat -> F Nat)` means the effect owning this operator should
-   * be triggered after applying the first argument, while
-   * `Nat -> (Nat -> OperatorEffectMarker (F Nat))` means it's applied after both args are applied.
-   */
-  case OperatorEffectMarker(outputType: CTerm)
   case Handler(
     eff: Effect,
     otherEffects: VTerm,

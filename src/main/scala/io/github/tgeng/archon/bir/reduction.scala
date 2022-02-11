@@ -59,7 +59,9 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case Application(fun, arg) =>
         fun match
           case Lambda(body) => run(body.substHead(arg))
-          case Continuation(inputType, outputType, stack) => ??? // TODO: explode the stack here
+          case Continuation(inputType, outputType, cStack) =>
+            stack.pushAll(cStack)
+            run(Return(arg))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -104,7 +106,6 @@ private final class StackMachine(val stack: mutable.Stack[CTerm],
       case OperatorCall(eff, name, args) => ??? // TODO: construct a continuation here inside two lambdas, which bind
                                                 //  1. the handler parameter
                                                 //  2. the operation result
-      case OperatorEffectMarker(outputType) => run(outputType)
       case Handler(eff, otherEffects, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
         input match
           case Return(v) => run(transform.substHead(v))
