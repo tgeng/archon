@@ -171,7 +171,12 @@ private final class StackMachine(
     case HeapHandler(inputType, outputType, key, input) => HeapHandler(inputType, outputType, key, c)
     case _ => throw IllegalArgumentException("unexpected context")
 
-  private def reconstructTermFromStack(pc: CTerm): CTerm = ???
+  private def reconstructTermFromStack(pc: CTerm): CTerm =
+    var current = pc
+    while(stack.nonEmpty) {
+      current = substHole(stack.pop(), current)
+    }
+    current
 
 given Reducible[CTerm] with
 
