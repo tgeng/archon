@@ -132,11 +132,6 @@ enum CTerm:
     eff: Effect,
 
     /**
-     * Inner parameter of the handler, also passed in resume function
-     */
-    parameterType: VTerm,
-
-    /**
      * A handler is a computation transformer. The input value type is then `U inputType`. Note that the effects of
      * input should be `eff ⊎ effect of outputType`.
      */
@@ -158,13 +153,10 @@ enum CTerm:
      * All handler implementations declared by the effect. Each handler is essentially a function body that takes the
      * following arguments
      *  - all declared parameters
-     *  - handler parameter
      *  - a continuation parameter of type `parameterType -> declared operator output type -> outputType`
      * and outputs `outputType`
      */
-    handlers: Map[Name, (Nat, /* binding + n + 1 (for parameter) + 1 (for resume) */ CTerm)],
-
-    parameter: VTerm,
+    handlers: Map[Name, (Nat, /* binding + n + 1 (for resume) */ CTerm)],
     input: CTerm,
   )
 

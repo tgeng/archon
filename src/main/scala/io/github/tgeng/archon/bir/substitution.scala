@@ -82,14 +82,12 @@ given RaisableCTerm: Raisable[CTerm] with
       name,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => Handler(
+    case Handler(eff, inputType, outputType, transform, handlers, input) => Handler(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
-      RaisableVTerm.raise(parameterType, amount, bar),
       raise(inputType, amount, bar),
       raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
       handlers.view.mapValues{ case (n, c) => (n, raise(c, amount, bar + n + 2))}.toMap,
-      RaisableVTerm.raise(parameter, amount, bar),
       raise(input, amount, bar),
     )
     case Set(call, value) => Set(RaisableVTerm.raise(call, amount, bar), RaisableVTerm.raise(value, amount, bar))
@@ -184,14 +182,12 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       name,
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
-    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) => Handler(
+    case Handler(eff, inputType, outputType, transform, handlers, input) => Handler(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      SubstitutableVTerm.substitute(parameterType, substitutor, offset),
       substitute(inputType, substitutor, offset),
       substitute(outputType, substitutor, offset),
       substitute(transform, substitutor, offset + 1),
       handlers.view.mapValues{ case (n, c) => (n, substitute(c, substitutor, offset + n + 2)) }.toMap,
-      SubstitutableVTerm.substitute(parameter, substitutor, offset),
       substitute(input, substitutor, offset),
     )
     case Set(call, value) => Set(

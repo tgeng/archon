@@ -111,37 +111,31 @@ private final class StackMachine(
           c match
             case Handler(
             hEff,
-            parameterType,
             inputType,
             outputType,
             transform,
             handlers,
-            parameter,
             input
             ) if eff == hEff =>
               val (count, handlerBody) = handlers(name)
               val continuation = Handler(
-                hEff.map(_.weaken(2, 0)),
-                parameterType.weaken(2, 0),
-                inputType.weaken(2, 0),
-                outputType.weaken(2, 0),
-                transform.weaken(2, 0),
-                handlers.view.mapValues { case (n, c) => (n, c.weaken(2, 0)) }.toMap,
-                LocalRef(1), // reference the handler parameter
+                hEff.map(_.weaken(1, 0)),
+                inputType.weaken(1, 0),
+                outputType.weaken(1, 0),
+                transform.weaken(1, 0),
+                handlers.view.mapValues { case (n, c) => (n, c.weaken(1, 0)) }.toMap,
                 Hole
-              ) +: cterms.reverseIterator.map(_.weaken(2, 0)).toSeq
+              ) +: cterms.reverseIterator.map(_.weaken(1, 0)).toSeq
 
               val resume = Thunk(
-                Lambda( // handler parameter
-                  Lambda( // operation result
-                    ContinuationCall(
-                      continuation,
-                      LocalRef(0) // reference the operation result
-                    ),
-                  )
+                Lambda( // operation result
+                  ContinuationCall(
+                    continuation,
+                    LocalRef(0) // reference the operation result
+                  ),
                 )
               )
-              nextComputation = handlerBody.substHead(args :+ parameter :+ resume: _*)
+              nextComputation = handlerBody.substHead(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
             // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
             case _ => cterms.addOne(substHole(c, Hole))
@@ -150,7 +144,7 @@ private final class StackMachine(
       case ContinuationCall(continuation, result) =>
         stack.pushAll(continuation)
         run(Force(result))
-      case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
+      case Handler(eff, inputType, outputType, transform, handlers, input) =>
         if reduceDown then
           run(transform.substHead(Thunk(input)))
         else
@@ -166,14 +160,14 @@ private final class StackMachine(
     case DLet(t, ctx) => DLet(c, ctx)
     case Application(fun, arg) => Application(c, arg)
     case Projection(rec, name) => Projection(c, name)
-    case Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, input) =>
-      Handler(eff, parameterType, inputType, outputType, transform, handlers, parameter, c)
+    case Handler(eff, inputType, outputType, transform, handlers, input) =>
+      Handler(eff, inputType, outputType, transform, handlers, c)
     case HeapHandler(inputType, outputType, key, input) => HeapHandler(inputType, outputType, key, c)
     case _ => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
-    while(stack.nonEmpty) {
+    while (stack.nonEmpty) {
       current = substHole(stack.pop(), current)
     }
     current
