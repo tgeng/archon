@@ -208,7 +208,9 @@ given SubstitutableCTerm: Substitutable[CTerm] with
 
 extension (c: CTerm)
   def substitute(substitutor: PartialSubstitution) = SubstitutableCTerm.substitute(c, substitutor)
+  def weakened = c.weaken(1, 0)
   def weaken(amount: Nat, at: Nat) = RaisableCTerm.raise(c, amount, at)
+  def strengthened = c.strengthen(1, 0)
   def strengthen(amount: Nat, at: Nat) = RaisableCTerm.raise(c, -amount, at)
 
   def substHead(vTerms: VTerm*) = c
@@ -222,4 +224,6 @@ extension (c: CTerm)
 extension (v: VTerm)
   def subst(substitutor: PartialSubstitution) = SubstitutableVTerm.substitute(v, substitutor)
   def weaken(amount: Nat, at: Nat) = RaisableVTerm.raise(v, amount, at)
+  def weakened = v.weaken(1, 0)
+  def strengthened = v.strengthen(1, 0)
   def strengthen(amount: Nat, at: Nat) = RaisableVTerm.raise(v, -amount, at)

@@ -119,13 +119,13 @@ private final class StackMachine(
             ) if eff == hEff =>
               val (count, handlerBody) = handlers(name)
               val continuation = Handler(
-                hEff.map(_.weaken(1, 0)),
-                inputType.weaken(1, 0),
-                outputType.weaken(1, 0),
-                transform.weaken(1, 0),
-                handlers.view.mapValues { case (n, c) => (n, c.weaken(1, 0)) }.toMap,
+                hEff.map(_.weakened),
+                inputType.weakened,
+                outputType.weakened,
+                transform.weakened,
+                handlers.view.mapValues { case (n, c) => (n, c.weakened) }.toMap,
                 Hole
-              ) +: cterms.reverseIterator.map(_.weaken(1, 0)).toSeq
+              ) +: cterms.reverseIterator.map(_.weakened).toSeq
 
               val resume = Thunk(
                 Lambda( // operation result
