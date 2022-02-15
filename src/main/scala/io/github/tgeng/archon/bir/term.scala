@@ -21,15 +21,12 @@ type Arguments = List[VTerm]
  */
 type Nat = Int
 
-type HeapKey = Any
-type CellKey = Any
+class HeapKey
 
 type Effect = (QualifiedName, Arguments)
 
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
-
-def foo(q: QualifiedNameOwner) = q.qualifiedName
 
 extension (eff: Effect)
   def map[S](f: VTerm => VTerm) : Effect = (eff._1, eff._2.map(f))
@@ -43,8 +40,8 @@ enum VTerm:
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 
-  case DataType(qn: QualifiedName, args: Arguments) extends VTerm, QualifiedNameOwner(qn)
-  case Con(name: Name, args: Arguments)
+  case DataType(qn: QualifiedName, args: Arguments = Nil) extends VTerm, QualifiedNameOwner(qn)
+  case Con(name: Name, args: Arguments = Nil)
 
   case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm) extends VTerm, QualifiedNameOwner(Builtin / "Equality")
   case Refl
@@ -74,7 +71,7 @@ enum VTerm:
   /**
    * Internal only, created by [[CTerm.Alloc]]
    */
-  case Cell(key: CellKey)
+  case Cell(heapKey: HeapKey, index: Nat)
 
 sealed trait CType:
   def effects: VTerm
@@ -104,7 +101,7 @@ enum CTerm:
   case Lambda(/* binding + 1 */ body: CTerm)
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments) extends CTerm, CType
+  case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments = Nil) extends CTerm, CType
   case Record(fields: Map[Name, CTerm])
   case Projection(rec: CTerm, name: Name)
 
@@ -116,7 +113,7 @@ enum CTerm:
   case DataCase(arg: VTerm, cases: Map[Name, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)])
   case EqualityCase(arg: VTerm, /* binding + 1 (for whole arg) */ body: CTerm)
 
-  case OperatorCall(eff: Effect, name: Name, args: Arguments)
+  case OperatorCall(eff: Effect, name: Name, args: Arguments = Nil)
 
   /**
    * @param stack stack containing the delimited continuation from the tip (right below operator call) to the
@@ -160,9 +157,9 @@ enum CTerm:
     input: CTerm,
   )
 
+  case Alloc(heap: VTerm, ty: VTerm)
   case Set(cell: VTerm, value: VTerm)
   case Get(cell: VTerm)
-  case Alloc(heap: VTerm, ty: VTerm)
   case HeapHandler(
     /**
      * A handler is a computation transformer. this is input type that has `ref 0` bound to a heap
@@ -179,7 +176,12 @@ enum CTerm:
      */
     outputType: CTerm,
 
-    key: HeapKey,
+    /**
+     * Newly created heap handler should always set this to `None`. This key is instantiated during reduction to a fresh
+     * value.
+     */
+    key: Option[HeapKey],
+    heapContent: IndexedSeq[Option[VTerm]],
     /* binding + 1 */ input: CTerm,
   )
 

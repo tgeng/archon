@@ -8,16 +8,28 @@ import scala.collection.mutable
 trait Reducible[T]:
   def reduce(t: T, useCaseTree: Boolean = false)(using signature: Signature): Either[Error, T]
 
+extension [T](a: mutable.ArrayBuffer[T])
+  def pop(): T = a.remove(a.length - 1)
+  def push(t: T) = a.addOne(t)
+  def pushAll(ts: Iterable[T]) = a.addAll(ts)
+
 private final class StackMachine(
-  val stack: mutable.Stack[CTerm],
-  val heap: mutable.Map[HeapKey, mutable.Map[CellKey, VTerm]],
+  val stack: mutable.ArrayBuffer[CTerm],
   val signature: Signature,
   val useCaseTree: Boolean
 ):
 
+  val heapKeyIndex = mutable.WeakHashMap[HeapKey, mutable.Stack[Nat]]()
+  refreshHeapKeyIndex()
+
   import CTerm.*
   import VTerm.*
   import Error.ReductionStuck
+
+  private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) = heapKeyIndex.getOrElseUpdate(heapKey, mutable.Stack()).push(index)
+  private def refreshHeapKeyIndex(startIndex: Nat = 0) : Unit =
+    for case (HeapHandler(_, _, Some(heapKey), _, _), index) <- stack.view.zipWithIndex.drop(startIndex) do
+      updateHeapKeyIndex(heapKey, index)
 
   /**
    * @param pc         "program counter"
@@ -138,22 +150,70 @@ private final class StackMachine(
               nextComputation = handlerBody.substHead(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
             // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
-            case _ => cterms.addOne(substHole(c, Hole))
+            case HeapHandler(_, _, Some(heapKey), _, _) =>
+              heapKeyIndex(heapKey).pop()
+              cterms.addOne(substHole(c, Hole))
+            case _ =>
+              cterms.addOne(substHole(c, Hole))
         }
         run(nextComputation.!!)
       case ContinuationCall(continuation, result) =>
+        val currentStackHeight = stack.length
         stack.pushAll(continuation)
+        refreshHeapKeyIndex(currentStackHeight)
         run(Force(result))
       case Handler(eff, inputType, outputType, transform, handlers, input) =>
         if reduceDown then
           run(transform.substHead(Thunk(input)))
         else
-          stack.push(input)
+          stack.push(pc)
           run(input)
-      case Set(cell, value) => ???
-      case Get(cell) => ???
-      case Alloc(heap, ty) => ???
-      case HeapHandler(inputType, outputType, key, input) => ???
+      case Alloc(heap, ty) =>
+        heap match
+          case _ : LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case Heap(heapKey) =>
+            val heapHandlerIndex = heapKeyIndex(heapKey).top
+            stack(heapHandlerIndex) match
+              case HeapHandler(inputType, outputType, key, heapContent, input) =>
+                val cell = new Cell(heapKey, heapContent.size)
+                stack(heapHandlerIndex) = HeapHandler(inputType, outputType, key, heapContent :+ None, input)
+                run(substHole(stack.pop(), Return(cell)))
+              case _ => throw IllegalStateException("corrupted heap key index")
+          case _ => throw IllegalArgumentException("type error")
+      case Set(cell, value) =>
+        cell match
+          case _ : LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case Cell(heapKey, index) =>
+            val heapHandlerIndex = heapKeyIndex(heapKey).top
+            stack(heapHandlerIndex) match
+              case HeapHandler(inputType, outputType, key, heapContent, input) =>
+                stack(heapHandlerIndex) = HeapHandler(inputType, outputType, key, heapContent.updated(index, Some(value)), input)
+                run(substHole(stack.pop(), Return(Builtins.Unit)))
+              case _ => throw IllegalStateException("corrupted heap key index")
+          case _ => throw IllegalArgumentException("type error")
+      case Get(cell) =>
+        cell match
+          case _ : LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case Cell(heapKey, index) =>
+            val heapHandlerIndex = heapKeyIndex(heapKey).top
+            stack(heapHandlerIndex) match
+              case HeapHandler(_, _, _, heapContent, _) =>
+                heapContent(index) match
+                  case None => Left(Error.UninitializedCell(reconstructTermFromStack(pc)))
+                  case Some(value) => run(substHole(stack.pop(), Return(value)))
+              case _ => throw IllegalStateException("corrupted heap key index")
+          case _ => throw IllegalArgumentException("type error")
+      case HeapHandler(inputType, outputType, currentKey, heapContent, input) =>
+        if reduceDown then
+          assert(currentKey.nonEmpty)
+          heapKeyIndex(currentKey.get).pop()
+          run(input)
+        else
+          assert(currentKey.isEmpty) // this heap handler should be fresh if evaluating upwards
+          val key = new HeapKey
+          updateHeapKeyIndex(key, stack.length)
+          stack.push(HeapHandler(inputType, outputType, Some(key), heapContent, input))
+          run(input.substHead(Heap(key)))
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) => Let(c, ctx)
@@ -162,7 +222,7 @@ private final class StackMachine(
     case Projection(rec, name) => Projection(c, name)
     case Handler(eff, inputType, outputType, transform, handlers, input) =>
       Handler(eff, inputType, outputType, transform, handlers, c)
-    case HeapHandler(inputType, outputType, key, input) => HeapHandler(inputType, outputType, key, c)
+    case HeapHandler(inputType, outputType, key, heap, input) => HeapHandler(inputType, outputType, key, heap, c)
     case _ => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
@@ -178,8 +238,7 @@ given Reducible[CTerm] with
    * It's assumed that `t` is effect-free.
    */
   override def reduce(t: CTerm, useCaseTree: Boolean)(using signature: Signature): Either[Error, CTerm] = StackMachine(
-    mutable.Stack(),
-    mutable.Map(),
+    mutable.ArrayBuffer(),
     signature,
     useCaseTree
   ).run(t)

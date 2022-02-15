@@ -90,13 +90,14 @@ given RaisableCTerm: Raisable[CTerm] with
       handlers.view.mapValues{ case (n, c) => (n, raise(c, amount, bar + n + 2))}.toMap,
       raise(input, amount, bar),
     )
+    case Alloc(heap, ty) => Alloc(RaisableVTerm.raise(heap, amount, bar), RaisableVTerm.raise(ty, amount, bar))
     case Set(call, value) => Set(RaisableVTerm.raise(call, amount, bar), RaisableVTerm.raise(value, amount, bar))
     case Get(cell) => Get(RaisableVTerm.raise(cell, amount, bar))
-    case Alloc(heap, ty) => Alloc(RaisableVTerm.raise(heap, amount, bar), RaisableVTerm.raise(ty, amount, bar))
-    case HeapHandler(inputType, outputType, key, input) => HeapHandler(
+    case HeapHandler(inputType, outputType, key, heapContent, input) => HeapHandler(
       raise(inputType, amount, bar + 1),
       raise(outputType, amount, bar),
       key,
+      heapContent.map(_.map(RaisableVTerm.raise(_, amount, bar))),
       raise(input, amount, bar + 1)
     )
 
@@ -190,19 +191,20 @@ given SubstitutableCTerm: Substitutable[CTerm] with
       handlers.view.mapValues{ case (n, c) => (n, substitute(c, substitutor, offset + n + 2)) }.toMap,
       substitute(input, substitutor, offset),
     )
+    case Alloc(heap, ty) => Alloc(
+      SubstitutableVTerm.substitute(heap, substitutor, offset),
+      SubstitutableVTerm.substitute(ty, substitutor, offset)
+    )
     case Set(call, value) => Set(
       SubstitutableVTerm.substitute(call, substitutor, offset),
       SubstitutableVTerm.substitute(value, substitutor, offset)
     )
     case Get(cell) => Get(SubstitutableVTerm.substitute(cell, substitutor, offset))
-    case Alloc(heap, ty) => Alloc(
-      SubstitutableVTerm.substitute(heap, substitutor, offset),
-      SubstitutableVTerm.substitute(ty, substitutor, offset)
-    )
-    case HeapHandler(inputType, outputType, key, input) => HeapHandler(
+    case HeapHandler(inputType, outputType, key, heapContent, input) => HeapHandler(
       substitute(inputType, substitutor, offset + 1),
       substitute(outputType, substitutor, offset),
       key,
+      heapContent.map(_.map(SubstitutableVTerm.substitute(_, substitutor, offset))),
       substitute(input, substitutor, offset + 1)
     )
 
