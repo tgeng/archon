@@ -19,7 +19,7 @@ private final class StackMachine(
   val useCaseTree: Boolean
 ):
 
-  val heapKeyIndex = mutable.WeakHashMap[HeapKey, mutable.Stack[Nat]]()
+  private val heapKeyIndex = mutable.WeakHashMap[HeapKey, mutable.Stack[Nat]]()
   refreshHeapKeyIndex()
 
   import CTerm.*
