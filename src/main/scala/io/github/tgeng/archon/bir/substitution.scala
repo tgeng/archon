@@ -3,13 +3,13 @@ package io.github.tgeng.archon.bir
 import io.github.tgeng.archon.bir.VTerm.VUniverse
 import io.github.tgeng.archon.common.*
 
-type PartialSubstitution = Int => Option[VTerm]
+type PartialSubstitution[T] = Int => Option[T]
 
 trait Raisable[T]:
   def raise(t: T, amount: Int, bar: Int = 0): T
 
-trait Substitutable[S: Raisable]:
-  def substitute(s: S, substitutor: PartialSubstitution, offset: Int = 0): S
+trait Substitutable[S: Raisable, T]:
+  def substitute(s: S, substitutor: PartialSubstitution[T], offset: Int = 0): S
 
 import VTerm.*
 import CTerm.*
@@ -101,8 +101,8 @@ given RaisableCTerm: Raisable[CTerm] with
       raise(input, amount, bar + 1)
     )
 
-given SubstitutableVTerm: Substitutable[VTerm] with
-  override def substitute(v: VTerm, substitutor: PartialSubstitution, offset: Int): VTerm = v match
+given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
+  override def substitute(v: VTerm, substitutor: PartialSubstitution[VTerm], offset: Int): VTerm = v match
     case Refl | EffectsType | LevelType | _: LevelLiteral | HeapType | GlobalHeap | _: Heap | _: Cell => v
     case VUniverse(level) => VUniverse(substitute(level, substitutor, offset))
     case LocalRef(idx) => substitutor(idx - offset) match
@@ -129,8 +129,8 @@ given SubstitutableVTerm: Substitutable[VTerm] with
     )
     case CellType(heap, ty) => CellType(substitute(heap, substitutor, offset), substitute(ty, substitutor, offset))
 
-given SubstitutableCTerm: Substitutable[CTerm] with
-  override def substitute(c: CTerm, substitutor: PartialSubstitution, offset: Int): CTerm = c match
+given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
+  override def substitute(c: CTerm, substitutor: PartialSubstitution[VTerm], offset: Int): CTerm = c match
     case Hole | _: GlobalRef => c
     case CUniverse(effects, level) => CUniverse(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
@@ -209,7 +209,7 @@ given SubstitutableCTerm: Substitutable[CTerm] with
     )
 
 extension (c: CTerm)
-  def substitute(substitutor: PartialSubstitution) = SubstitutableCTerm.substitute(c, substitutor)
+  def substitute(substitutor: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitutor)
   def weakened = c.weaken(1, 0)
   def weaken(amount: Nat, at: Nat) = RaisableCTerm.raise(c, amount, at)
   def strengthened = c.strengthen(1, 0)
@@ -224,7 +224,7 @@ extension (c: CTerm)
     .substitute(i => vTerms.lift(-(i + 1)))
 
 extension (v: VTerm)
-  def subst(substitutor: PartialSubstitution) = SubstitutableVTerm.substitute(v, substitutor)
+  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableVTerm.substitute(v, substitutor)
   def weaken(amount: Nat, at: Nat) = RaisableVTerm.raise(v, amount, at)
   def weakened = v.weaken(1, 0)
   def strengthened = v.strengthen(1, 0)
