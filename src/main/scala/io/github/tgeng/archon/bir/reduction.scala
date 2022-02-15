@@ -6,6 +6,15 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 trait Reducible[T]:
+  /**
+   * @param useCaseTree reduction during type checking should not use case tree because it can get
+   *                    stuck more often than evaluating by clauses in presence of local variables.
+   *                    Note that we are taking a different strategy than in Agda: when evaluating
+   *                    pattern match, we let mismatch dominate stuckness because we always eval by
+   *                    clauses during type checking. We may even support overlapping patterns at
+   *                    some point later. Eval by case tree, on the other hand, is only used to
+   *                    evaluate a complete program, similar to running a compiled program.
+   */
   def reduce(t: T, useCaseTree: Boolean = false)(using signature: Signature): Either[Error, T]
 
 extension [T](a: mutable.ArrayBuffer[T])
@@ -52,7 +61,7 @@ private final class StackMachine(
       case GlobalRef(qn) =>
         if useCaseTree then
           run(signature.getDef(qn).caseTree)
-        else ??? // TODO: implement strict first clause match semantic by inspecting tip of the stack
+        else ??? // TODO: implement first clause match semantic by inspecting tip of the stack
       case Force(v) => v match
         case Thunk(c) => run(c)
         case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
