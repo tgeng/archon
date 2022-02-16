@@ -3,6 +3,7 @@ package io.github.tgeng.archon.bir
 import io.github.tgeng.archon.common.*
 
 enum CaseTree:
+  case Term(term: CTerm)
   case Lambda(/* binding + 1 */ body: CTerm)
   case Record(fields: Map[Name, CTerm])
   case TypeCase(
