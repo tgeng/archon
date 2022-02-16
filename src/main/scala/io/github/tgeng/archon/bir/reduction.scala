@@ -53,14 +53,45 @@ private final class StackMachine(
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
-      case _: CUniverse | _: F | _: Return | _: FunctionType | _: Lambda | _: RecordType | _: Record =>
+      case _: CUniverse | _: F | _: Return | _: FunctionType | _: RecordType =>
         if stack.isEmpty then
           Right(pc)
         else
           run(substHole(stack.pop(), pc), true)
       case GlobalRef(qn) =>
         if useCaseTree then
-          run(signature.getDef(qn).caseTree)
+          val caseTree = signature.getDef(qn).caseTree
+          //      case TypeCase(arg, cases, default) => arg match
+          //        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
+          //          val (count, body) = cases(q.qualifiedName)
+          //          q match
+          //            case VUniverse(level) =>
+          //              assert(count == 1)
+          //              run(body.substHead(arg, level))
+          //            case DataType(qn, args) =>
+          //              assert(count == args.length)
+          //              run(body.substHead(arg +: args: _*))
+          //            case EqualityType(level, ty, left, right) =>
+          //              assert(count == 4)
+          //              run(body.substHead(arg, level, ty, left, right))
+          //            case EffectsType | LevelType | HeapType =>
+          //              assert(count == 1)
+          //              run(body.substHead(arg))
+          //        case _ => run(default.substHead(arg))
+          //      case DataCase(arg, cases) => arg match
+          //        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          //        case Con(name, args) if cases.contains(name) =>
+          //          val (count, body) = cases(name)
+          //          assert(count == args.length)
+          //          run(body.substHead(arg +: args: _*))
+          //        case _ => throw IllegalArgumentException("type error")
+          //      case EqualityCase(arg, body) =>
+          //        arg match
+          //          case Refl => run(body.substHead(Refl))
+          //          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          //          case _ => throw IllegalArgumentException("type error")
+          ??? // TODO: implement reduction with case tree
         else ??? // TODO: implement first clause match semantic by inspecting tip of the stack
       case Force(v) => v match
         case Thunk(c) => run(c)
@@ -82,48 +113,18 @@ private final class StackMachine(
             run(t)
       case Application(fun, arg) =>
         fun match
-          case Lambda(body) => run(body.substHead(arg))
+//          case Lambda(body) => run(body.substHead(arg))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(fun)
       case Projection(rec, name) =>
         rec match
-          case Record(fields) if fields.contains(name) => run(fields(name))
+//          case Record(fields) if fields.contains(name) => run(fields(name))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(rec)
-      case TypeCase(arg, cases, default) => arg match
-        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
-        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
-          val (count, body) = cases(q.qualifiedName)
-          q match
-            case VUniverse(level) =>
-              assert(count == 1)
-              run(body.substHead(arg, level))
-            case DataType(qn, args) =>
-              assert(count == args.length)
-              run(body.substHead(arg +: args: _*))
-            case EqualityType(level, ty, left, right) =>
-              assert(count == 4)
-              run(body.substHead(arg, level, ty, left, right))
-            case EffectsType | LevelType | HeapType =>
-              assert(count == 1)
-              run(body.substHead(arg))
-        case _ => run(default.substHead(arg))
-      case DataCase(arg, cases) => arg match
-        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
-        case Con(name, args) if cases.contains(name) =>
-          val (count, body) = cases(name)
-          assert(count == args.length)
-          run(body.substHead(arg +: args: _*))
-        case _ => throw IllegalArgumentException("type error")
-      case EqualityCase(arg, body) =>
-        arg match
-          case Refl => run(body.substHead(Refl))
-          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          case _ => throw IllegalArgumentException("type error")
       case OperatorCall(eff, name, args) =>
         val cterms = mutable.ArrayBuffer[CTerm]()
         var nextComputation: CTerm | Null = null
@@ -139,23 +140,16 @@ private final class StackMachine(
             input
             ) if eff == hEff =>
               val (count, handlerBody) = handlers(name)
-              val continuation = Handler(
-                hEff.map(_.weakened),
-                inputType.weakened,
-                outputType.weakened,
-                transform.weakened,
-                handlers.view.mapValues { case (n, c) => (n, c.weakened) }.toMap,
+              val capturedStack = Handler(
+                hEff,
+                inputType,
+                outputType,
+                transform,
+                handlers,
                 Hole
-              ) +: cterms.reverseIterator.map(_.weakened).toSeq
+              ) +: cterms.reverseIterator.toSeq
 
-              val resume = Thunk(
-                Lambda( // operation result
-                  ContinuationCall(
-                    continuation,
-                    LocalRef(0) // reference the operation result
-                  ),
-                )
-              )
+              val resume = Thunk(Continuation(capturedStack))
               nextComputation = handlerBody.substHead(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
             // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
@@ -166,11 +160,14 @@ private final class StackMachine(
               cterms.addOne(substHole(c, Hole))
         }
         run(nextComputation.!!)
-      case ContinuationCall(continuation, result) =>
-        val currentStackHeight = stack.length
-        stack.pushAll(continuation)
-        refreshHeapKeyIndex(currentStackHeight)
-        run(Force(result))
+      case Continuation(capturedStack) =>
+        stack.pop() match
+          case Application(_, arg) =>
+            val currentStackHeight = stack.length
+            stack.pushAll(capturedStack)
+            refreshHeapKeyIndex(currentStackHeight)
+            run(Force(arg))
+          case _ => throw IllegalArgumentException("type error")
       case Handler(eff, inputType, outputType, transform, handlers, input) =>
         if reduceDown then
           run(transform.substHead(Thunk(input)))

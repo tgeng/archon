@@ -51,31 +51,30 @@ given RaisableCTerm: Raisable[CTerm] with
       binding.map(RaisableVTerm.raise(_, amount, bar)),
       raise(bodyTy, amount, bar + 1)
     )
-    case Lambda(body) => Lambda(raise(body, amount, bar + 1))
+//    case Lambda(body) => Lambda(raise(body, amount, bar + 1))
     case Application(fun, arg) => Application(raise(fun, amount, bar), RaisableVTerm.raise(arg, amount, bar))
     case RecordType(effects, qn, args) => RecordType(
       RaisableVTerm.raise(effects, amount, bar),
       qn,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
+//    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
     case Projection(rec, name) => Projection(raise(rec, amount, bar), name)
-    case TypeCase(arg, cases, default) => TypeCase(
-      RaisableVTerm.raise(arg, amount, bar),
-      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap,
-      raise(default, amount, bar + 1)
-    )
-    case DataCase(arg, cases) => DataCase(
-      RaisableVTerm.raise(arg, amount, bar),
-      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap
-    )
-    case EqualityCase(arg, body) => EqualityCase(
-      RaisableVTerm.raise(arg, amount, bar),
-      raise(body, amount, bar + 1)
-    )
-    case ContinuationCall(stack, result) => ContinuationCall(
-      stack.map(raise(_, amount, bar)),
-      RaisableVTerm.raise(result, amount, bar)
+//    case TypeCase(arg, cases, default) => TypeCase(
+//      RaisableVTerm.raise(arg, amount, bar),
+//      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap,
+//      raise(default, amount, bar + 1)
+//    )
+//    case DataCase(arg, cases) => DataCase(
+//      RaisableVTerm.raise(arg, amount, bar),
+//      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap
+//    )
+//    case EqualityCase(arg, body) => EqualityCase(
+//      RaisableVTerm.raise(arg, amount, bar),
+//      raise(body, amount, bar + 1)
+//    )
+    case Continuation(capturedStack) => Continuation(
+      capturedStack.map(raise(_, amount, bar)),
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
@@ -149,7 +148,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       substitute(bodyTy, substitutor, offset + 1)
     )
-    case Lambda(body) => Lambda(substitute(body, substitutor, offset + 1))
+//    case Lambda(body) => Lambda(substitute(body, substitutor, offset + 1))
     case Application(fun, arg) => Application(
       substitute(fun, substitutor, offset),
       SubstitutableVTerm.substitute(arg, substitutor, offset)
@@ -159,24 +158,23 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       qn,
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
-    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitutor, offset)).toMap)
+//    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitutor, offset)).toMap)
     case Projection(rec, name) => Projection(substitute(rec, substitutor, offset), name)
-    case TypeCase(arg, cases, default) => TypeCase(
-      SubstitutableVTerm.substitute(arg, substitutor, offset),
-      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap,
-      substitute(default, substitutor, offset + 1)
-    )
-    case DataCase(arg, cases) => DataCase(
-      SubstitutableVTerm.substitute(arg, substitutor, offset),
-      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap
-    )
-    case EqualityCase(arg, body) => EqualityCase(
-      SubstitutableVTerm.substitute(arg, substitutor, offset),
-      substitute(body, substitutor, offset + 1)
-    )
-    case ContinuationCall(stack, result) => ContinuationCall(
-      stack.map(substitute(_, substitutor, offset)),
-      SubstitutableVTerm.substitute(result, substitutor, offset)
+//    case TypeCase(arg, cases, default) => TypeCase(
+//      SubstitutableVTerm.substitute(arg, substitutor, offset),
+//      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap,
+//      substitute(default, substitutor, offset + 1)
+//    )
+//    case DataCase(arg, cases) => DataCase(
+//      SubstitutableVTerm.substitute(arg, substitutor, offset),
+//      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap
+//    )
+//    case EqualityCase(arg, body) => EqualityCase(
+//      SubstitutableVTerm.substitute(arg, substitutor, offset),
+//      substitute(body, substitutor, offset + 1)
+//    )
+    case Continuation(capturedStack) =>
+      Continuation(capturedStack.map(substitute(_, substitutor, offset)),
     )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),

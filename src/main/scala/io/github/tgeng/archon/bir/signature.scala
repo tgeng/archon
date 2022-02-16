@@ -6,7 +6,7 @@ enum Declaration:
   case Data(val qn: QualifiedName)(val paramTys: Telescope, val ty: VTerm, val cons: Vector[Constructor])
   case Effect(val qn: QualifiedName)(val paramTys: Telescope, operations: Vector[Operator])
   case Record(val qn: QualifiedName)(val paramTys: Telescope, val ty: CTerm, val fields: Vector[Field])
-  case Definition(val qn: QualifiedName)(val ty: CTerm, val clauses: Vector[CheckedClause], val caseTree: CTerm)
+  case Definition(val qn: QualifiedName)(val ty: CTerm, val clauses: Vector[CheckedClause], val caseTree: CaseTree)
 
   def qn: QualifiedName
 

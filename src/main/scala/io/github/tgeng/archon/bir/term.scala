@@ -29,7 +29,7 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
 
 extension (eff: Effect)
-  def map[S](f: VTerm => VTerm) : Effect = (eff._1, eff._2.map(f))
+  def map[S](f: VTerm => VTerm): Effect = (eff._1, eff._2.map(f))
 
 enum VTerm:
   case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(Builtin / "VUniverse")
@@ -43,7 +43,12 @@ enum VTerm:
   case DataType(qn: QualifiedName, args: Arguments = Nil) extends VTerm, QualifiedNameOwner(qn)
   case Con(name: Name, args: Arguments = Nil)
 
-  case EqualityType(level: VTerm, ty: VTerm, left: VTerm, right: VTerm) extends VTerm, QualifiedNameOwner(Builtin / "Equality")
+  case EqualityType(
+    level: VTerm,
+    ty: VTerm,
+    left: VTerm,
+    right: VTerm
+  ) extends VTerm, QualifiedNameOwner(Builtin / "Equality")
   case Refl
 
   case EffectsType extends VTerm, QualifiedNameOwner(Builtin / "Effects")
@@ -97,33 +102,26 @@ enum CTerm:
   case FunctionType(
     effects: VTerm,
     /* binding + 1 */ binding: Binding[VTerm],
-    bodyTy: CTerm) extends CTerm, CType
-  case Lambda(/* binding + 1 */ body: CTerm)
+    bodyTy: CTerm
+  ) extends CTerm, CType
   case Application(fun: CTerm, arg: VTerm)
 
   case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments = Nil) extends CTerm, CType
-  case Record(fields: Map[Name, CTerm])
   case Projection(rec: CTerm, name: Name)
-
-  case TypeCase(
-    arg: VTerm,
-    cases: Map[QualifiedName, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)],
-    /* binding + 1 */ default: CTerm
-  )
-  case DataCase(arg: VTerm, cases: Map[Name, (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)])
-  case EqualityCase(arg: VTerm, /* binding + 1 (for whole arg) */ body: CTerm)
 
   case OperatorCall(eff: Effect, name: Name, args: Arguments = Nil)
 
   /**
-   * @param stack stack containing the delimited continuation from the tip (right below operator call) to the
-   *              corresponding handler, inclusively. Note that the handler should have the parameter pointing to a
-   *              lambda-bound variable so that it can be updated when invoked through `resume`.
-   * @param result the result passed to this continuation call. It must be of type `U c` for some computation type `c`.
-   *               during evaluation, it's forced and the resulted computation is pushed on top of the stack, above
-   *               [[continuation]]
+   * A continuation behaves like a function, it has type `U inputType -> outputType`, where
+   * `inputType` is the type of the hole at the tip of the continuation seq and `outputType` is the
+   * type of the bottom continuation stack.
+   *
+   * @param continuation stack containing the delimited continuation from the tip (right below
+   *                     operator call) to the corresponding handler, inclusively. Note that the
+   *                     first term is at the bottom of the stack and the last term is the tip of
+   *                     the stack.
    */
-  case ContinuationCall(continuation: Seq[CTerm], result: VTerm)
+  case Continuation(capturedStack: Seq[CTerm])
 
   case Handler(
     eff: Effect,
@@ -151,7 +149,7 @@ enum CTerm:
      * following arguments
      *  - all declared parameters
      *  - a continuation parameter of type `parameterType -> declared operator output type -> outputType`
-     * and outputs `outputType`
+     *    and outputs `outputType`
      */
     handlers: Map[Name, (Nat, /* binding + n + 1 (for resume) */ CTerm)],
     input: CTerm,
