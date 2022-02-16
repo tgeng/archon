@@ -1,6 +1,6 @@
-package io.github.tgeng.archon.bir
+package io.github.tgeng.archon.ir
 
-import io.github.tgeng.archon.bir.VTerm.VUniverse
+import io.github.tgeng.archon.ir.VTerm.VUniverse
 import io.github.tgeng.archon.common.*
 
 type PartialSubstitution[T] = Int => Option[T]

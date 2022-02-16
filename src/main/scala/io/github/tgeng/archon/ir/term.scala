@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.bir
+package io.github.tgeng.archon.ir
 
 import scala.collection.immutable.{ListMap, ListSet}
 import io.github.tgeng.archon.common.*

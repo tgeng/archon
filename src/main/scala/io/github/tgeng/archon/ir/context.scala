@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.bir
+package io.github.tgeng.archon.ir
 
 /**
  * Head is on the left, e.g. [x: Nat, y: Vector String x] is represented as `x: Nat :: y: Vector String x :: []`
