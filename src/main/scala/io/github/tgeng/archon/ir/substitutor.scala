@@ -25,13 +25,21 @@ class Substitutor[T: DeBruijn](
   val targetContextSize: Nat,
   private var nonTrivialMapping: IndexedSeq[T],
 ) extends PartialSubstitution[T] :
+
+  assert(sourceContextSize >= 0)
+  assert(targetContextSize >= 0)
+
   private inline def fromIndex(index: Nat): T = summon[DeBruijn[T]].fromIndex(index)
 
-  private def materialize(): Unit =
-    if nonTrivialMapping.length == targetContextSize then return
-      nonTrivialMapping = (1 to targetContextSize - nonTrivialMapping.length)
-        .map(i => fromIndex(sourceContextSize - i)) ++
-        nonTrivialMapping
+  /**
+   * @param boundIndex up to how many DeBruijn indices in the target context that materialization
+   *                   should happen. Default value makes materialization happens fully
+   */
+  private def materialize(boundIndex: Nat = targetContextSize): Unit =
+    if nonTrivialMapping.length == boundIndex then return
+      nonTrivialMapping ++= (targetContextSize - nonTrivialMapping.length)
+        .until(targetContextSize - boundIndex, -1)
+        .map(i => fromIndex(sourceContextSize - i))
 
   def apply(index: Nat): Option[T] =
     if index < targetContextSize && 0 <= index then
@@ -46,7 +54,7 @@ class Substitutor[T: DeBruijn](
   )
 
   @targetName("uplus")
-  infix def ⊎(that: Substitutor[T]) : Substitutor[T] =
+  infix def ⊎(that: Substitutor[T]): Substitutor[T] =
     assert(that.sourceContextSize == sourceContextSize)
     that.materialize()
     Substitutor(
@@ -54,3 +62,21 @@ class Substitutor[T: DeBruijn](
       targetContextSize + that.targetContextSize,
       that.nonTrivialMapping ++ nonTrivialMapping,
     )
+
+  @targetName("delete")
+  infix def \(index: Nat): Substitutor[T] =
+    materialize(index)
+    if nonTrivialMapping.length == index then
+      Substitutor(sourceContextSize, targetContextSize - 1, nonTrivialMapping)
+    else
+      Substitutor(
+        sourceContextSize,
+        targetContextSize - 1,
+        nonTrivialMapping.patch(index, IndexedSeq.empty, 1)
+      )
+
+  def drop(count: Nat): Substitutor[T] = Substitutor(
+    sourceContextSize,
+    targetContextSize - count,
+    nonTrivialMapping.drop(count)
+  )
