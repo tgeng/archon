@@ -113,14 +113,12 @@ private final class StackMachine(
             run(t)
       case Application(fun, arg) =>
         fun match
-//          case Lambda(body) => run(body.substHead(arg))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(fun)
       case Projection(rec, name) =>
         rec match
-//          case Record(fields) if fields.contains(name) => run(fields(name))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
