@@ -102,11 +102,16 @@ private final class StackMachine(
                 case Application(_, arg) => Elimination.Value(arg)
                 case Projection(_, name) => Elimination.Proj(name)
                 case _ => throw IllegalArgumentException("type error")
-              }), mapping)
-              None
+              }), mapping, MatchingStatus.Matched) match
+                case MatchingStatus.Matched =>
+                  stack.dropRightInPlace(lhs.length)
+                  Some(Right(rhs.subst(mapping.get)))
+                case MatchingStatus.Stuck => Some(Left(ReductionStuck(reconstructTermFromStack(pc))))
+                case MatchingStatus.Mismatch => None
           } match
-            case Some(t) => run(t)
-            case None => throw IllegalArgumentException("leaky pattern")
+            case Some(Right(t)) => run(t)
+            case Some(error) => error
+            case None => throw IllegalArgumentException(s"leaky pattern in $qn")
       case Force(v) => v match
         case Thunk(c) => run(c)
         case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
@@ -237,13 +242,17 @@ private final class StackMachine(
     case Value(v: VTerm)
     case Proj(n: Name)
 
+  private enum MatchingStatus:
+    case Matched, Stuck, Mismatch
+
   @tailrec
-  private def matchPattern(elims: List[(Pattern, Elimination)], mapping: mutable.Map[Nat, VTerm]): Boolean =
+  private def matchPattern(elims: List[(Pattern, Elimination)], mapping: mutable.Map[Nat, VTerm], matchingStatus: MatchingStatus): MatchingStatus =
     import Elimination.*
     import Builtins.*
     elims match
-      case Nil => true
+      case Nil => matchingStatus
       case elim :: rest =>
+        var status: MatchingStatus = matchingStatus
         var elims = rest
         elim match
           case (PRef(idx), Value(v)) => mapping(idx) = v
@@ -262,12 +271,23 @@ private final class StackMachine(
               (leftP, Value(left)) ::
               (rightP, Value(right)) ::
               elims
+          case (PValueType(pQn, pArgs), Value(DataType(qn, args))) if pQn == qn =>
+            elims = pArgs.zip(args.map(Value(_))) ++ elims
+          case (PForcedValueType(_, pArgs), Value(DataType(qn2, args))) =>
+            elims = pArgs.zip(args.map(Value(_))) ++ elims
+          case (PConstructor(pName, pArgs), Value(Con(name, args))) if pName == name =>
+            elims = pArgs.zip(args.map(Value(_))) ++ elims
+          case (PForcedValueType(pName, pArgs), Value(Con(name, args))) =>
+            elims = pArgs.zip(args.map(Value(_))) ++ elims
           case (PProjection(n1), Proj(n2)) if n1 == n2 =>
           case (PProjection(_), Value(_)) |
                (_, Proj(_)) |
                (PAbsurd, _) => throw IllegalArgumentException("type error")
-          case _ => return false
-        matchPattern(elims, mapping)
+          case (_, Value(LocalRef(_))) => status = MatchingStatus.Stuck
+          // Note that we make mismatch dominating stuck because we do not eval by case tree during
+          // type checking.
+          case _ => return MatchingStatus.Mismatch
+        matchPattern(elims, mapping, status)
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) => Let(c, ctx)
