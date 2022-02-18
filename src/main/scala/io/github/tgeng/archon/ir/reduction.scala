@@ -52,13 +52,13 @@ private final class StackMachine(
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context): Either[Error, CTerm] =
     pc match
-      case Hole => throw IllegalStateException()
+      case Computation => throw IllegalStateException()
       // terminal cases
       case _: CUniverse | _: F | _: Return | _: FunctionType | _: RecordType =>
         if stack.isEmpty then
           Right(pc)
         else
-          run(substHole(stack.pop(), pc), true)
+          run(substComputation(stack.pop(), pc), true)
       case GlobalRef(qn) =>
         val definition = signature.getDef(qn)
         if useCaseTree then
@@ -163,18 +163,18 @@ private final class StackMachine(
                 outputType,
                 transform,
                 handlers,
-                Hole
+                Computation
               ) +: cterms.reverseIterator.toSeq
 
               val resume = Thunk(Continuation(capturedStack))
               nextComputation = handlerBody.substHead(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
-            // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
+            // remove unnecessary computations with Computation so substitution and raise on the stack becomes more efficient
             case HeapHandler(_, _, Some(heapKey), _, _) =>
               heapKeyIndex(heapKey).pop()
-              cterms.addOne(substHole(c, Hole))
+              cterms.addOne(substComputation(c, Computation))
             case _ =>
-              cterms.addOne(substHole(c, Hole))
+              cterms.addOne(substComputation(c, Computation))
         }
         run(nextComputation.!!)
       case Continuation(capturedStack) =>
@@ -200,7 +200,7 @@ private final class StackMachine(
               case HeapHandler(inputType, outputType, key, heapContent, input) =>
                 val cell = new Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(inputType, outputType, key, heapContent :+ None, input)
-                run(substHole(stack.pop(), Return(cell)))
+                run(substComputation(stack.pop(), Return(cell)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case Set(cell, value) =>
@@ -211,7 +211,7 @@ private final class StackMachine(
             stack(heapHandlerIndex) match
               case HeapHandler(inputType, outputType, key, heapContent, input) =>
                 stack(heapHandlerIndex) = HeapHandler(inputType, outputType, key, heapContent.updated(index, Some(value)), input)
-                run(substHole(stack.pop(), Return(Builtins.Unit)))
+                run(substComputation(stack.pop(), Return(Builtins.Unit)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case Get(cell) =>
@@ -223,7 +223,7 @@ private final class StackMachine(
               case HeapHandler(_, _, _, heapContent, _) =>
                 heapContent(index) match
                   case None => Left(Error.UninitializedCell(reconstructTermFromStack(pc)))
-                  case Some(value) => run(substHole(stack.pop(), Return(value)))
+                  case Some(value) => run(substComputation(stack.pop(), Return(value)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case HeapHandler(inputType, outputType, currentKey, heapContent, input) =>
@@ -289,7 +289,7 @@ private final class StackMachine(
           case _ => return MatchingStatus.Mismatch
         matchPattern(elims, mapping, status)
 
-  private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
+  private def substComputation(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) => Let(c, ctx)
     case DLet(t, ctx) => DLet(c, ctx)
     case Application(fun, arg) => Application(c, arg)
@@ -302,7 +302,7 @@ private final class StackMachine(
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
     while (stack.nonEmpty) {
-      current = substHole(stack.pop(), current)
+      current = substComputation(stack.pop(), current)
     }
     current
 

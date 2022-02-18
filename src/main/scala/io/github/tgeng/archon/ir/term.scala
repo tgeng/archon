@@ -83,8 +83,14 @@ sealed trait CType:
   def effects: VTerm
 
 enum CTerm:
-  /** Used in stack representation of computation. */
-  case Hole
+  /**
+   *  Used in stack machine to represent the computations above the computation term containing
+   *  this. For example, `f a b` converted to the stack machine becomes
+   *  - f
+   *  - Application(Computation, a)
+   *  - Application(Computation, b)
+   */
+  case Computation
 
   /** archon.builtin.CUniverse */
   case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
