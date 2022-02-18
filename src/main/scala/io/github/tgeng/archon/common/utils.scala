@@ -99,3 +99,11 @@ extension[T] (inline t: T)
 def caching[A, B](f: A => B): A => B =
   val cache = mutable.Map[A, B]()
   a => cache.getOrElseUpdate(a, f(a))
+
+extension[T] (elems: IterableOnce[T])
+  def first[R](f: T => Option[R]): Option[R] =
+    for elem <- elems do
+      f(elem) match
+        case r: Some[R] => return r
+        case _ =>
+    None

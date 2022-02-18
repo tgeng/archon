@@ -1,6 +1,6 @@
 package io.github.tgeng.archon.ir
 
-import io.github.tgeng.archon.common.QualifiedName
+import io.github.tgeng.archon.common.*
 
 enum Pattern:
   case PRef(idx: Nat)
@@ -15,8 +15,8 @@ enum Pattern:
   case PForcedValueType(qn: QualifiedName, args: List[Pattern])
   // Note that we do not allow matching specific values of level, effect, and heap because there are no corresponding
   // eliminators. All these can only be matched with a pattern variable.
-  case PConstructor(name: String, args: List[Pattern])
-  case PForcedConstructor(name: String, args: List[Pattern])
+  case PConstructor(name: Name, args: List[Pattern])
+  case PForcedConstructor(name: Name, args: List[Pattern])
   case PForced(term: VTerm)
-  case PProjection(name: String)
+  case PProjection(name: Name)
   case PAbsurd

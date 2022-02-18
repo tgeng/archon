@@ -15,7 +15,7 @@ trait Reducible[T]:
    *                    some point later. Eval by case tree, on the other hand, is only used to
    *                    evaluate a complete program, similar to running a compiled program.
    */
-  def reduce(t: T, useCaseTree: Boolean = false)(using signature: Signature): Either[Error, T]
+  def reduce(t: T, useCaseTree: Boolean = false)(using ctx: Context)(using signature: Signature): Either[Error, T]
 
 extension [T](a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
@@ -33,6 +33,7 @@ private final class StackMachine(
 
   import CTerm.*
   import VTerm.*
+  import Pattern.*
   import Error.ReductionStuck
 
   private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) = heapKeyIndex.getOrElseUpdate(heapKey, mutable.Stack()).push(index)
@@ -49,7 +50,7 @@ private final class StackMachine(
    * @return
    */
   @tailrec
-  def run(pc: CTerm, reduceDown: Boolean = false): Either[Error, CTerm] =
+  def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context): Either[Error, CTerm] =
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -59,8 +60,9 @@ private final class StackMachine(
         else
           run(substHole(stack.pop(), pc), true)
       case GlobalRef(qn) =>
+        val definition = signature.getDef(qn)
         if useCaseTree then
-          val caseTree = signature.getDef(qn).caseTree
+          val caseTree = definition.caseTree
           //      case TypeCase(arg, cases, default) => arg match
           //        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
@@ -92,7 +94,19 @@ private final class StackMachine(
           //          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //          case _ => throw IllegalArgumentException("type error")
           ??? // TODO: implement reduction with case tree
-        else ??? // TODO: implement first clause match semantic by inspecting tip of the stack
+        else
+          definition.clauses.first {
+            case CheckedClause(bindings, lhs, rhs, ty) =>
+              val mapping = mutable.Map[Nat, VTerm]()
+              matchPattern(lhs.zip(stack.reverseIterator.map{
+                case Application(_, arg) => Elimination.Value(arg)
+                case Projection(_, name) => Elimination.Proj(name)
+                case _ => throw IllegalArgumentException("type error")
+              }), mapping)
+              None
+          } match
+            case Some(t) => run(t)
+            case None => throw IllegalArgumentException("leaky pattern")
       case Force(v) => v match
         case Thunk(c) => run(c)
         case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
@@ -219,6 +233,42 @@ private final class StackMachine(
           stack.push(HeapHandler(inputType, outputType, Some(key), heapContent, input))
           run(input.substHead(Heap(key)))
 
+  private enum Elimination:
+    case Value(v: VTerm)
+    case Proj(n: Name)
+
+  @tailrec
+  private def matchPattern(elims: List[(Pattern, Elimination)], mapping: mutable.Map[Nat, VTerm]): Boolean =
+    import Elimination.*
+    import Builtins.*
+    elims match
+      case Nil => true
+      case elim :: rest =>
+        var elims = rest
+        elim match
+          case (PRef(idx), Value(v)) => mapping(idx) = v
+          case (PRefl, Value(Refl)) |
+               (PValueType(EffectsQn, Nil), Value(EffectsType)) |
+               (PValueType(LevelQn, Nil), Value(LevelType)) |
+               (PValueType(HeapQn, Nil), Value(HeapType)) |
+               (PForced(_), Value(_)) =>
+          case (PValueType(VUniverseQn, p :: Nil), Value(VUniverse(l))) =>
+            elims = (p, Value(l)) :: elims
+          case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty))) =>
+            elims = (heapP, Value(heap)) :: (tyP, Value(ty)) :: elims
+          case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil), Value(EqualityType(level, ty, left, right))) =>
+            elims = (levelP, Value(level)) ::
+              (tyP, Value(ty)) ::
+              (leftP, Value(left)) ::
+              (rightP, Value(right)) ::
+              elims
+          case (PProjection(n1), Proj(n2)) if n1 == n2 =>
+          case (PProjection(_), Value(_)) |
+               (_, Proj(_)) |
+               (PAbsurd, _) => throw IllegalArgumentException("type error")
+          case _ => return false
+        matchPattern(elims, mapping)
+
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) => Let(c, ctx)
     case DLet(t, ctx) => DLet(c, ctx)
@@ -241,7 +291,7 @@ given Reducible[CTerm] with
   /**
    * It's assumed that `t` is effect-free.
    */
-  override def reduce(t: CTerm, useCaseTree: Boolean)(using signature: Signature): Either[Error, CTerm] = StackMachine(
+  override def reduce(t: CTerm, useCaseTree: Boolean)(using ctx: Context)(using signature: Signature): Either[Error, CTerm] = StackMachine(
     mutable.ArrayBuffer(),
     signature,
     useCaseTree

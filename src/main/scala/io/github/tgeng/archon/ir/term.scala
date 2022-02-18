@@ -24,6 +24,7 @@ type Nat = Int
 class HeapKey
 
 type Effect = (QualifiedName, Arguments)
+import Builtins._
 
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
@@ -32,7 +33,7 @@ extension (eff: Effect)
   def map[S](f: VTerm => VTerm): Effect = (eff._1, eff._2.map(f))
 
 enum VTerm:
-  case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(Builtin / "VUniverse")
+  case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
 
   case LocalRef(idx: Nat)
 
@@ -48,19 +49,19 @@ enum VTerm:
     ty: VTerm,
     left: VTerm,
     right: VTerm
-  ) extends VTerm, QualifiedNameOwner(Builtin / "Equality")
+  ) extends VTerm, QualifiedNameOwner(EqualityQn)
   case Refl
 
-  case EffectsType extends VTerm, QualifiedNameOwner(Builtin / "Effects")
+  case EffectsType extends VTerm, QualifiedNameOwner(EffectsQn)
   case EffectsLiteral(effects: ListSet[Effect])
   case EffectsUnion(effects1: VTerm, effects2: VTerm)
 
-  case LevelType extends VTerm, QualifiedNameOwner(Builtin / "Level")
+  case LevelType extends VTerm, QualifiedNameOwner(LevelQn)
   case LevelLiteral(value: Nat)
   case CompoundLevel(offset: Nat, operands: ListSet[VTerm])
 
   /** archon.builtin.Heap */
-  case HeapType extends VTerm, QualifiedNameOwner(Builtin / "Heap")
+  case HeapType extends VTerm, QualifiedNameOwner(HeapQn)
 
   /** Any need for leaky heap usage goes here. */
   case GlobalHeap
@@ -71,7 +72,7 @@ enum VTerm:
   case Heap(key: HeapKey)
 
   /** archon.builtin.Cell */
-  case CellType(heap: VTerm, ty: VTerm)
+  case CellType(heap: VTerm, ty: VTerm) extends VTerm, QualifiedNameOwner(CellQn)
 
   /**
    * Internal only, created by [[CTerm.Alloc]]

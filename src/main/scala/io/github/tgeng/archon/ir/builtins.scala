@@ -5,7 +5,14 @@ import io.github.tgeng.archon.common.*
 import QualifiedName.*
 import VTerm.*
 
-object Builtins {
+object Builtins:
   val UnitTy = DataType(Builtin/"Unit")
   val Unit = Con(Name.Normal("Unit"))
-}
+  
+  val VUniverseQn = Builtin / "VUniverse"
+  val EqualityQn = Builtin / "Equality"
+  val EffectsQn = Builtin / "Effects"
+  val LevelQn = Builtin / "Level"
+  val HeapQn = Builtin / "Heap"
+  val CellQn = Builtin / "Cell"
+

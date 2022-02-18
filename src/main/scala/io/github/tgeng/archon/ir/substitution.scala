@@ -207,7 +207,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     )
 
 extension (c: CTerm)
-  def substitute(substitutor: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitutor)
+  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitutor)
   def weakened = c.weaken(1, 0)
   def weaken(amount: Nat, at: Nat) = RaisableCTerm.raise(c, amount, at)
   def strengthened = c.strengthen(1, 0)
@@ -219,7 +219,7 @@ extension (c: CTerm)
     // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
     // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
     // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
-    .substitute(i => vTerms.lift(-(i + 1)))
+    .subst(i => vTerms.lift(-(i + 1)))
 
 extension (v: VTerm)
   def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableVTerm.substitute(v, substitutor)
