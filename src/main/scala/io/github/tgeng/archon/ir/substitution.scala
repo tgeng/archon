@@ -1,7 +1,10 @@
 package io.github.tgeng.archon.ir
 
+import scala.collection.mutable
 import io.github.tgeng.archon.ir.VTerm.VUniverse
 import io.github.tgeng.archon.common.*
+
+import scala.collection.immutable.{ListMap, ListSet}
 
 type PartialSubstitution[T] = Int => Option[T]
 
@@ -16,7 +19,7 @@ import CTerm.*
 
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int): VTerm = v match
-    case Refl | EffectsType | LevelType | _: LevelLiteral | HeapType | GlobalHeap | _: Heap | _: Cell => v
+    case Refl | EffectsType | LevelType | HeapType | GlobalHeap | _: Heap | _: Cell => v
     case VUniverse(level) => VUniverse(raise(level, amount, bar))
     case LocalRef(idx) => if idx >= bar then LocalRef(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
@@ -29,9 +32,16 @@ given RaisableVTerm: Raisable[VTerm] with
       raise(left, amount, bar),
       raise(right, amount, bar)
     )
-    case EffectsLiteral(effects) => EffectsLiteral(effects.map(_.map(raise(_, amount, bar))))
-    case EffectsUnion(effects1, effects2) => EffectsUnion(raise(effects1, amount, bar), raise(effects2, amount, bar))
-    case CompoundLevel(offset, operands) => CompoundLevel(offset, operands.map((v: VTerm) => raise(v, amount, bar)))
+    case Level(literal, maxOperands) => Level(
+      literal,
+      maxOperands.map { (k, v) => (raise(k, amount, bar).asInstanceOf[VTerm.LocalRef], v) }
+    )
+    case Effects(literal, unionOperands) => Effects(
+      literal, unionOperands.map(
+        raise(_, amount, bar)
+          .asInstanceOf[VTerm.LocalRef]
+      )
+    )
     case CellType(heap, ty) => CellType(raise(heap, amount, bar), raise(ty, amount, bar))
 
 given RaisableCTerm: Raisable[CTerm] with
@@ -42,7 +52,10 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(level, amount, bar)
     )
     case Force(v) => Force(RaisableVTerm.raise(v, amount, bar))
-    case F(effects, vTerm) => F(RaisableVTerm.raise(effects, amount, bar), RaisableVTerm.raise(vTerm, amount, bar))
+    case F(effects, vTerm) => F(
+      RaisableVTerm.raise(effects, amount, bar),
+      RaisableVTerm.raise(vTerm, amount, bar)
+    )
     case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
     case Let(t, ctx) => Let(raise(t, amount, bar), raise(ctx, amount, bar))
     case DLet(t, ctx) => DLet(raise(t, amount, bar), raise(ctx, amount, bar))
@@ -51,28 +64,31 @@ given RaisableCTerm: Raisable[CTerm] with
       binding.map(RaisableVTerm.raise(_, amount, bar)),
       raise(bodyTy, amount, bar + 1)
     )
-//    case Lambda(body) => Lambda(raise(body, amount, bar + 1))
-    case Application(fun, arg) => Application(raise(fun, amount, bar), RaisableVTerm.raise(arg, amount, bar))
+    //    case Lambda(body) => Lambda(raise(body, amount, bar + 1))
+    case Application(fun, arg) => Application(
+      raise(fun, amount, bar),
+      RaisableVTerm.raise(arg, amount, bar)
+    )
     case RecordType(effects, qn, args) => RecordType(
       RaisableVTerm.raise(effects, amount, bar),
       qn,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-//    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
+    //    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
     case Projection(rec, name) => Projection(raise(rec, amount, bar), name)
-//    case TypeCase(arg, cases, default) => TypeCase(
-//      RaisableVTerm.raise(arg, amount, bar),
-//      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap,
-//      raise(default, amount, bar + 1)
-//    )
-//    case DataCase(arg, cases) => DataCase(
-//      RaisableVTerm.raise(arg, amount, bar),
-//      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap
-//    )
-//    case EqualityCase(arg, body) => EqualityCase(
-//      RaisableVTerm.raise(arg, amount, bar),
-//      raise(body, amount, bar + 1)
-//    )
+    //    case TypeCase(arg, cases, default) => TypeCase(
+    //      RaisableVTerm.raise(arg, amount, bar),
+    //      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap,
+    //      raise(default, amount, bar + 1)
+    //    )
+    //    case DataCase(arg, cases) => DataCase(
+    //      RaisableVTerm.raise(arg, amount, bar),
+    //      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap
+    //    )
+    //    case EqualityCase(arg, body) => EqualityCase(
+    //      RaisableVTerm.raise(arg, amount, bar),
+    //      raise(body, amount, bar + 1)
+    //    )
     case Continuation(capturedStack) => Continuation(
       capturedStack.map(raise(_, amount, bar)),
     )
@@ -86,11 +102,17 @@ given RaisableCTerm: Raisable[CTerm] with
       raise(inputType, amount, bar),
       raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
-      handlers.view.mapValues{ case (n, c) => (n, raise(c, amount, bar + n + 2))}.toMap,
+      handlers.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 2)) }.toMap,
       raise(input, amount, bar),
     )
-    case Alloc(heap, ty) => Alloc(RaisableVTerm.raise(heap, amount, bar), RaisableVTerm.raise(ty, amount, bar))
-    case Set(call, value) => Set(RaisableVTerm.raise(call, amount, bar), RaisableVTerm.raise(value, amount, bar))
+    case Alloc(heap, ty) => Alloc(
+      RaisableVTerm.raise(heap, amount, bar),
+      RaisableVTerm.raise(ty, amount, bar)
+    )
+    case Set(call, value) => Set(
+      RaisableVTerm.raise(call, amount, bar),
+      RaisableVTerm.raise(value, amount, bar)
+    )
     case Get(cell) => Get(RaisableVTerm.raise(cell, amount, bar))
     case HeapHandler(inputType, outputType, key, heapContent, input) => HeapHandler(
       raise(inputType, amount, bar + 1),
@@ -101,8 +123,12 @@ given RaisableCTerm: Raisable[CTerm] with
     )
 
 given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
-  override def substitute(v: VTerm, substitutor: PartialSubstitution[VTerm], offset: Int): VTerm = v match
-    case Refl | EffectsType | LevelType | _: LevelLiteral | HeapType | GlobalHeap | _: Heap | _: Cell => v
+  override def substitute(
+    v: VTerm,
+    substitutor: PartialSubstitution[VTerm],
+    offset: Int
+  ): VTerm = v match
+    case Refl | LevelType | EffectsType | HeapType | GlobalHeap | _: Heap | _: Cell => v
     case VUniverse(level) => VUniverse(substitute(level, substitutor, offset))
     case LocalRef(idx) => substitutor(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
@@ -117,19 +143,41 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       substitute(left, substitutor, offset),
       substitute(right, substitutor, offset),
     )
-    case EffectsLiteral(effects) => EffectsLiteral(effects.map(_.map(substitute(_, substitutor, offset))))
-    case EffectsUnion(effects1, effects2) => EffectsUnion(
-      substitute(effects1, substitutor, offset),
-      substitute(effects2, substitutor, offset)
+    case Effects(literal, unionOperands) =>
+      val operands = unionOperands.map(substitute(_, substitutor, offset))
+      val newLiteral = literal.to(mutable.ArrayBuffer)
+      val newOperands = mutable.ArrayBuffer[LocalRef]()
+      for operand <- operands do
+        operand match
+          case r: LocalRef => newOperands.append(r)
+          case Effects(literal, operands) =>
+            newLiteral.appendAll(literal)
+            newOperands.appendAll(operands)
+          case _ => throw IllegalArgumentException("type error")
+      Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
+    case Level(literal, maxOperands) =>
+      val operands = maxOperands.map{ (ref, lOffset) => (substitute(ref, substitutor, offset), lOffset) }
+      var newLiteral = literal
+      val newOperands = mutable.ArrayBuffer[(LocalRef, Nat)]()
+      for (t, lOffset) <- operands do
+        t match
+          case r: LocalRef => newOperands.append((r, lOffset))
+          case Level(literal, operands) =>
+            newOperands.addAll(operands.map{ (r, o) => (r, o + lOffset) })
+            newLiteral = math.max(literal, newLiteral)
+          case _ => throw IllegalArgumentException("type error")
+      Level(newLiteral, ListMap.from(newOperands))
+    case CellType(heap, ty) => CellType(
+      substitute(heap, substitutor, offset),
+      substitute(ty, substitutor, offset)
     )
-    case CompoundLevel(offset, operands) => CompoundLevel(
-      offset,
-      operands.map((v: VTerm) => substitute(v, substitutor, offset))
-    )
-    case CellType(heap, ty) => CellType(substitute(heap, substitutor, offset), substitute(ty, substitutor, offset))
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
-  override def substitute(c: CTerm, substitutor: PartialSubstitution[VTerm], offset: Int): CTerm = c match
+  override def substitute(
+    c: CTerm,
+    substitutor: PartialSubstitution[VTerm],
+    offset: Int
+  ): CTerm = c match
     case Computation | _: GlobalRef => c
     case CUniverse(effects, level) => CUniverse(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
@@ -141,14 +189,20 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       SubstitutableVTerm.substitute(vTerm, substitutor, offset)
     )
     case Return(v) => Return(SubstitutableVTerm.substitute(v, substitutor, offset))
-    case Let(t, ctx) => Let(substitute(t, substitutor, offset), substitute(ctx, substitutor, offset))
-    case DLet(t, ctx) => DLet(substitute(t, substitutor, offset), substitute(ctx, substitutor, offset))
+    case Let(t, ctx) => Let(
+      substitute(t, substitutor, offset),
+      substitute(ctx, substitutor, offset)
+    )
+    case DLet(t, ctx) => DLet(
+      substitute(t, substitutor, offset),
+      substitute(ctx, substitutor, offset)
+    )
     case FunctionType(effects, binding, bodyTy) => FunctionType(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
       binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       substitute(bodyTy, substitutor, offset + 1)
     )
-//    case Lambda(body) => Lambda(substitute(body, substitutor, offset + 1))
+    //    case Lambda(body) => Lambda(substitute(body, substitutor, offset + 1))
     case Application(fun, arg) => Application(
       substitute(fun, substitutor, offset),
       SubstitutableVTerm.substitute(arg, substitutor, offset)
@@ -158,24 +212,25 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       qn,
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
-//    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitutor, offset)).toMap)
+    //    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitutor, offset)).toMap)
     case Projection(rec, name) => Projection(substitute(rec, substitutor, offset), name)
-//    case TypeCase(arg, cases, default) => TypeCase(
-//      SubstitutableVTerm.substitute(arg, substitutor, offset),
-//      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap,
-//      substitute(default, substitutor, offset + 1)
-//    )
-//    case DataCase(arg, cases) => DataCase(
-//      SubstitutableVTerm.substitute(arg, substitutor, offset),
-//      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap
-//    )
-//    case EqualityCase(arg, body) => EqualityCase(
-//      SubstitutableVTerm.substitute(arg, substitutor, offset),
-//      substitute(body, substitutor, offset + 1)
-//    )
+    //    case TypeCase(arg, cases, default) => TypeCase(
+    //      SubstitutableVTerm.substitute(arg, substitutor, offset),
+    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap,
+    //      substitute(default, substitutor, offset + 1)
+    //    )
+    //    case DataCase(arg, cases) => DataCase(
+    //      SubstitutableVTerm.substitute(arg, substitutor, offset),
+    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap
+    //    )
+    //    case EqualityCase(arg, body) => EqualityCase(
+    //      SubstitutableVTerm.substitute(arg, substitutor, offset),
+    //      substitute(body, substitutor, offset + 1)
+    //    )
     case Continuation(capturedStack) =>
-      Continuation(capturedStack.map(substitute(_, substitutor, offset)),
-    )
+      Continuation(
+        capturedStack.map(substitute(_, substitutor, offset)),
+      )
     case OperatorCall(eff, name, args) => OperatorCall(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       name,
@@ -186,7 +241,12 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       substitute(inputType, substitutor, offset),
       substitute(outputType, substitutor, offset),
       substitute(transform, substitutor, offset + 1),
-      handlers.view.mapValues{ case (n, c) => (n, substitute(c, substitutor, offset + n + 2)) }.toMap,
+      handlers.view.mapValues { case (n, c) => (n, substitute(
+        c,
+        substitutor,
+        offset + n + 2
+      ))
+      }.toMap,
       substitute(input, substitutor, offset),
     )
     case Alloc(heap, ty) => Alloc(

@@ -53,12 +53,10 @@ enum VTerm:
   case Refl
 
   case EffectsType extends VTerm, QualifiedNameOwner(EffectsQn)
-  case EffectsLiteral(effects: ListSet[Effect])
-  case EffectsUnion(effects1: VTerm, effects2: VTerm)
+  case Effects(literal: ListSet[Effect], unionOperands: ListSet[VTerm.LocalRef])
 
   case LevelType extends VTerm, QualifiedNameOwner(LevelQn)
-  case LevelLiteral(value: Nat)
-  case CompoundLevel(offset: Nat, operands: ListSet[VTerm])
+  case Level(literal: Nat, maxOperands: ListMap[VTerm.LocalRef, /* offset */ Nat])
 
   /** archon.builtin.Heap */
   case HeapType extends VTerm, QualifiedNameOwner(HeapQn)
