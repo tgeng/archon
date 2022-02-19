@@ -163,8 +163,9 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
         t match
           case r: LocalRef => newOperands.append((r, lOffset))
           case Level(literal, operands) =>
-            newOperands.addAll(operands.map{ (r, o) => (r, o + lOffset) })
-            newLiteral = math.max(literal, newLiteral)
+            val offsetOperands = operands.map { (r, o) => (r, o + lOffset) }
+            newOperands.addAll(offsetOperands)
+            newLiteral = (Seq(math.max(literal, newLiteral)) ++ offsetOperands.map{ (_, o) => o }).max
           case _ => throw IllegalArgumentException("type error")
       Level(newLiteral, ListMap.from(newOperands))
     case CellType(heap, ty) => CellType(

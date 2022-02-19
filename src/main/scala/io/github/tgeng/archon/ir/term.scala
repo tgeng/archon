@@ -24,6 +24,7 @@ type Nat = Int
 class HeapKey
 
 type Effect = (QualifiedName, Arguments)
+
 import Builtins._
 
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
@@ -77,13 +78,39 @@ enum VTerm:
    */
   case Cell(heapKey: HeapKey, index: Nat)
 
+object VTerm:
+  def LevelLiteral(n: Nat): Level = new Level(n, ListMap())
+
+  def LevelSuc(t: VTerm): VTerm = t match
+    case Level(literal, maxOperands) => Level(literal + 1, maxOperands.map { (r, o) => (r, o + 1) })
+    case r: LocalRef => Level(1, ListMap((r, 1)))
+    case _ => throw IllegalArgumentException("type error")
+
+  def LevelMax(t1: VTerm, t2: VTerm) = t1 match
+    case Level(literal1, maxOperands1) => t2 match
+      case Level(literal2, maxOperands2) => Level(
+        math.max(literal1, literal2),
+        ListMap.from(
+          (maxOperands1.toSeq ++ maxOperands2.toSeq)
+            .groupBy(_._1)
+            .map { (k, vs) => (k, vs.map(_._2).max) }
+        )
+      )
+      case r: LocalRef => Level(literal1, maxOperands1.updated(r, 0))
+      case _ => throw IllegalArgumentException("type error")
+    case r1: LocalRef => t2 match
+      case Level(literal2, maxOperands2) => Level(literal2, maxOperands2.updated(r1, 0))
+      case r2: LocalRef => Level(0, ListMap((r1, 0), (r2, 0)))
+      case _ => throw IllegalArgumentException("type error")
+    case _ => throw IllegalArgumentException("type error")
+
 sealed trait CType:
   def effects: VTerm
 
 enum CTerm:
   /**
-   *  Used in stack machine to represent the computations above the computation term containing
-   *  this. For example, `f a b` converted to the stack machine becomes
+   * Used in stack machine to represent the computations above the computation term containing
+   * this. For example, `f a b` converted to the stack machine becomes
    *  - f
    *  - Application(Computation, a)
    *  - Application(Computation, b)
