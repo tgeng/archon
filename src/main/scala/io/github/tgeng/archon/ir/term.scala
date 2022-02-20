@@ -37,7 +37,7 @@ extension (eff: Eff)
 enum VTerm:
   case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
 
-  case LocalRef(index: Nat)
+  case Var(index: Nat)
 
   /** archon.builtin.U */
   case U(cty: CTerm)
@@ -55,10 +55,10 @@ enum VTerm:
   case Refl
 
   case EffectsType extends VTerm, QualifiedNameOwner(EffectsQn)
-  case Effects(literal: ListSet[Eff], unionOperands: ListSet[VTerm.LocalRef])
+  case Effects(literal: ListSet[Eff], unionOperands: ListSet[VTerm.Var])
 
   case LevelType extends VTerm, QualifiedNameOwner(LevelQn)
-  case Level(literal: Nat, maxOperands: ListMap[VTerm.LocalRef, /* offset */ Nat])
+  case Level(literal: Nat, maxOperands: ListMap[VTerm.Var, /* offset */ Nat])
 
   /** archon.builtin.Heap */
   case HeapType extends VTerm, QualifiedNameOwner(HeapQn)
@@ -84,7 +84,7 @@ object VTerm:
       literal + 1,
       maxOperands.map { (r, o) => (r, o + 1) }
     )
-    case r: LocalRef => new Level(1, ListMap((r, 1)))
+    case r: Var => new Level(1, ListMap((r, 1)))
     case _ => throw IllegalArgumentException("type error")
 
   def LevelMax(t1: VTerm, t2: VTerm): Level = t1 match
@@ -97,11 +97,11 @@ object VTerm:
             .map { (k, vs) => (k, vs.map(_._2).max) }
         )
       )
-      case r: LocalRef => new Level(literal1, maxOperands1.updated(r, 0))
+      case r: Var => new Level(literal1, maxOperands1.updated(r, 0))
       case _ => throw IllegalArgumentException("type error")
-    case r1: LocalRef => t2 match
+    case r1: Var => t2 match
       case Level(literal2, maxOperands2) => new Level(literal2, maxOperands2.updated(r1, 0))
-      case r2: LocalRef => new Level(0, ListMap((r1, 0), (r2, 0)))
+      case r2: Var => new Level(0, ListMap((r1, 0), (r2, 0)))
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
@@ -110,11 +110,11 @@ object VTerm:
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects = effects1 match
     case Effects(literal1, unionOperands1) => effects2 match
       case Effects(literal2, unionOperands2) => new Effects(literal1 ++ literal2, unionOperands1 ++ unionOperands2)
-      case r: LocalRef => new Effects(literal1, unionOperands1 + r)
+      case r: Var => new Effects(literal1, unionOperands1 + r)
       case _ => throw IllegalArgumentException("type error")
-    case r1: LocalRef => effects2 match
+    case r1: Var => effects2 match
       case Effects(literal2, unionOperands2) => new Effects(literal2, unionOperands2 + r1)
-      case r2: LocalRef => new Effects(ListSet(), ListSet(r1, r2))
+      case r2: Var => new Effects(ListSet(), ListSet(r1, r2))
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
@@ -135,7 +135,7 @@ enum CTerm:
   /** archon.builtin.CUniverse */
   case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
 
-  case GlobalRef(qn: QualifiedName)
+  case Def(qn: QualifiedName)
 
   case Force(v: VTerm)
 

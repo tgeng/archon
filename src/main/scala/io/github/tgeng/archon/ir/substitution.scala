@@ -21,7 +21,7 @@ given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int): VTerm = v match
     case Refl | EffectsType | LevelType | HeapType | _: Heap => v
     case VUniverse(level) => VUniverse(raise(level, amount, bar))
-    case LocalRef(idx) => if idx >= bar then LocalRef(idx + amount) else v
+    case Var(idx) => if idx >= bar then Var(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
     case Thunk(c) => Thunk(RaisableCTerm.raise(c, amount, bar))
     case DataType(qn, args) => DataType(qn, args.map((v: VTerm) => raise(v, amount, bar)))
@@ -34,12 +34,12 @@ given RaisableVTerm: Raisable[VTerm] with
     )
     case Level(literal, maxOperands) => Level(
       literal,
-      maxOperands.map { (k, v) => (raise(k, amount, bar).asInstanceOf[VTerm.LocalRef], v) }
+      maxOperands.map { (k, v) => (raise(k, amount, bar).asInstanceOf[VTerm.Var], v) }
     )
     case Effects(literal, unionOperands) => Effects(
       literal, unionOperands.map(
         raise(_, amount, bar)
-          .asInstanceOf[VTerm.LocalRef]
+          .asInstanceOf[VTerm.Var]
       )
     )
     case CellType(heap, ty) => CellType(raise(heap, amount, bar), raise(ty, amount, bar))
@@ -47,7 +47,7 @@ given RaisableVTerm: Raisable[VTerm] with
 
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
-    case Computation | _: GlobalRef => c
+    case Computation | _: Def => c
     case CUniverse(effects, level) => CUniverse(
       RaisableVTerm.raise(effects, amount, bar),
       RaisableVTerm.raise(level, amount, bar)
@@ -137,7 +137,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
   ): VTerm = v match
     case Refl | LevelType | EffectsType | HeapType | _: Heap => v
     case VUniverse(level) => VUniverse(substitute(level, substitutor, offset))
-    case LocalRef(idx) => substitutor(idx - offset) match
+    case Var(idx) => substitutor(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
       case _ => v
     case U(cty) => U(SubstitutableCTerm.substitute(cty, substitutor, offset))
@@ -153,10 +153,10 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     case Effects(literal, unionOperands) =>
       val operands = unionOperands.map(substitute(_, substitutor, offset))
       val newLiteral = literal.to(mutable.ArrayBuffer)
-      val newOperands = mutable.ArrayBuffer[LocalRef]()
+      val newOperands = mutable.ArrayBuffer[Var]()
       for operand <- operands do
         operand match
-          case r: LocalRef => newOperands.append(r)
+          case r: Var => newOperands.append(r)
           case Effects(literal, operands) =>
             newLiteral.appendAll(literal)
             newOperands.appendAll(operands)
@@ -171,10 +171,10 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
         ), lOffset)
       }
       var newLiteral = literal
-      val newOperands = mutable.ArrayBuffer[(LocalRef, Nat)]()
+      val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
       for (t, lOffset) <- operands do
         t match
-          case r: LocalRef => newOperands.append((r, lOffset))
+          case r: Var => newOperands.append((r, lOffset))
           case Level(literal, operands) =>
             val offsetOperands = operands.map { (r, o) => (r, o + lOffset) }
             newOperands.addAll(offsetOperands)
@@ -198,7 +198,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     substitutor: PartialSubstitution[VTerm],
     offset: Int
   ): CTerm = c match
-    case Computation | _: GlobalRef => c
+    case Computation | _: Def => c
     case CUniverse(effects, level) => CUniverse(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
       SubstitutableVTerm.substitute(level, substitutor, offset)

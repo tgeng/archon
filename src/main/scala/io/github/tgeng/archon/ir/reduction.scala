@@ -80,12 +80,12 @@ private final class StackMachine(
           Right(pc)
         else
           run(substComputation(stack.pop(), pc), true)
-      case GlobalRef(qn) =>
+      case Def(qn) =>
         val definition = signature.getDef(qn)
         if useCaseTree then
           val caseTree = definition.caseTree
           //      case TypeCase(arg, cases, default) => arg match
-          //        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
           //          val (count, body) = cases(q.qualifiedName)
           //          q match
@@ -103,7 +103,7 @@ private final class StackMachine(
           //              run(body.substLowers(arg))
           //        case _ => run(default.substLowers(arg))
           //      case DataCase(arg, cases) => arg match
-          //        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //        case Con(name, args) if cases.contains(name) =>
           //          val (count, body) = cases(name)
           //          assert(count == args.length)
@@ -112,7 +112,7 @@ private final class StackMachine(
           //      case EqualityCase(arg, body) =>
           //        arg match
           //          case Refl => run(body.substLowers(Refl))
-          //          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          //          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //          case _ => throw IllegalArgumentException("type error")
           ??? // TODO: implement reduction with case tree
         else
@@ -139,7 +139,7 @@ private final class StackMachine(
             case None => throw IllegalArgumentException(s"leaky pattern in $qn")
       case Force(v) => v match
         case Thunk(c) => run(c)
-        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
         case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
@@ -218,7 +218,7 @@ private final class StackMachine(
           run(input)
       case Alloc(heap, ty) =>
         heap match
-          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case Heap(heapKey) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
@@ -236,7 +236,7 @@ private final class StackMachine(
           case _ => throw IllegalArgumentException("type error")
       case Set(cell, value) =>
         cell match
-          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case Cell(heapKey, index, _) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
@@ -253,7 +253,7 @@ private final class StackMachine(
           case _ => throw IllegalArgumentException("type error")
       case Get(cell) =>
         cell match
-          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           case Cell(heapKey, index, _) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
@@ -331,7 +331,7 @@ private final class StackMachine(
           case (PProjection(_), Value(_)) |
                (_, Proj(_)) |
                (PAbsurd, _) => throw IllegalArgumentException("type error")
-          case (_, Value(LocalRef(_))) => status = MatchingStatus.Stuck
+          case (_, Value(Var(_))) => status = MatchingStatus.Stuck
           // Note that we make mismatch dominating stuck because we do not eval by case tree during
           // type checking.
           case _ => return MatchingStatus.Mismatch

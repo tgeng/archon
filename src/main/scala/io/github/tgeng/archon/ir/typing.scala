@@ -23,7 +23,7 @@ def checkVType(tm: VTerm, ty: VTerm)
     case VUniverse(l1) =>
       sys.addEquality(VUniverse(LevelSuc(l1)), ty) >>
         checkVType(l1, LevelType)
-    case r: LocalRef => sys.addEquality(Γ(r).ty, ty)
+    case r: Var => sys.addEquality(Γ(r).ty, ty)
     case U(cty) =>
       val level = sys.newVHole(LevelType)
       sys.addEquality(ty, VUniverse(level)) >> checkCType(cty, CUniverse(Total, level))
@@ -84,12 +84,23 @@ def checkVTypes(tms: List[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using sys: ConstraintSystem): Either[Error, Unit] =
-  ???
+  if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
+  else allRight(tms.zip(tys).map{ (tm, binding) => checkVType(tm, binding.ty) })
 
 def checkCType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using sys: ConstraintSystem): Either[Error, Unit] = ???
+  (using sys: ConstraintSystem): Either[Error, Unit] = tm match
+  case Computation => throw IllegalArgumentException(s"$tm not expected for type checking")
+  case CUniverse(effects, l1) =>
+    sys.addEquality(ty, CUniverse(Total, LevelSuc(l1))) >>
+      checkVType(effects, EffectsType) >>
+      checkVType(l1, LevelType)
+  case Def(qn) =>
+    val definition = Σ.getDef(qn)
+    sys.addEquality(ty, definition.ty)
+  case Force(v) => ???
+  case _ => ???
 
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   es.first {

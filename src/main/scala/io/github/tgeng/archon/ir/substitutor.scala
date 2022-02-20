@@ -6,7 +6,7 @@ trait DeBruijn[T]:
   def fromIndex(index: Nat): T
 
 given DeBruijnVTerm: DeBruijn[VTerm] with
-  override def fromIndex(index: Nat): VTerm = VTerm.LocalRef(index)
+  override def fromIndex(index: Nat): VTerm = VTerm.Var(index)
 
 given DeBruijnPattern: DeBruijn[Pattern] with
   override def fromIndex(index: Nat): Pattern = Pattern.PRef(index)
