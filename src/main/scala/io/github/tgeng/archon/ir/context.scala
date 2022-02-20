@@ -10,5 +10,7 @@ type Telescope = List[Binding[VTerm]]
  */
 type Context = Vector[Binding[VTerm]]
 
-extension [T] (v: Vector[T])
-  def apply(ref: VTerm.LocalRef) : T = v(v.length - ref.idx - 1)
+extension (v: Vector[Binding[VTerm]])
+  def apply(ref: VTerm.LocalRef) : Binding[VTerm] =
+    val offset = ref.index + 1
+    v(v.length - offset).map(RaisableVTerm.raise(_, offset))

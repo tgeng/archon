@@ -70,27 +70,27 @@ private final class StackMachine(
           //          q match
           //            case VUniverse(level) =>
           //              assert(count == 1)
-          //              run(body.substHead(arg, level))
+          //              run(body.substLowers(arg, level))
           //            case DataType(qn, args) =>
           //              assert(count == args.length)
-          //              run(body.substHead(arg +: args: _*))
+          //              run(body.substLowers(arg +: args: _*))
           //            case EqualityType(level, ty, left, right) =>
           //              assert(count == 4)
-          //              run(body.substHead(arg, level, ty, left, right))
+          //              run(body.substLowers(arg, level, ty, left, right))
           //            case EffectsType | LevelType | HeapType =>
           //              assert(count == 1)
-          //              run(body.substHead(arg))
-          //        case _ => run(default.substHead(arg))
+          //              run(body.substLowers(arg))
+          //        case _ => run(default.substLowers(arg))
           //      case DataCase(arg, cases) => arg match
           //        case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //        case Con(name, args) if cases.contains(name) =>
           //          val (count, body) = cases(name)
           //          assert(count == args.length)
-          //          run(body.substHead(arg +: args: _*))
+          //          run(body.substLowers(arg +: args: _*))
           //        case _ => throw IllegalArgumentException("type error")
           //      case EqualityCase(arg, body) =>
           //        arg match
-          //          case Refl => run(body.substHead(Refl))
+          //          case Refl => run(body.substLowers(Refl))
           //          case _: LocalRef => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //          case _ => throw IllegalArgumentException("type error")
           ??? // TODO: implement reduction with case tree
@@ -118,14 +118,14 @@ private final class StackMachine(
         case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
-          case Return(v) => run(ctx.substHead(v))
+          case Return(v) => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(t)
       case DLet(t, ctx) =>
         t match
-          case Return(v) => run(ctx.substHead(v))
+          case Return(v) => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -167,7 +167,7 @@ private final class StackMachine(
               ) +: cterms.reverseIterator.toSeq
 
               val resume = Thunk(Continuation(capturedStack))
-              nextComputation = handlerBody.substHead(args :+ resume: _*)
+              nextComputation = handlerBody.substLowers(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
             // remove unnecessary computations with Computation so substitution and raise on the stack becomes more efficient
             case HeapHandler(_, _, Some(heapKey), _, _) =>
@@ -187,7 +187,7 @@ private final class StackMachine(
           case _ => throw IllegalArgumentException("type error")
       case Handler(eff, inputType, outputType, transform, handlers, input) =>
         if reduceDown then
-          run(transform.substHead(Thunk(input)))
+          run(transform.substLowers(Thunk(input)))
         else
           stack.push(pc)
           run(input)
@@ -236,7 +236,7 @@ private final class StackMachine(
           val key = new HeapKey
           updateHeapKeyIndex(key, stack.length)
           stack.push(HeapHandler(inputType, outputType, Some(key), heapContent, input))
-          run(input.substHead(Heap(key)))
+          run(input.substLowers(Heap(key)))
 
   private enum Elimination:
     case Value(v: VTerm)

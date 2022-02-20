@@ -122,6 +122,12 @@ given RaisableCTerm: Raisable[CTerm] with
       raise(input, amount, bar + 1)
     )
 
+given RaisableTelescope: Raisable[Telescope] with
+  override def raise(telescope: Telescope, amount: Int, bar: Int): Telescope = telescope match
+    case Nil => Nil
+    case binding :: telescope =>
+      binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(telescope, amount, bar + 1)
+
 given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
   override def substitute(
     v: VTerm,
@@ -156,7 +162,13 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
           case _ => throw IllegalArgumentException("type error")
       Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
     case Level(literal, maxOperands) =>
-      val operands = maxOperands.map{ (ref, lOffset) => (substitute(ref, substitutor, offset), lOffset) }
+      val operands = maxOperands.map { (ref, lOffset) =>
+        (substitute(
+          ref,
+          substitutor,
+          offset
+        ), lOffset)
+      }
       var newLiteral = literal
       val newOperands = mutable.ArrayBuffer[(LocalRef, Nat)]()
       for (t, lOffset) <- operands do
@@ -165,7 +177,12 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
           case Level(literal, operands) =>
             val offsetOperands = operands.map { (r, o) => (r, o + lOffset) }
             newOperands.addAll(offsetOperands)
-            newLiteral = (Seq(math.max(literal, newLiteral)) ++ offsetOperands.map{ (_, o) => o }).max
+            newLiteral = (Seq(
+              math.max(
+                literal,
+                newLiteral
+              )
+            ) ++ offsetOperands.map { (_, o) => o }).max
           case _ => throw IllegalArgumentException("type error")
       Level(newLiteral, ListMap.from(newOperands))
     case CellType(heap, ty) => CellType(
@@ -267,6 +284,16 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       substitute(input, substitutor, offset + 1)
     )
 
+given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
+  override def substitute(
+    telescope: Telescope,
+    substitutor: PartialSubstitution[VTerm],
+    offset: Int
+  ): Telescope = telescope match
+    case Nil => Nil
+    case binding :: telescope =>
+      binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)) :: substitute(telescope, substitutor, offset + 1)
+
 extension (c: CTerm)
   def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitutor)
   def weakened = c.weaken(1, 0)
@@ -274,7 +301,12 @@ extension (c: CTerm)
   def strengthened = c.strengthen(1, 0)
   def strengthen(amount: Nat, at: Nat) = RaisableCTerm.raise(c, -amount, at)
 
-  def substHead(vTerms: VTerm*) = c
+  /**
+   * Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest
+   * index with the last substitutes 0. Then the result is raised so that the substituted indices
+   * are taken by other (deeper) indices.
+   */
+  def substLowers(vTerms: VTerm*) = c
     // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
     .strengthen(vTerms.length, 0)
     // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
@@ -288,3 +320,36 @@ extension (v: VTerm)
   def weakened = v.weaken(1, 0)
   def strengthened = v.strengthen(1, 0)
   def strengthen(amount: Nat, at: Nat) = RaisableVTerm.raise(v, -amount, at)
+
+  /**
+   * Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest
+   * index with the last substitutes 0. Then the result is raised so that the substituted indices
+   * are taken by other (deeper) indices.
+   */
+  def substLowers(vTerms: VTerm*) = v
+    // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
+    .strengthen(vTerms.length, 0)
+    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
+    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
+    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
+    .subst(i => vTerms.lift(-(i + 1)))
+
+extension (telescope: Telescope)
+  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableTelescope.substitute(telescope, substitutor)
+  def weaken(amount: Nat, at: Nat) = RaisableTelescope.raise(telescope, amount, at)
+  def weakened = telescope.weaken(1, 0)
+  def strengthened = telescope.strengthen(1, 0)
+  def strengthen(amount: Nat, at: Nat) = RaisableTelescope.raise(telescope, -amount, at)
+
+  /**
+   * Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest
+   * index with the last substitutes 0. Then the result is raised so that the substituted indices
+   * are taken by other (deeper) indices.
+   */
+  def substLowers(vTerms: VTerm*) = telescope
+    // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
+    .strengthen(vTerms.length, 0)
+    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
+    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
+    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
+    .subst(i => vTerms.lift(-(i + 1)))

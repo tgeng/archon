@@ -36,7 +36,7 @@ extension (eff: Effect)
 enum VTerm:
   case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
 
-  case LocalRef(idx: Nat)
+  case LocalRef(index: Nat)
 
   /** archon.builtin.U */
   case U(cty: CTerm)
@@ -107,7 +107,8 @@ object VTerm:
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
-  def EffectsLiteral(effects: Iterable[Effect]): Effects = Effects(ListSet.from(effects), ListSet.empty)
+  def Total = EffectsLiteral(ListSet.empty)
+  def EffectsLiteral(effects: ListSet[Effect]): Effects = Effects(effects, ListSet.empty)
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects = effects1 match
     case Effects(literal1, unionOperands1) => effects2 match
       case Effects(literal2, unionOperands2) => new Effects(literal1 ++ literal2, unionOperands1 ++ unionOperands2)
