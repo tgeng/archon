@@ -10,7 +10,7 @@ enum Declaration:
 
   def qn: QualifiedName
 
-import Declaration._
+import Declaration.*
 
 case class Constructor(name: Name, argTys: Telescope)
 case class Operator(name: Name, argTys: Telescope, resultTy: CTerm)

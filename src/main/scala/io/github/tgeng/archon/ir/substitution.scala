@@ -19,7 +19,7 @@ import CTerm.*
 
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int): VTerm = v match
-    case Refl | EffectsType | LevelType | HeapType | GlobalHeap | _: Heap | _: Cell => v
+    case Refl | EffectsType | LevelType | HeapType | _: Heap => v
     case VUniverse(level) => VUniverse(raise(level, amount, bar))
     case LocalRef(idx) => if idx >= bar then LocalRef(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
@@ -43,6 +43,7 @@ given RaisableVTerm: Raisable[VTerm] with
       )
     )
     case CellType(heap, ty) => CellType(raise(heap, amount, bar), raise(ty, amount, bar))
+    case Cell(heapKey, index, ty) => Cell(heapKey, index, raise(ty, amount, bar))
 
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
@@ -134,7 +135,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     substitutor: PartialSubstitution[VTerm],
     offset: Int
   ): VTerm = v match
-    case Refl | LevelType | EffectsType | HeapType | GlobalHeap | _: Heap | _: Cell => v
+    case Refl | LevelType | EffectsType | HeapType | _: Heap => v
     case VUniverse(level) => VUniverse(substitute(level, substitutor, offset))
     case LocalRef(idx) => substitutor(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
@@ -189,6 +190,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       substitute(heap, substitutor, offset),
       substitute(ty, substitutor, offset)
     )
+    case Cell(heapKey, index, ty) => Cell(heapKey, index, substitute(ty, substitutor, offset))
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
   override def substitute(

@@ -22,16 +22,17 @@ type Arguments = List[VTerm]
 type Nat = Int
 
 class HeapKey
+val GlobalHeapKey = new HeapKey
 
-type Effect = (QualifiedName, Arguments)
+type Eff = (QualifiedName, Arguments)
 
 import Builtins._
 
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
 
-extension (eff: Effect)
-  def map[S](f: VTerm => VTerm): Effect = (eff._1, eff._2.map(f))
+extension (eff: Eff)
+  def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
 enum VTerm:
   case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
@@ -54,16 +55,13 @@ enum VTerm:
   case Refl
 
   case EffectsType extends VTerm, QualifiedNameOwner(EffectsQn)
-  case Effects(literal: ListSet[Effect], unionOperands: ListSet[VTerm.LocalRef])
+  case Effects(literal: ListSet[Eff], unionOperands: ListSet[VTerm.LocalRef])
 
   case LevelType extends VTerm, QualifiedNameOwner(LevelQn)
   case Level(literal: Nat, maxOperands: ListMap[VTerm.LocalRef, /* offset */ Nat])
 
   /** archon.builtin.Heap */
   case HeapType extends VTerm, QualifiedNameOwner(HeapQn)
-
-  /** Any need for leaky heap usage goes here. */
-  case GlobalHeap
 
   /**
    * Internal only, created by [[CTerm.HeapHandler]]
@@ -76,7 +74,7 @@ enum VTerm:
   /**
    * Internal only, created by [[CTerm.Alloc]]
    */
-  case Cell(heapKey: HeapKey, index: Nat)
+  case Cell(heapKey: HeapKey, index: Nat, ty: VTerm)
 
 object VTerm:
   def LevelLiteral(n: Nat): Level = new Level(n, ListMap())
@@ -108,7 +106,7 @@ object VTerm:
     case _ => throw IllegalArgumentException("type error")
 
   def Total = EffectsLiteral(ListSet.empty)
-  def EffectsLiteral(effects: ListSet[Effect]): Effects = Effects(effects, ListSet.empty)
+  def EffectsLiteral(effects: ListSet[Eff]): Effects = Effects(effects, ListSet.empty)
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects = effects1 match
     case Effects(literal1, unionOperands1) => effects2 match
       case Effects(literal2, unionOperands2) => new Effects(literal1 ++ literal2, unionOperands1 ++ unionOperands2)
@@ -158,7 +156,7 @@ enum CTerm:
   case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments = Nil) extends CTerm, CType
   case Projection(rec: CTerm, name: Name)
 
-  case OperatorCall(eff: Effect, name: Name, args: Arguments = Nil)
+  case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
 
   /**
    * A continuation behaves like a function, it has type `U inputType -> outputType`, where
@@ -173,7 +171,7 @@ enum CTerm:
   case Continuation(capturedStack: Seq[CTerm])
 
   case Handler(
-    eff: Effect,
+    eff: Eff,
 
     /**
      * A handler is a computation transformer. The input value type is then `U inputType`. Note that the effects of
@@ -219,7 +217,7 @@ enum CTerm:
      * This is the output type. The effects of the output type should be exactly `otherEffects`.
      * Note that we do not allow heap to be leaked through `outputType` by existential types like (t: Type, x: t) where
      * `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
-     * flexibility is needed, one should use `GlobalHeap` instead.
+     * flexibility is needed, one should use `GlobalHeapKey` instead.
      */
     outputType: CTerm,
 
