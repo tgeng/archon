@@ -8,12 +8,13 @@ import Error.*
 
 trait ConstraintSystem:
   def addEquality(t1: VTerm, t2: VTerm)(using Γ: Context)(using Σ: Signature): Either[Error, Unit]
-
   def addEquality(t1: CTerm, t2: CTerm)(using Γ: Context)(using Σ: Signature): Either[Error, Unit]
 
-  def newVHole(ty: VTerm)(using Γ: Context)(using Σ: Signature): VTerm
+  def addTyping(tm: VTerm, ty: VTerm)(using Γ: Context)(using Σ: Signature): Either[Error, Unit]
+  def addTyping(tm: CTerm, ty: CTerm)(using Γ: Context)(using Σ: Signature): Either[Error, Unit]
 
-  def newCHole(ty: CTerm)(using Γ: Context)(using Σ: Signature): CTerm
+  def newHole(ty: VTerm)(using Γ: Context)(using Σ: Signature): VTerm
+  def newHole(ty: CTerm)(using Γ: Context)(using Σ: Signature): CTerm
 
 def checkVType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
@@ -25,11 +26,11 @@ def checkVType(tm: VTerm, ty: VTerm)
         checkVType(l1, LevelType)
     case r: Var => sys.addEquality(Γ(r).ty, ty)
     case U(cty) =>
-      val level = sys.newVHole(LevelType)
+      val level = sys.newHole(LevelType)
       sys.addEquality(ty, VUniverse(level)) >> checkCType(cty, CUniverse(Total, level))
     case Thunk(c) =>
-      val level = sys.newVHole(LevelType)
-      val cty = sys.newCHole(CUniverse(Total, level))
+      val level = sys.newHole(LevelType)
+      val cty = sys.newHole(CUniverse(Total, level))
       sys.addEquality(ty, U(cty)) >> checkCType(c, cty)
     case DataType(qn, args) =>
       val data = Σ.getData(qn)
@@ -42,15 +43,15 @@ def checkVType(tm: VTerm, ty: VTerm)
           case None => Left(VTypeError(tm, ty))
           case Some(con) => checkVTypes(args, con.argTys.substLowers(tArgs: _*))
       case _ => Left(VTypeError(tm, ty))
-    case EqualityType(level, ty1, left, right) =>
+    case EqualityType(level, a, left, right) =>
       sys.addEquality(VUniverse(level), ty) >>
-        checkVType(ty1, VUniverse(level)) >>
-        checkVType(left, ty1) >>
-        checkVType(right, ty1)
+        checkVType(a, VUniverse(level)) >>
+        checkVType(left, a) >>
+        checkVType(right, a)
     case Refl =>
-      val level = sys.newVHole(LevelType)
-      val a = sys.newVHole(VUniverse(level))
-      val t = sys.newVHole(a)
+      val level = sys.newHole(LevelType)
+      val a = sys.newHole(VUniverse(level))
+      val t = sys.newHole(a)
       sys.addEquality(ty, EqualityType(level, a, t, t))
     case EffectsType => sys.addEquality(ty, VUniverse(LevelLiteral(0)))
     case Effects(literal, unionOperands) =>
@@ -68,24 +69,21 @@ def checkVType(tm: VTerm, ty: VTerm)
         allRight(maxOperands.map { (ref, _) => checkVType(ref, LevelType) })
     case HeapType => sys.addEquality(ty, VUniverse(LevelLiteral(0)))
     case Heap(_) => sys.addEquality(ty, HeapType)
-    case CellType(heap, ty1) =>
-      val level = sys.newVHole(LevelType)
-      val u = sys.newVHole(VUniverse(level))
+    case CellType(heap, a) =>
+      val level = sys.newHole(LevelType)
+      val u = VUniverse(level)
       sys.addEquality(ty, u) >>
-        checkVType(ty1, u) >>
+        checkVType(a, u) >>
         checkVType(heap, HeapType)
     case Cell(heapKey, _, a) =>
-      val level = sys.newVHole(LevelType)
-      val u = sys.newVHole(VUniverse(level))
-      sys.addEquality(ty, CellType(Heap(heapKey), a)) >>
-        checkVType(a, u)
+      sys.addEquality(ty, CellType(Heap(heapKey), a))
 
 def checkVTypes(tms: List[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using sys: ConstraintSystem): Either[Error, Unit] =
   if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
-  else allRight(tms.zip(tys).map{ (tm, binding) => checkVType(tm, binding.ty) })
+  else allRight(tms.zip(tys).map { (tm, binding) => checkVType(tm, binding.ty) })
 
 def checkCType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
@@ -99,8 +97,30 @@ def checkCType(tm: CTerm, ty: CTerm)
   case Def(qn) =>
     val definition = Σ.getDef(qn)
     sys.addEquality(ty, definition.ty)
-  case Force(v) => ???
+  case Force(v) => checkVType(v, U(ty))
+  case F(effects, vTerm) =>
+    val level = sys.newHole(LevelType)
+    sys.addEquality(ty, CUniverse(Total, level)) >>
+      checkVType(effects, EffectsType) >> checkVType(vTerm, VUniverse(level))
+  case Return(v) =>
+    val level = sys.newHole(LevelType)
+    val vTy = sys.newHole(VUniverse(level))
+    sys.addEquality(ty, F(Total, vTy)) >> checkVType(v, vTy)
   case _ => ???
+
+private def checkIsSomeType(vTerm: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using sys: ConstraintSystem): Either[Error, Unit] =
+  val level = sys.newHole(LevelType)
+  checkVType(vTerm, VUniverse(level))
+
+private def checkIsSomeType(cTerm: CTerm, effects: VTerm = Total)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using sys: ConstraintSystem): Either[Error, Unit] =
+  val level = sys.newHole(LevelType)
+  checkCType(cTerm, CUniverse(effects, level))
 
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   es.first {
