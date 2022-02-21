@@ -58,8 +58,8 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(vTerm, amount, bar)
     )
     case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
-    case Let(t, ctx) => Let(raise(t, amount, bar), raise(ctx, amount, bar))
-    case DLet(t, ctx) => DLet(raise(t, amount, bar), raise(ctx, amount, bar))
+    case Let(t, ctx) => Let(raise(t, amount, bar), raise(ctx, amount, bar + 1))
+    case DLet(t, ctx) => DLet(raise(t, amount, bar), raise(ctx, amount, bar + 1))
     case FunctionType(effects, binding, bodyTy) => FunctionType(
       RaisableVTerm.raise(effects, amount, bar),
       binding.map(RaisableVTerm.raise(_, amount, bar)),
@@ -211,11 +211,11 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     case Return(v) => Return(SubstitutableVTerm.substitute(v, substitutor, offset))
     case Let(t, ctx) => Let(
       substitute(t, substitutor, offset),
-      substitute(ctx, substitutor, offset)
+      substitute(ctx, substitutor, offset + 1)
     )
     case DLet(t, ctx) => DLet(
       substitute(t, substitutor, offset),
-      substitute(ctx, substitutor, offset)
+      substitute(ctx, substitutor, offset + 1)
     )
     case FunctionType(effects, binding, bodyTy) => FunctionType(
       SubstitutableVTerm.substitute(effects, substitutor, offset),

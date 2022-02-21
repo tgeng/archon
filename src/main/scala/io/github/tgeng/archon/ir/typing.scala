@@ -35,13 +35,13 @@ def checkVType(tm: VTerm, ty: VTerm)
     case DataType(qn, args) =>
       val data = Σ.getData(qn)
       sys.addEquality(data.ty.substLowers(args: _*), ty) >>
-        checkVTypes(args, data.paramTys)
+        checkVTypes(args, data.tParamTys)
     case Con(name, args) => ty match
       case DataType(qn, tArgs) =>
         val data = Σ.getData(qn)
         data.cons.first { c => if c.name == name then Some(c) else None } match
           case None => Left(VTypeError(tm, ty))
-          case Some(con) => checkVTypes(args, con.argTys.substLowers(tArgs: _*))
+          case Some(con) => checkVTypes(args, con.paramTys.substLowers(tArgs: _*))
       case _ => Left(VTypeError(tm, ty))
     case EqualityType(level, a, left, right) =>
       sys.addEquality(VUniverse(level), ty) >>
@@ -59,7 +59,7 @@ def checkVType(tm: VTerm, ty: VTerm)
         allRight(
           literal.map { (qn, args) =>
             val effect = Σ.getEffect(qn)
-            checkVTypes(args, effect.paramTys)
+            checkVTypes(args, effect.tParamTys)
           }
         ) >>
         allRight(unionOperands.map { ref => checkVType(ref, EffectsType) })
