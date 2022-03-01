@@ -89,7 +89,7 @@ def checkCType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using sys: ConstraintSystem): Either[Error, Unit] = tm match
-  case Computation => throw IllegalArgumentException(s"$tm not expected for type checking")
+  case Hole => throw IllegalArgumentException(s"$tm not expected for type checking")
   case CUniverse(effects, l1) =>
     sys.addEquality(ty, CUniverse(Total, LevelSuc(l1))) >>
       checkVType(effects, EffectsType) >>

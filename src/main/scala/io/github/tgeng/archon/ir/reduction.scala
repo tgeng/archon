@@ -27,11 +27,11 @@ extension[T] (a: mutable.ArrayBuffer[T])
 
 private val builtinHandlers = Seq(
   CTerm.HeapHandler(
-    CTerm.Computation, // placeholder value, not important
-    CTerm.Computation, // placeholder value, not important
+    CTerm.Hole, // placeholder value, not important
+    CTerm.Hole, // placeholder value, not important
     Some(GlobalHeapKey),
     IndexedSeq(),
-    CTerm.Computation
+    CTerm.Hole
   )
 )
 
@@ -73,13 +73,13 @@ private final class StackMachine(
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context): Either[Error, CTerm] =
     pc match
-      case Computation => throw IllegalStateException()
+      case Hole => throw IllegalStateException()
       // terminal cases
       case _: CUniverse | _: F | _: Return | _: FunctionType | _: RecordType =>
         if stack.size == builtinHandlers.length then
           Right(pc)
         else
-          run(substComputation(stack.pop(), pc), true)
+          run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
         val definition = signature.getDef(qn)
         if useCaseTree then
@@ -169,8 +169,8 @@ private final class StackMachine(
             run(rec)
       case OperatorCall(eff, name, args) =>
         val cterms = mutable.ArrayBuffer[CTerm]()
-        var nextComputation: CTerm | Null = null
-        while (nextComputation == null) {
+        var nextHole: CTerm | Null = null
+        while (nextHole == null) {
           val c = stack.pop()
           c match
             case Handler(
@@ -188,20 +188,20 @@ private final class StackMachine(
                 outputType,
                 transform,
                 handlers,
-                Computation
+                Hole
               ) +: cterms.reverseIterator.toSeq
 
               val resume = Thunk(Continuation(capturedStack))
-              nextComputation = handlerBody.substLowers(args :+ resume: _*)
+              nextHole = handlerBody.substLowers(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
-            // remove unnecessary computations with Computation so substitution and raise on the stack becomes more efficient
+            // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
             case HeapHandler(_, _, Some(heapKey), _, _) =>
               heapKeyIndex(heapKey).pop()
-              cterms.addOne(substComputation(c, Computation))
+              cterms.addOne(substHole(c, Hole))
             case _ =>
-              cterms.addOne(substComputation(c, Computation))
+              cterms.addOne(substHole(c, Hole))
         }
-        run(nextComputation.!!)
+        run(nextHole.!!)
       case Continuation(capturedStack) =>
         stack.pop() match
           case Application(_, arg) =>
@@ -231,7 +231,7 @@ private final class StackMachine(
                   heapContent :+ None,
                   input
                 )
-                run(substComputation(stack.pop(), Return(cell)))
+                run(substHole(stack.pop(), Return(cell)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case Set(cell, value) =>
@@ -248,7 +248,7 @@ private final class StackMachine(
                   heapContent.updated(index, Some(value)),
                   input
                 )
-                run(substComputation(stack.pop(), Return(Builtins.Unit)))
+                run(substHole(stack.pop(), Return(Builtins.Unit)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case Get(cell) =>
@@ -260,7 +260,7 @@ private final class StackMachine(
               case HeapHandler(_, _, _, heapContent, _) =>
                 heapContent(index) match
                   case None => Left(Error.UninitializedCell(reconstructTermFromStack(pc)))
-                  case Some(value) => run(substComputation(stack.pop(), Return(value)))
+                  case Some(value) => run(substHole(stack.pop(), Return(value)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case HeapHandler(inputType, outputType, currentKey, heapContent, input) =>
@@ -337,7 +337,7 @@ private final class StackMachine(
           case _ => return MatchingStatus.Mismatch
         matchPattern(elims, mapping, status)
 
-  private def substComputation(ctx: CTerm, c: CTerm): CTerm = ctx match
+  private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
     case Let(t, ctx) => Let(c, ctx)
     case DLet(t, ctx) => DLet(c, ctx)
     case Application(fun, arg) => Application(c, arg)
@@ -356,7 +356,7 @@ private final class StackMachine(
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
     while (stack.size >= builtinHandlers.length) {
-      current = substComputation(stack.pop(), current)
+      current = substHole(stack.pop(), current)
     }
     current
 
