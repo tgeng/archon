@@ -34,8 +34,19 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 extension (eff: Eff)
   def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
+enum ULevel:
+  case Simple(level: VTerm)
+  case ω(layer: Nat)
+
+object ULevel:
+  extension(u: ULevel)
+    def map(f: VTerm => VTerm): ULevel = u match
+      case Simple(level) => Simple(f(level))
+      case _: ULevel.ω => u
+
 enum VTerm:
-  case VUniverse(level: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
+  case VUniverse(level: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
+  case VTop(level: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
 
   case Var(index: Nat)
 
@@ -133,7 +144,8 @@ enum CTerm:
   case Hole
 
   /** archon.builtin.CUniverse */
-  case CUniverse(effects: VTerm, level: VTerm) extends CTerm, CType
+  case CUniverse(effects: VTerm, level: ULevel, upperBound: CTerm) extends CTerm, CType
+  case CTop(effects: VTerm, level: ULevel) extends CTerm, CType
 
   case Def(qn: QualifiedName)
 

@@ -20,7 +20,11 @@ import CTerm.*
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int): VTerm = v match
     case Refl | EffectsType | LevelType | HeapType | _: Heap => v
-    case VUniverse(level) => VUniverse(raise(level, amount, bar))
+    case VUniverse(level, upperBound) => VUniverse(
+      level.map(raise(_, amount, bar)),
+      raise(upperBound, amount, bar)
+    )
+    case VTop(level) => VTop(level.map(raise(_, amount, bar)))
     case Var(idx) => if idx >= bar then Var(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
     case Thunk(c) => Thunk(RaisableCTerm.raise(c, amount, bar))
@@ -48,9 +52,14 @@ given RaisableVTerm: Raisable[VTerm] with
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
     case Hole | _: Def => c
-    case CUniverse(effects, level) => CUniverse(
+    case CUniverse(effects, level, upperBound) => CUniverse(
       RaisableVTerm.raise(effects, amount, bar),
-      RaisableVTerm.raise(level, amount, bar)
+      level.map(RaisableVTerm.raise(_, amount, bar)),
+      raise(upperBound, amount, bar),
+    )
+    case CTop(effects, level) => CTop(
+      RaisableVTerm.raise(effects, amount, bar),
+      level.map(RaisableVTerm.raise(_, amount, bar)),
     )
     case Force(v) => Force(RaisableVTerm.raise(v, amount, bar))
     case F(effects, vTerm) => F(
@@ -136,7 +145,11 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     offset: Int
   ): VTerm = v match
     case Refl | LevelType | EffectsType | HeapType | _: Heap => v
-    case VUniverse(level) => VUniverse(substitute(level, substitutor, offset))
+    case VUniverse(level, upperBound) => VUniverse(
+      level.map(l => substitute(l, substitutor, offset)),
+      substitute(upperBound, substitutor, offset),
+    )
+    case VTop(level) => VTop(level.map(substitute(_, substitutor, offset)))
     case Var(idx) => substitutor(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
       case _ => v
@@ -199,9 +212,14 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     offset: Int
   ): CTerm = c match
     case Hole | _: Def => c
-    case CUniverse(effects, level) => CUniverse(
+    case CUniverse(effects, level, upperBound) => CUniverse(
       SubstitutableVTerm.substitute(effects, substitutor, offset),
-      SubstitutableVTerm.substitute(level, substitutor, offset)
+      level.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
+      substitute(upperBound, substitutor, offset),
+    )
+    case CTop(effects, level) => CTop(
+      SubstitutableVTerm.substitute(effects, substitutor, offset),
+      level.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
     case Force(v) => Force(SubstitutableVTerm.substitute(v, substitutor, offset))
     case F(effects, vTerm) => F(

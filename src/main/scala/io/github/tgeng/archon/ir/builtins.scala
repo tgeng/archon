@@ -10,6 +10,7 @@ object Builtins:
   val Unit = Con(Name.Normal("Unit"))
   
   val VUniverseQn = Builtin / "VUniverse"
+  val VTopQn = Builtin / "VTop"
   val EqualityQn = Builtin / "Equality"
   val EffectsQn = Builtin / "Effects"
   val LevelQn = Builtin / "Level"

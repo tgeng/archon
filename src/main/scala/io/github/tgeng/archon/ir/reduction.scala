@@ -75,7 +75,7 @@ private final class StackMachine(
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
-      case _: CUniverse | _: F | _: Return | _: FunctionType | _: RecordType =>
+      case _: CUniverse | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.size == builtinHandlers.length then
           Right(pc)
         else
@@ -302,8 +302,10 @@ private final class StackMachine(
                (PValueType(LevelQn, Nil), Value(LevelType)) |
                (PValueType(HeapQn, Nil), Value(HeapType)) |
                (PForced(_), Value(_)) =>
-          case (PValueType(VUniverseQn, p :: Nil), Value(VUniverse(l))) =>
-            elims = (p, Value(l)) :: elims
+          case (PValueType(VUniverseQn, p :: Nil), Value(VUniverse(l, upperBound))) =>
+            l match
+              case ULevel.Simple(l) => elims = (p, Value(l)) :: elims
+              case ULevel.ω(_) => throw IllegalArgumentException("type error")
           case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty))) =>
             elims = (heapP, Value(heap)) :: (tyP, Value(ty)) :: elims
           case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil), Value(
