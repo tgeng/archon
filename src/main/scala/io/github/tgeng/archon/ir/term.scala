@@ -35,14 +35,24 @@ extension (eff: Eff)
   def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
 enum ULevel:
-  case Simple(level: VTerm)
-  case ω(layer: Nat)
+  case USimpleLevel(level: VTerm)
+  case UωLevel(layer: Nat)
 
 object ULevel:
   extension(u: ULevel)
     def map(f: VTerm => VTerm): ULevel = u match
-      case Simple(level) => Simple(f(level))
-      case _: ULevel.ω => u
+      case USimpleLevel(level) => USimpleLevel(f(level))
+      case _: ULevel.UωLevel => u
+
+  def ULevelSuc(u: ULevel): ULevel = u match
+    case USimpleLevel(l) => USimpleLevel(VTerm.LevelSuc(l))
+    case UωLevel(layer) => UωLevel(layer + 1)
+
+  def ULevelMax(u1: ULevel, u2: ULevel): ULevel = (u1, u2) match
+    case (USimpleLevel(l1), USimpleLevel(l2)) => USimpleLevel(VTerm.LevelMax(l1, l2))
+    case (UωLevel(layer1), UωLevel(layer2)) => UωLevel(math.max(layer1, layer2))
+    case (_, u: UωLevel) => u
+    case (u, _) => u
 
 enum VTerm:
   case VUniverse(level: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)

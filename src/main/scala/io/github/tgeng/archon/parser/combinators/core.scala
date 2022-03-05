@@ -30,14 +30,14 @@ object ParseResult:
   def success[M[+_], T](result: M[T], committed: Boolean = false): ParseResult[M, T] = ParseResult(result, Seq(), committed)
   def failure[M[+_] : Monad : Alternative, T](errors: Seq[ParseError], committed: Boolean = false): ParseResult[M, Nothing] = ParseResult(Alternative.empty, errors, committed)
   def apply[M[+_], T](result: M[T], errors: Seq[ParseError], committed: Boolean = false) : ParseResult[M, T] =
-    new SimpleParseResult(result, trimErrors(errors), committed)
+    new USimpleLevelParseResult(result, trimErrors(errors), committed)
   def unapply[M[+_], T](r: ParseResult[M, T]): Option[(M[T], Seq[ParseError], Boolean)] = Some((r.result, r.errors, r.committed))
 
   private def trimErrors(errors: Seq[ParseError]) : Seq[ParseError] =
     val maxTargetProgress = errors.map(e => e.index).maxOption.getOrElse(0)
     errors.filter(e => e.index == maxTargetProgress).take(5)
 
-  private case class SimpleParseResult[M[+_], +T](
+  private case class USimpleLevelParseResult[M[+_], +T](
     override val result: M[T],
     override val errors: Seq[ParseError],
     override val committed: Boolean

@@ -7,3 +7,6 @@ enum Error:
   case TelescopeLengthMismatch(tms: List[VTerm], tys: Telescope)
   case VTypeError(vTerm: VTerm, vType: VTerm)
   case CTypeError(cTerm: CTerm, cType: CTerm)
+  case ULevelError(sub: ULevel, sup: ULevel)
+  case NotVTypeError(ty: VTerm)
+  case NotCTypeError(ty: CTerm)

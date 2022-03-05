@@ -304,18 +304,12 @@ private final class StackMachine(
                (PForced(_), Value(_)) =>
           case (PValueType(VUniverseQn, p :: Nil), Value(VUniverse(l, upperBound))) =>
             l match
-              case ULevel.Simple(l) => elims = (p, Value(l)) :: elims
-              case ULevel.ω(_) => throw IllegalArgumentException("type error")
+              case ULevel.USimpleLevel(l) => elims = (p, Value(l)) :: elims
+              case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
           case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty))) =>
             elims = (heapP, Value(heap)) :: (tyP, Value(ty)) :: elims
-          case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil), Value(
-          EqualityType(
-          level,
-          ty,
-          left,
-          right
-          )
-          )) =>
+          case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil),
+          Value(EqualityType(level, ty, left, right))) =>
             elims = (levelP, Value(level)) ::
               (tyP, Value(ty)) ::
               (leftP, Value(left)) ::
