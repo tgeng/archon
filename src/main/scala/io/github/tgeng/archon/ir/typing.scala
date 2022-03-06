@@ -52,7 +52,23 @@ trait ConstraintSystem:
 def checkIsVType(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using sys: ConstraintSystem): Either[Error, Unit] = ???
+  (using sys: ConstraintSystem): Either[Error, Unit] = ty match
+  case VUniverse(ul1, upperBound) =>
+    ul1 match
+      case USimpleLevel(l) => checkVType(l, LevelType) >> checkVType(upperBound, ty)
+      case UωLevel(layer) =>
+        if layer < 0 then Left(NotVTypeError(ty))
+        else checkVType(upperBound, ty)
+  case U(cty) => checkIsCType(cty)
+  case DataType(qn, args) => checkVTypes(args, Σ.getData(qn).tParamTys)
+  case EqualityType(level, ty, left, right) =>
+    checkVType(level, LevelType) >>
+      checkIsVType(ty) >>
+      checkVType(left, ty) >>
+      checkVType(right, ty)
+  case EffectsType | LevelType | HeapType => Right(())
+  case CellType(heap, a) => checkIsVType(a)
+  case _ => Left(NotVTypeError(ty))
 
 def checkVType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
@@ -60,11 +76,11 @@ def checkVType(tm: VTerm, ty: VTerm)
   (using sys: ConstraintSystem): Either[Error, Unit] =
   tm match
     case VUniverse(ul1, upperBound1) =>
-      checkVType(upperBound1, tm) >>
-        sys.addSubtyping(VUniverse(ULevelSuc(ul1), tm), ty)
-    case VTop(ul) => sys.addSubtyping(VUniverse(ul, tm), ty)
+      checkIsVType(tm) >> sys.addSubtyping(VUniverse(ULevelSuc(ul1), tm), ty)
+    case VTop(ul) => checkIsVType(tm) >> sys.addSubtyping(VUniverse(ul, tm), ty)
     case r: Var => sys.addSubtyping(Γ(r).ty, ty)
     case U(cty) =>
+      // skip checking `tm` is a VType or `cty` is a CType because that's done during `checkCType`
       val uLevel = sys.newULevelUnfVar()
       sys.addSubtyping(VUniverse(uLevel, tm), ty) >>
         checkCType(cty, CUniverse(Total, uLevel, cty))
@@ -72,16 +88,14 @@ def checkVType(tm: VTerm, ty: VTerm)
       val cty = sys.newCUnfVar()
       sys.addSubtyping(U(cty), ty) >> checkCType(c, cty)
     case DataType(qn, args) =>
-          val data = Σ.getData(qn)
-          sys.addSubtyping(data.ty.substLowers(args: _*), ty) >>
-            checkVTypes(args, data.tParamTys)
+      checkIsVType(tm) >> sys.addSubtyping(Σ.getData(qn).ty.substLowers(args: _*), ty)
     case Con(name, args) => ty match
-          case DataType(qn, tArgs) =>
-            val data = Σ.getData(qn)
-            data.cons.first { c => if c.name == name then Some(c) else None } match
-              case None => Left(VTypeError(tm, ty))
-              case Some(con) => checkVTypes(args, con.paramTys.substLowers(tArgs: _*))
-          case _ => Left(VTypeError(tm, ty))
+      case DataType(qn, tArgs) =>
+        val data = Σ.getData(qn)
+        data.cons.first { c => if c.name == name then Some(c) else None } match
+          case None => Left(VTypeError(tm, ty))
+          case Some(con) => checkVTypes(args, con.paramTys.substLowers(tArgs: _*))
+      case _ => Left(VTypeError(tm, ty))
     case EqualityType(l, a, left, right) =>
       sys.addSubtyping(VUniverse(USimpleLevel(l), tm), ty) >>
         checkVType(a, VUniverse(USimpleLevel(l), a)) >>
