@@ -368,3 +368,8 @@ given Reducible[CTerm] with
     signature,
     useCaseTree
   ).run(t)
+
+object Reducible:
+  def reduce(t: CTerm, useCaseTree: Boolean = false)
+    (using ctx: Context)
+    (using signature: Signature) = summon[Reducible[CTerm]].reduce(t, useCaseTree)

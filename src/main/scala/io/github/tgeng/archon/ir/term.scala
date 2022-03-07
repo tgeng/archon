@@ -154,15 +154,15 @@ enum CTerm:
   case Hole
 
   /** archon.builtin.CUniverse */
-  case CUniverse(effects: VTerm, level: ULevel, upperBound: CTerm) extends CTerm, CType
-  case CTop(effects: VTerm, level: ULevel) extends CTerm, CType
+  case CUniverse(effects: VTerm, ul: ULevel, upperBound: CTerm) extends CTerm, CType
+  case CTop(effects: VTerm, ul: ULevel) extends CTerm, CType
 
   case Def(qn: QualifiedName)
 
   case Force(v: VTerm)
 
   /** archon.builtin.F */
-  case F(effects: VTerm, vTerm: VTerm) extends CTerm, CType
+  case F(effects: VTerm, vTy: VTerm) extends CTerm, CType
   case Return(v: VTerm)
   case Let(t: CTerm, ctx: CTerm)
   case DLet(t: CTerm, ctx: CTerm)

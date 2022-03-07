@@ -6,6 +6,7 @@ import VTerm.*
 import CTerm.*
 import ULevel.*
 import Error.*
+import io.github.tgeng.archon.ir.Reducible.reduce
 
 trait ConstraintSystem:
   /**
@@ -49,17 +50,24 @@ trait ConstraintSystem:
 
   def newULevelUnfVar()(using Γ: Context)(using Σ: Signature): ULevel
 
+  def solve(cUnfVar: CTerm): Either[Error, CTerm]
+
+  def solve(vUnfVar: VTerm): Either[Error, VTerm]
+
+private def checkIsULevel(ul: ULevel)(using Γ: Context)
+  (using Σ: Signature)
+  (using sys: ConstraintSystem): Either[Error, Unit] = ul match
+  case USimpleLevel(l) => checkVType(l, LevelType)
+  case UωLevel(layer) =>
+    assert(layer >= 0)
+    Right(())
+
 def checkIsVType(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using sys: ConstraintSystem): Either[Error, Unit] = ty match
-  case VUniverse(ul1, upperBound) =>
-    ul1 match
-      case USimpleLevel(l) => checkVType(l, LevelType) >> checkVType(upperBound, ty)
-      case UωLevel(layer) =>
-        if layer < 0 then Left(NotVTypeError(ty))
-        else checkVType(upperBound, ty)
-  case U(cty) => checkIsCType(cty)
+  case VUniverse(ul, upperBound) => checkIsULevel(ul) >> checkVType(upperBound, ty)
+  case U(cty) => checkIsCType(cty) >> Right(())
   case DataType(qn, args) => checkVTypes(args, Σ.getData(qn).tParamTys)
   case EqualityType(level, ty, left, right) =>
     checkVType(level, LevelType) >>
@@ -124,11 +132,6 @@ def checkVType(tm: VTerm, ty: VTerm)
     case CellType(heap, a) => checkVType(heap, HeapType) >> checkVType(a, ty)
     case Cell(heapKey, _, a) => sys.addSubtyping(CellType(Heap(heapKey), a), ty)
 
-def checkIsCType(ty: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using sys: ConstraintSystem): Either[Error, Unit] = ???
-
 def checkVTypes(tms: List[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
@@ -137,6 +140,57 @@ def checkVTypes(tms: List[VTerm], tys: Telescope)
   else allRight(
     tms.zip(tys).map { (tm, binding) => checkVType(tm, binding.ty) }
   )
+
+def checkIsCType(ty: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using sys: ConstraintSystem): Either[Error, CTerm] = ty match
+  case CUniverse(effects, ul, upperBound) =>
+    for _ <- checkVType(effects, EffectsType)
+        _ <- checkIsULevel(ul)
+        upperBound <- checkIsCType(upperBound)
+        _ <- checkCType(upperBound, ty)
+    yield CUniverse(effects, ul, upperBound)
+  case CTop(effects, ul) => checkVType(effects, EffectsType) >> checkIsULevel(ul) >> Right(ty)
+  case F(effects, vTy) => checkVType(effects, EffectsType) >> checkIsVType(vTy) >> Right(ty)
+  case FunctionType(effects, binding, bodyTy) =>
+    for _ <- checkVType(effects, EffectsType)
+        _ <- checkIsVType(binding.ty)
+        bodyTy <- checkIsCType(bodyTy)(using binding +: Γ)
+    yield FunctionType(effects, binding, bodyTy)
+  case RecordType(effects, qn, args) =>
+    val record = Σ.getRecord(qn)
+    record.ty match
+      case CUniverse(effects, _, _) if effects == Total =>
+        for _ <- checkVType(effects, EffectsType)
+            _ <- checkVTypes(args, record.tParamTys)
+        yield ty
+      case CUniverse(_, _, _) => Left(EffectfulCType(ty))
+      case _ => throw IllegalArgumentException(s"invalid record type declaration $qn")
+  case Def(qn) =>
+    val definition = Σ.getDef(qn)
+    for tyTy <- checkIsCType(definition.ty)
+        r <- tyTy match
+          case CUniverse(effects, _, _) if effects == Total => reduce(ty)
+          case _: CUniverse => Left(EffectfulCType(ty))
+          case _ => Left(NotCTypeError(ty))
+    yield r
+  case Application(fun, arg) => ???
+  case Projection(rec, name) => ???
+  case Force(v) => ???
+  case Let(t, ctx) => ???
+  case DLet(t, ctx) => ???
+  case Handler(_, _, outputType, _, _, _) => ???
+  case HeapHandler(_, outputType, _, _, _) => ???
+  case _ => Left(NotCTypeError(ty))
+
+private def inferCType
+(tm: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using sys: ConstraintSystem): Either[Error, CTerm] =
+  val inferred = sys.newCUnfVar()
+  checkCType(tm, inferred) >> sys.solve(inferred)
 
 def checkCType(tm: CTerm, ty: CTerm)
   (using Γ: Context)

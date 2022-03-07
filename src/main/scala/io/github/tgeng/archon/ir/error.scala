@@ -10,3 +10,6 @@ enum Error:
   case ULevelError(sub: ULevel, sup: ULevel)
   case NotVTypeError(ty: VTerm)
   case NotCTypeError(ty: CTerm)
+  case EffectfulCType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
+  case CInferenceFailure(cTerm: CTerm)
+  case VInferenceFailure(vTerm: VTerm)
