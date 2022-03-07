@@ -175,8 +175,33 @@ def checkIsCType(ty: CTerm)
           case _: CUniverse => Left(EffectfulCType(ty))
           case _ => Left(NotCTypeError(ty))
     yield r
-  case Application(fun, arg) => ???
-  case Projection(rec, name) => ???
+  case Application(fun, arg) =>
+    for funTy <- inferCType(fun)
+        r <- funTy match
+          case FunctionType(eff1, binding, bodyTy) if eff1 == Total =>
+            for bodyTy <- checkIsCType(bodyTy.substLowers(arg))
+                r <- bodyTy match
+                  case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
+                  case _: CUniverse => Left(EffectfulCType(ty))
+                  case _ => Left(NotCTypeError(bodyTy))
+            yield r
+          case _ : FunctionType => Left(EffectfulCType(ty))
+          case _ => Left(NotCTypeError(ty))
+    yield r
+  case Projection(rec, name) =>
+    for recTy <- inferCType(rec)
+        r <- recTy match
+          case RecordType(eff1, qn , args) if eff1 == Total =>
+            val rec = Σ.getRecord(qn)
+            rec.fields.first{ f => if f.name == name then Some(f) else None } match
+              case None => throw IllegalArgumentException(s"nonexistent field $name in record $qn")
+              case Some(f) => f.ty match
+                case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
+                case _: CUniverse => Left(EffectfulCType(ty))
+                case _ => Left(NotCTypeError(ty))
+          case _ : RecordType => Left(EffectfulCType(ty))
+          case _ => Left(NotCTypeError(ty))
+    yield r
   case Force(v) => ???
   case Let(t, ctx) => ???
   case DLet(t, ctx) => ???

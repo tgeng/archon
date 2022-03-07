@@ -169,7 +169,8 @@ enum CTerm:
 
   /** archon.builtin.Function */
   case FunctionType(
-    effects: VTerm,
+    effects: VTerm, // effects that needed for getting the function of this type. The effects caused
+                    // by function application is tracked by the `bodyTy`.
     /* binding + 1 */ binding: Binding[VTerm],
     bodyTy: CTerm
   ) extends CTerm, CType
