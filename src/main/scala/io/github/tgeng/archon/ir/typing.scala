@@ -231,8 +231,20 @@ def checkIsCType(ty: CTerm)
              else
                Left(EffectfulCType(ty))
     yield r
-  case Handler(_, _, outputType, _, _, _) => ???
-  case HeapHandler(_, outputType, _, _, _) => ???
+  case Handler(_, _, outputType, _, _, _) =>
+    for outputType <- checkIsCType(outputType)
+        r <- outputType match
+          case CUniverse(eff, _, _) if eff == Total => reduce(ty)
+          case _: CUniverse => Left(EffectfulCType(ty))
+          case _ => Left(NotCTypeError(ty))
+    yield r
+  case HeapHandler(_, outputType, _, _, _) =>
+    for outputType <- checkIsCType(outputType)
+        r <- outputType match
+          case CUniverse(eff, _, _) if eff == Total => reduce(ty)
+          case _: CUniverse => Left(EffectfulCType(ty))
+          case _ => Left(NotCTypeError(ty))
+    yield r
   case _ => Left(NotCTypeError(ty))
 
 private def inferCType
