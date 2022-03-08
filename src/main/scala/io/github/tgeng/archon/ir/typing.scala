@@ -132,6 +132,14 @@ def checkVType(tm: VTerm, ty: VTerm)
     case CellType(heap, a) => checkVType(heap, HeapType) >> checkVType(a, ty)
     case Cell(heapKey, _, a) => sys.addSubtyping(CellType(Heap(heapKey), a), ty)
 
+private def inferVType
+(tm: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using sys: ConstraintSystem): Either[Error, VTerm] =
+  val inferred = sys.newVUnfVar()
+  checkVType(tm, inferred) >> sys.solve(inferred)
+
 def checkVTypes(tms: List[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
@@ -202,9 +210,27 @@ def checkIsCType(ty: CTerm)
           case _ : RecordType => Left(EffectfulCType(ty))
           case _ => Left(NotCTypeError(ty))
     yield r
-  case Force(v) => ???
-  case Let(t, ctx) => ???
-  case DLet(t, ctx) => ???
+  case Force(v) =>
+    for vTy <- inferVType(v)
+        r <- vTy match
+          case U(CUniverse(effects, _, _)) =>
+            if effects == Total then reduce(ty)
+            else Left(EffectfulCType(ty))
+          case _ => Left(NotCTypeError(ty))
+    yield r
+  case Let(t, binding, ctx) =>
+    val eff1 = sys.newVUnfVar()
+    for _ <- checkCType(t, F(eff1, binding.ty))
+        r <- if eff1 == Total then
+               for ctxTy <- inferCType(ctx)(using binding +: Γ)
+                   r <- ctxTy match
+                     case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
+                     case _: CUniverse => Left(EffectfulCType(ty))
+                     case _ => Left(NotCTypeError(ty))
+               yield r
+             else
+               Left(EffectfulCType(ty))
+    yield r
   case Handler(_, _, outputType, _, _, _) => ???
   case HeapHandler(_, outputType, _, _, _) => ???
   case _ => Left(NotCTypeError(ty))

@@ -141,14 +141,7 @@ private final class StackMachine(
         case Thunk(c) => run(c)
         case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
         case _ => throw IllegalArgumentException("type error")
-      case Let(t, ctx) =>
-        t match
-          case Return(v) => run(ctx.substLowers(v))
-          case _ if reduceDown => throw IllegalArgumentException("type error")
-          case _ =>
-            stack.push(pc)
-            run(t)
-      case DLet(t, ctx) =>
+      case Let(t, ty, ctx) =>
         t match
           case Return(v) => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
@@ -334,8 +327,7 @@ private final class StackMachine(
         matchPattern(elims, mapping, status)
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
-    case Let(t, ctx) => Let(c, ctx)
-    case DLet(t, ctx) => DLet(c, ctx)
+    case Let(t, ty, ctx) => Let(c, ty, ctx)
     case Application(fun, arg) => Application(c, arg)
     case Projection(rec, name) => Projection(c, name)
     case Handler(eff, inputType, outputType, transform, handlers, input) =>

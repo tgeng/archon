@@ -164,8 +164,9 @@ enum CTerm:
   /** archon.builtin.F */
   case F(effects: VTerm, vTy: VTerm) extends CTerm, CType
   case Return(v: VTerm)
-  case Let(t: CTerm, ctx: CTerm)
-  case DLet(t: CTerm, ctx: CTerm)
+  // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
+  // Σx:A.C̲ like in eMLTT [1]
+  case Let(t: CTerm, binding: Binding[VTerm], /* binding + 1 */ ctx: CTerm)
 
   /** archon.builtin.Function */
   case FunctionType(
@@ -259,4 +260,6 @@ enum CTerm:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,
       dependent elimination, and effects. Proc. ACM Program. Lang. 4, POPL, Article 58 (January
       2020), 28 pages. DOI:https://doi.org/10.1145/3371126
+ [1]  Danel Ahman. 2017. Handling fibred algebraic effects. Proc. ACM Program. Lang. 2, POPL,
+      Article 7 (January 2018), 29 pages. DOI:https://doi.org/10.1145/3158095
 */

@@ -67,8 +67,11 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(vTerm, amount, bar)
     )
     case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
-    case Let(t, ctx) => Let(raise(t, amount, bar), raise(ctx, amount, bar + 1))
-    case DLet(t, ctx) => DLet(raise(t, amount, bar), raise(ctx, amount, bar + 1))
+    case Let(t, ty, ctx) => Let(
+      raise(t, amount, bar),
+      ty.map(RaisableVTerm.raise(_, amount, bar)),
+      raise(ctx, amount, bar + 1)
+    )
     case FunctionType(effects, binding, bodyTy) => FunctionType(
       RaisableVTerm.raise(effects, amount, bar),
       binding.map(RaisableVTerm.raise(_, amount, bar)),
@@ -227,12 +230,9 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       SubstitutableVTerm.substitute(vTerm, substitutor, offset)
     )
     case Return(v) => Return(SubstitutableVTerm.substitute(v, substitutor, offset))
-    case Let(t, ctx) => Let(
+    case Let(t, ty, ctx) => Let(
       substitute(t, substitutor, offset),
-      substitute(ctx, substitutor, offset + 1)
-    )
-    case DLet(t, ctx) => DLet(
-      substitute(t, substitutor, offset),
+      ty.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
       substitute(ctx, substitutor, offset + 1)
     )
     case FunctionType(effects, binding, bodyTy) => FunctionType(
@@ -312,7 +312,11 @@ given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
   ): Telescope = telescope match
     case Nil => Nil
     case binding :: telescope =>
-      binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)) :: substitute(telescope, substitutor, offset + 1)
+      binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)) :: substitute(
+        telescope,
+        substitutor,
+        offset + 1
+      )
 
 extension (c: CTerm)
   def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitutor)
@@ -355,7 +359,10 @@ extension (v: VTerm)
     .subst(i => vTerms.lift(-(i + 1)))
 
 extension (telescope: Telescope)
-  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableTelescope.substitute(telescope, substitutor)
+  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableTelescope.substitute(
+    telescope,
+    substitutor
+  )
   def weaken(amount: Nat, at: Nat) = RaisableTelescope.raise(telescope, amount, at)
   def weakened = telescope.weaken(1, 0)
   def strengthened = telescope.strengthen(1, 0)
