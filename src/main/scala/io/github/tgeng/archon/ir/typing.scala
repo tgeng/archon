@@ -82,55 +82,63 @@ def checkVType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using sys: ConstraintSystem): Either[Error, Unit] =
-  tm match
-    case VUniverse(ul1, upperBound1) =>
-      checkIsVType(tm) >> sys.addSubtyping(VUniverse(ULevelSuc(ul1), tm), ty)
-    case VTop(ul) => checkIsVType(tm) >> sys.addSubtyping(VUniverse(ul, tm), ty)
-    case r: Var => sys.addSubtyping(Γ(r).ty, ty)
-    case U(cty) =>
-      // skip checking `tm` is a VType or `cty` is a CType because that's done during `checkCType`
-      val uLevel = sys.newULevelUnfVar()
-      sys.addSubtyping(VUniverse(uLevel, tm), ty) >>
+  checkIsVType(ty) >>
+    (tm match
+      case VUniverse(ul1, upperBound1) =>
+        checkIsVType(tm) >> sys.addSubtyping(VUniverse(ULevelSuc(ul1), tm), ty)
+      case VTop(ul) => checkIsVType(tm) >> sys.addSubtyping(VUniverse(ul, tm), ty)
+      case r: Var => sys.addSubtyping(Γ(r).ty, ty)
+      case U(cty) =>
+        // skip checking `tm` is a VType or `cty` is a CType because that's done during `checkCType`
+        val uLevel = sys.newULevelUnfVar()
+          sys
+        .addSubtyping(VUniverse(uLevel, tm), ty) >>
         checkCType(cty, CUniverse(Total, uLevel, cty))
-    case Thunk(c) =>
-      val cty = sys.newCUnfVar()
-      sys.addSubtyping(U(cty), ty) >> checkCType(c, cty)
-    case DataType(qn, args) =>
-      checkIsVType(tm) >> sys.addSubtyping(Σ.getData(qn).ty.substLowers(args: _*), ty)
-    case Con(name, args) => ty match
-      case DataType(qn, tArgs) =>
-        val data = Σ.getData(qn)
-        data.cons.first { c => if c.name == name then Some(c) else None } match
+      case Thunk(c) =>
+        val cty = sys.newCUnfVar()
+          sys
+        .addSubtyping(U(cty), ty) >> checkCType(c, cty)
+      case DataType(qn, args) =>
+        checkIsVType(tm) >> sys.addSubtyping(Σ.getData(qn).ty.substLowers(args: _*), ty)
+      case Con(name, args) => ty match
+        case DataType(qn, tArgs) =>
+          val data = Σ.getData(qn)
+            data
+          .cons.first { c => if c.name == name then Some(c) else None } match
           case None => Left(VTypeError(tm, ty))
           case Some(con) => checkVTypes(args, con.paramTys.substLowers(tArgs: _*))
-      case _ => Left(VTypeError(tm, ty))
-    case EqualityType(l, a, left, right) =>
-      sys.addSubtyping(VUniverse(USimpleLevel(l), tm), ty) >>
-        checkVType(a, VUniverse(USimpleLevel(l), a)) >>
-        checkVType(left, a) >>
-        checkVType(right, a)
-    case Refl => ty match
-      case EqualityType(level, ty, left, right) =>
-        sys.addSubsumption(left, right, ty) >> sys.addSubsumption(right, left, ty)
-      case _ => Left(VTypeError(tm, ty))
-    case EffectsType => sys.addSubtyping(VUniverse(USimpleLevel(LevelLiteral(0)), EffectsType), ty)
-    case Effects(literal, unionOperands) =>
-      sys.addSubtyping(EffectsType, ty) >>
-        allRight(
-          literal.map { (qn, args) =>
-            val effect = Σ.getEffect(qn)
-            checkVTypes(args, effect.tParamTys)
-          }
-        ) >>
-        allRight(unionOperands.map { ref => checkVType(ref, EffectsType) })
-    case LevelType => sys.addSubtyping(VUniverse(USimpleLevel(LevelLiteral(0)), LevelType), ty)
-    case Level(literal, maxOperands) =>
-      sys.addSubtyping(LevelType, ty) >>
-        allRight(maxOperands.map { (ref, _) => checkVType(ref, LevelType) })
-    case HeapType => sys.addSubtyping(VUniverse(USimpleLevel(LevelLiteral(0)), HeapType), ty)
-    case Heap(_) => sys.addSubtyping(HeapType, ty)
-    case CellType(heap, a) => checkVType(heap, HeapType) >> checkVType(a, ty)
-    case Cell(heapKey, _, a) => sys.addSubtyping(CellType(Heap(heapKey), a), ty)
+        case _ => Left(VTypeError(tm, ty))
+      case EqualityType(l, a, left, right) =>
+        sys.addSubtyping(VUniverse(USimpleLevel(l), tm), ty) >>
+          checkVType(a, VUniverse(USimpleLevel(l), a)) >>
+          checkVType(left, a) >>
+          checkVType(right, a)
+      case Refl => ty match
+        case EqualityType(level, ty, left, right) =>
+          sys.addSubsumption(left, right, ty) >> sys.addSubsumption(right, left, ty)
+        case _ => Left(VTypeError(tm, ty))
+      case EffectsType => sys.addSubtyping(
+        VUniverse(USimpleLevel(LevelLiteral(0)), EffectsType),
+        ty
+      )
+      case Effects(literal, unionOperands) =>
+        sys.addSubtyping(EffectsType, ty) >>
+          allRight(
+            literal.map { (qn, args) =>
+              val effect = Σ.getEffect(qn)
+              checkVTypes(args, effect.tParamTys)
+            }
+          ) >>
+          allRight(unionOperands.map { ref => checkVType(ref, EffectsType) })
+      case LevelType => sys.addSubtyping(VUniverse(USimpleLevel(LevelLiteral(0)), LevelType), ty)
+      case Level(literal, maxOperands) =>
+        sys.addSubtyping(LevelType, ty) >>
+          allRight(maxOperands.map { (ref, _) => checkVType(ref, LevelType) })
+      case HeapType => sys.addSubtyping(VUniverse(USimpleLevel(LevelLiteral(0)), HeapType), ty)
+      case Heap(_) => sys.addSubtyping(HeapType, ty)
+      case CellType(heap, a) => checkVType(heap, HeapType) >> checkVType(a, ty)
+      case Cell(heapKey, _, a) => sys.addSubtyping(CellType(Heap(heapKey), a), ty)
+      )
 
 private def inferVType
 (tm: VTerm)
@@ -152,100 +160,101 @@ def checkVTypes(tms: List[VTerm], tys: Telescope)
 def checkIsCType(ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using sys: ConstraintSystem): Either[Error, CTerm] = ty match
-  case CUniverse(effects, ul, upperBound) =>
-    for _ <- checkVType(effects, EffectsType)
-        _ <- checkIsULevel(ul)
-        upperBound <- checkIsCType(upperBound)
-        _ <- checkCType(upperBound, ty)
-    yield CUniverse(effects, ul, upperBound)
-  case CTop(effects, ul) => checkVType(effects, EffectsType) >> checkIsULevel(ul) >> Right(ty)
-  case F(effects, vTy) => checkVType(effects, EffectsType) >> checkIsVType(vTy) >> Right(ty)
-  case FunctionType(effects, binding, bodyTy) =>
-    for _ <- checkVType(effects, EffectsType)
-        _ <- checkIsVType(binding.ty)
-        bodyTy <- checkIsCType(bodyTy)(using binding +: Γ)
-    yield FunctionType(effects, binding, bodyTy)
-  case RecordType(effects, qn, args) =>
-    val record = Σ.getRecord(qn)
-    record.ty match
-      case CUniverse(effects, _, _) if effects == Total =>
-        for _ <- checkVType(effects, EffectsType)
-            _ <- checkVTypes(args, record.tParamTys)
-        yield ty
-      case CUniverse(_, _, _) => Left(EffectfulCType(ty))
-      case _ => throw IllegalArgumentException(s"invalid record type declaration $qn")
-  case Def(qn) =>
-    val definition = Σ.getDef(qn)
-    for tyTy <- checkIsCType(definition.ty)
-        r <- tyTy match
-          case CUniverse(effects, _, _) if effects == Total => reduce(ty)
-          case _: CUniverse => Left(EffectfulCType(ty))
-          case _ => Left(NotCTypeError(ty))
-    yield r
-  case Application(fun, arg) =>
-    for funTy <- inferCType(fun)
-        r <- funTy match
-          case FunctionType(eff1, binding, bodyTy) if eff1 == Total =>
-            for bodyTy <- checkIsCType(bodyTy.substLowers(arg))
-                r <- bodyTy match
+  (using sys: ConstraintSystem): Either[Error, CTerm] =
+  ty match
+    case CUniverse(effects, ul, upperBound) =>
+      for _ <- checkVType(effects, EffectsType)
+          _ <- checkIsULevel(ul)
+          upperBound <- checkIsCType(upperBound)
+          _ <- checkCType(upperBound, ty)
+      yield CUniverse(effects, ul, upperBound)
+    case CTop(effects, ul) => checkVType(effects, EffectsType) >> checkIsULevel(ul) >> Right(ty)
+    case F(effects, vTy) => checkVType(effects, EffectsType) >> checkIsVType(vTy) >> Right(ty)
+    case FunctionType(effects, binding, bodyTy) =>
+      for _ <- checkVType(effects, EffectsType)
+          _ <- checkIsVType(binding.ty)
+          bodyTy <- checkIsCType(bodyTy)(using binding +: Γ)
+      yield FunctionType(effects, binding, bodyTy)
+    case RecordType(effects, qn, args) =>
+      val record = Σ.getRecord(qn)
+      record.ty match
+        case CUniverse(effects, _, _) if effects == Total =>
+          for _ <- checkVType(effects, EffectsType)
+              _ <- checkVTypes(args, record.tParamTys)
+          yield ty
+        case CUniverse(_, _, _) => Left(EffectfulCType(ty))
+        case _ => throw IllegalArgumentException(s"invalid record type declaration $qn")
+    case Def(qn) =>
+      val definition = Σ.getDef(qn)
+      for tyTy <- checkIsCType(definition.ty)
+          r <- tyTy match
+            case CUniverse(effects, _, _) if effects == Total => reduce(ty)
+            case _: CUniverse => Left(EffectfulCType(ty))
+            case _ => Left(NotCTypeError(ty))
+      yield r
+    case Application(fun, arg) =>
+      for funTy <- inferCType(fun)
+          r <- funTy match
+            case FunctionType(eff1, binding, bodyTy) if eff1 == Total =>
+              for bodyTy <- checkIsCType(bodyTy.substLowers(arg))
+                  r <- bodyTy match
+                    case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
+                    case _: CUniverse => Left(EffectfulCType(ty))
+                    case _ => Left(NotCTypeError(bodyTy))
+              yield r
+            case _: FunctionType => Left(EffectfulCType(ty))
+            case _ => Left(NotCTypeError(ty))
+      yield r
+    case Projection(rec, name) =>
+      for recTy <- inferCType(rec)
+          r <- recTy match
+            case RecordType(eff1, qn, args) if eff1 == Total =>
+              val rec = Σ.getRecord(qn)
+              rec.fields.first { f => if f.name == name then Some(f) else None } match
+                case None => throw IllegalArgumentException(s"nonexistent field $name in record $qn")
+                case Some(f) => f.ty match
                   case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
                   case _: CUniverse => Left(EffectfulCType(ty))
-                  case _ => Left(NotCTypeError(bodyTy))
+                  case _ => Left(NotCTypeError(ty))
+            case _: RecordType => Left(EffectfulCType(ty))
+            case _ => Left(NotCTypeError(ty))
+      yield r
+    case Force(v) =>
+      for vTy <- inferVType(v)
+          r <- vTy match
+            case U(CUniverse(effects, _, _)) =>
+              if effects == Total then reduce(ty)
+              else Left(EffectfulCType(ty))
+            case _ => Left(NotCTypeError(ty))
+      yield r
+    case Let(t, binding, ctx) =>
+      val eff1 = sys.newVUnfVar()
+      for _ <- checkCType(t, F(eff1, binding.ty))
+          r <- if eff1 == Total then
+            for ctxTy <- inferCType(ctx)(using binding +: Γ)
+                r <- ctxTy match
+                  case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
+                  case _: CUniverse => Left(EffectfulCType(ty))
+                  case _ => Left(NotCTypeError(ty))
             yield r
-          case _ : FunctionType => Left(EffectfulCType(ty))
-          case _ => Left(NotCTypeError(ty))
-    yield r
-  case Projection(rec, name) =>
-    for recTy <- inferCType(rec)
-        r <- recTy match
-          case RecordType(eff1, qn , args) if eff1 == Total =>
-            val rec = Σ.getRecord(qn)
-            rec.fields.first{ f => if f.name == name then Some(f) else None } match
-              case None => throw IllegalArgumentException(s"nonexistent field $name in record $qn")
-              case Some(f) => f.ty match
-                case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
-                case _: CUniverse => Left(EffectfulCType(ty))
-                case _ => Left(NotCTypeError(ty))
-          case _ : RecordType => Left(EffectfulCType(ty))
-          case _ => Left(NotCTypeError(ty))
-    yield r
-  case Force(v) =>
-    for vTy <- inferVType(v)
-        r <- vTy match
-          case U(CUniverse(effects, _, _)) =>
-            if effects == Total then reduce(ty)
-            else Left(EffectfulCType(ty))
-          case _ => Left(NotCTypeError(ty))
-    yield r
-  case Let(t, binding, ctx) =>
-    val eff1 = sys.newVUnfVar()
-    for _ <- checkCType(t, F(eff1, binding.ty))
-        r <- if eff1 == Total then
-               for ctxTy <- inferCType(ctx)(using binding +: Γ)
-                   r <- ctxTy match
-                     case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
-                     case _: CUniverse => Left(EffectfulCType(ty))
-                     case _ => Left(NotCTypeError(ty))
-               yield r
-             else
-               Left(EffectfulCType(ty))
-    yield r
-  case Handler(_, _, outputType, _, _, _) =>
-    for outputType <- checkIsCType(outputType)
-        r <- outputType match
-          case CUniverse(eff, _, _) if eff == Total => reduce(ty)
-          case _: CUniverse => Left(EffectfulCType(ty))
-          case _ => Left(NotCTypeError(ty))
-    yield r
-  case HeapHandler(_, outputType, _, _, _) =>
-    for outputType <- checkIsCType(outputType)
-        r <- outputType match
-          case CUniverse(eff, _, _) if eff == Total => reduce(ty)
-          case _: CUniverse => Left(EffectfulCType(ty))
-          case _ => Left(NotCTypeError(ty))
-    yield r
-  case _ => Left(NotCTypeError(ty))
+          else
+            Left(EffectfulCType(ty))
+      yield r
+    case Handler(_, _, outputType, _, _, _) =>
+      for outputType <- checkIsCType(outputType)
+          r <- outputType match
+            case CUniverse(eff, _, _) if eff == Total => reduce(ty)
+            case _: CUniverse => Left(EffectfulCType(ty))
+            case _ => Left(NotCTypeError(ty))
+      yield r
+    case HeapHandler(_, outputType, _, _, _) =>
+      for outputType <- checkIsCType(outputType)
+          r <- outputType match
+            case CUniverse(eff, _, _) if eff == Total => reduce(ty)
+            case _: CUniverse => Left(EffectfulCType(ty))
+            case _ => Left(NotCTypeError(ty))
+      yield r
+    case _ => Left(NotCTypeError(ty))
 
 private def inferCType
 (tm: CTerm)
@@ -259,7 +268,31 @@ def checkCType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using sys: ConstraintSystem): Either[Error, Unit] =
-  ???
+  for ty <- checkIsCType(ty)
+      r <- tm match
+        case Hole => throw IllegalArgumentException("hole should only be present during reduction")
+        case CUniverse(effects, ul, upperBound) => checkIsCType(tm) >>
+          sys.addSubtyping(CUniverse(effects, ULevelSuc(ul), tm), ty)
+        case CTop(effects, ul) =>
+          checkIsCType(tm) >>
+            sys.addSubtyping(CUniverse(effects, ul, tm), ty)
+        case Def(qn) => sys.addSubtyping(Σ.getDef(qn).ty, ty)
+        case Force(v) => checkVType(v, U(ty))
+        case F(effects, vTy) =>
+          val uLevel = sys.newULevelUnfVar()
+          checkIsCType(tm) >>
+            sys.addSubtyping(CUniverse(Total, uLevel, tm), ty) >>
+            checkVType(vTy, VUniverse(uLevel, vTy))
+        case Return(v) => ty match
+          case F(eff, vTy) => checkVType(v, vTy)
+          case _ =>
+            val vTy = sys.newVUnfVar()
+            checkVType(v, vTy) >>
+              sys.addSubtyping(F(Total, vTy), ty)
+        case Let(t, binding, ctx) =>
+          ???
+  yield r
+
 //  tm match
 //    case Hole => throw IllegalArgumentException(s"$tm not expected for type checking")
 //    case CUniverse(effects, l1) =>
