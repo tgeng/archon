@@ -172,8 +172,8 @@ enum CTerm:
   case FunctionType(
     effects: VTerm, // effects that needed for getting the function of this type. The effects caused
                     // by function application is tracked by the `bodyTy`.
-    /* binding + 1 */ binding: Binding[VTerm],
-    bodyTy: CTerm
+    binding: Binding[VTerm],
+    /* binding + 1 */ bodyTy: CTerm
   ) extends CTerm, CType
   case Application(fun: CTerm, arg: VTerm)
 

@@ -44,6 +44,10 @@ trait ConstraintSystem:
       case (_, _: UωLevel) => Right(())
       case _ => Left(ULevelError(sub, sup))
 
+  def addEffectConstraint(cTy: CTerm, requiredEffect: VTerm)
+    (using Γ: Context)
+    (using Σ: Signature): Either[Error, Unit]
+
   def newVUnfVar()(using Γ: Context)(using Σ: Signature): VTerm
 
   def newCUnfVar()(using Γ: Context)(using Σ: Signature): CTerm
@@ -154,7 +158,9 @@ def checkVTypes(tms: List[VTerm], tys: Telescope)
   (using sys: ConstraintSystem): Either[Error, Unit] =
   if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
   else allRight(
-    tms.zip(tys).map { (tm, binding) => checkVType(tm, binding.ty) }
+    tms.zip(tys).zipWithIndex.map {
+      case ((tm, binding), index) => checkVType(tm, binding.ty.substLowers(tms.take(index): _*))
+    }
   )
 
 def checkIsCType(ty: CTerm)
@@ -173,7 +179,7 @@ def checkIsCType(ty: CTerm)
     case FunctionType(effects, binding, bodyTy) =>
       for _ <- checkVType(effects, EffectsType)
           _ <- checkIsVType(binding.ty)
-          bodyTy <- checkIsCType(bodyTy)(using binding +: Γ)
+          bodyTy <- checkIsCType(bodyTy)(using Γ :+ binding)
       yield FunctionType(effects, binding, bodyTy)
     case RecordType(effects, qn, args) =>
       val record = Σ.getRecord(qn)
@@ -231,7 +237,7 @@ def checkIsCType(ty: CTerm)
       val eff1 = sys.newVUnfVar()
       for _ <- checkCType(t, F(eff1, binding.ty))
           r <- if eff1 == Total then
-            for ctxTy <- inferCType(ctx)(using binding +: Γ)
+            for ctxTy <- inferCType(ctx)(using Γ :+ binding)
                 r <- ctxTy match
                   case CUniverse(eff2, _, _) if eff2 == Total => reduce(ty)
                   case _: CUniverse => Left(EffectfulCType(ty))
@@ -290,7 +296,44 @@ def checkCType(tm: CTerm, ty: CTerm)
             checkVType(v, vTy) >>
               sys.addSubtyping(F(Total, vTy), ty)
         case Let(t, binding, ctx) =>
-          ???
+          val eff = sys.newVUnfVar()
+          checkCType(t, F(eff, binding.ty)) >>
+            sys.addEffectConstraint(ty, eff) >>
+            checkCType(ctx, ty.weakened)(using Γ :+ binding)
+        case FunctionType(effects, binding, bodyTy) =>
+          val ul = sys.newULevelUnfVar()
+          checkIsCType(tm) >>
+            checkVType(binding.ty, VUniverse(ul, binding.ty)) >>
+            checkCType(bodyTy, CUniverse(Total, ul, bodyTy)) >>
+            sys.addSubtyping(CUniverse(Total, ul, tm), ty)
+        case Application(fun, arg) =>
+          for funTy <- inferCType(fun)
+              r <- funTy match
+                case FunctionType(effects, binding, bodyTy) =>
+                  checkVType(arg, binding.ty) >>
+                    sys.addSubtyping(bodyTy.substLowers(arg), ty) >>
+                    sys.addEffectConstraint(ty, effects)
+                // TODO: case UnfVar => Left(UnificationFailure(...))
+                case _ => Left(CTypeError(tm, ty))
+          yield r
+        case RecordType(effects, qn, args) =>
+          val record = Σ.getRecord(qn)
+          checkIsCType(tm) >>
+            checkVTypes(args, record.tParamTys) >>
+            sys.addSubtyping(record.ty.substLowers(args: _*), ty)
+        case Projection(rec, name) =>
+          for recTy <- inferCType(rec)
+              r <- recTy match
+                case RecordType(effects, qn, args) =>
+                  val record = Σ.getRecord(qn)
+                  record.fields.first{ f => if f.name == name then Some(f) else None } match
+                    case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
+                    case Some(f) =>
+                      sys.addSubtyping(f.ty.substLowers(args :+ Thunk(tm) : _*), ty) >>
+                        sys.addEffectConstraint(ty, effects)
+                // TODO: case UnfVar => Left(UnificationFailure(...))
+                case _ => Left(CTypeError(tm, ty))
+          yield r
   yield r
 
 //  tm match
