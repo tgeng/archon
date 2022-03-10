@@ -6,14 +6,19 @@ import QualifiedName.*
 import VTerm.*
 
 object Builtins:
-  val UnitTy = DataType(Builtin/"Unit")
+  val BuiltinType = Builtin / "type"
+  val UnitTy = DataType(BuiltinType / "Unit")
   val Unit = Con(Name.Normal("Unit"))
+
+  val VUniverseQn = BuiltinType / "VUniverse"
+  val VTopQn = BuiltinType / "VTop"
+  val EqualityQn = BuiltinType / "Equality"
+  val EffectsQn = BuiltinType / "Effects"
+  val LevelQn = BuiltinType / "Level"
+  val HeapQn = BuiltinType / "Heap"
+  val CellQn = BuiltinType / "Cell"
+  val UnitQn = BuiltinType / "Unit"
   
-  val VUniverseQn = Builtin / "VUniverse"
-  val VTopQn = Builtin / "VTop"
-  val EqualityQn = Builtin / "Equality"
-  val EffectsQn = Builtin / "Effects"
-  val LevelQn = Builtin / "Level"
-  val HeapQn = Builtin / "Heap"
-  val CellQn = Builtin / "Cell"
+  val BuiltinEffects = Builtin / "effect"
+  val HeapEf = BuiltinEffects / "Heap"
 

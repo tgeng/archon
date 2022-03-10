@@ -326,10 +326,10 @@ def checkCType(tm: CTerm, ty: CTerm)
               r <- recTy match
                 case RecordType(effects, qn, args) =>
                   val record = Σ.getRecord(qn)
-                  record.fields.first{ f => if f.name == name then Some(f) else None } match
+                  record.fields.first { f => if f.name == name then Some(f) else None } match
                     case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
                     case Some(f) =>
-                      sys.addSubtyping(f.ty.substLowers(args :+ Thunk(tm) : _*), ty) >>
+                      sys.addSubtyping(f.ty.substLowers(args :+ Thunk(tm): _*), ty) >>
                         sys.addEffectConstraint(ty, effects)
                 // TODO: case UnfVar => Left(UnificationFailure(...))
                 case _ => Left(CTypeError(tm, ty))
@@ -340,9 +340,48 @@ def checkCType(tm: CTerm, ty: CTerm)
             case None => throw IllegalArgumentException(s"unexpected operator $name for $qn")
             case Some(op) => checkVTypes(tArgs, effect.tParamTys) >>
               checkVTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
-              sys.addSubtyping(F(EffectsLiteral(ListSet(eff)), op.resultTy.substLowers(tArgs ++ args : _*)), ty)
-        case _: Continuation => throw IllegalArgumentException("continuation is only created in reduction and hence should not be type checked.")
-        case _ => ???
+              sys.addSubtyping(
+                F(
+                  EffectsLiteral(ListSet(eff)),
+                  op.resultTy.substLowers(tArgs ++ args: _*)
+                ), ty
+              )
+        case _: Continuation => throw IllegalArgumentException(
+          "continuation is only created in reduction and hence should not be type checked."
+        )
+        case Handler(eff, inputType, outputType, transform, handlers, input) => ???
+        case Alloc(heap, vTy) => checkIsVType(vTy) >>
+          sys.addSubtyping(
+            F(
+              EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+              CellType(heap, vTy),
+            ),
+            ty
+          )
+        case Set(cell, value) =>
+          val vTy = sys.newVUnfVar()
+          val heap = sys.newVUnfVar()
+          checkVType(cell, CellType(heap, vTy)) >>
+            checkVType(value, vTy) >>
+            sys.addSubtyping(
+              F(
+                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+                Builtins.UnitTy
+              ),
+              ty
+            )
+        case Get(cell) =>
+          val vTy = sys.newVUnfVar()
+          val heap = sys.newVUnfVar()
+          checkVType(cell, CellType(heap, vTy)) >>
+            sys.addSubtyping(
+              F(
+                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+                vTy
+              ),
+              ty
+            )
+        case HeapHandler(inputType, outputType, key, heapContent, input) => ???
   yield r
 
 //  tm match

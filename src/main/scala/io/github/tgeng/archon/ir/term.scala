@@ -184,7 +184,7 @@ enum CTerm:
 
   /**
    * Internal only. This is only created by reduction.
-   * 
+   *
    * A continuation behaves like a function, it has type `U inputType -> outputType`, where
    * `inputType` is the type of the hole at the tip of the continuation seq and `outputType` is the
    * type of the bottom continuation stack.
