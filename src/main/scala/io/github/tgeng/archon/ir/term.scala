@@ -54,6 +54,14 @@ object ULevel:
     case (_, u: UωLevel) => u
     case (u, _) => u
 
+enum CellStatus extends Comparable[CellStatus]:
+  case Initialized, Uninitialized
+
+  override def compareTo(that: CellStatus): Int =
+    if this == that then 0
+    else if this == CellStatus.Initialized then -1
+    else 1
+
 enum VTerm:
   case VUniverse(level: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
   case VTop(level: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
@@ -90,12 +98,12 @@ enum VTerm:
   case Heap(key: HeapKey)
 
   /** archon.builtin.Cell */
-  case CellType(heap: VTerm, ty: VTerm) extends VTerm, QualifiedNameOwner(CellQn)
+  case CellType(heap: VTerm, ty: VTerm, status: CellStatus) extends VTerm, QualifiedNameOwner(CellQn)
 
   /**
    * Internal only, created by [[CTerm.Alloc]]
    */
-  case Cell(heapKey: HeapKey, index: Nat, ty: VTerm)
+  case Cell(heapKey: HeapKey, index: Nat, ty: VTerm, status: CellStatus)
 
 object VTerm:
   def LevelLiteral(n: Nat): Level = new Level(n, ListMap())

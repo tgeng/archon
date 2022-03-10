@@ -79,7 +79,7 @@ def checkIsVType(ty: VTerm)
       checkVType(left, ty) >>
       checkVType(right, ty)
   case EffectsType | LevelType | HeapType => Right(())
-  case CellType(heap, a) => checkIsVType(a)
+  case CellType(heap, a, status) => checkIsVType(a)
   case _ => Left(NotVTypeError(ty))
 
 def checkVType(tm: VTerm, ty: VTerm)
@@ -140,8 +140,8 @@ def checkVType(tm: VTerm, ty: VTerm)
           allRight(maxOperands.map { (ref, _) => checkVType(ref, LevelType) })
       case HeapType => sys.addSubtyping(VUniverse(USimpleLevel(LevelLiteral(0)), HeapType), ty)
       case Heap(_) => sys.addSubtyping(HeapType, ty)
-      case CellType(heap, a) => checkVType(heap, HeapType) >> checkVType(a, ty)
-      case Cell(heapKey, _, a) => sys.addSubtyping(CellType(Heap(heapKey), a), ty)
+      case CellType(heap, a, status) => checkVType(heap, HeapType) >> checkVType(a, ty)
+      case Cell(heapKey, _, a, status) => sys.addSubtyping(CellType(Heap(heapKey), a, status), ty)
       )
 
 private def inferVType
@@ -354,26 +354,26 @@ def checkCType(tm: CTerm, ty: CTerm)
           sys.addSubtyping(
             F(
               EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
-              CellType(heap, vTy),
+              CellType(heap, vTy, CellStatus.Uninitialized),
             ),
             ty
           )
         case Set(cell, value) =>
           val vTy = sys.newVUnfVar()
           val heap = sys.newVUnfVar()
-          checkVType(cell, CellType(heap, vTy)) >>
+          checkVType(cell, CellType(heap, vTy, CellStatus.Uninitialized)) >>
             checkVType(value, vTy) >>
             sys.addSubtyping(
               F(
                 EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
-                Builtins.UnitTy
+                CellType(heap, vTy, CellStatus.Initialized),
               ),
               ty
             )
         case Get(cell) =>
           val vTy = sys.newVUnfVar()
           val heap = sys.newVUnfVar()
-          checkVType(cell, CellType(heap, vTy)) >>
+          checkVType(cell, CellType(heap, vTy, CellStatus.Initialized)) >>
             sys.addSubtyping(
               F(
                 EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),

@@ -46,8 +46,8 @@ given RaisableVTerm: Raisable[VTerm] with
           .asInstanceOf[VTerm.Var]
       )
     )
-    case CellType(heap, ty) => CellType(raise(heap, amount, bar), raise(ty, amount, bar))
-    case Cell(heapKey, index, ty) => Cell(heapKey, index, raise(ty, amount, bar))
+    case CellType(heap, ty, status) => CellType(raise(heap, amount, bar), raise(ty, amount, bar), status)
+    case Cell(heapKey, index, ty, status) => Cell(heapKey, index, raise(ty, amount, bar), status)
 
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
@@ -202,11 +202,12 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
             ) ++ offsetOperands.map { (_, o) => o }).max
           case _ => throw IllegalArgumentException("type error")
       Level(newLiteral, ListMap.from(newOperands))
-    case CellType(heap, ty) => CellType(
+    case CellType(heap, ty, status) => CellType(
       substitute(heap, substitutor, offset),
-      substitute(ty, substitutor, offset)
+      substitute(ty, substitutor, offset),
+      status,
     )
-    case Cell(heapKey, index, ty) => Cell(heapKey, index, substitute(ty, substitutor, offset))
+    case Cell(heapKey, index, ty, status) => Cell(heapKey, index, substitute(ty, substitutor, offset), status)
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
   override def substitute(

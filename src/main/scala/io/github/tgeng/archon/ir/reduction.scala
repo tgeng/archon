@@ -216,7 +216,7 @@ private final class StackMachine(
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(inputType, outputType, key, heapContent, input) =>
-                val cell = new Cell(heapKey, heapContent.size, ty)
+                val cell = new Cell(heapKey, heapContent.size, ty, CellStatus.Uninitialized)
                 stack(heapHandlerIndex) = HeapHandler(
                   inputType,
                   outputType,
@@ -230,7 +230,7 @@ private final class StackMachine(
       case Set(cell, value) =>
         cell match
           case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          case Cell(heapKey, index, _) =>
+          case Cell(heapKey, index, ty, _) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(inputType, outputType, key, heapContent, input) =>
@@ -241,13 +241,14 @@ private final class StackMachine(
                   heapContent.updated(index, Some(value)),
                   input
                 )
-                run(substHole(stack.pop(), Return(Builtins.Unit)))
+                run(substHole(stack.pop(), Return(new Cell(heapKey, index, ty, CellStatus.Initialized))))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case Get(cell) =>
         cell match
           case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          case Cell(heapKey, index, _) =>
+          case Cell(heapKey, index, _, status) =>
+            if status == CellStatus.Uninitialized then throw IllegalArgumentException("read uninitialized cell")
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(_, _, _, heapContent, _) =>
@@ -299,7 +300,7 @@ private final class StackMachine(
             l match
               case ULevel.USimpleLevel(l) => elims = (p, Value(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
-          case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty))) =>
+          case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty, status))) =>
             elims = (heapP, Value(heap)) :: (tyP, Value(ty)) :: elims
           case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil),
           Value(EqualityType(level, ty, left, right))) =>
