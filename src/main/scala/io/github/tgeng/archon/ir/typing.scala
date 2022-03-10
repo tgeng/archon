@@ -334,6 +334,15 @@ def checkCType(tm: CTerm, ty: CTerm)
                 // TODO: case UnfVar => Left(UnificationFailure(...))
                 case _ => Left(CTypeError(tm, ty))
           yield r
+        case OperatorCall(eff@(qn, tArgs), name, args) =>
+          val effect = Σ.getEffect(qn)
+          effect.operators.first { o => if o.name == name then Some(o) else None } match
+            case None => throw IllegalArgumentException(s"unexpected operator $name for $qn")
+            case Some(op) => checkVTypes(tArgs, effect.tParamTys) >>
+              checkVTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
+              sys.addSubtyping(F(EffectsLiteral(ListSet(eff)), op.resultTy.substLowers(tArgs ++ args : _*)), ty)
+        case _: Continuation => throw IllegalArgumentException("continuation is only created in reduction and hence should not be type checked.")
+        case _ => ???
   yield r
 
 //  tm match
