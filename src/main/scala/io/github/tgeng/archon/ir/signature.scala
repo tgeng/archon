@@ -13,7 +13,7 @@ enum Declaration:
 import Declaration.*
 
 case class Constructor(name: Name, /* binding + tParamTys */ paramTys: Telescope, /* binding + tParamTys + paramTys */  idTys: Telescope)
-case class Operator(name: Name, paramTys: Telescope, /* binding + paramTys */ resultTy: CTerm)
+case class Operator(name: Name, paramTys: Telescope, /* binding + paramTys */ resultTy: VTerm)
 case class Field(name: Name, /* binding + tParamTys + 1 for self */ ty: CTerm)
 case class CheckedClause(bindings: Telescope, lhs: List[Pattern], /* binding + bindings */ rhs: CTerm, /* binding + bindings */ ty: CTerm)
 
