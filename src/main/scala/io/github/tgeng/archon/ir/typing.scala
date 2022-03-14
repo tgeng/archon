@@ -428,40 +428,6 @@ def checkCType(tm: CTerm, ty: CTerm)
             )(using Γ :+ heapVarBinding)
   yield r
 
-//  tm match
-//    case Hole => throw IllegalArgumentException(s"$tm not expected for type checking")
-//    case CUniverse(effects, l1) =>
-//      sys.addEquality(ty, CUniverse(Total, LevelSuc(l1))) >>
-//        checkVType(effects, EffectsType) >>
-//        checkVType(l1, LevelType)
-//    case Def(qn) =>
-//      val definition = Σ.getDef(qn)
-//      sys.addEquality(ty, definition.ty)
-//    case Force(v) => checkVType(v, U(ty))
-//    case F(effects, vTerm) =>
-//      val level = sys.newHole(LevelType)
-//      sys.addEquality(ty, CUniverse(Total, level)) >>
-//        checkVType(effects, EffectsType) >> checkVType(vTerm, VUniverse(level))
-//    case Return(v) =>
-//      val level = sys.newHole(LevelType)
-//      val vTy = sys.newHole(VUniverse(level))
-//      sys.addEquality(ty, F(Total, vTy)) >> checkVType(v, vTy)
-//    case _ => ???
-
-//private def checkIsSomeType(vTerm: VTerm)
-//  (using Γ: Context)
-//  (using Σ: Signature)
-//  (using sys: ConstraintSystem): Either[Error, Unit] =
-//  val level = sys.newHole(LevelType)
-//  checkVType(vTerm, VUniverse(level, VTop(level)))
-//
-//private def checkIsSomeType(cTerm: CTerm, effects: VTerm = Total)
-//  (using Γ: Context)
-//  (using Σ: Signature)
-//  (using sys: ConstraintSystem): Either[Error, Unit] =
-//  val level = sys.newHole(LevelType)
-//  checkCType(cTerm, CUniverse(effects, level, CTop(level)))
-
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   es.first {
     case Left(l) => Some(l)
