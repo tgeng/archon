@@ -44,7 +44,7 @@ trait ConstraintSystem:
       case (_, _: UωLevel) => Right(())
       case _ => Left(ULevelError(sub, sup))
 
-  def addEffectConstraint(cTy: CTerm, requiredEffect: VTerm)
+  def addEffectConstraint(requiredEffect: VTerm, cTy: CTerm)
     (using Γ: Context)
     (using Σ: Signature): Either[Error, Unit]
 
@@ -246,14 +246,7 @@ def checkIsCType(ty: CTerm)
           else
             Left(EffectfulCType(ty))
       yield r
-    case Handler(_, _, outputType, _, _, _) =>
-      for outputType <- checkIsCType(outputType)
-          r <- outputType match
-            case CUniverse(eff, _, _) if eff == Total => reduce(ty)
-            case _: CUniverse => Left(EffectfulCType(ty))
-            case _ => Left(NotCTypeError(ty))
-      yield r
-    case HeapHandler(_, outputType, _, _, _) =>
+    case Handler(_, _, _, outputType, _, _, _) =>
       for outputType <- checkIsCType(outputType)
           r <- outputType match
             case CUniverse(eff, _, _) if eff == Total => reduce(ty)
@@ -298,7 +291,7 @@ def checkCType(tm: CTerm, ty: CTerm)
         case Let(t, binding, ctx) =>
           val eff = sys.newVUnfVar()
           checkCType(t, F(eff, binding.ty)) >>
-            sys.addEffectConstraint(ty, eff) >>
+            sys.addEffectConstraint(eff, ty) >>
             checkCType(ctx, ty.weakened)(using Γ :+ binding)
         case FunctionType(effects, binding, bodyTy) =>
           val ul = sys.newULevelUnfVar()
@@ -312,7 +305,7 @@ def checkCType(tm: CTerm, ty: CTerm)
                 case FunctionType(effects, binding, bodyTy) =>
                   checkVType(arg, binding.ty) >>
                     sys.addSubtyping(bodyTy.substLowers(arg), ty) >>
-                    sys.addEffectConstraint(ty, effects)
+                    sys.addEffectConstraint(effects, ty)
                 // TODO: case UnfVar => Left(UnificationFailure(...))
                 case _ => Left(CTypeError(tm, ty))
           yield r
@@ -330,7 +323,7 @@ def checkCType(tm: CTerm, ty: CTerm)
                     case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
                     case Some(f) =>
                       sys.addSubtyping(f.ty.substLowers(args :+ Thunk(tm): _*), ty) >>
-                        sys.addEffectConstraint(ty, effects)
+                        sys.addEffectConstraint(effects, ty)
                 // TODO: case UnfVar => Left(UnificationFailure(...))
                 case _ => Left(CTypeError(tm, ty))
           yield r
@@ -349,7 +342,51 @@ def checkCType(tm: CTerm, ty: CTerm)
         case _: Continuation => throw IllegalArgumentException(
           "continuation is only created in reduction and hence should not be type checked."
         )
-        case Handler(eff, inputType, outputType, transform, handlers, input) => ???
+        case Handler(
+        eff@(qn, args),
+        inputBinding,
+        otherEffects,
+        outputType,
+        transform,
+        handlers,
+        input
+        ) =>
+          val effect = Σ.getEffect(qn)
+          if handlers.size != effect.operators.size ||
+            handlers.keySet != effect.operators.map(_.name).toSet then
+            Left(UnmatchedHandlerImplementation(qn, handlers.keys))
+          else
+            checkVTypes(args, effect.tParamTys) >>
+              checkIsVType(inputBinding.ty) >>
+              checkCType(
+                input,
+                F(EffectsUnion(EffectsLiteral(ListSet(eff)), otherEffects), inputBinding.ty)
+              ) >>
+              sys.addEffectConstraint(otherEffects, outputType) >>
+              checkCType(transform, outputType.weakened)(using Γ :+ inputBinding) >>
+              allRight(
+                effect.operators.map { opDecl =>
+                  val (n, handlerBody) = handlers(opDecl.name)
+                  assert(n == opDecl.paramTys.size)
+                  checkCType(
+                    handlerBody,
+                    outputType
+                  )(
+                    using Γ ++
+                      opDecl.paramTys :+
+                      Binding(
+                        U(
+                          FunctionType(
+                            otherEffects,
+                            Binding(opDecl.resultTy)(gn"output"),
+                            outputType
+                          )
+                        )
+                      )(gn"resume")
+                  )
+                }
+              )
+
         case Alloc(heap, vTy) => checkIsVType(vTy) >>
           sys.addSubtyping(
             F(
@@ -381,7 +418,14 @@ def checkCType(tm: CTerm, ty: CTerm)
               ),
               ty
             )
-        case HeapHandler(inputType, outputType, key, heapContent, input) => ???
+        case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
+          val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
+          checkIsVType(inputBinding.ty) >>
+          // TODO: check heap variable is not leaked.
+            checkCType(
+              input,
+              F(EffectsUnion(Var(0), otherEffects.weakened), inputBinding.ty.weakened)
+            )(using Γ :+ heapVarBinding)
   yield r
 
 //  tm match

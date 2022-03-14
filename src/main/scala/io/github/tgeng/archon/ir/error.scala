@@ -1,5 +1,7 @@
 package io.github.tgeng.archon.ir
 
+import io.github.tgeng.archon.common.*
+
 enum Error:
   case Unknown
   case ReductionStuck(stuckTerm: CTerm)
@@ -13,3 +15,4 @@ enum Error:
   case EffectfulCType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
   case CInferenceFailure(cTerm: CTerm)
   case VInferenceFailure(vTerm: VTerm)
+  case UnmatchedHandlerImplementation(qn: QualifiedName, implementedOperators:Iterable[Name])

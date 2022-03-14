@@ -3,6 +3,7 @@ package io.github.tgeng.archon.ir
 import io.github.tgeng.archon.common.*
 
 import scala.annotation.tailrec
+import scala.collection.immutable.ListSet
 import scala.collection.mutable
 
 trait Reducible[T]:
@@ -27,8 +28,8 @@ extension[T] (a: mutable.ArrayBuffer[T])
 
 private val builtinHandlers = Seq(
   CTerm.HeapHandler(
-    CTerm.Hole, // placeholder value, not important
-    CTerm.Hole, // placeholder value, not important
+    Binding(VTerm.VTop(ULevel.USimpleLevel(VTerm.LevelLiteral(0))))(gn"_"), // placeholder value, not important
+    VTerm.EffectsLiteral(ListSet()), // placeholder value, not important
     Some(GlobalHeapKey),
     IndexedSeq(),
     CTerm.Hole
@@ -168,7 +169,8 @@ private final class StackMachine(
           c match
             case Handler(
             hEff,
-            inputType,
+            inputBinding,
+            otherEffects,
             outputType,
             transform,
             handlers,
@@ -177,7 +179,8 @@ private final class StackMachine(
               val (count, handlerBody) = handlers(name)
               val capturedStack = Handler(
                 hEff,
-                inputType,
+                inputBinding,
+                otherEffects,
                 outputType,
                 transform,
                 handlers,
@@ -203,7 +206,7 @@ private final class StackMachine(
             refreshHeapKeyIndex(currentStackHeight)
             run(Force(arg))
           case _ => throw IllegalArgumentException("type error")
-      case Handler(eff, inputType, outputType, transform, handlers, input) =>
+      case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) =>
         if reduceDown then
           run(transform.substLowers(Thunk(input)))
         else
@@ -215,11 +218,11 @@ private final class StackMachine(
           case Heap(heapKey) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case HeapHandler(inputType, outputType, key, heapContent, input) =>
+              case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
                 val cell = new Cell(heapKey, heapContent.size, ty, CellStatus.Uninitialized)
                 stack(heapHandlerIndex) = HeapHandler(
-                  inputType,
-                  outputType,
+                  inputBinding,
+                  otherEffects,
                   key,
                   heapContent :+ None,
                   input
@@ -233,10 +236,10 @@ private final class StackMachine(
           case Cell(heapKey, index, ty, _) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case HeapHandler(inputType, outputType, key, heapContent, input) =>
+              case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
                 stack(heapHandlerIndex) = HeapHandler(
-                  inputType,
-                  outputType,
+                  inputBinding,
+                  otherEffects,
                   key,
                   heapContent.updated(index, Some(value)),
                   input
@@ -257,7 +260,7 @@ private final class StackMachine(
                   case Some(value) => run(substHole(stack.pop(), Return(value)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case HeapHandler(inputType, outputType, currentKey, heapContent, input) =>
+      case HeapHandler(inputBinding, otherEffects, currentKey, heapContent, input) =>
         if reduceDown then
           assert(currentKey.nonEmpty)
           heapKeyIndex(currentKey.get).pop()
@@ -266,7 +269,7 @@ private final class StackMachine(
           assert(currentKey.isEmpty) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHeapKeyIndex(key, stack.length)
-          stack.push(HeapHandler(inputType, outputType, Some(key), heapContent, input))
+          stack.push(HeapHandler(inputBinding, otherEffects, Some(key), heapContent, input))
           run(input.substLowers(Heap(key)))
 
   private enum Elimination:
@@ -331,11 +334,11 @@ private final class StackMachine(
     case Let(t, ty, ctx) => Let(c, ty, ctx)
     case Application(fun, arg) => Application(c, arg)
     case Projection(rec, name) => Projection(c, name)
-    case Handler(eff, inputType, outputType, transform, handlers, input) =>
-      Handler(eff, inputType, outputType, transform, handlers, c)
-    case HeapHandler(inputType, outputType, key, heap, input) => HeapHandler(
-      inputType,
-      outputType,
+    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) =>
+      Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, c)
+    case HeapHandler(inputBinding, otherEffects, key, heap, input) => HeapHandler(
+      inputBinding,
+      otherEffects,
       key,
       heap,
       c

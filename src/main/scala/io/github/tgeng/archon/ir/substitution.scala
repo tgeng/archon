@@ -110,9 +110,10 @@ given RaisableCTerm: Raisable[CTerm] with
       name,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-    case Handler(eff, inputType, outputType, transform, handlers, input) => Handler(
+    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) => Handler(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
-      raise(inputType, amount, bar),
+      inputBinding.map(RaisableVTerm.raise(_, amount, bar)),
+      RaisableVTerm.raise(otherEffects, amount, bar),
       raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
       handlers.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 2)) }.toMap,
@@ -127,9 +128,9 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(value, amount, bar)
     )
     case Get(cell) => Get(RaisableVTerm.raise(cell, amount, bar))
-    case HeapHandler(inputType, outputType, key, heapContent, input) => HeapHandler(
-      raise(inputType, amount, bar + 1),
-      raise(outputType, amount, bar),
+    case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
+      inputBinding.map(RaisableVTerm.raise(_, amount, bar)),
+      RaisableVTerm.raise(otherEffects, amount, bar + 1),
       key,
       heapContent.map(_.map(RaisableVTerm.raise(_, amount, bar))),
       raise(input, amount, bar + 1)
@@ -275,9 +276,10 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       name,
       args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
     )
-    case Handler(eff, inputType, outputType, transform, handlers, input) => Handler(
+    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) => Handler(
       eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      substitute(inputType, substitutor, offset),
+      inputBinding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
+      SubstitutableVTerm.substitute(otherEffects, substitutor, offset),
       substitute(outputType, substitutor, offset),
       substitute(transform, substitutor, offset + 1),
       handlers.view.mapValues { case (n, c) => (n, substitute(
@@ -297,9 +299,9 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       SubstitutableVTerm.substitute(value, substitutor, offset)
     )
     case Get(cell) => Get(SubstitutableVTerm.substitute(cell, substitutor, offset))
-    case HeapHandler(inputType, outputType, key, heapContent, input) => HeapHandler(
-      substitute(inputType, substitutor, offset + 1),
-      substitute(outputType, substitutor, offset),
+    case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
+      inputBinding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
+      SubstitutableVTerm.substitute(otherEffects, substitutor, offset + 1),
       key,
       heapContent.map(_.map(SubstitutableVTerm.substitute(_, substitutor, offset))),
       substitute(input, substitutor, offset + 1)

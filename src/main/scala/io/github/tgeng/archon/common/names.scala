@@ -27,8 +27,12 @@ enum QualifiedName:
 import io.github.tgeng.archon.common.QualifiedName.*
 
 object QualifiedName:
-  def from(string: String) = string.split('.').asInstanceOf[Array[String]].foldLeft(Root)(_ / _)
+  def from(string: String) = string.split('.').asInstanceOf[Array[String]].foldLeft(Root) { (p, n) =>
+    if n.startsWith("#") then p /# n.drop(1) else p / n
+  }
   def Builtin = Root / "archon" / "builtin"
 
 extension (ctx: StringContext)
   def qn(args: String*) = QualifiedName.from(ctx.s(args))
+  def gn(args: String*) = Name.Generated(ctx.s(args))
+  def n(args: String*) = Name.Normal(ctx.s(args))

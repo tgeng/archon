@@ -12,8 +12,8 @@ given DeBruijnPattern: DeBruijn[Pattern] with
   override def fromIndex(index: Nat): Pattern = Pattern.PRef(index)
 
 /**
- * Local references are represented as DeBruijn indices so `ref 0` points to the right most entry in
- * the context. In this setting, a "trivial" mapping should map `ref (sourceContextSize - 1)` to the first
+ * Local references are represented as DeBruijn indices so `var 0` points to the right most entry in
+ * the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)` to the first
  * var in target context (DeBruijn index targetContextSize - 1). [[nonTrivialMapping]] contains the
  * mapping of the last variables in the target context. If target context is longer than source
  * context, then [[nonTrivialMapping]] must account for this gap. In addition, it may go beyond this

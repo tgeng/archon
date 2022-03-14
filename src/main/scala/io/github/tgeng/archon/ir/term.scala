@@ -193,8 +193,8 @@ enum CTerm:
   /**
    * Internal only. This is only created by reduction.
    *
-   * A continuation behaves like a function, it has type `U inputType -> outputType`, where
-   * `inputType` is the type of the hole at the tip of the continuation seq and `outputType` is the
+   * A continuation behaves like a (linear) function, it has type `U inputBinding -> outputType`, where
+   * `inputBinding` is the type of the hole at the tip of the continuation seq and `outputType` is the
    * type of the bottom continuation stack.
    *
    * @param continuation stack containing the delimited continuation from the tip (right below
@@ -208,10 +208,11 @@ enum CTerm:
     eff: Eff,
 
     /**
-     * A handler is a computation transformer. The input value type is then `U inputType`. Note that the effects of
+     * A handler is a computation transformer. The input value type is then `U inputBinding`. Note that the effects of
      * input should be `eff ⊎ effect of outputType`.
      */
-    inputType: CTerm,
+    inputBinding: Binding[VTerm],
+    otherEffects: VTerm,
 
     /**
      * This is the output type.
@@ -219,18 +220,17 @@ enum CTerm:
     outputType: CTerm,
 
     /**
-     * The transformer that transforms a ref at DeBruijn index 0 of type `U inputType` to `outputType`.
-     * for cases where `inputType` equals `outputType`, a sensible default value
-     * is simply `force (ref 0)`
+     * The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`.
+     * for cases where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value
+     * is simply `return (var 0)`
      */
     /* binding + 1 */ transform: CTerm,
 
     /**
-     * All handler implementations declared by the effect. Each handler is essentially a function body that takes the
-     * following arguments
+     * All handler implementations declared by the effect. Each handler is essentially a function
+     * body that takes the following arguments
      *  - all declared parameters
-     *  - a continuation parameter of type `parameterType -> declared operator output type -> outputType`
-     *    and outputs `outputType`
+     *  - a continuation parameter of type `declared operator output type -> outputType` and outputs `outputType`
      */
     handlers: Map[Name, (Nat, /* binding + n + 1 (for resume) */ CTerm)],
     input: CTerm,
@@ -241,19 +241,13 @@ enum CTerm:
   case Get(cell: VTerm)
   case HeapHandler(
     /**
-     * A handler is a computation transformer. this is input type that has `ref 0` bound to a heap
-     * argument, which will be bound by this handler to the new heap created by this handler. The input type
-     * should have effect `{heap (ref 0)} ⊎ effect of outputType`.
+     * Similar to `inputBinidng` of [[Handler]]. But note that the type of `input` is
+     * `F(heap(var 0) ⊎ otherEffects, inputBinding.ty)` where referenced terms are weakened to
+     * accommodate the heap variable created by this heap handler. Note that this type must not. The
+     * output type of this handler should be `F(otherEffects, inputBinding.ty)`.
      */
-    /* binding + 1 */ inputType: CTerm,
-
-    /**
-     * This is the output type. The effects of the output type should be exactly `otherEffects`.
-     * Note that we do not allow heap to be leaked through `outputType` by existential types like (t: Type, x: t) where
-     * `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
-     * flexibility is needed, one should use `GlobalHeapKey` instead.
-     */
-    outputType: CTerm,
+    inputBinding: Binding[VTerm],
+    otherEffects: VTerm,
 
     /**
      * Newly created heap handler should always set this to `None`. This key is instantiated during reduction to a fresh
@@ -261,6 +255,13 @@ enum CTerm:
      */
     key: Option[HeapKey],
     heapContent: IndexedSeq[Option[VTerm]],
+
+    /**
+     * Note that the logic here should not expose the heap variable (i.e. `var 0`) through
+     * existential types like (t: Type, x: t) where
+     * `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
+     * flexibility is needed, one should use `GlobalHeapKey` instead.
+     */
     /* binding + 1 */ input: CTerm,
   )
 
