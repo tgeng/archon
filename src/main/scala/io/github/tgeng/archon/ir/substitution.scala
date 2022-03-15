@@ -12,7 +12,7 @@ trait Raisable[T]:
   def raise(t: T, amount: Int, bar: Int = 0): T
 
 trait Substitutable[S: Raisable, T]:
-  def substitute(s: S, substitutor: PartialSubstitution[T], offset: Int = 0): S
+  def substitute(s: S, substitution: PartialSubstitution[T], offset: Int = 0): S
 
 import VTerm.*
 import CTerm.*
@@ -145,30 +145,30 @@ given RaisableTelescope: Raisable[Telescope] with
 given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
   override def substitute(
     v: VTerm,
-    substitutor: PartialSubstitution[VTerm],
+    substitution: PartialSubstitution[VTerm],
     offset: Int
   ): VTerm = v match
     case Refl | LevelType | EffectsType | HeapType | _: Heap => v
     case VUniverse(level, upperBound) => VUniverse(
-      level.map(l => substitute(l, substitutor, offset)),
-      substitute(upperBound, substitutor, offset),
+      level.map(l => substitute(l, substitution, offset)),
+      substitute(upperBound, substitution, offset),
     )
-    case VTop(level) => VTop(level.map(substitute(_, substitutor, offset)))
-    case Var(idx) => substitutor(idx - offset) match
+    case VTop(level) => VTop(level.map(substitute(_, substitution, offset)))
+    case Var(idx) => substitution(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
       case _ => v
-    case U(cty) => U(SubstitutableCTerm.substitute(cty, substitutor, offset))
-    case Thunk(cty) => Thunk(SubstitutableCTerm.substitute(cty, substitutor, offset))
-    case DataType(qn, args) => DataType(qn, args.map(substitute(_, substitutor, offset)))
-    case Con(name, args) => Con(name, args.map(substitute(_, substitutor, offset)))
+    case U(cty) => U(SubstitutableCTerm.substitute(cty, substitution, offset))
+    case Thunk(cty) => Thunk(SubstitutableCTerm.substitute(cty, substitution, offset))
+    case DataType(qn, args) => DataType(qn, args.map(substitute(_, substitution, offset)))
+    case Con(name, args) => Con(name, args.map(substitute(_, substitution, offset)))
     case EqualityType(level, ty, left, right) => EqualityType(
-      substitute(level, substitutor, offset),
-      substitute(ty, substitutor, offset),
-      substitute(left, substitutor, offset),
-      substitute(right, substitutor, offset),
+      substitute(level, substitution, offset),
+      substitute(ty, substitution, offset),
+      substitute(left, substitution, offset),
+      substitute(right, substitution, offset),
     )
     case Effects(literal, unionOperands) =>
-      val operands = unionOperands.map(substitute(_, substitutor, offset))
+      val operands = unionOperands.map(substitute(_, substitution, offset))
       val newLiteral = literal.to(mutable.ArrayBuffer)
       val newOperands = mutable.ArrayBuffer[Var]()
       for operand <- operands do
@@ -183,7 +183,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       val operands = maxOperands.map { (ref, lOffset) =>
         (substitute(
           ref,
-          substitutor,
+          substitution,
           offset
         ), lOffset)
       }
@@ -204,125 +204,125 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
           case _ => throw IllegalArgumentException("type error")
       Level(newLiteral, ListMap.from(newOperands))
     case CellType(heap, ty, status) => CellType(
-      substitute(heap, substitutor, offset),
-      substitute(ty, substitutor, offset),
+      substitute(heap, substitution, offset),
+      substitute(ty, substitution, offset),
       status,
     )
-    case Cell(heapKey, index, ty, status) => Cell(heapKey, index, substitute(ty, substitutor, offset), status)
+    case Cell(heapKey, index, ty, status) => Cell(heapKey, index, substitute(ty, substitution, offset), status)
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
   override def substitute(
     c: CTerm,
-    substitutor: PartialSubstitution[VTerm],
+    substitution: PartialSubstitution[VTerm],
     offset: Int
   ): CTerm = c match
     case Hole | _: Def => c
     case CUniverse(effects, level, upperBound) => CUniverse(
-      SubstitutableVTerm.substitute(effects, substitutor, offset),
-      level.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      substitute(upperBound, substitutor, offset),
+      SubstitutableVTerm.substitute(effects, substitution, offset),
+      level.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      substitute(upperBound, substitution, offset),
     )
     case CTop(effects, level) => CTop(
-      SubstitutableVTerm.substitute(effects, substitutor, offset),
-      level.map(SubstitutableVTerm.substitute(_, substitutor, offset))
+      SubstitutableVTerm.substitute(effects, substitution, offset),
+      level.map(SubstitutableVTerm.substitute(_, substitution, offset))
     )
-    case Force(v) => Force(SubstitutableVTerm.substitute(v, substitutor, offset))
+    case Force(v) => Force(SubstitutableVTerm.substitute(v, substitution, offset))
     case F(effects, vTerm) => F(
-      SubstitutableVTerm.substitute(effects, substitutor, offset),
-      SubstitutableVTerm.substitute(vTerm, substitutor, offset)
+      SubstitutableVTerm.substitute(effects, substitution, offset),
+      SubstitutableVTerm.substitute(vTerm, substitution, offset)
     )
-    case Return(v) => Return(SubstitutableVTerm.substitute(v, substitutor, offset))
+    case Return(v) => Return(SubstitutableVTerm.substitute(v, substitution, offset))
     case Let(t, ty, ctx) => Let(
-      substitute(t, substitutor, offset),
-      ty.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      substitute(ctx, substitutor, offset + 1)
+      substitute(t, substitution, offset),
+      ty.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      substitute(ctx, substitution, offset + 1)
     )
     case FunctionType(effects, binding, bodyTy) => FunctionType(
-      SubstitutableVTerm.substitute(effects, substitutor, offset),
-      binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      substitute(bodyTy, substitutor, offset + 1)
+      SubstitutableVTerm.substitute(effects, substitution, offset),
+      binding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      substitute(bodyTy, substitution, offset + 1)
     )
-    //    case Lambda(body) => Lambda(substitute(body, substitutor, offset + 1))
+    //    case Lambda(body) => Lambda(substitute(body, substitution, offset + 1))
     case Application(fun, arg) => Application(
-      substitute(fun, substitutor, offset),
-      SubstitutableVTerm.substitute(arg, substitutor, offset)
+      substitute(fun, substitution, offset),
+      SubstitutableVTerm.substitute(arg, substitution, offset)
     )
     case RecordType(effects, qn, args) => RecordType(
-      SubstitutableVTerm.substitute(effects, substitutor, offset),
+      SubstitutableVTerm.substitute(effects, substitution, offset),
       qn,
-      args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
+      args.map(SubstitutableVTerm.substitute(_, substitution, offset))
     )
-    //    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitutor, offset)).toMap)
-    case Projection(rec, name) => Projection(substitute(rec, substitutor, offset), name)
+    //    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitution, offset)).toMap)
+    case Projection(rec, name) => Projection(substitute(rec, substitution, offset), name)
     //    case TypeCase(arg, cases, default) => TypeCase(
-    //      SubstitutableVTerm.substitute(arg, substitutor, offset),
-    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap,
-    //      substitute(default, substitutor, offset + 1)
+    //      SubstitutableVTerm.substitute(arg, substitution, offset),
+    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitution, offset + n + 1)) }.toMap,
+    //      substitute(default, substitution, offset + 1)
     //    )
     //    case DataCase(arg, cases) => DataCase(
-    //      SubstitutableVTerm.substitute(arg, substitutor, offset),
-    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitutor, offset + n + 1)) }.toMap
+    //      SubstitutableVTerm.substitute(arg, substitution, offset),
+    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitution, offset + n + 1)) }.toMap
     //    )
     //    case EqualityCase(arg, body) => EqualityCase(
-    //      SubstitutableVTerm.substitute(arg, substitutor, offset),
-    //      substitute(body, substitutor, offset + 1)
+    //      SubstitutableVTerm.substitute(arg, substitution, offset),
+    //      substitute(body, substitution, offset + 1)
     //    )
     case Continuation(capturedStack) =>
       Continuation(
-        capturedStack.map(substitute(_, substitutor, offset)),
+        capturedStack.map(substitute(_, substitution, offset)),
       )
     case OperatorCall(eff, name, args) => OperatorCall(
-      eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
+      eff.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       name,
-      args.map(SubstitutableVTerm.substitute(_, substitutor, offset))
+      args.map(SubstitutableVTerm.substitute(_, substitution, offset))
     )
     case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) => Handler(
-      eff.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      inputBinding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      SubstitutableVTerm.substitute(otherEffects, substitutor, offset),
-      substitute(outputType, substitutor, offset),
-      substitute(transform, substitutor, offset + 1),
+      eff.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      inputBinding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      SubstitutableVTerm.substitute(otherEffects, substitution, offset),
+      substitute(outputType, substitution, offset),
+      substitute(transform, substitution, offset + 1),
       handlers.view.mapValues { case (n, c) => (n, substitute(
         c,
-        substitutor,
+        substitution,
         offset + n + 2
       ))
       }.toMap,
-      substitute(input, substitutor, offset),
+      substitute(input, substitution, offset),
     )
     case Alloc(heap, ty) => Alloc(
-      SubstitutableVTerm.substitute(heap, substitutor, offset),
-      SubstitutableVTerm.substitute(ty, substitutor, offset)
+      SubstitutableVTerm.substitute(heap, substitution, offset),
+      SubstitutableVTerm.substitute(ty, substitution, offset)
     )
     case Set(call, value) => Set(
-      SubstitutableVTerm.substitute(call, substitutor, offset),
-      SubstitutableVTerm.substitute(value, substitutor, offset)
+      SubstitutableVTerm.substitute(call, substitution, offset),
+      SubstitutableVTerm.substitute(value, substitution, offset)
     )
-    case Get(cell) => Get(SubstitutableVTerm.substitute(cell, substitutor, offset))
+    case Get(cell) => Get(SubstitutableVTerm.substitute(cell, substitution, offset))
     case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
-      inputBinding.map(SubstitutableVTerm.substitute(_, substitutor, offset)),
-      SubstitutableVTerm.substitute(otherEffects, substitutor, offset + 1),
+      inputBinding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      SubstitutableVTerm.substitute(otherEffects, substitution, offset + 1),
       key,
-      heapContent.map(_.map(SubstitutableVTerm.substitute(_, substitutor, offset))),
-      substitute(input, substitutor, offset + 1)
+      heapContent.map(_.map(SubstitutableVTerm.substitute(_, substitution, offset))),
+      substitute(input, substitution, offset + 1)
     )
 
 given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
   override def substitute(
     telescope: Telescope,
-    substitutor: PartialSubstitution[VTerm],
+    substitution: PartialSubstitution[VTerm],
     offset: Int
   ): Telescope = telescope match
     case Nil => Nil
     case binding :: telescope =>
-      binding.map(SubstitutableVTerm.substitute(_, substitutor, offset)) :: substitute(
+      binding.map(SubstitutableVTerm.substitute(_, substitution, offset)) :: substitute(
         telescope,
-        substitutor,
+        substitution,
         offset + 1
       )
 
 extension (c: CTerm)
-  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitutor)
+  def subst(substitution: PartialSubstitution[VTerm]) = SubstitutableCTerm.substitute(c, substitution)
   def weakened = c.weaken(1, 0)
   def weaken(amount: Nat, at: Nat) = RaisableCTerm.raise(c, amount, at)
   def strengthened = c.strengthen(1, 0)
@@ -342,7 +342,7 @@ extension (c: CTerm)
     .subst(i => vTerms.lift(-(i + 1)))
 
 extension (v: VTerm)
-  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableVTerm.substitute(v, substitutor)
+  def subst(substitution: PartialSubstitution[VTerm]) = SubstitutableVTerm.substitute(v, substitution)
   def weaken(amount: Nat, at: Nat) = RaisableVTerm.raise(v, amount, at)
   def weakened = v.weaken(1, 0)
   def strengthened = v.strengthen(1, 0)
@@ -362,9 +362,9 @@ extension (v: VTerm)
     .subst(i => vTerms.lift(-(i + 1)))
 
 extension (telescope: Telescope)
-  def subst(substitutor: PartialSubstitution[VTerm]) = SubstitutableTelescope.substitute(
+  def subst(substitution: PartialSubstitution[VTerm]) = SubstitutableTelescope.substitute(
     telescope,
-    substitutor
+    substitution
   )
   def weaken(amount: Nat, at: Nat) = RaisableTelescope.raise(telescope, amount, at)
   def weakened = telescope.weaken(1, 0)
