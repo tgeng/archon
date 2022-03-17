@@ -115,7 +115,7 @@ given RaisableCTerm: Raisable[CTerm] with
       eff.map(RaisableVTerm.raise(_, amount, bar)),
       inputBinding.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(otherEffects, amount, bar),
-      raise(outputType, amount, bar),
+      RaisableVTerm.raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
       handlers.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 2)) }.toMap,
       raise(input, amount, bar),
@@ -282,7 +282,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       eff.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       inputBinding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       SubstitutableVTerm.substitute(otherEffects, substitution, offset),
-      substitute(outputType, substitution, offset),
+      SubstitutableVTerm.substitute(outputType, substitution, offset),
       substitute(transform, substitution, offset + 1),
       handlers.view.mapValues { case (n, c) => (n, substitute(
         c,

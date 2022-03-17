@@ -123,10 +123,21 @@ def inferType(tm: CTerm)
       yield F(Total, vTy)
   case Let(t, effects, binding, ctx) =>
     for _ <- checkType(t, F(effects, binding.ty))
-        ctxTy <- inferType(ctx)(using Γ :+ binding)
+        ctxTy <- if effects == Total then
+        // Do the reduction onsite so that type checking in sub terms can leverage the more specific
+        // type.
+          for t <- reduce(t)
+              r <- t match
+                case Return(v) => inferType(ctx.substLowers(v))
+                case _ => throw IllegalStateException(
+                  "impossible since we have checked type of t to be F(...)"
+                )
+          yield r
+        // Otherwise, just add the binding to the context and continue type checking.
+        else inferType(ctx)(using Γ :+ binding).map(_.weakened)
     // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
     //  the bound variable
-    yield augmentEffect(effects, ctxTy.weakened)
+    yield augmentEffect(effects, ctxTy)
   case FunctionType(effects, binding, bodyTy) =>
     for _ <- checkType(effects, EffectsType)
         tyTy <- inferType(binding.ty)
@@ -186,43 +197,42 @@ def inferType(tm: CTerm)
   transform,
   handlers,
   input
-  ) => ???
-//          val effect = Σ.getEffect(qn)
-//          if handlers.size != effect.operators.size ||
-//            handlers.keySet != effect.operators.map(_.name).toSet then
-//            Left(UnmatchedHandlerImplementation(qn, handlers.keys))
-//          else
-//            checkVTypes(args, effect.tParamTys) >>
-//              checkIsVType(inputBinding.ty) >>
-//              checkCType(
-//                input,
-//                F(EffectsUnion(EffectsLiteral(ListSet(eff)), otherEffects), inputBinding.ty)
-//              ) >>
-//              sys.addEffectConstraint(otherEffects, outputType) >>
-//              checkCType(transform, outputType.weakened)(using Γ :+ inputBinding) >>
-//              allRight(
-//                effect.operators.map { opDecl =>
-//                  val (n, handlerBody) = handlers(opDecl.name)
-//                  assert(n == opDecl.paramTys.size)
-//                  checkCType(
-//                    handlerBody,
-//                    outputType
-//                  )(
-//                    using Γ ++
-//                      opDecl.paramTys :+
-//                      Binding(
-//                        U(
-//                          FunctionType(
-//                            otherEffects,
-//                            Binding(opDecl.resultTy)(gn"output"),
-//                            outputType
-//                          )
-//                        )
-//                      )(gn"resume")
-//                  )
-//                }
-//              )
-//
+  ) =>
+    val effect = Σ.getEffect(qn)
+    if handlers.size != effect.operators.size ||
+      handlers.keySet != effect.operators.map(_.name).toSet then
+      Left(UnmatchedHandlerImplementation(qn, handlers.keys))
+    else
+      val outputCType = F(otherEffects, outputType)
+      for _ <- checkTypes(args, effect.tParamTys)
+          _ <- checkType(
+            input,
+            F(EffectsUnion(EffectsLiteral(ListSet(eff)), otherEffects), inputBinding.ty)
+          )
+          _ <- checkType(transform, outputCType.weakened)(using Γ :+ inputBinding)
+          _ <- allRight(
+            effect.operators.map { opDecl =>
+              val (n, handlerBody) = handlers(opDecl.name)
+              assert(n == opDecl.paramTys.size)
+              checkType(
+                handlerBody,
+                outputCType.weaken(n + 1, 0)
+              )(
+                using Γ ++
+                  opDecl.paramTys :+
+                  Binding(
+                    U(
+                      FunctionType(
+                        otherEffects,
+                        Binding(opDecl.resultTy)(gn"output"),
+                        F(otherEffects, opDecl.resultTy)
+                      )
+                    )
+                  )(gn"resume")
+              )
+            }
+          )
+      yield outputCType
 //        case Alloc(heap, vTy) => checkIsVType(vTy) >>
 //          sys.addSubtyping(
 //            F(

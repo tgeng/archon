@@ -215,9 +215,9 @@ enum CTerm:
     otherEffects: VTerm,
 
     /**
-     * This is the output type.
+     * This is the output value type. The computation type of this handler is `F(otherEffects, outputType)`.
      */
-    outputType: CTerm,
+    outputType: VTerm,
 
     /**
      * The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`.
