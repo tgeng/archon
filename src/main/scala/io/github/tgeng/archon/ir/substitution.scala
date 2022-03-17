@@ -67,8 +67,9 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(vTerm, amount, bar)
     )
     case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
-    case Let(t, ty, ctx) => Let(
+    case Let(t, eff, ty, ctx) => Let(
       raise(t, amount, bar),
+      RaisableVTerm.raise(eff, amount, bar),
       ty.map(RaisableVTerm.raise(_, amount, bar)),
       raise(ctx, amount, bar + 1)
     )
@@ -232,8 +233,9 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       SubstitutableVTerm.substitute(vTerm, substitution, offset)
     )
     case Return(v) => Return(SubstitutableVTerm.substitute(v, substitution, offset))
-    case Let(t, ty, ctx) => Let(
+    case Let(t, eff, ty, ctx) => Let(
       substitute(t, substitution, offset),
+      SubstitutableVTerm.substitute(eff, substitution, offset),
       ty.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       substitute(ctx, substitution, offset + 1)
     )
@@ -354,6 +356,26 @@ extension (v: VTerm)
    * are taken by other (deeper) indices.
    */
   def substLowers(vTerms: VTerm*) = v
+    // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
+    .strengthen(vTerms.length, 0)
+    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
+    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
+    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
+    .subst(i => vTerms.lift(-(i + 1)))
+
+extension (ul: ULevel)
+  def subst(substitution: PartialSubstitution[VTerm]) = ul.map(SubstitutableVTerm.substitute(_, substitution))
+  def weaken(amount: Nat, at: Nat) = ul.map(RaisableVTerm.raise(_, amount, at))
+  def weakened = ul.weaken(1, 0)
+  def strengthened = ul.strengthen(1, 0)
+  def strengthen(amount: Nat, at: Nat) = ul.map(RaisableVTerm.raise(_, -amount, at))
+
+  /**
+   * Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest
+   * index with the last substitutes 0. Then the result is raised so that the substituted indices
+   * are taken by other (deeper) indices.
+   */
+  def substLowers(vTerms: VTerm*) = ul
     // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
     .strengthen(vTerms.length, 0)
     // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index

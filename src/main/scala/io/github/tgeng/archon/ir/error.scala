@@ -6,7 +6,7 @@ enum Error:
   case Unknown
   case ReductionStuck(stuckTerm: CTerm)
   case UninitializedCell(stuckTerm: CTerm)
-  case TelescopeLengthMismatch(tms: List[VTerm], tys: Telescope)
+  case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case VTypeError(vTerm: VTerm, vType: VTerm)
   case CTypeError(cTerm: CTerm, cType: CTerm)
   case ULevelError(sub: ULevel, sup: ULevel)
@@ -16,3 +16,7 @@ enum Error:
   case CInferenceFailure(cTerm: CTerm)
   case VInferenceFailure(vTerm: VTerm)
   case UnmatchedHandlerImplementation(qn: QualifiedName, implementedOperators:Iterable[Name])
+  case ExpectUType(vTy: VTerm)
+  case ExpectFType(cTy: CTerm)
+  case ExpectFunction(c: CTerm)
+  case ExpectRecord(c: CTerm)

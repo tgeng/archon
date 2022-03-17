@@ -63,8 +63,8 @@ enum CellStatus extends Comparable[CellStatus]:
     else 1
 
 enum VTerm:
-  case VUniverse(level: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
-  case VTop(level: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
+  case VUniverse(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
+  case VTop(ul: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
 
   case Var(index: Nat)
 
@@ -174,7 +174,7 @@ enum CTerm:
   case Return(v: VTerm)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // Σx:A.C̲ like in eMLTT [1]
-  case Let(t: CTerm, binding: Binding[VTerm], /* binding + 1 */ ctx: CTerm)
+  case Let(t: CTerm, effects: VTerm, binding: Binding[VTerm], /* binding + 1 */ ctx: CTerm)
 
   /** archon.builtin.Function */
   case FunctionType(
