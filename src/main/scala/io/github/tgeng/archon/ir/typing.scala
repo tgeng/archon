@@ -65,7 +65,13 @@ def inferType(tm: VTerm)
     allRight(maxOperands.map { (ref, _) => checkType(ref, LevelType) }) >> Right(LevelType)
   case HeapType => Right(VUniverse(USimpleLevel(LevelLiteral(0)), HeapType))
   case _: Heap => Right(HeapType)
-  case CellType(heap, ty, _) => checkType(heap, HeapType) >> inferType(ty)
+  case CellType(heap, ty, _) =>
+    for _ <- checkType(heap, HeapType)
+        tyTy <- inferType(ty)
+        r <- tyTy match
+          case _: VUniverse => Right(tyTy)
+          case _ => Left(NotVTypeError(ty))
+    yield r
   case Cell(heapKey, _, ty, status) => Right(CellType(Heap(heapKey), ty, status))
 
 def checkType(tm: VTerm, ty: VTerm)
@@ -78,12 +84,12 @@ def checkType(tm: VTerm, ty: VTerm)
       val data = Σ.getData(qn)
       data
         .cons.first { c => if c.name == name then Some(c) else None } match
-        case None => Left(VTypeError(tm, ty))
+        case None => Left(MissingConstructor(name, qn))
         case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
-    case _ => Left(VTypeError(tm, ty))
+    case _ => Left(ExpectDataType(ty))
   case Refl => ty match
     case EqualityType(level, ty, left, right) => checkConversion(left, right, ty)
-    case _ => Left(VTypeError(tm, ty))
+    case _ => Left(ExpectEqualityType(ty))
   case _ =>
     for inferred <- inferType(tm)
         r <- checkSubtyping(inferred, ty)
@@ -122,7 +128,8 @@ def inferType(tm: CTerm)
     for vTy <- inferType(v)
       yield F(Total, vTy)
   case Let(t, effects, binding, ctx) =>
-    for _ <- checkType(t, F(effects, binding.ty))
+    for _ <- checkIsType(binding.ty)
+        _ <- checkType(t, F(effects, binding.ty))
         ctxTy <- if effects == Total then
         // Do the reduction onsite so that type checking in sub terms can leverage the more specific
         // type.
@@ -205,6 +212,7 @@ def inferType(tm: CTerm)
     else
       val outputCType = F(otherEffects, outputType)
       for _ <- checkTypes(args, effect.tParamTys)
+          _ <- checkIsType(inputBinding.ty)
           _ <- checkType(
             input,
             F(EffectsUnion(EffectsLiteral(ListSet(eff)), otherEffects), inputBinding.ty)
@@ -233,46 +241,49 @@ def inferType(tm: CTerm)
             }
           )
       yield outputCType
-//        case Alloc(heap, vTy) => checkIsVType(vTy) >>
-//          sys.addSubtyping(
-//            F(
-//              EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
-//              CellType(heap, vTy, CellStatus.Uninitialized),
-//            ),
-//            ty
-//          )
-//        case Set(cell, value) =>
-//          val vTy = sys.newVUnfVar()
-//          val heap = sys.newVUnfVar()
-//          checkVType(cell, CellType(heap, vTy, CellStatus.Uninitialized)) >>
-//            checkVType(value, vTy) >>
-//            sys.addSubtyping(
-//              F(
-//                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
-//                CellType(heap, vTy, CellStatus.Initialized),
-//              ),
-//              ty
-//            )
-//        case Get(cell) =>
-//          val vTy = sys.newVUnfVar()
-//          val heap = sys.newVUnfVar()
-//          checkVType(cell, CellType(heap, vTy, CellStatus.Initialized)) >>
-//            sys.addSubtyping(
-//              F(
-//                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
-//                vTy
-//              ),
-//              ty
-//            )
-//        case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
-//          val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
-//          checkIsVType(inputBinding.ty) >>
-//          // TODO: check heap variable is not leaked.
-//            checkCType(
-//              input,
-//              F(EffectsUnion(Var(0), otherEffects.weakened), inputBinding.ty.weakened)
-//            )(using Γ :+ heapVarBinding)
-
+  case Alloc(heap, vTy) =>
+    checkType(heap, HeapType) >>
+      checkIsType(vTy) >>
+      Right(
+        F(
+          EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+          CellType(heap, vTy, CellStatus.Uninitialized),
+        )
+      )
+  case Set(cell, value) =>
+    for cellTy <- inferType(cell)
+        r <- cellTy match
+          case CellType(heap, vTy, status) => checkType(value, vTy) >>
+            Right(
+              F(
+                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+                CellType(heap, vTy, CellStatus.Initialized),
+              )
+            )
+          case _ => Left(ExpectCell(cell))
+    yield r
+  case Get(cell) =>
+    for cellTy <- inferType(cell)
+        r <- cellTy match
+          case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
+            Right(
+              F(
+                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+                CellType(heap, vTy, CellStatus.Initialized),
+              )
+            )
+          case _: CellType => Left(UninitializedCell(tm))
+          case _ => Left(ExpectCell(cell))
+    yield r
+  case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
+    val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
+    checkIsType(inputBinding.ty) >>
+      // TODO: check heap variable is not leaked.
+      checkType(
+        input,
+        F(EffectsUnion(Var(0), otherEffects.weakened), inputBinding.ty.weakened)
+      )(using Γ :+ heapVarBinding) >>
+      Right(F(otherEffects, inputBinding.ty))
 
 def checkType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
@@ -281,6 +292,7 @@ def checkType(tm: CTerm, ty: CTerm)
 : Either[Error, Unit] = tm match
   case _ =>
     for tmTy <- inferType(tm)
+        ty <- reduceForTyping(ty)
         r <- checkSubtyping(tmTy, ty)
     yield r
 
@@ -313,6 +325,29 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)
       case ((tm, binding), index) => checkType(tm, binding.ty.substLowers(tms.take(index): _*))
     }
   )
+
+private def checkIsType(vTy: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  for vTyTy <- inferType(vTy)
+      r <- vTyTy match
+        case VUniverse(_, _) => Right(())
+        case _ => Left(NotVTypeError(vTy))
+  yield r
+
+private def checkIsType(cTy: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  for cTyTy <- inferType(cTy)
+      r <- cTyTy match
+        case CUniverse(eff, _, _) if eff == Total => Right(())
+        case _: CUniverse => Left(EffectfulCType(cTy))
+        case _ => Left(NotCTypeError(cTy))
+  yield r
 
 private def reduceForTyping(cTy: CTerm): Either[Error, CTerm] = ???
 
