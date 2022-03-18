@@ -24,7 +24,8 @@ given RaisableVTerm: Raisable[VTerm] with
       level.map(raise(_, amount, bar)),
       raise(upperBound, amount, bar)
     )
-    case VTop(level) => VTop(level.map(raise(_, amount, bar)))
+    case VTop(ul) => VTop(ul.map(raise(_, amount, bar)))
+    case Pure(ul) => Pure(ul.map(raise(_, amount, bar)))
     case Var(idx) => if idx >= bar then Var(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
     case Thunk(c) => Thunk(RaisableCTerm.raise(c, amount, bar))
@@ -47,7 +48,7 @@ given RaisableVTerm: Raisable[VTerm] with
       )
     )
     case CellType(heap, ty, status) => CellType(raise(heap, amount, bar), raise(ty, amount, bar), status)
-    case Cell(heapKey, index, ty, status) => Cell(heapKey, index, raise(ty, amount, bar), status)
+    case Cell(heapKey, index) => Cell(heapKey, index)
 
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
@@ -154,7 +155,8 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       level.map(l => substitute(l, substitution, offset)),
       substitute(upperBound, substitution, offset),
     )
-    case VTop(level) => VTop(level.map(substitute(_, substitution, offset)))
+    case VTop(ul) => VTop(ul.map(substitute(_, substitution, offset)))
+    case Pure(ul) => Pure(ul.map(substitute(_, substitution, offset)))
     case Var(idx) => substitution(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
       case _ => v
@@ -209,7 +211,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       substitute(ty, substitution, offset),
       status,
     )
-    case Cell(heapKey, index, ty, status) => Cell(heapKey, index, substitute(ty, substitution, offset), status)
+    case Cell(heapKey, index) => Cell(heapKey, index)
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
   override def substitute(

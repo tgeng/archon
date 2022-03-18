@@ -12,6 +12,7 @@ object Builtins:
 
   val VUniverseQn = BuiltinType / "VUniverse"
   val VTopQn = BuiltinType / "VTop"
+  val PureQn = BuiltinType / "Pure"
   val EqualityQn = BuiltinType / "Equality"
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"

@@ -8,6 +8,8 @@ import CTerm.*
 import ULevel.*
 import Error.*
 
+import javax.swing.text.WrappedPlainView
+
 trait TypingContext
 
 private def checkULevel(ul: ULevel)
@@ -27,6 +29,7 @@ def inferType(tm: VTerm)
     checkULevel(level) >>
       checkType(upperBound, tm) >>
       Right(VUniverse(ULevelSuc(level), tm))
+  case Pure(ul) => Right(VUniverse(ul, tm))
   case VTop(ul) => Right(VUniverse(ul, tm))
   case r: Var => Right(Γ(r).ty)
   case U(cty) =>
@@ -72,28 +75,34 @@ def inferType(tm: VTerm)
           case _: VUniverse => Right(tyTy)
           case _ => Left(NotVTypeError(ty))
     yield r
-  case Cell(heapKey, _, ty, status) => Right(CellType(Heap(heapKey), ty, status))
+  case Cell(heapKey, _) => throw IllegalArgumentException("cannot infer type")
 
 def checkType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = tm match
-  case Con(name, args) => ty match
-    case DataType(qn, tArgs) =>
-      val data = Σ.getData(qn)
-      data
-        .cons.first { c => if c.name == name then Some(c) else None } match
-        case None => Left(MissingConstructor(name, qn))
-        case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
-    case _ => Left(ExpectDataType(ty))
-  case Refl => ty match
-    case EqualityType(level, ty, left, right) => checkConversion(left, right, ty)
-    case _ => Left(ExpectEqualityType(ty))
-  case _ =>
-    for inferred <- inferType(tm)
-        r <- checkSubtyping(inferred, ty)
-    yield r
+: Either[Error, Unit] =
+  checkIsType(ty) >>
+    (tm match
+      case Con(name, args) => ty match
+        case DataType(qn, tArgs) =>
+          val data = Σ.getData(qn)
+            data
+          .cons.first { c => if c.name == name then Some(c) else None } match
+          case None => Left(MissingConstructor(name, qn))
+          case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
+        case _ => Left(ExpectDataType(ty))
+      case Refl => ty match
+        case EqualityType(level, ty, left, right) => checkConversion(left, right, ty)
+        case _ => Left(ExpectEqualityType(ty))
+      case Cell(heapKey, _) => ty match
+        case CellType(heap, _, _) if Heap(heapKey) == heap => Right(())
+        case _: CellType => Left(ExpectCellTypeWithHeap(heapKey))
+        case _ => Left(ExpectCellType(ty))
+      case _ =>
+        for inferred <- inferType(tm)
+            r <- checkSubtyping(inferred, ty)
+        yield r)
 
 def inferType(tm: CTerm)
   (using Γ: Context)
@@ -186,7 +195,7 @@ def inferType(tm: CTerm)
               case Some(f) => Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(tm): _*)))
           case _ => Left(ExpectRecord(rec))
     yield r
-  case OperatorCall(eff@(qn, tArgs), name, args) => ???
+  case OperatorCall(eff@(qn, tArgs), name, args) =>
     val effect = Σ.getEffect(qn)
     effect.operators.first { o => if o.name == name then Some(o) else None } match
       case None => throw IllegalArgumentException(s"unexpected operator $name for $qn")
@@ -312,7 +321,38 @@ def checkConversion(a: VTerm, b: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = ???
+: Either[Error, Unit] =
+// We have specifically designed pure value terms to respect object equality.
+  if a == b then Right(())
+    // TODO: implement β and η conversion checking for `U` and `Thunk`.
+  else (a, b, ty) match
+    case (Thunk(a), Thunk(b), U(ty)) => checkConversion(a, b, ty)
+    case (U(a), U(b), VUniverse(ul, _)) => checkConversion(a, b, CUniverse(Total, ul, CTop(Total, ul)))
+    case _ => Left(VConversionFailure(a, b, ty))
+
+private def checkConversion(a: CTerm, b: CTerm, ty: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  if a == b then Right(())
+  else if ty.asInstanceOf[CType].effects == Total then
+    for a2 <- reduce(a)
+        b2 <- reduce(b)
+        r <- if a2 == b2 then Right(())
+             else ty match
+               case FunctionType(_, binding, bodyTy) =>
+                 checkConversion(Application(a2.weakened, Var(0)), Application(b2.weakened, Var(0)), bodyTy)(using Γ :+ binding)
+               case RecordType(_, qn, args) =>
+                 val record = Σ.getRecord(qn)
+                 allRight(
+                   record.fields.map{ field =>
+                     checkConversion(Projection(a2, field.name), Projection(b2, field.name), field.ty)
+                   }
+                 )
+               case _ => Left(CConversionFailure(a, b, ty))
+    yield r
+  else Left(CConversionFailure(a, b, ty))
 
 def checkTypes(tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)
@@ -349,7 +389,17 @@ private def checkIsType(cTy: CTerm)
         case _ => Left(NotCTypeError(cTy))
   yield r
 
-private def reduceForTyping(cTy: CTerm): Either[Error, CTerm] = ???
+private def reduceForTyping(cTy: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, CTerm] =
+  for cTyTy <- inferType(cTy)
+      r <- cTyTy match
+        case CUniverse(eff, _, _) if eff == Total => reduce(cTy)
+        case _: CUniverse => Left(EffectfulCType(cTy))
+        case _ => Left(NotCTypeError(cTy))
+  yield r
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   case CUniverse(effects, ul, upperBound) => CUniverse(EffectsUnion(eff, effects), ul, upperBound)

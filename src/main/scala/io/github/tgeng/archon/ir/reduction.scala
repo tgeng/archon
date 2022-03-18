@@ -50,7 +50,6 @@ private final class StackMachine(
   import CTerm.*
   import VTerm.*
   import Pattern.*
-  import Error.ReductionStuck
 
   private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) = heapKeyIndex.getOrElseUpdate(
     heapKey,
@@ -132,15 +131,14 @@ private final class StackMachine(
                 case MatchingStatus.Matched =>
                   stack.dropRightInPlace(lhs.length)
                   Some(Right(rhs.subst(mapping.get)))
-                case MatchingStatus.Stuck => Some(Left(ReductionStuck(reconstructTermFromStack(pc))))
+                case MatchingStatus.Stuck => Some(Right(reconstructTermFromStack(pc)))
                 case MatchingStatus.Mismatch => None
           } match
             case Some(Right(t)) => run(t)
-            case Some(error) => error
             case None => throw IllegalArgumentException(s"leaky pattern in $qn")
       case Force(v) => v match
         case Thunk(c) => run(c)
-        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        case _: Var => Right(reconstructTermFromStack(pc))
         case _ => throw IllegalArgumentException("type error")
       case Let(t, _, ty, ctx) =>
         t match
@@ -214,12 +212,12 @@ private final class StackMachine(
           run(input)
       case Alloc(heap, ty) =>
         heap match
-          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
+          case _: Var => Right(reconstructTermFromStack(pc))
           case Heap(heapKey) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
-                val cell = new Cell(heapKey, heapContent.size, ty, CellStatus.Uninitialized)
+                val cell = new Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
                   inputBinding,
                   otherEffects,
@@ -232,8 +230,8 @@ private final class StackMachine(
           case _ => throw IllegalArgumentException("type error")
       case Set(cell, value) =>
         cell match
-          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          case Cell(heapKey, index, ty, _) =>
+          case _: Var => Right(reconstructTermFromStack(pc))
+          case Cell(heapKey, index) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
@@ -244,14 +242,13 @@ private final class StackMachine(
                   heapContent.updated(index, Some(value)),
                   input
                 )
-                run(substHole(stack.pop(), Return(new Cell(heapKey, index, ty, CellStatus.Initialized))))
+                run(substHole(stack.pop(), Return(new Cell(heapKey, index))))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case Get(cell) =>
         cell match
-          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          case Cell(heapKey, index, _, status) =>
-            if status == CellStatus.Uninitialized then throw IllegalArgumentException("read uninitialized cell")
+          case _: Var => Right(reconstructTermFromStack(pc))
+          case Cell(heapKey, index) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(_, _, _, heapContent, _) =>

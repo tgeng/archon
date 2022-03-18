@@ -4,6 +4,16 @@ import io.github.tgeng.archon.common.*
 
 enum Declaration:
   case Data(val qn: QualifiedName)(val tParamTys: Telescope, /* binding + paramTys */ val ty: VTerm, val cons: Vector[Constructor])
+
+  /**
+   * Note: `tParamTys` can only contain pure value terms. That is, `U` and `Thunk` are not allowed.
+   * This is necessary because type-based handler matching needs a "simple" way to efficiently
+   * locate the corresponding handler. Arbitrary logic that can happen during conversion would make
+   * it very difficult to implement dynamic handlers efficiently. Also note that this means we also
+   * need to conservatively reject `tParamTys` like `[A: VUniverse, a: A]` because there is no way
+   * to statically know if `A` could be `U`. In addition, this also rules out any data type that
+   * wraps impure computation inside.
+   */
   case Effect(val qn: QualifiedName)(val tParamTys: Telescope, val operators: Vector[Operator])
   case Record(val qn: QualifiedName)(val tParamTys: Telescope, /* binding + tParamTys */ val ty: CTerm, val fields: Vector[Field])
   case Definition(val qn: QualifiedName)(val ty: CTerm, val clauses: Vector[CheckedClause], val caseTree: CaseTree)

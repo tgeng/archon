@@ -66,6 +66,11 @@ enum VTerm:
   case VUniverse(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
   case VTop(ul: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
 
+  /**
+   * Top type of pure value types.
+   */
+  case Pure(ul: ULevel) extends VTerm, QualifiedNameOwner(PureQn)
+
   case Var(index: Nat)
 
   /** archon.builtin.U */
@@ -103,7 +108,7 @@ enum VTerm:
   /**
    * Internal only, created by [[CTerm.Alloc]]
    */
-  case Cell(heapKey: HeapKey, index: Nat, ty: VTerm, status: CellStatus)
+  case Cell(heapKey: HeapKey, index: Nat)
 
 object VTerm:
   def LevelLiteral(n: Nat): Level = new Level(n, ListMap())
