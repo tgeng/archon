@@ -93,7 +93,7 @@ def checkType(tm: VTerm, ty: VTerm)
           case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
         case _ => Left(ExpectDataType(ty))
       case Refl => ty match
-        case EqualityType(level, ty, left, right) => checkConversion(left, right, ty)
+        case EqualityType(level, ty, left, right) => checkConversion(left, right, Some(ty))
         case _ => Left(ExpectEqualityType(ty))
       case Cell(heapKey, _) => ty match
         case CellType(heap, _, _) if Heap(heapKey) == heap => Right(())
@@ -101,7 +101,7 @@ def checkType(tm: VTerm, ty: VTerm)
         case _ => Left(ExpectCellType(ty))
       case _ =>
         for inferred <- inferType(tm)
-            r <- checkSubtyping(inferred, ty)
+            r <- checkSubsumption(inferred, ty, None)
         yield r)
 
 def inferType(tm: CTerm)
@@ -302,10 +302,10 @@ def checkType(tm: CTerm, ty: CTerm)
   case _ =>
     for tmTy <- inferType(tm)
         ty <- reduceForTyping(ty)
-        r <- checkSubtyping(tmTy, ty)
+        r <- checkSubsumption(tmTy, ty, None)
     yield r
 
-def checkSubtyping(sub: VTerm, sup: VTerm)
+def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -313,10 +313,10 @@ def checkSubtyping(sub: VTerm, sup: VTerm)
   if sub == sup then return Right(())
   (sub, sup) match
     case (VUniverse(ul1, upperBound1), VUniverse(ul2, upperBound2)) =>
-      checkULevelSubsumption(ul1, ul2) >> checkSubtyping(upperBound1, upperBound2)
+      checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
     case (VTop(ul1), VTop(ul2)) => checkULevelSubsumption(ul1, ul2)
     case (Pure(ul1), Pure(ul2)) => checkULevelSubsumption(ul1, ul2)
-    case (U(cty1), U(cty2)) => checkSubtyping(cty1, cty2)
+    case (U(cty1), U(cty2)) => checkSubsumption(cty1, cty2, None)
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
       val data = Σ.getData(qn1)
       var Γ2 = Γ
@@ -324,93 +324,124 @@ def checkSubtyping(sub: VTerm, sup: VTerm)
         args1.zip(args2).zip(data.tParamTys).map {
           case ((arg1, arg2), (binding, variance)) =>
             val r = variance match
-              case Variance.INVARIANT => checkConversion(arg1, arg2, binding.ty)(using Γ2)
-              case Variance.COVARIANT => checkSubtyping(arg1, arg2)(using Γ2)
-              case Variance.CONTRAVARIANT => checkSubtyping(arg2, arg1)(using Γ2)
+              case Variance.INVARIANT => checkConversion(arg1, arg2, Some(binding.ty))(using Γ2)
+              case Variance.COVARIANT => checkSubsumption(arg1, arg2, Some(binding.ty))(using Γ2)
+              case Variance.CONTRAVARIANT => checkSubsumption(arg2, arg1, Some(binding.ty))(using Γ2)
             Γ2 = Γ2 :+ binding
             r
         }
       )
     case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2)) =>
-      for tyTy <- inferType(sup)
-          r <- checkConversion(heap1, heap2, HeapType) >>
-            checkConversion(ty1, ty2, tyTy) >>
-            (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
-              NotVSubType(sub, sup)
-            ))
+      for r <- checkConversion(heap1, heap2, Some(HeapType)) >>
+        checkConversion(ty1, ty2, ty) >>
+        (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
+          NotVSubsumption(sub, sup, ty)
+        ))
       yield r
-    case _ => Left(NotVSubType(sub, sup))
+    case _ => Left(NotVSubsumption(sub, sup, ty))
 
-def checkSubtyping(sub: CTerm, sup: CTerm)
+def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
-  for sub <- reduceForTyping(sub)
-      sup <- reduceForTyping(sup)
-  yield ???
+  val isTotal = ty.asInstanceOf[CType].effects == Total
+  for sub <- if isTotal then reduce(sub) else Right(sub)
+      sup <- if isTotal then reduce(sup) else Right(sup)
+      r <- (sub, sup, ty) match
+        case (_, _, _) if sub == sup => Right(())
+        case (_, _, Some(FunctionType(_, binding, bodyTy))) =>
+          checkSubsumption(
+            Application(sub.weakened, Var(0)),
+            Application(sup.weakened, Var(0)),
+            Some(bodyTy),
+          )(using Γ :+ binding)
+        case (_, _, Some(RecordType(_, qn, args))) =>
+          val record = Σ.getRecord(qn)
+          allRight(
+            record.fields.map { field =>
+              checkSubsumption(Projection(sub, field.name), Projection(sup, field.name), Some(field.ty))
+            }
+          )
+        case (CUniverse(eff1, ul1, upperBound1), CUniverse(eff2, ul2, upperBound2), _) =>
+          checkEffSubsumption(eff1, eff2) >>
+            checkULevelSubsumption(ul1, ul2) >>
+            checkSubsumption(upperBound1, upperBound2, Some(sup))
+        case (CTop(eff1, ul1), CTop(eff2, ul2), _) =>
+          checkEffSubsumption(eff1, eff2) >>
+            checkULevelSubsumption(ul1, ul2)
+        case (F(eff1, vTy1), F(eff2, vTy2), _) =>
+          for _ <- checkEffSubsumption(eff1, eff2)
+              r <- checkSubsumption(vTy1, vTy2, None)
+          yield r
+        // TODO: keep doing this part
+        case _ => Left(NotCSubsumption(sub, sup, ty))
+  yield r
+
+private def checkEffSubsumption(eff1: VTerm, eff2: VTerm): Either[Error, Unit] = (eff1, eff2) match
+  case (_, _) if eff1 == eff2 => Right(())
+  case (Effects(literals1, unionOperands1), Effects(literals2, unionOperands2))
+    if literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) => Right(())
+  case _ => Left(NotEffectSubsumption(eff1, eff2))
 
 /**
  * Check that `ul1` is lower or equal to `ul2`.
  */
-private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-: Either[Error, Unit] =
-  if ul1 == ul2 then return Right(())
-  (ul1, ul2) match
-    case (USimpleLevel(Level(l1, maxOperands1)), USimpleLevel(Level(l2, maxOperands2)))
-      if l1 <= l2 &&
-        maxOperands1.forall { (k, v) => maxOperands2.getOrElse(k, -1) >= v } => Right(())
-    case (USimpleLevel(_), UωLevel(_)) => Right(())
-    case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(())
-    case _ => Left(NotLevelSubsumption(ul1, ul2))
+private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel): Either[Error, Unit] = (ul1, ul2) match
+  case (_, _) if ul1 == ul2 => Right(())
+  case (USimpleLevel(Level(l1, maxOperands1)), USimpleLevel(Level(l2, maxOperands2)))
+    if l1 <= l2 &&
+      maxOperands1.forall { (k, v) => maxOperands2.getOrElse(k, -1) >= v } => Right(())
+  case (USimpleLevel(_), UωLevel(_)) => Right(())
+  case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(())
+  case _ => Left(NotLevelSubsumption(ul1, ul2))
 
-def checkConversion(a: VTerm, b: VTerm, ty: VTerm)
+/**
+ * @param ty can be [[None]] if `a` and `b` are types
+ */
+def checkConversion(a: VTerm, b: VTerm, ty: Option[VTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
 // We have specifically designed pure value terms to respect object equality.
-  if a == b then Right(())
-  // TODO: implement β and η conversion checking for `U` and `Thunk`.
-  else (a, b, ty) match
-    case (Thunk(a), Thunk(b), U(ty)) => checkConversion(a, b, ty)
-    case (U(a), U(b), VUniverse(ul, _)) => checkConversion(
-      a,
-      b,
-      CUniverse(Total, ul, CTop(Total, ul))
-    )
+  (a, b, ty) match
+    case (_, _, _) if a == b => Right(())
+    case (Thunk(a), Thunk(b), Some(U(ty))) => checkConversion(a, b, Some(ty))
+    case (U(a), U(b), _) => checkConversion(a, b, None)
     case _ => Left(VConversionFailure(a, b, ty))
 
-private def checkConversion(a: CTerm, b: CTerm, ty: CTerm)
+/**
+ * @param ty can be [[None]] if `a` and `b` are types
+ */
+private def checkConversion(a: CTerm, b: CTerm, ty: Option[CTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
-  if a == b then Right(())
-  else if ty.asInstanceOf[CType].effects == Total then
-    for a2 <- reduce(a)
-        b2 <- reduce(b)
-        r <- if a2 == b2 then Right(())
-        else ty match
-          case FunctionType(_, binding, bodyTy) =>
-            checkConversion(
-              Application(a2.weakened, Var(0)),
-              Application(b2.weakened, Var(0)),
-              bodyTy
-            )(using Γ :+ binding)
-          case RecordType(_, qn, args) =>
-            val record = Σ.getRecord(qn)
-            allRight(
-              record.fields.map { field =>
-                checkConversion(Projection(a2, field.name), Projection(b2, field.name), field.ty)
-              }
-            )
-          case _ => Left(CConversionFailure(a, b, ty))
-    yield r
-  else Left(CConversionFailure(a, b, ty))
+  val isTotal = ty.asInstanceOf[CType].effects == Total
+  for a <- if isTotal then reduce(a) else Right(a)
+      b <- if isTotal then reduce(b) else Right(b)
+      r <- (a, b, ty) match
+        case (_, _, Some(FunctionType(_, binding, bodyTy))) =>
+          checkConversion(
+            Application(a.weakened, Var(0)),
+            Application(b.weakened, Var(0)),
+            Some(bodyTy),
+          )(using Γ :+ binding)
+        case (_, _, Some(RecordType(_, qn, args))) =>
+          val record = Σ.getRecord(qn)
+          allRight(
+            record.fields.map { field =>
+              checkConversion(Projection(a, field.name), Projection(b, field.name), Some(field.ty))
+            }
+          )
+        case (Force(v1), Force(v2), Some(ty)) => checkConversion(v1, v2, Some(U(ty)))
+        case (F(eff1, vTy1), F(eff2, vTy2), _) => ???
+        // TODO: add more cases.
+        case (Let(t1, eff1, binding1, ctx1), Let(t2, eff2, binding2, ctx2), _) => ???
+        case _ => Left(CConversionFailure(a, b, ty))
+  yield r
 
 def checkTypes(tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)

@@ -178,7 +178,8 @@ enum CTerm:
   case F(effects: VTerm, vTy: VTerm) extends CTerm, CType
   case Return(v: VTerm)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
-  // Σx:A.C̲ like in eMLTT [1]
+  // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
+  // especially after graded modality is added to support linear usage of computations when needed.
   case Let(t: CTerm, effects: VTerm, binding: Binding[VTerm], /* binding + 1 */ ctx: CTerm)
 
   /** archon.builtin.Function */

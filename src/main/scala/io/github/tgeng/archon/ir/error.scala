@@ -4,8 +4,8 @@ import io.github.tgeng.archon.common.*
 
 enum Error:
   case Unknown
-  case VConversionFailure(a: VTerm, b: VTerm, ty: VTerm)
-  case CConversionFailure(a: CTerm, b: CTerm, ty: CTerm)
+  case VConversionFailure(a: VTerm, b: VTerm, ty: Option[VTerm])
+  case CConversionFailure(a: CTerm, b: CTerm, ty: Option[CTerm])
   case EffectfulCType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
   case ExpectCell(tm: VTerm)
   case ExpectCellType(ty: VTerm)
@@ -23,6 +23,7 @@ enum Error:
   case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case UninitializedCell(stuckTerm: CTerm)
   case UnmatchedHandlerImplementation(qn: QualifiedName, implementedOperators:Iterable[Name])
-  case NotVSubType(sub: VTerm, sup: VTerm)
-  case NotCSubType(sub: CTerm, sup: CTerm)
+  case NotVSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
+  case NotCSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
   case NotLevelSubsumption(sub: ULevel, sup: ULevel)
+  case NotEffectSubsumption(sub: VTerm, sup: VTerm)
