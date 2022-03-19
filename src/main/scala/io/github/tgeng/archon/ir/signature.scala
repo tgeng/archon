@@ -2,8 +2,13 @@ package io.github.tgeng.archon.ir
 
 import io.github.tgeng.archon.common.*
 
+enum Variance:
+  case INVARIANT, COVARIANT, CONTRAVARIANT
+
+type TTelescope = List[(Binding[VTerm], Variance)]
+
 enum Declaration:
-  case Data(val qn: QualifiedName)(val tParamTys: Telescope, /* binding + paramTys */ val ty: VTerm, val cons: Vector[Constructor])
+  case Data(val qn: QualifiedName)(val tParamTys: TTelescope, /* binding + paramTys */ val ty: VTerm, val cons: Vector[Constructor])
 
   /**
    * Note: `tParamTys` can only contain pure value terms. That is, `U` and `Thunk` are not allowed.
@@ -15,7 +20,7 @@ enum Declaration:
    * wraps impure computation inside.
    */
   case Effect(val qn: QualifiedName)(val tParamTys: Telescope, val operators: Vector[Operator])
-  case Record(val qn: QualifiedName)(val tParamTys: Telescope, /* binding + tParamTys */ val ty: CTerm, val fields: Vector[Field])
+  case Record(val qn: QualifiedName)(val tParamTys: TTelescope, /* binding + tParamTys */ val ty: CTerm, val fields: Vector[Field])
   case Definition(val qn: QualifiedName)(val ty: CTerm, val clauses: Vector[CheckedClause], val caseTree: CaseTree)
 
   def qn: QualifiedName

@@ -23,3 +23,6 @@ enum Error:
   case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case UninitializedCell(stuckTerm: CTerm)
   case UnmatchedHandlerImplementation(qn: QualifiedName, implementedOperators:Iterable[Name])
+  case NotVSubType(sub: VTerm, sup: VTerm)
+  case NotCSubType(sub: CTerm, sup: CTerm)
+  case NotLevelSubsumption(sub: ULevel, sup: ULevel)

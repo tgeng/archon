@@ -44,7 +44,7 @@ def inferType(tm: VTerm)
       yield U(cty)
   case DataType(qn, args) =>
     val data = Σ.getData(qn)
-    checkTypes(args, data.tParamTys) >> Right(data.ty.substLowers(args: _*))
+    checkTypes(args, data.tParamTys.map(_._1)) >> Right(data.ty.substLowers(args: _*))
   case _: Con => throw IllegalArgumentException("cannot infer type")
   case EqualityType(level, ty, left, right) =>
     val ul = USimpleLevel(level)
@@ -183,7 +183,7 @@ def inferType(tm: CTerm)
   case RecordType(effects, qn, args) =>
     val record = Σ.getRecord(qn)
     checkType(effects, EffectsType) >>
-      checkTypes(args, record.tParamTys) >>
+      checkTypes(args, record.tParamTys.map(_._1)) >>
       Right(record.ty.substLowers(args: _*))
   case Projection(rec, name) =>
     for recTy <- inferType(rec)
@@ -309,13 +309,63 @@ def checkSubtyping(sub: VTerm, sup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = ???
+: Either[Error, Unit] =
+  if sub == sup then return Right(())
+  (sub, sup) match
+    case (VUniverse(ul1, upperBound1), VUniverse(ul2, upperBound2)) =>
+      checkULevelSubsumption(ul1, ul2) >> checkSubtyping(upperBound1, upperBound2)
+    case (VTop(ul1), VTop(ul2)) => checkULevelSubsumption(ul1, ul2)
+    case (Pure(ul1), Pure(ul2)) => checkULevelSubsumption(ul1, ul2)
+    case (U(cty1), U(cty2)) => checkSubtyping(cty1, cty2)
+    case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
+      val data = Σ.getData(qn1)
+      var Γ2 = Γ
+      allRight(
+        args1.zip(args2).zip(data.tParamTys).map {
+          case ((arg1, arg2), (binding, variance)) =>
+            val r = variance match
+              case Variance.INVARIANT => checkConversion(arg1, arg2, binding.ty)(using Γ2)
+              case Variance.COVARIANT => checkSubtyping(arg1, arg2)(using Γ2)
+              case Variance.CONTRAVARIANT => checkSubtyping(arg2, arg1)(using Γ2)
+            Γ2 = Γ2 :+ binding
+            r
+        }
+      )
+    case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2)) =>
+      for tyTy <- inferType(sup)
+          r <- checkConversion(heap1, heap2, HeapType) >>
+            checkConversion(ty1, ty2, tyTy) >>
+            (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
+              NotVSubType(sub, sup)
+            ))
+      yield r
+    case _ => Left(NotVSubType(sub, sup))
 
 def checkSubtyping(sub: CTerm, sup: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = ???
+: Either[Error, Unit] =
+  for sub <- reduceForTyping(sub)
+      sup <- reduceForTyping(sup)
+  yield ???
+
+/**
+ * Check that `ul1` is lower or equal to `ul2`.
+ */
+private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  if ul1 == ul2 then return Right(())
+  (ul1, ul2) match
+    case (USimpleLevel(Level(l1, maxOperands1)), USimpleLevel(Level(l2, maxOperands2)))
+      if l1 <= l2 &&
+        maxOperands1.forall { (k, v) => maxOperands2.getOrElse(k, -1) >= v } => Right(())
+    case (USimpleLevel(_), UωLevel(_)) => Right(())
+    case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(())
+    case _ => Left(NotLevelSubsumption(ul1, ul2))
 
 def checkConversion(a: VTerm, b: VTerm, ty: VTerm)
   (using Γ: Context)
@@ -324,10 +374,14 @@ def checkConversion(a: VTerm, b: VTerm, ty: VTerm)
 : Either[Error, Unit] =
 // We have specifically designed pure value terms to respect object equality.
   if a == b then Right(())
-    // TODO: implement β and η conversion checking for `U` and `Thunk`.
+  // TODO: implement β and η conversion checking for `U` and `Thunk`.
   else (a, b, ty) match
     case (Thunk(a), Thunk(b), U(ty)) => checkConversion(a, b, ty)
-    case (U(a), U(b), VUniverse(ul, _)) => checkConversion(a, b, CUniverse(Total, ul, CTop(Total, ul)))
+    case (U(a), U(b), VUniverse(ul, _)) => checkConversion(
+      a,
+      b,
+      CUniverse(Total, ul, CTop(Total, ul))
+    )
     case _ => Left(VConversionFailure(a, b, ty))
 
 private def checkConversion(a: CTerm, b: CTerm, ty: CTerm)
@@ -340,17 +394,21 @@ private def checkConversion(a: CTerm, b: CTerm, ty: CTerm)
     for a2 <- reduce(a)
         b2 <- reduce(b)
         r <- if a2 == b2 then Right(())
-             else ty match
-               case FunctionType(_, binding, bodyTy) =>
-                 checkConversion(Application(a2.weakened, Var(0)), Application(b2.weakened, Var(0)), bodyTy)(using Γ :+ binding)
-               case RecordType(_, qn, args) =>
-                 val record = Σ.getRecord(qn)
-                 allRight(
-                   record.fields.map{ field =>
-                     checkConversion(Projection(a2, field.name), Projection(b2, field.name), field.ty)
-                   }
-                 )
-               case _ => Left(CConversionFailure(a, b, ty))
+        else ty match
+          case FunctionType(_, binding, bodyTy) =>
+            checkConversion(
+              Application(a2.weakened, Var(0)),
+              Application(b2.weakened, Var(0)),
+              bodyTy
+            )(using Γ :+ binding)
+          case RecordType(_, qn, args) =>
+            val record = Σ.getRecord(qn)
+            allRight(
+              record.fields.map { field =>
+                checkConversion(Projection(a2, field.name), Projection(b2, field.name), field.ty)
+              }
+            )
+          case _ => Left(CConversionFailure(a, b, ty))
     yield r
   else Left(CConversionFailure(a, b, ty))
 
