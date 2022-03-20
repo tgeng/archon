@@ -8,7 +8,12 @@ enum Variance:
 type TTelescope = List[(Binding[VTerm], Variance)]
 
 enum Declaration:
-  case Data(val qn: QualifiedName)(val tParamTys: TTelescope, /* binding + paramTys */ val ty: VTerm, val cons: Vector[Constructor])
+  case Data(val qn: QualifiedName)
+    (
+      val tParamTys: TTelescope, /* binding + paramTys */
+      val ul: ULevel,
+      val cons: IndexedSeq[Constructor]
+    )
 
   /**
    * Note: `tParamTys` can only contain pure value terms. That is, `U` and `Thunk` are not allowed.
@@ -19,21 +24,43 @@ enum Declaration:
    * to statically know if `A` could be `U`. In addition, this also rules out any data type that
    * wraps impure computation inside.
    */
-  case Effect(val qn: QualifiedName)(val tParamTys: Telescope, val operators: Vector[Operator])
-  case Record(val qn: QualifiedName)(val tParamTys: TTelescope, /* binding + tParamTys */ val ty: CTerm, val fields: Vector[Field])
-  case Definition(val qn: QualifiedName)(val ty: CTerm, val clauses: Vector[CheckedClause], val caseTree: CaseTree)
+  case Effect(val qn: QualifiedName)
+    (val tParamTys: Telescope, val operators: IndexedSeq[Operator])
+  case Record(val qn: QualifiedName)
+    (val tParamTys: TTelescope, /* binding + tParamTys */ val ul: ULevel, val fields: IndexedSeq[Field])
+  case Definition(val qn: QualifiedName)
+    (val ty: CTerm, val clauses: IndexedSeq[CheckedClause], val caseTree: CaseTree)
 
   def qn: QualifiedName
 
 import Declaration.*
 
-case class Constructor(name: Name, /* binding + tParamTys */ paramTys: Telescope, /* binding + tParamTys + paramTys */  idTys: Telescope)
-case class Operator(name: Name, /* binding + tParamTys */ paramTys: Telescope, /* binding + tParamTys + paramTys */ resultTy: VTerm)
-case class Field(name: Name, /* binding + tParamTys + 1 for self */ ty: CTerm)
-case class CheckedClause(bindings: Telescope, lhs: List[Pattern], /* binding + bindings */ rhs: CTerm, /* binding + bindings */ ty: CTerm)
+case class Constructor(
+  name: Name,
+  paramTys: Telescope, /* + tParamTys */
+  idTys: Telescope /* + tParamTys + paramTys */
+)
+
+case class Operator(
+  name: Name,
+  paramTys: Telescope, /* + tParamTys */
+  resultTy: VTerm /* + tParamTys + paramTys */
+)
+
+case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
+
+case class CheckedClause(
+  bindings: Telescope,
+  lhs: List[Pattern], /* + bindings */
+  rhs: CTerm, /* + bindings */
+  ty: CTerm /* + bindings */
+)
 
 trait Signature:
   def getData(qn: QualifiedName): Data
+
   def getRecord(qn: QualifiedName): Record
+
   def getDef(qn: QualifiedName): Definition
+
   def getEffect(qn: QualifiedName): Effect

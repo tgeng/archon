@@ -8,9 +8,9 @@ type Telescope = List[Binding[VTerm]]
 /**
  * Head is the last element. Hence, resolving DeBruijn index is done from the end.
  */
-type Context = Vector[Binding[VTerm]]
+type Context = IndexedSeq[Binding[VTerm]]
 
-extension (v: Vector[Binding[VTerm]])
+extension (v: IndexedSeq[Binding[VTerm]])
   def apply(ref: VTerm.Var) : Binding[VTerm] =
     val offset = ref.index + 1
     v(v.length - offset).map(RaisableVTerm.raise(_, offset))

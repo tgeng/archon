@@ -7,8 +7,37 @@ import VTerm.*
 import CTerm.*
 import ULevel.*
 import Error.*
+import Declaration.*
 
 trait TypingContext
+
+def checkDataType(data: Data)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
+  checkULevel(data.ul)
+
+def checkDataConstructors(data: Data)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = allRight(
+  data.cons.map { con =>
+    val Γ2 = Γ ++ data.tParamTys.map(_._1)
+    checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2) >>
+      checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
+    // TODO: check variance
+  }
+)
+
+private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = tParamTys match
+  case Nil => Right(())
+  case binding :: rest => checkIsVType(binding.ty, levelBound) >> checkParameterTypeDeclarations(rest)(using Γ :+ binding)
 
 private def checkULevel(ul: ULevel)
   (using Γ: Context)
@@ -42,7 +71,7 @@ def inferType(tm: VTerm)
       yield U(cty)
   case DataType(qn, args) =>
     val data = Σ.getData(qn)
-    checkTypes(args, data.tParamTys.map(_._1)) >> Right(data.ty.substLowers(args: _*))
+    checkTypes(args, data.tParamTys.map(_._1)) >> Right(VUniverse(data.ul.map(_.substLowers(args: _*)), tm))
   case _: Con => throw IllegalArgumentException("cannot infer type")
   case EqualityType(level, ty, left, right) =>
     val ul = USimpleLevel(level)
@@ -80,7 +109,7 @@ def checkType(tm: VTerm, ty: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
-  checkIsType(ty) >>
+  checkIsVType(ty) >>
     (tm match
       case Con(name, args) => ty match
         case DataType(qn, tArgs) =>
@@ -139,7 +168,7 @@ def inferType(tm: CTerm)
     for vTy <- inferType(v)
       yield F(Total, vTy)
   case Let(t, effects, binding, ctx) =>
-    for _ <- checkIsType(binding.ty)
+    for _ <- checkIsVType(binding.ty)
         _ <- checkType(t, F(effects, binding.ty))
         ctxTy <- if effects == Total then
         // Do the reduction onsite so that type checking in sub terms can leverage the more specific
@@ -186,7 +215,7 @@ def inferType(tm: CTerm)
     val record = Σ.getRecord(qn)
     checkType(effects, EffectsType) >>
       checkTypes(args, record.tParamTys.map(_._1)) >>
-      Right(record.ty.substLowers(args: _*))
+      Right(CUniverse(Total, record.ul.map(_.substLowers(args: _*)), tm))
   case Projection(rec, name) =>
     for recTy <- inferType(rec)
         r <- recTy match
@@ -223,7 +252,7 @@ def inferType(tm: CTerm)
     else
       val outputCType = F(otherEffects, outputType)
       for _ <- checkTypes(args, effect.tParamTys)
-          _ <- checkIsType(inputBinding.ty)
+          _ <- checkIsVType(inputBinding.ty)
           _ <- checkType(
             input,
             F(EffectsUnion(EffectsLiteral(ListSet(eff)), otherEffects), inputBinding.ty)
@@ -254,7 +283,7 @@ def inferType(tm: CTerm)
       yield outputCType
   case Alloc(heap, vTy) =>
     checkType(heap, HeapType) >>
-      checkIsType(vTy) >>
+      checkIsVType(vTy) >>
       Right(
         F(
           EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
@@ -288,7 +317,7 @@ def inferType(tm: CTerm)
     yield r
   case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
     val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
-    checkIsType(inputBinding.ty) >>
+    checkIsVType(inputBinding.ty) >>
       // TODO: check heap variable is not leaked.
       checkType(
         input,
@@ -332,7 +361,7 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
     case (U(cty1), U(cty2)) => checkSubsumption(cty1, cty2, None)
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
       val data = Σ.getData(qn1)
-      var args = Vector[VTerm]()
+      var args = IndexedSeq[VTerm]()
       allRight(
         args1.zip(args2).zip(data.tParamTys).map {
           case ((arg1, arg2), (binding, variance)) =>
@@ -433,7 +462,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
           yield r
         case (RecordType(eff1, qn1, args1), RecordType(eff2, qn2, args2), _) if qn1 == qn2 =>
           val record = Σ.getRecord(qn1)
-          var args = Vector[VTerm]()
+          var args = IndexedSeq[VTerm]()
           checkSubsumption(eff1, eff2, Some(EffectsType)) >>
             allRight(
               args1.zip(args2).zip(record.tParamTys).map {
@@ -472,7 +501,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             _.name == name1,
             throw IllegalArgumentException(s"expect effect $qn1 to have operation $name1")
           )
-          var args = Vector[VTerm]()
+          var args = IndexedSeq[VTerm]()
           allRight(
             args1.zip(args2).zip(operator.paramTys).map {
               case ((arg1, arg2), binding) =>
@@ -522,25 +551,29 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)
     }
   )
 
-private def checkIsType(vTy: VTerm)
+def checkIsVType(vTy: VTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   for vTyTy <- inferType(vTy)
       r <- vTyTy match
-        case VUniverse(_, _) => Right(())
+        case VUniverse(ul, _) => levelBound match
+          case Some(bound) => checkULevelSubsumption(ul, bound)
+          case _ => Right(())
         case _ => Left(NotVTypeError(vTy))
   yield r
 
-private def checkIsType(cTy: CTerm)
+def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   for cTyTy <- inferType(cTy)
       r <- cTyTy match
-        case CUniverse(eff, _, _) if eff == Total => Right(())
+        case CUniverse(eff, ul, _) if eff == Total => levelBound match
+          case Some(bound) => checkULevelSubsumption(ul, bound)
+          case _ => Right(())
         case _: CUniverse => Left(EffectfulCType(cTy))
         case _ => Left(NotCTypeError(cTy))
   yield r
