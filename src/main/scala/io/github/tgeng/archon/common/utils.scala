@@ -107,3 +107,8 @@ extension[T] (elems: IterableOnce[T])
         case r: Some[R] => return r
         case _ =>
     None
+
+  def getFirstOrDefault(predicate:T => Boolean, default: =>T) : T =
+    for elem <- elems do
+      if predicate(elem) then return elem
+    default

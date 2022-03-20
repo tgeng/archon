@@ -334,24 +334,25 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
     case (U(cty1), U(cty2)) => checkSubsumption(cty1, cty2, None)
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
       val data = Σ.getData(qn1)
-      var Γ2 = Γ
+      var args = Vector[VTerm]()
       allRight(
         args1.zip(args2).zip(data.tParamTys).map {
           case ((arg1, arg2), (binding, variance)) =>
-            val r = variance match
-              case Variance.INVARIANT => checkSubsumption(
-                arg1,
-                arg2,
-                Some(binding.ty)
-              )(using CONVERSION)(using Γ2)
-              case Variance.COVARIANT => checkSubsumption(arg1, arg2, Some(binding.ty))(using SUBSUMPTION)(using Γ2)
-              case Variance.CONTRAVARIANT => checkSubsumption(
-                arg2,
-                arg1,
-                Some(binding.ty)
-              )(using SUBSUMPTION)(using Γ2)
-            Γ2 = Γ2 :+ binding
-            r
+            variance match
+              case Variance.INVARIANT =>
+                val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))(
+                  using CONVERSION
+                )
+                args = args :+ arg1
+                r
+              case Variance.COVARIANT =>
+                val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                args = args :+ arg1
+                r
+              case Variance.CONTRAVARIANT =>
+                val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
+                args = args :+ arg2
+                r
         }
       )
     case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2)) =>
@@ -410,7 +411,81 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
               r <- checkSubsumption(vTy1, vTy2, None)
           yield r
         case (Return(v1), Return(v2), Some(F(_, ty))) => checkSubsumption(v1, v2, Some(ty))
-        // TODO: keep doing this part
+        case (Let(t1, eff1, binding1, ctx1), Let(t2, eff2, binding2, ctx2), ty) =>
+          checkSubsumption(eff1, eff2, Some(EffectsType))(using CONVERSION) >>
+            checkSubsumption(binding1.ty, binding2.ty, None)(using CONVERSION) >>
+            checkSubsumption(t1, t2, Some(F(eff1, binding1.ty)))(using CONVERSION) >>
+            checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(using Γ :+ binding1)
+        case (FunctionType(eff1, binding1, bodyTy1), FunctionType(eff2, binding2, bodyTy2), _) =>
+          checkSubsumption(eff1, eff2, Some(EffectsType)) >>
+            checkSubsumption(binding2.ty, binding1.ty, None) >>
+            checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
+        case (Application(fun1, arg1), Application(fun2, arg2), _) =>
+          for fun1Ty <- inferType(fun1)
+              fun2Ty <- inferType(fun2)
+              _ <- checkSubsumption(fun1Ty, fun2Ty, None)(using CONVERSION)
+              _ <- checkSubsumption(fun1, fun2, Some(fun1Ty))(using CONVERSION)
+              r <- fun1Ty match
+                case FunctionType(_, binding, _) => checkSubsumption(
+                  arg1,
+                  arg2,
+                  Some(binding.ty)
+                )(using CONVERSION)
+                case _ => Left(NotCSubsumption(sub, sup, ty, mode))
+          yield r
+        case (RecordType(eff1, qn1, args1), RecordType(eff2, qn2, args2), _) if qn1 == qn2 =>
+          val record = Σ.getRecord(qn1)
+          var args = Vector[VTerm]()
+          checkSubsumption(eff1, eff2, Some(EffectsType)) >>
+            allRight(
+              args1.zip(args2).zip(record.tParamTys).map {
+                case ((arg1, arg2), (binding, variance)) =>
+                  variance match
+                    case Variance.INVARIANT =>
+                      val r = checkSubsumption(
+                        arg1,
+                        arg2,
+                        Some(binding.ty.substLowers(args: _*))
+                      )(using CONVERSION)
+                      args = args :+ arg1
+                      r
+                    case Variance.COVARIANT =>
+                      val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                      args = args :+ arg1
+                      r
+                    case Variance.CONTRAVARIANT =>
+                      val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
+                      args = args :+ arg2
+                      r
+              }
+            )
+        case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
+          for rec1Ty <- inferType(rec1)
+              rec2Ty <- inferType(rec2)
+              r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
+          yield r
+        case (OperatorCall(
+        eff1@(qn1, tArgs1), name1, args1
+        ), OperatorCall(
+        eff2@(qn2, tArgs2), name2, args2
+        ), _) if qn1 == qn2 && name1 == name2 =>
+          val effect = Σ.getEffect(qn1)
+          val operator = effect.operators.getFirstOrDefault(
+            _.name == name1,
+            throw IllegalArgumentException(s"expect effect $qn1 to have operation $name1")
+          )
+          var args = Vector[VTerm]()
+          allRight(
+            args1.zip(args2).zip(operator.paramTys).map {
+              case ((arg1, arg2), binding) =>
+                val r = checkSubsumption(arg1, arg2, Some(binding.ty))(using CONVERSION)
+                args = args :+ arg1
+                r
+            }
+          )
+        // For now, we skip the complex logic checking subsumption of handler and continuations. It
+        // seems not all that useful to keep those. But we can always add them later if it's deemed
+        // necessary.
         case _ => Left(NotCSubsumption(sub, sup, ty, mode))
   yield r
 
