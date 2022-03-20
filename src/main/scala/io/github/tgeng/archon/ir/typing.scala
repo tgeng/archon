@@ -8,16 +8,7 @@ import CTerm.*
 import ULevel.*
 import Error.*
 
-import javax.swing.text.WrappedPlainView
-
 trait TypingContext
-
-enum CheckSubsumptionMode:
-  case SUBSUMPTION, CONVERSION
-
-import CheckSubsumptionMode.*
-
-given CheckSubsumptionMode = SUBSUMPTION
 
 private def checkULevel(ul: ULevel)
   (using Γ: Context)
@@ -315,6 +306,13 @@ def checkType(tm: CTerm, ty: CTerm)
         ty <- reduceForTyping(ty)
         r <- checkSubsumption(tmTy, ty, None)
     yield r
+
+enum CheckSubsumptionMode:
+  case SUBSUMPTION, CONVERSION
+
+import CheckSubsumptionMode.*
+
+given CheckSubsumptionMode = SUBSUMPTION
 
 /**
  * @param ty can be [[None]] if `a` and `b` are types
