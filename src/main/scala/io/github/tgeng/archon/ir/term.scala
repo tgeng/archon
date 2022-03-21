@@ -22,6 +22,7 @@ type Arguments = List[VTerm]
 type Nat = Int
 
 class HeapKey
+
 val GlobalHeapKey = new HeapKey
 
 type Eff = (QualifiedName, Arguments)
@@ -39,7 +40,7 @@ enum ULevel:
   case UωLevel(layer: Nat)
 
 object ULevel:
-  extension(u: ULevel)
+  extension (u: ULevel)
     def map(f: VTerm => VTerm): ULevel = u match
       case USimpleLevel(level) => USimpleLevel(f(level))
       case _: ULevel.UωLevel => u
@@ -54,7 +55,7 @@ object ULevel:
     case (_, u: UωLevel) => u
     case (u, _) => u
 
-enum CellStatus extends Comparable[CellStatus]:
+enum CellStatus extends Comparable[CellStatus] :
   case Initialized, Uninitialized
 
   override def compareTo(that: CellStatus): Int =
@@ -102,10 +103,14 @@ enum VTerm:
   case Heap(key: HeapKey)
 
   /** archon.builtin.Cell */
-  case CellType(heap: VTerm, ty: VTerm, status: CellStatus) extends VTerm, QualifiedNameOwner(CellQn)
+  case CellType(
+    heap: VTerm,
+    ty: VTerm,
+    status: CellStatus
+  ) extends VTerm, QualifiedNameOwner(CellQn)
 
   /**
-   * Internal only, created by [[CTerm.Alloc]]
+   * Internal only, created by [[CTerm.AllocOp]]
    */
   case Cell(heapKey: HeapKey, index: Nat)
 
@@ -139,10 +144,15 @@ object VTerm:
     case _ => throw IllegalArgumentException("type error")
 
   def Total = EffectsLiteral(ListSet.empty)
+
   def EffectsLiteral(effects: ListSet[Eff]): Effects = Effects(effects, ListSet.empty)
+
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects = effects1 match
     case Effects(literal1, unionOperands1) => effects2 match
-      case Effects(literal2, unionOperands2) => new Effects(literal1 ++ literal2, unionOperands1 ++ unionOperands2)
+      case Effects(literal2, unionOperands2) => new Effects(
+        literal1 ++ literal2,
+        unionOperands1 ++ unionOperands2
+      )
       case r: Var => new Effects(literal1, unionOperands1 + r)
       case _ => throw IllegalArgumentException("type error")
     case r1: Var => effects2 match
@@ -184,7 +194,7 @@ enum CTerm:
   /** archon.builtin.Function */
   case FunctionType(
     effects: VTerm, // effects that needed for getting the function of this type. The effects caused
-                    // by function application is tracked by the `bodyTy`.
+    // by function application is tracked by the `bodyTy`.
     binding: Binding[VTerm],
     /* binding + 1 */ bodyTy: CTerm
   ) extends CTerm, CType
@@ -241,9 +251,9 @@ enum CTerm:
     input: CTerm,
   )
 
-  case Alloc(heap: VTerm, ty: VTerm)
-  case Set(cell: VTerm, value: VTerm)
-  case Get(cell: VTerm)
+  case AllocOp(heap: VTerm, ty: VTerm)
+  case SetOp(cell: VTerm, value: VTerm)
+  case GetOp(cell: VTerm)
   case HeapHandler(
     /**
      * Similar to `inputBinidng` of [[Handler]]. But note that the type of `input` is
@@ -271,6 +281,117 @@ enum CTerm:
   )
 
 // TODO: support array operations on heap
+
+def getFreeVars(tele: Telescope)
+  (using bar: Nat)
+  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
+  case Nil => (Set(), Set())
+  case binding :: rest => getFreeVars(binding.ty) | getFreeVars(rest)(using bar + 1) - 1
+
+def getFreeVars(tm: VTerm)
+  (using bar: Nat)
+  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  import VTerm.*
+  tm match
+    case VUniverse(ul, upperBound) => getFreeVars(ul) | getFreeVars(upperBound)
+    case VTop(ul) => getFreeVars(ul)
+    case Pure(ul) => getFreeVars(ul)
+    case Var(index) => (if index < bar then Set() else Set(index), Set())
+    case U(cty) => getFreeVars(cty)
+    case Thunk(c) => getFreeVars(c)
+    case DataType(qn, args) =>
+      val data = Σ.getData(qn)
+      data.tParamTys.zip(args).map { case ((_, variance), arg) => variance match
+        case Variance.COVARIANT => getFreeVars(arg)
+        case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
+        case Variance.INVARIANT => mix(getFreeVars(arg))
+      }.reduce(_ | _)
+    case Con(_, args) => getFreeVars(args)
+    case EqualityType(ty, left, right) => getFreeVars(ty) | getFreeVars(left) | getFreeVars(right)
+    case Effects(literal, unionOperands) =>
+      getFreeVars(literal.flatMap { (_, args) => args }) |
+        getFreeVars(unionOperands)
+    case Level(_, maxOperands) => maxOperands.map { (v, _) => getFreeVars(v) }.reduce(_ | _)
+    case CellType(heap, ty, status) => getFreeVars(heap) | mix(getFreeVars(ty))
+    case Refl | EffectsType | LevelType | HeapType | _: Heap | _: Cell => (Set(), Set())
+
+def getFreeVars(tm: CTerm)
+  (using bar: Nat)
+  (using Σ: Signature)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  import CTerm.*
+  tm match
+    case Hole => (Set(), Set())
+    case CUniverse(eff, ul, upperBound) =>
+      getFreeVars(eff) | getFreeVars(ul) | getFreeVars(upperBound)
+    case CTop(eff, ul) => getFreeVars(eff) | getFreeVars(ul)
+    case Force(v) => getFreeVars(v)
+    case F(eff, vTy) => getFreeVars(eff) | getFreeVars(vTy)
+    case Return(v) => getFreeVars(v)
+    case Let(t, eff, binding, ctx) => getFreeVars(t) |
+      getFreeVars(eff) |
+      getFreeVars(binding.ty) |
+      getFreeVars(ctx)(using bar + 1) - 1
+    case FunctionType(effects, binding, bodyTy) =>
+      getFreeVars(effects) |
+        swap(getFreeVars(binding.ty)) |
+        getFreeVars(bodyTy)(using bar + 1) - 1
+    case Application(fun, arg) => getFreeVars(fun) | getFreeVars(arg)
+    case RecordType(effects, qn, args) =>
+      val record = Σ.getRecord(qn)
+      getFreeVars(effects) |
+        record.tParamTys.zip(args).map { case ((_, variance), arg) => variance match
+          case Variance.COVARIANT => getFreeVars(arg)
+          case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
+          case Variance.INVARIANT => mix(getFreeVars(arg))
+        }.reduce(_ | _)
+    case Projection(rec, _) => getFreeVars(rec)
+    case OperatorCall(eff, _, args) => getFreeVars(eff) | getFreeVars(args)
+    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) =>
+      getFreeVars(eff) |
+        getFreeVars(inputBinding.ty) |
+        getFreeVars(otherEffects) |
+        getFreeVars(outputType) |
+        getFreeVars(transform)(using bar + 1) - 1 |
+        handlers.values.map{ (n, t) => getFreeVars(t)(using bar + n + 1) - (n + 1) }.reduce(_ | _) |
+        getFreeVars(input)
+    case AllocOp(heap, ty) => getFreeVars(heap) | getFreeVars(ty)
+    case SetOp(cell, value) => getFreeVars(cell) | getFreeVars(value)
+    case GetOp(cell) => getFreeVars(cell)
+    case HeapHandler(inputBinding, otherEffects, _, _, input) =>
+      getFreeVars(inputBinding.ty) |
+        getFreeVars(otherEffects) |
+        getFreeVars(input)(using bar + 1) - 1
+    case _: Def | _: Continuation => (Set(), Set())
+
+def getFreeVars(ul: ULevel)
+  (using bar: Nat)
+  (using Σ: Signature)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  import ULevel.*
+  ul match
+    case USimpleLevel(l) => getFreeVars(l)
+    case UωLevel(_) => (Set(), Set())
+
+def getFreeVars(eff: Eff)
+  (using bar: Nat)
+  (using Σ: Signature)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2.map(getFreeVars).reduce(_ | _)
+
+def getFreeVars(args: Iterable[VTerm])
+  (using bar: Nat)
+  (using Σ: Signature)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = args.map(getFreeVars).reduce(_ | _)
+
+extension (freeVars1: (Set[Nat], Set[Nat]))
+  def |(freeVars2: (Set[Nat], Set[Nat])): (Set[Nat], Set[Nat]) =
+    (freeVars1._1 | freeVars2._1, freeVars1._2 | freeVars2._2)
+
+  def -(offset: Nat): (Set[Nat], Set[Nat]) = (freeVars1._1.map(_ - offset), freeVars1._2.map(_ - offset))
+
+def mix(freeVars: (Set[Nat], Set[Nat])) =
+  val r = freeVars._1 | freeVars._2
+  (r, r)
 
 /* References:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,

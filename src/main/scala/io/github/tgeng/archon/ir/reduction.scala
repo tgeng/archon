@@ -210,7 +210,7 @@ private final class StackMachine(
         else
           stack.push(pc)
           run(input)
-      case Alloc(heap, ty) =>
+      case AllocOp(heap, ty) =>
         heap match
           case _: Var => Right(reconstructTermFromStack(pc))
           case Heap(heapKey) =>
@@ -228,7 +228,7 @@ private final class StackMachine(
                 run(substHole(stack.pop(), Return(cell)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case Set(cell, value) =>
+      case SetOp(cell, value) =>
         cell match
           case _: Var => Right(reconstructTermFromStack(pc))
           case Cell(heapKey, index) =>
@@ -245,7 +245,7 @@ private final class StackMachine(
                 run(substHole(stack.pop(), Return(new Cell(heapKey, index))))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case Get(cell) =>
+      case GetOp(cell) =>
         cell match
           case _: Var => Right(reconstructTermFromStack(pc))
           case Cell(heapKey, index) =>

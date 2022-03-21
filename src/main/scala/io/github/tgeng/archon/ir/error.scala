@@ -25,3 +25,4 @@ enum Error:
   case NotCSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm], mode: CheckSubsumptionMode)
   case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case IllegalVarianceInData(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])

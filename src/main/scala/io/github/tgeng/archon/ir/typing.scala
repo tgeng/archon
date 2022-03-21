@@ -25,9 +25,23 @@ def checkDataConstructors(data: Data)
 : Either[Error, Unit] = allRight(
   data.cons.map { con =>
     val Γ2 = Γ ++ data.tParamTys.map(_._1)
-    checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2) >>
-      checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
-    // TODO: check variance
+    for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2)
+        _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
+    yield
+      // binding of positiveVars must be either covariant or invariant
+      // binding of negativeVars must be either contravariant or invariant
+      val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
+      val tParamTysSize = data.tParamTys.size
+      val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
+        case ((binding, variance), reverseIndex) =>
+          val index = tParamTysSize - reverseIndex - 1
+          variance match
+            case Variance.INVARIANT => false
+            case Variance.COVARIANT => negativeVars(index)
+            case Variance.CONTRAVARIANT => positiveVars(index)
+      }
+      if bindingWithIncorrectUsage.isEmpty then ()
+      else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
   }
 )
 
@@ -289,7 +303,7 @@ def inferType(tm: CTerm)
             }
           )
       yield outputCType
-  case Alloc(heap, vTy) =>
+  case AllocOp(heap, vTy) =>
     checkType(heap, HeapType) >>
       checkIsVType(vTy) >>
       Right(
@@ -298,7 +312,7 @@ def inferType(tm: CTerm)
           CellType(heap, vTy, CellStatus.Uninitialized),
         )
       )
-  case Set(cell, value) =>
+  case SetOp(cell, value) =>
     for cellTy <- inferType(cell)
         r <- cellTy match
           case CellType(heap, vTy, status) => checkType(value, vTy) >>
@@ -310,7 +324,7 @@ def inferType(tm: CTerm)
             )
           case _ => Left(ExpectCell(cell))
     yield r
-  case Get(cell) =>
+  case GetOp(cell) =>
     for cellTy <- inferType(cell)
         r <- cellTy match
           case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
@@ -408,7 +422,7 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
         checkSubsumption(a1, a2, Some(ty1)) >>
         checkSubsumption(b1, b2, Some(ty1))
     case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _) =>
-      for r <- checkSubsumption(heap1, heap2, Some(HeapType))(using CONVERSION) >>
+      for r <- checkSubsumption(heap1, heap2, Some(HeapType)) >>
         checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
         (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
           NotVSubsumption(sub, sup, ty, mode)
@@ -460,9 +474,9 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
           yield r
         case (Return(v1), Return(v2), Some(F(_, ty))) => checkSubsumption(v1, v2, Some(ty))
         case (Let(t1, eff1, binding1, ctx1), Let(t2, eff2, binding2, ctx2), ty) =>
-          checkSubsumption(eff1, eff2, Some(EffectsType))(using CONVERSION) >>
-            checkSubsumption(binding1.ty, binding2.ty, None)(using CONVERSION) >>
-            checkSubsumption(t1, t2, Some(F(eff1, binding1.ty)))(using CONVERSION) >>
+          checkSubsumption(eff1, eff2, Some(EffectsType)) >>
+            checkSubsumption(binding1.ty, binding2.ty, None) >>
+            checkSubsumption(t1, t2, Some(F(eff1, binding1.ty))) >>
             checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(using Γ :+ binding1)
         case (FunctionType(eff1, binding1, bodyTy1), FunctionType(eff2, binding2, bodyTy2), _) =>
           checkSubsumption(eff1, eff2, Some(EffectsType)) >>
@@ -471,14 +485,14 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         case (Application(fun1, arg1), Application(fun2, arg2), _) =>
           for fun1Ty <- inferType(fun1)
               fun2Ty <- inferType(fun2)
-              _ <- checkSubsumption(fun1Ty, fun2Ty, None)(using CONVERSION)
-              _ <- checkSubsumption(fun1, fun2, Some(fun1Ty))(using CONVERSION)
+              _ <- checkSubsumption(fun1Ty, fun2Ty, None)
+              _ <- checkSubsumption(fun1, fun2, Some(fun1Ty))
               r <- fun1Ty match
                 case FunctionType(_, binding, _) => checkSubsumption(
                   arg1,
                   arg2,
                   Some(binding.ty)
-                )(using CONVERSION)
+                )
                 case _ => Left(NotCSubsumption(sub, sup, ty, mode))
           yield r
         case (RecordType(eff1, qn1, args1), RecordType(eff2, qn2, args2), _) if qn1 == qn2 =>
@@ -510,7 +524,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
           for rec1Ty <- inferType(rec1)
               rec2Ty <- inferType(rec2)
-              r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
+              r <- checkSubsumption(rec1Ty, rec2Ty, None)
           yield r
         case (OperatorCall(
         eff1@(qn1, tArgs1), name1, args1
@@ -526,7 +540,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
           allRight(
             args1.zip(args2).zip(operator.paramTys).map {
               case ((arg1, arg2), binding) =>
-                val r = checkSubsumption(arg1, arg2, Some(binding.ty))(using CONVERSION)
+                val r = checkSubsumption(arg1, arg2, Some(binding.ty))
                 args = args :+ arg1
                 r
             }

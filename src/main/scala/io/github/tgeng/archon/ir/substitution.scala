@@ -120,15 +120,15 @@ given RaisableCTerm: Raisable[CTerm] with
       handlers.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 2)) }.toMap,
       raise(input, amount, bar),
     )
-    case Alloc(heap, ty) => Alloc(
+    case AllocOp(heap, ty) => AllocOp(
       RaisableVTerm.raise(heap, amount, bar),
       RaisableVTerm.raise(ty, amount, bar)
     )
-    case Set(call, value) => Set(
+    case SetOp(call, value) => SetOp(
       RaisableVTerm.raise(call, amount, bar),
       RaisableVTerm.raise(value, amount, bar)
     )
-    case Get(cell) => Get(RaisableVTerm.raise(cell, amount, bar))
+    case GetOp(cell) => GetOp(RaisableVTerm.raise(cell, amount, bar))
     case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
       inputBinding.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(otherEffects, amount, bar + 1),
@@ -292,15 +292,15 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       }.toMap,
       substitute(input, substitution, offset),
     )
-    case Alloc(heap, ty) => Alloc(
+    case AllocOp(heap, ty) => AllocOp(
       SubstitutableVTerm.substitute(heap, substitution, offset),
       SubstitutableVTerm.substitute(ty, substitution, offset)
     )
-    case Set(call, value) => Set(
+    case SetOp(call, value) => SetOp(
       SubstitutableVTerm.substitute(call, substitution, offset),
       SubstitutableVTerm.substitute(value, substitution, offset)
     )
-    case Get(cell) => Get(SubstitutableVTerm.substitute(cell, substitution, offset))
+    case GetOp(cell) => GetOp(SubstitutableVTerm.substitute(cell, substitution, offset))
     case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
       inputBinding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       SubstitutableVTerm.substitute(otherEffects, substitution, offset + 1),

@@ -112,3 +112,6 @@ extension[T] (elems: IterableOnce[T])
     for elem <- elems do
       if predicate(elem) then return elem
     default
+
+def swap[A, B](t: (A, B)) : (B, A) = t match
+  case (a, b) => (b, a)

@@ -22,7 +22,7 @@ abstract class ParseResult[M[+_], +T] :
   def committed: Boolean
 
   def commit: ParseResult[M, T] = ParseResult.WrappedParseResult(this, None, true)
-  def onExitFromTarget(targetName: Option[String]): ParseResult[M, T] = targetName match
+  def onExitFromTarGetOp(targetName: Option[String]): ParseResult[M, T] = targetName match
     case None => this
     case Some(_) => ParseResult.WrappedParseResult(this, targetName, false)
 
@@ -50,7 +50,7 @@ import ParseResult.*
 
 abstract class ParserT[-I, +T, M[+_]]:
   final def doParse(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
-    parseImpl(index).onExitFromTarget(targetName)
+    parseImpl(index).onExitFromTarGetOp(targetName)
 
   def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)]
 
