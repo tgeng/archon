@@ -26,3 +26,4 @@ enum Error:
   case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
   case IllegalVarianceInData(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])
+  case IllegalVarianceInRecord(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])

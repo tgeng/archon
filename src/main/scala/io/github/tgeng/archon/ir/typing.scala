@@ -45,6 +45,49 @@ def checkDataConstructors(data: Data)
   }
 )
 
+def checkRecordType(record: Record)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
+  checkULevel(record.ul)
+
+def checkRecordFields(record: Record)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = allRight(
+  record.fields.map { field =>
+    val Γ2 = Γ ++ record.tParamTys.map(_._1) :+ getRecordSelfBinding(record)
+    for _ <- checkIsCType(field.ty, Some(record.ul.weakened))(using Γ2)
+      yield
+        // binding of positiveVars must be either covariant or invariant
+        // binding of negativeVars must be either contravariant or invariant
+        val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
+        val tParamTysSize = record.tParamTys.size
+        val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
+          case ((binding, variance), reverseIndex) =>
+            val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
+            variance match
+              case Variance.INVARIANT => false
+              case Variance.COVARIANT => negativeVars(index)
+              case Variance.CONTRAVARIANT => positiveVars(index)
+        }
+        if bindingWithIncorrectUsage.isEmpty then ()
+        else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
+  }
+)
+
+def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
+  U(
+    RecordType(
+      Total,
+      record.qn,
+      (record.tParamTys.size - 1).to(0, -1).map(Var(_)).toList
+    )
+  )
+)(gn"self")
+
 private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
@@ -407,7 +450,10 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
       )
     case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, tArgs))) if name1 == name2 =>
       val data = Σ.getData(qn)
-      val con = data.cons.getFirstOrDefault(_.name == name1, throw IllegalArgumentException(s"missing constructor $name1 in data $qn"))
+      val con = data.cons.getFirstOrDefault(
+        _.name == name1,
+        throw IllegalArgumentException(s"missing constructor $name1 in data $qn")
+      )
       var args = IndexedSeq[VTerm]()
       allRight(
         args1.zip(args2).zip(con.paramTys).map {
