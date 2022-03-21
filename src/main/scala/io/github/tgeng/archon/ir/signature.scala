@@ -12,7 +12,15 @@ enum Declaration:
     (
       val tParamTys: TTelescope, /* binding + paramTys */
       val ul: ULevel,
-      val cons: IndexedSeq[Constructor]
+    )
+  case Record(val qn: QualifiedName)
+    (
+      val tParamTys: TTelescope, /* binding + tParamTys */
+      val ul: ULevel,
+    )
+  case Definition(val qn: QualifiedName)
+    (
+      val ty: CTerm,
     )
 
   /**
@@ -24,12 +32,7 @@ enum Declaration:
    * to statically know if `A` could be `U`. In addition, this also rules out any data type that
    * wraps impure computation inside.
    */
-  case Effect(val qn: QualifiedName)
-    (val tParamTys: Telescope, val operators: IndexedSeq[Operator])
-  case Record(val qn: QualifiedName)
-    (val tParamTys: TTelescope, /* binding + tParamTys */ val ul: ULevel, val fields: IndexedSeq[Field])
-  case Definition(val qn: QualifiedName)
-    (val ty: CTerm, val clauses: IndexedSeq[CheckedClause], val caseTree: CaseTree)
+  case Effect(val qn: QualifiedName)(val tParamTys: Telescope)
 
   def qn: QualifiedName
 
@@ -59,8 +62,21 @@ case class CheckedClause(
 trait Signature:
   def getData(qn: QualifiedName): Data
 
+  def getConstructors(qn: QualifiedName): IndexedSeq[Constructor]
+
+
   def getRecord(qn: QualifiedName): Record
+
+  def getFields(qn: QualifiedName): IndexedSeq[Field]
+
 
   def getDef(qn: QualifiedName): Definition
 
+  def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause]
+
+  def getCaseTree(qn: QualifiedName): CaseTree
+
+
   def getEffect(qn: QualifiedName): Effect
+
+  def getOperators(qn: QualifiedName): IndexedSeq[Operator]

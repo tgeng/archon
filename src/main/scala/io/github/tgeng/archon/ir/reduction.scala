@@ -71,7 +71,7 @@ private final class StackMachine(
    * @return
    */
   @tailrec
-  def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context): Either[Error, CTerm] =
+  def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context)(using Σ: Signature): Either[Error, CTerm] =
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -81,9 +81,7 @@ private final class StackMachine(
         else
           run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
-        val definition = signature.getDef(qn)
         if useCaseTree then
-          val caseTree = definition.caseTree
           //      case TypeCase(arg, cases, default) => arg match
           //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
           //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
@@ -116,7 +114,7 @@ private final class StackMachine(
           //          case _ => throw IllegalArgumentException("type error")
           ??? // TODO: implement reduction with case tree
         else
-          definition.clauses.first {
+          Σ.getClauses(qn).first {
             case CheckedClause(bindings, lhs, rhs, ty) =>
               val mapping = mutable.Map[Nat, VTerm]()
               matchPattern(

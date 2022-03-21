@@ -23,7 +23,7 @@ def checkDataConstructors(data: Data)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] = allRight(
-  data.cons.map { con =>
+  Σ.getConstructors(data.qn).map { con =>
     val Γ2 = Γ ++ data.tParamTys.map(_._1)
     for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2)
         _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
@@ -57,7 +57,7 @@ def checkRecordFields(record: Record)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] = allRight(
-  record.fields.map { field =>
+  Σ.getFields(record.qn).map { field =>
     val Γ2 = Γ ++ record.tParamTys.map(_._1) :+ getRecordSelfBinding(record)
     for _ <- checkIsCType(field.ty, Some(record.ul.weakened))(using Γ2)
       yield
@@ -178,11 +178,9 @@ def checkType(tm: VTerm, ty: VTerm)
     (tm match
       case Con(name, args) => ty match
         case DataType(qn, tArgs) =>
-          val data = Σ.getData(qn)
-            data
-          .cons.first { c => if c.name == name then Some(c) else None } match
-          case None => Left(MissingConstructor(name, qn))
-          case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
+          Σ.getConstructors(qn).first { c => if c.name == name then Some(c) else None } match
+            case None => Left(MissingConstructor(name, qn))
+            case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
         case _ => Left(ExpectDataType(ty))
       case Refl => ty match
         case EqualityType(ty, left, right) => checkSubsumption(
@@ -285,15 +283,14 @@ def inferType(tm: CTerm)
     for recTy <- inferType(rec)
         r <- recTy match
           case RecordType(effects, qn, args) =>
-            val record = Σ.getRecord(qn)
-            record.fields.first { f => if f.name == name then Some(f) else None } match
+            Σ.getFields(qn).first { f => if f.name == name then Some(f) else None } match
               case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
               case Some(f) => Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(tm): _*)))
           case _ => Left(ExpectRecord(rec))
     yield r
   case OperatorCall(eff@(qn, tArgs), name, args) =>
     val effect = Σ.getEffect(qn)
-    effect.operators.first { o => if o.name == name then Some(o) else None } match
+    Σ.getOperators(qn).first { o => if o.name == name then Some(o) else None } match
       case None => throw IllegalArgumentException(s"unexpected operator $name for $qn")
       case Some(op) => checkTypes(tArgs, effect.tParamTys) >>
         checkTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
@@ -311,8 +308,9 @@ def inferType(tm: CTerm)
   input
   ) =>
     val effect = Σ.getEffect(qn)
-    if handlers.size != effect.operators.size ||
-      handlers.keySet != effect.operators.map(_.name).toSet then
+    val operators = Σ.getOperators(qn)
+    if handlers.size != operators.size ||
+      handlers.keySet != operators.map(_.name).toSet then
       Left(UnmatchedHandlerImplementation(qn, handlers.keys))
     else
       val outputCType = F(otherEffects, outputType)
@@ -324,7 +322,7 @@ def inferType(tm: CTerm)
           )
           _ <- checkType(transform, outputCType.weakened)(using Γ :+ inputBinding)
           _ <- allRight(
-            effect.operators.map { opDecl =>
+            operators.map { opDecl =>
               val (n, handlerBody) = handlers(opDecl.name)
               assert(n == opDecl.paramTys.size)
               checkType(
@@ -449,8 +447,7 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
         }
       )
     case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, tArgs))) if name1 == name2 =>
-      val data = Σ.getData(qn)
-      val con = data.cons.getFirstOrDefault(
+      val con = Σ.getConstructors(qn).getFirstOrDefault(
         _.name == name1,
         throw IllegalArgumentException(s"missing constructor $name1 in data $qn")
       )
@@ -496,17 +493,15 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             Application(sup.weakened, Var(0)),
             Some(bodyTy),
           )(using mode)(using Γ :+ binding)
-        case (_, _, Some(RecordType(_, qn, args))) =>
-          val record = Σ.getRecord(qn)
-          allRight(
-            record.fields.map { field =>
-              checkSubsumption(
-                Projection(sub, field.name),
-                Projection(sup, field.name),
-                Some(field.ty)
-              )
-            }
-          )
+        case (_, _, Some(RecordType(_, qn, args))) => allRight(
+          Σ.getFields(qn).map { field =>
+            checkSubsumption(
+              Projection(sub, field.name),
+              Projection(sup, field.name),
+              Some(field.ty)
+            )
+          }
+        )
         case (CUniverse(eff1, ul1, upperBound1), CUniverse(eff2, ul2, upperBound2), _) =>
           checkEffSubsumption(eff1, eff2) >>
             checkULevelSubsumption(ul1, ul2) >>
@@ -578,7 +573,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         eff2@(qn2, tArgs2), name2, args2
         ), _) if qn1 == qn2 && name1 == name2 =>
           val effect = Σ.getEffect(qn1)
-          val operator = effect.operators.getFirstOrDefault(
+          val operator = Σ.getOperators(qn1).getFirstOrDefault(
             _.name == name1,
             throw IllegalArgumentException(s"expect effect $qn1 to have operation $name1")
           )
