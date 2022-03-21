@@ -11,72 +11,80 @@ import Declaration.*
 
 trait TypingContext
 
-def checkDataType(data: Data)
+def checkDataType(qn: QualifiedName)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
-  checkULevel(data.ul)
+: Either[Error, Unit] =
+  val data = Σ.getData(qn)
+  checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
+    checkULevel(data.ul)
 
-def checkDataConstructors(data: Data)
+def checkDataConstructors(qn: QualifiedName)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = allRight(
-  Σ.getConstructors(data.qn).map { con =>
-    val Γ2 = Γ ++ data.tParamTys.map(_._1)
-    for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2)
-        _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
-    yield
-      // binding of positiveVars must be either covariant or invariant
-      // binding of negativeVars must be either contravariant or invariant
-      val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
-      val tParamTysSize = data.tParamTys.size
-      val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
-        case ((binding, variance), reverseIndex) =>
-          val index = tParamTysSize - reverseIndex - 1
-          variance match
-            case Variance.INVARIANT => false
-            case Variance.COVARIANT => negativeVars(index)
-            case Variance.CONTRAVARIANT => positiveVars(index)
-      }
-      if bindingWithIncorrectUsage.isEmpty then ()
-      else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
-  }
-)
-
-def checkRecordType(record: Record)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-: Either[Error, Unit] = checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
-  checkULevel(record.ul)
-
-def checkRecordFields(record: Record)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-: Either[Error, Unit] = allRight(
-  Σ.getFields(record.qn).map { field =>
-    val Γ2 = Γ ++ record.tParamTys.map(_._1) :+ getRecordSelfBinding(record)
-    for _ <- checkIsCType(field.ty, Some(record.ul.weakened))(using Γ2)
+: Either[Error, Unit] =
+  val data = Σ.getData(qn)
+  allRight(
+    Σ.getConstructors(qn).map { con =>
+      val Γ2 = Γ ++ data.tParamTys.map(_._1)
+      for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2)
+          _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
       yield
         // binding of positiveVars must be either covariant or invariant
         // binding of negativeVars must be either contravariant or invariant
-        val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
-        val tParamTysSize = record.tParamTys.size
-        val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
+        val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
+        val tParamTysSize = data.tParamTys.size
+        val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
           case ((binding, variance), reverseIndex) =>
-            val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
+            val index = tParamTysSize - reverseIndex - 1
             variance match
               case Variance.INVARIANT => false
               case Variance.COVARIANT => negativeVars(index)
               case Variance.CONTRAVARIANT => positiveVars(index)
         }
         if bindingWithIncorrectUsage.isEmpty then ()
-        else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
-  }
-)
+        else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
+    }
+  )
+
+def checkRecordType(qn: QualifiedName)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  val record = Σ.getRecord(qn)
+  checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
+    checkULevel(record.ul)
+
+def checkRecordFields(qn: QualifiedName)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  val record = Σ.getRecord(qn)
+  allRight(
+    Σ.getFields(qn).map { field =>
+      val Γ2 = Γ ++ record.tParamTys.map(_._1) :+ getRecordSelfBinding(record)
+      for _ <- checkIsCType(field.ty, Some(record.ul.weakened))(using Γ2)
+        yield
+          // binding of positiveVars must be either covariant or invariant
+          // binding of negativeVars must be either contravariant or invariant
+          val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
+          val tParamTysSize = record.tParamTys.size
+          val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
+            case ((binding, variance), reverseIndex) =>
+              val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
+              variance match
+                case Variance.INVARIANT => false
+                case Variance.COVARIANT => negativeVars(index)
+                case Variance.CONTRAVARIANT => positiveVars(index)
+          }
+          if bindingWithIncorrectUsage.isEmpty then ()
+          else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
+    }
+  )
 
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U(
