@@ -8,7 +8,7 @@ import QualifiedName.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[T](ty: T)(name: Name):
+case class Binding[+T](ty: T)(name: Name):
   def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
 
 /**
@@ -81,7 +81,6 @@ enum VTerm:
   case Con(name: Name, args: Arguments = Nil)
 
   case EqualityType(
-    level: VTerm,
     ty: VTerm,
     left: VTerm,
     right: VTerm

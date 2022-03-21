@@ -38,7 +38,7 @@ import Declaration.*
 case class Constructor(
   name: Name,
   paramTys: Telescope, /* + tParamTys */
-  idTys: Telescope /* + tParamTys + paramTys */
+  idTys: List[Binding[VTerm.EqualityType]] /* + tParamTys + paramTys */
 )
 
 case class Operator(

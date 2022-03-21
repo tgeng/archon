@@ -31,8 +31,7 @@ given RaisableVTerm: Raisable[VTerm] with
     case Thunk(c) => Thunk(RaisableCTerm.raise(c, amount, bar))
     case DataType(qn, args) => DataType(qn, args.map((v: VTerm) => raise(v, amount, bar)))
     case Con(name, args) => Con(name, args.map((v: VTerm) => raise(v, amount, bar)))
-    case EqualityType(level, ty, left, right) => EqualityType(
-      raise(level, amount, bar),
+    case EqualityType(ty, left, right) => EqualityType(
       raise(ty, amount, bar),
       raise(left, amount, bar),
       raise(right, amount, bar)
@@ -164,8 +163,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     case Thunk(cty) => Thunk(SubstitutableCTerm.substitute(cty, substitution, offset))
     case DataType(qn, args) => DataType(qn, args.map(substitute(_, substitution, offset)))
     case Con(name, args) => Con(name, args.map(substitute(_, substitution, offset)))
-    case EqualityType(level, ty, left, right) => EqualityType(
-      substitute(level, substitution, offset),
+    case EqualityType(ty, left, right) => EqualityType(
       substitute(ty, substitution, offset),
       substitute(left, substitution, offset),
       substitute(right, substitution, offset),

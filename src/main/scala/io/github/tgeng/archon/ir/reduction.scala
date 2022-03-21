@@ -303,9 +303,8 @@ private final class StackMachine(
           case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty, status))) =>
             elims = (heapP, Value(heap)) :: (tyP, Value(ty)) :: elims
           case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil),
-          Value(EqualityType(level, ty, left, right))) =>
-            elims = (levelP, Value(level)) ::
-              (tyP, Value(ty)) ::
+          Value(EqualityType(ty, left, right))) =>
+            elims = (tyP, Value(ty)) ::
               (leftP, Value(left)) ::
               (rightP, Value(right)) ::
               elims

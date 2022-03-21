@@ -37,7 +37,9 @@ private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Opt
   (using ctx: TypingContext)
 : Either[Error, Unit] = tParamTys match
   case Nil => Right(())
-  case binding :: rest => checkIsVType(binding.ty, levelBound) >> checkParameterTypeDeclarations(rest)(using Γ :+ binding)
+  case binding :: rest => checkIsVType(binding.ty, levelBound) >> checkParameterTypeDeclarations(
+    rest
+  )(using Γ :+ binding)
 
 private def checkULevel(ul: ULevel)
   (using Γ: Context)
@@ -71,14 +73,20 @@ def inferType(tm: VTerm)
       yield U(cty)
   case DataType(qn, args) =>
     val data = Σ.getData(qn)
-    checkTypes(args, data.tParamTys.map(_._1)) >> Right(VUniverse(data.ul.map(_.substLowers(args: _*)), tm))
+    checkTypes(
+      args,
+      data.tParamTys.map(_._1)
+    ) >> Right(VUniverse(data.ul.map(_.substLowers(args: _*)), tm))
   case _: Con => throw IllegalArgumentException("cannot infer type")
-  case EqualityType(level, ty, left, right) =>
-    val ul = USimpleLevel(level)
-    checkType(ty, VUniverse(ul, ty)) >>
-      checkType(left, ty) >>
-      checkType(right, ty) >>
-      Right(VUniverse(ul, tm))
+  case EqualityType(ty, left, right) =>
+    for tyTy <- inferType(ty)
+        r <- tyTy match
+          case VUniverse(ul, _) =>
+            checkType(left, ty) >>
+              checkType(right, ty) >>
+              Right(VUniverse(ul, tm))
+          case _ => Left(NotVTypeError(ty))
+    yield r
   case Refl => throw IllegalArgumentException("cannot infer type")
   case EffectsType => Right(VUniverse(ULevel.USimpleLevel(LevelLiteral(0)), EffectsType))
   case Effects(literal, unionOperands) =>
@@ -120,7 +128,7 @@ def checkType(tm: VTerm, ty: VTerm)
           case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
         case _ => Left(ExpectDataType(ty))
       case Refl => ty match
-        case EqualityType(level, ty, left, right) => checkSubsumption(
+        case EqualityType(ty, left, right) => checkSubsumption(
           left,
           right,
           Some(ty)
@@ -353,13 +361,14 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   if sub == sup then return Right(())
-  (sub, sup) match
-    case (VUniverse(ul1, upperBound1), VUniverse(ul2, upperBound2)) =>
+  (sub, sup, ty) match
+    case (VUniverse(ul1, upperBound1), VUniverse(ul2, upperBound2), _) =>
       checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
-    case (VTop(ul1), VTop(ul2)) => checkULevelSubsumption(ul1, ul2)
-    case (Pure(ul1), Pure(ul2)) => checkULevelSubsumption(ul1, ul2)
-    case (U(cty1), U(cty2)) => checkSubsumption(cty1, cty2, None)
-    case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
+    case (VTop(ul1), VTop(ul2), _) => checkULevelSubsumption(ul1, ul2)
+    case (Pure(ul1), Pure(ul2), _) => checkULevelSubsumption(ul1, ul2)
+    case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
+    case (Thunk(c1), Thunk(c2), Some(U(ty))) => checkSubsumption(c1, c2, Some(ty))
+    case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
       val data = Σ.getData(qn1)
       var args = IndexedSeq[VTerm]()
       allRight(
@@ -382,13 +391,25 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
                 r
         }
       )
-    case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2)) =>
-      for r <- checkSubsumption(
-        heap1,
-        heap2,
-        Some(HeapType)
-      )(using CONVERSION) >>
-        checkSubsumption(ty1, ty2, ty)(using CONVERSION) >>
+    case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, tArgs))) if name1 == name2 =>
+      val data = Σ.getData(qn)
+      val con = data.cons.getFirstOrDefault(_.name == name1, throw IllegalArgumentException(s"missing constructor $name1 in data $qn"))
+      var args = IndexedSeq[VTerm]()
+      allRight(
+        args1.zip(args2).zip(con.paramTys).map {
+          case ((arg1, arg2), binding) =>
+            val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+            args = args :+ arg1
+            r
+        }
+      )
+    case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
+      checkSubsumption(ty1, ty2, None) >>
+        checkSubsumption(a1, a2, Some(ty1)) >>
+        checkSubsumption(b1, b2, Some(ty1))
+    case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _) =>
+      for r <- checkSubsumption(heap1, heap2, Some(HeapType))(using CONVERSION) >>
+        checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
         (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
           NotVSubsumption(sub, sup, ty, mode)
         ))
