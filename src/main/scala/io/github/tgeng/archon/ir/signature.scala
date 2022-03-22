@@ -12,6 +12,7 @@ enum Declaration:
     (
       val tParamTys: TTelescope, /* binding + paramTys */
       val ul: ULevel,
+      val isPure: Boolean,
     )
   case Record(val qn: QualifiedName)
     (

@@ -30,6 +30,7 @@ def checkDataConstructors(qn: QualifiedName)
     Σ.getConstructors(qn).map { con =>
       val Γ2 = Γ ++ data.tParamTys.map(_._1)
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2)
+          _ <- allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)(using Γ2)))
           _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
       yield
         // binding of positiveVars must be either covariant or invariant
@@ -427,8 +428,18 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
   (sub, sup, ty) match
     case (VUniverse(ul1, upperBound1), VUniverse(ul2, upperBound2), _) =>
       checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
-    case (VTop(ul1), VTop(ul2), _) => checkULevelSubsumption(ul1, ul2)
-    case (Pure(ul1), Pure(ul2), _) => checkULevelSubsumption(ul1, ul2)
+    case (ty, VTop(ul2), _) =>
+      for tyTy <- inferType(ty)
+          r <- tyTy match
+            case VUniverse(ul1, _) => checkULevelSubsumption(ul1, ul2)
+            case _ => Left(NotVTypeError(sub))
+      yield r
+    case (ty, Pure(ul2), _) =>
+      for tyTy <- inferType(ty)
+          r <- tyTy match
+            case VUniverse(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
+            case _ => Left(NotVTypeError(sub))
+      yield r
     case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
     case (Thunk(c1), Thunk(c2), Some(U(ty))) => checkSubsumption(c1, c2, Some(ty))
     case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
@@ -514,9 +525,13 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
           checkEffSubsumption(eff1, eff2) >>
             checkULevelSubsumption(ul1, ul2) >>
             checkSubsumption(upperBound1, upperBound2, Some(sup))
-        case (CTop(eff1, ul1), CTop(eff2, ul2), _) =>
-          checkEffSubsumption(eff1, eff2) >>
-            checkULevelSubsumption(ul1, ul2)
+        case (ty: CType, CTop(eff2, ul2), _) =>
+          for tyTy <- inferType(sub)
+              r <- tyTy match
+                case CUniverse(_, ul1, _) => checkEffSubsumption(ty.effects, eff2) >>
+                  checkULevelSubsumption(ul1, ul2)
+                case _ => Left(NotCTypeError(sub))
+          yield r
         case (F(eff1, vTy1), F(eff2, vTy2), _) =>
           for _ <- checkEffSubsumption(eff1, eff2)
               r <- checkSubsumption(vTy1, vTy2, None)
@@ -599,6 +614,25 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         // necessary.
         case _ => Left(NotCSubsumption(sub, sup, ty, mode))
   yield r
+
+private def checkIsPureType(ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[Error, Unit] = ty match
+  // Here we check if upper bound is pure because otherwise, the this universe type does not admit a
+  // normalized representation.
+  case VUniverse(_, upperBound) => checkIsPureType(upperBound)
+  case CellType(_, ty, _) => checkIsPureType(ty)
+  case DataType(qn, _) => Σ.getData(qn).isPure match
+    case true => Right(())
+    case false => Left(NotPureVType(ty))
+  case _: U => Left(NotPureVType(ty))
+  case _: VTop | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType => Right(())
+  case v: Var => Γ(v).ty match
+    case VUniverse(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
+    case _ => throw IllegalArgumentException(s"$v not a type")
+  case _: Thunk | _: Con | Refl | _: Effects | _: Level | _: Heap | _: Cell =>
+    throw IllegalArgumentException(s"$ty not a type")
 
 private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode): Either[Error, Unit] = (eff1, eff2) match
