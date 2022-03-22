@@ -12,26 +12,26 @@ import Declaration.*
 trait TypingContext
 
 def checkDataType(qn: QualifiedName)
-  (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
+  given Context = IndexedSeq()
   val data = Σ.getData(qn)
   checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
     checkULevel(data.ul)
 
 def checkDataConstructors(qn: QualifiedName)
-  (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
+  given Context = IndexedSeq()
   val data = Σ.getData(qn)
   allRight(
     Σ.getConstructors(qn).map { con =>
-      val Γ2 = Γ ++ data.tParamTys.map(_._1)
-      for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))(using Γ2)
-          _ <- allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)(using Γ2)))
-          _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ2 ++ con.paramTys)
+      given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+      for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
+          _ <- allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+          _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ ++ con.paramTys)
       yield
         // binding of positiveVars must be either covariant or invariant
         // binding of negativeVars must be either contravariant or invariant
@@ -51,24 +51,24 @@ def checkDataConstructors(qn: QualifiedName)
   )
 
 def checkRecordType(qn: QualifiedName)
-  (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
+  given Context = IndexedSeq()
   val record = Σ.getRecord(qn)
   checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
     checkULevel(record.ul)
 
 def checkRecordFields(qn: QualifiedName)
-  (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
+  given Context = IndexedSeq()
   val record = Σ.getRecord(qn)
   allRight(
     Σ.getFields(qn).map { field =>
-      val Γ2 = Γ ++ record.tParamTys.map(_._1) :+ getRecordSelfBinding(record)
-      for _ <- checkIsCType(field.ty, Some(record.ul.weakened))(using Γ2)
+      given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
+      for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
         yield
           // binding of positiveVars must be either covariant or invariant
           // binding of negativeVars must be either contravariant or invariant
