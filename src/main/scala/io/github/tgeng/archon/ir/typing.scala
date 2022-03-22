@@ -16,6 +16,7 @@ def checkDataType(qn: QualifiedName)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
+
   val data = Σ.getData(qn)
   checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
     checkULevel(data.ul)
@@ -25,12 +26,16 @@ def checkDataConstructors(qn: QualifiedName)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
+
   val data = Σ.getData(qn)
   allRight(
     Σ.getConstructors(qn).map { con =>
       given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <- allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+          _ <- if data.isPure then
+            allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+          else Right(())
           _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ ++ con.paramTys)
       yield
         // binding of positiveVars must be either covariant or invariant
@@ -55,6 +60,7 @@ def checkRecordType(qn: QualifiedName)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
+
   val record = Σ.getRecord(qn)
   checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
     checkULevel(record.ul)
@@ -64,10 +70,12 @@ def checkRecordFields(qn: QualifiedName)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
+
   val record = Σ.getRecord(qn)
   allRight(
     Σ.getFields(qn).map { field =>
       given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
+
       for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
         yield
           // binding of positiveVars must be either covariant or invariant
