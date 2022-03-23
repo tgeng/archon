@@ -55,7 +55,7 @@ case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
 
 case class CheckedClause(
   bindings: Telescope,
-  lhs: List[Pattern], /* + bindings */
+  lhs: List[CoPattern], /* + bindings */
   rhs: CTerm, /* + bindings */
   ty: CTerm /* + bindings */
 )

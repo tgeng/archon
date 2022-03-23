@@ -18,5 +18,8 @@ enum Pattern:
   case PConstructor(name: Name, args: List[Pattern])
   case PForcedConstructor(name: Name, args: List[Pattern])
   case PForced(term: VTerm)
-  case PProjection(name: Name)
   case PAbsurd
+
+enum CoPattern:
+  case CPattern(p: Pattern)
+  case CProjection(name: Name)

@@ -50,6 +50,7 @@ private final class StackMachine(
   import CTerm.*
   import VTerm.*
   import Pattern.*
+  import CoPattern.*
 
   private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) = heapKeyIndex.getOrElseUpdate(
     heapKey,
@@ -276,7 +277,7 @@ private final class StackMachine(
 
   @tailrec
   private def matchPattern(
-    elims: List[(Pattern, Elimination)],
+    elims: List[(CoPattern, Elimination)],
     mapping: mutable.Map[Nat, VTerm],
     matchingStatus: MatchingStatus
   ): MatchingStatus =
@@ -288,36 +289,36 @@ private final class StackMachine(
         var status: MatchingStatus = matchingStatus
         var elims = rest
         elim match
-          case (PRef(idx), Value(v)) => mapping(idx) = v
-          case (PRefl, Value(Refl)) |
-               (PValueType(EffectsQn, Nil), Value(EffectsType)) |
-               (PValueType(LevelQn, Nil), Value(LevelType)) |
-               (PValueType(HeapQn, Nil), Value(HeapType)) |
-               (PForced(_), Value(_)) =>
-          case (PValueType(VUniverseQn, p :: Nil), Value(VUniverse(l, upperBound))) =>
+          case (CPattern(PRef(idx)), Value(v)) => mapping(idx) = v
+          case (CPattern(PRefl), Value(Refl)) |
+               (CPattern(PValueType(EffectsQn, Nil)), Value(EffectsType)) |
+               (CPattern(PValueType(LevelQn, Nil)), Value(LevelType)) |
+               (CPattern(PValueType(HeapQn, Nil)), Value(HeapType)) |
+               (CPattern(PForced(_)), Value(_)) =>
+          case (CPattern(PValueType(VUniverseQn, p :: Nil)), Value(VUniverse(l, upperBound))) =>
             l match
-              case ULevel.USimpleLevel(l) => elims = (p, Value(l)) :: elims
+              case ULevel.USimpleLevel(l) => elims = (CPattern(p), Value(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
-          case (PValueType(CellQn, heapP :: tyP :: Nil), Value(CellType(heap, ty, status))) =>
-            elims = (heapP, Value(heap)) :: (tyP, Value(ty)) :: elims
-          case (PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil),
+          case (CPattern(PValueType(CellQn, heapP :: tyP :: Nil)), Value(CellType(heap, ty, status))) =>
+            elims = (CPattern(heapP), Value(heap)) :: (CPattern(tyP), Value(ty)) :: elims
+          case (CPattern(PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
           Value(EqualityType(ty, left, right))) =>
-            elims = (tyP, Value(ty)) ::
-              (leftP, Value(left)) ::
-              (rightP, Value(right)) ::
+            elims = (CPattern(tyP), Value(ty)) ::
+              (CPattern(leftP), Value(left)) ::
+              (CPattern(rightP), Value(right)) ::
               elims
-          case (PValueType(pQn, pArgs), Value(DataType(qn, args))) if pQn == qn =>
-            elims = pArgs.zip(args.map(Value(_))) ++ elims
-          case (PForcedValueType(_, pArgs), Value(DataType(qn2, args))) =>
-            elims = pArgs.zip(args.map(Value(_))) ++ elims
-          case (PConstructor(pName, pArgs), Value(Con(name, args))) if pName == name =>
-            elims = pArgs.zip(args.map(Value(_))) ++ elims
-          case (PForcedValueType(pName, pArgs), Value(Con(name, args))) =>
-            elims = pArgs.zip(args.map(Value(_))) ++ elims
-          case (PProjection(n1), Proj(n2)) if n1 == n2 =>
-          case (PProjection(_), Value(_)) |
+          case (CPattern(PValueType(pQn, pArgs)), Value(DataType(qn, args))) if pQn == qn =>
+            elims = pArgs.map(CPattern.apply).zip(args.map(Value(_))) ++ elims
+          case (CPattern(PForcedValueType(_, pArgs)), Value(DataType(qn2, args))) =>
+            elims = pArgs.map(CPattern.apply).zip(args.map(Value(_))) ++ elims
+          case (CPattern(PConstructor(pName, pArgs)), Value(Con(name, args))) if pName == name =>
+            elims = pArgs.map(CPattern.apply).zip(args.map(Value(_))) ++ elims
+          case (CPattern(PForcedValueType(pName, pArgs)), Value(Con(name, args))) =>
+            elims = pArgs.map(CPattern.apply).zip(args.map(Value(_))) ++ elims
+          case (CProjection(n1), Proj(n2)) if n1 == n2 =>
+          case (CProjection(_), Value(_)) |
                (_, Proj(_)) |
-               (PAbsurd, _) => throw IllegalArgumentException("type error")
+               (CPattern(PAbsurd), _) => throw IllegalArgumentException("type error")
           case (_, Value(Var(_))) => status = MatchingStatus.Stuck
           // Note that we make mismatch dominating stuck because we do not eval by case tree during
           // type checking.
