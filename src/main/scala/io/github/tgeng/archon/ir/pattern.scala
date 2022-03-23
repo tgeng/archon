@@ -3,7 +3,7 @@ package io.github.tgeng.archon.ir
 import io.github.tgeng.archon.common.*
 
 enum Pattern:
-  case PRef(idx: Nat)
+  case PVar(idx: Nat)
   case PRefl
 
   /**
@@ -23,3 +23,8 @@ enum Pattern:
 enum CoPattern:
   case CPattern(p: Pattern)
   case CProjection(name: Name)
+
+enum Elimination:
+  case ETerm(v: VTerm)
+  case EProj(n: Name)
+

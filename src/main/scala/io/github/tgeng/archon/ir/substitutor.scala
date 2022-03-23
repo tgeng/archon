@@ -9,7 +9,7 @@ given DeBruijnVTerm: DeBruijn[VTerm] with
   override def fromIndex(index: Nat): VTerm = VTerm.Var(index)
 
 given DeBruijnPattern: DeBruijn[Pattern] with
-  override def fromIndex(index: Nat): Pattern = Pattern.PRef(index)
+  override def fromIndex(index: Nat): Pattern = Pattern.PVar(index)
 
 /**
  * Local references are represented as DeBruijn indices so `var 0` points to the right most entry in
