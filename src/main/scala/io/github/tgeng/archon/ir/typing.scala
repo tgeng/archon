@@ -144,12 +144,27 @@ def checkClauses(qn: QualifiedName)
 def checkEffect(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = ???
+: Either[Error, Unit] =
+  given Context = IndexedSeq()
+
+  val effect = Σ.getEffect(qn)
+  checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
 
 def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = ???
+: Either[Error, Unit] =
+  val effect = Σ.getEffect(qn)
+  val operators = Σ.getOperators(qn)
+
+  given Γ: Context = effect.tParamTys.toIndexedSeq
+
+  allRight(
+    operators.map { operator =>
+      checkParameterTypeDeclarations(operator.paramTys) >>
+        checkIsVType(operator.resultTy)(using Γ ++ operator.paramTys)
+    }
+  )
 
 private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
@@ -668,6 +683,13 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         // necessary.
         case _ => Left(NotCSubsumption(sub, sup, ty, mode))
   yield r
+
+def checkArePureTypes(telescope: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[Error, Unit] = telescope match
+  case Nil => Right(())
+  case binding :: telescope => checkIsPureType(binding.ty) >> checkArePureTypes(telescope)(using Γ :+ binding)
 
 def checkIsPureType(ty: VTerm)
   (using Γ: Context)
