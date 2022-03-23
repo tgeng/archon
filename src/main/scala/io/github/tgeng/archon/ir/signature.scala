@@ -10,14 +10,14 @@ type TTelescope = List[(Binding[VTerm], Variance)]
 enum Declaration:
   case Data(val qn: QualifiedName)
     (
-      val tParamTys: TTelescope, /* binding + paramTys */
-      val ul: ULevel,
-      val isPure: Boolean,
+      val tParamTys: TTelescope = Nil, /* binding + paramTys */
+      val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+      val isPure: Boolean = true,
     )
   case Record(val qn: QualifiedName)
     (
-      val tParamTys: TTelescope, /* binding + tParamTys */
-      val ul: ULevel,
+      val tParamTys: TTelescope = Nil, /* binding + tParamTys */
+      val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
     )
   case Definition(val qn: QualifiedName)
     (
@@ -33,7 +33,7 @@ enum Declaration:
    * there is no way to statically know if `A` could be `U`. In addition, this also rules out any
    * data type that wraps impure computation inside.
    */
-  case Effect(val qn: QualifiedName)(val tParamTys: Telescope)
+  case Effect(val qn: QualifiedName)(val tParamTys: Telescope = Nil)
 
   def qn: QualifiedName
 
@@ -41,8 +41,8 @@ import Declaration.*
 
 case class Constructor(
   name: Name,
-  paramTys: Telescope, /* + tParamTys */
-  idTys: List[Binding[VTerm.EqualityType]] /* + tParamTys + paramTys */
+  paramTys: Telescope = Nil, /* + tParamTys */
+  idTys: List[Binding[VTerm.EqualityType]] = Nil /* + tParamTys + paramTys */
 )
 
 case class Operator(
@@ -71,7 +71,7 @@ trait Signature:
   def getFields(qn: QualifiedName): IndexedSeq[Field]
 
 
-  def getDef(qn: QualifiedName): Definition
+  def getDefinition(qn: QualifiedName): Definition
 
   def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause]
 

@@ -112,7 +112,7 @@ def checkDef(qn: QualifiedName)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
 
-  val definition = Σ.getDef(qn)
+  val definition = Σ.getDefinition(qn)
   checkIsCType(definition.ty)
 
 def checkClauses(qn: QualifiedName)
@@ -121,7 +121,7 @@ def checkClauses(qn: QualifiedName)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
 
-  val definition = Σ.getDef(qn)
+  val definition = Σ.getDefinition(qn)
   val clauses = Σ.getClauses(qn)
   allRight(
     clauses.map { clause =>
@@ -291,7 +291,7 @@ def inferType(tm: CTerm)
     checkType(effects, EffectsType) >>
       checkULevel(ul) >>
       Right(CUniverse(Total, ul, tm))
-  case Def(qn) => Right(Σ.getDef(qn).ty)
+  case Def(qn) => Right(Σ.getDefinition(qn).ty)
   case Force(v) =>
     for vTy <- inferType(v)
         r <- vTy match
