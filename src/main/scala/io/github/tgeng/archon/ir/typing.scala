@@ -8,6 +8,7 @@ import CTerm.*
 import ULevel.*
 import Error.*
 import Declaration.*
+import Elimination.*
 
 trait TypingContext
 
@@ -104,6 +105,51 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
     )
   )
 )(gn"self")
+
+def checkDef(qn: QualifiedName)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  given Context = IndexedSeq()
+
+  val definition = Σ.getDef(qn)
+  checkIsCType(definition.ty)
+
+def checkClauses(qn: QualifiedName)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  given Context = IndexedSeq()
+
+  val definition = Σ.getDef(qn)
+  val clauses = Σ.getClauses(qn)
+  allRight(
+    clauses.map { clause =>
+      val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
+        case (Some(f), p) => p.toElimination match
+          case Some(ETerm(t)) => Some(Application(f, t))
+          case Some(EProj(name)) => Some(Projection(f, name))
+          case None => None
+        case (None, _) => None
+      }
+      lhs match
+        case None => Right(()) // skip checking absurd clauses
+        case Some(lhs) =>
+          given Context = clause.bindings.toIndexedSeq
+
+          checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty)
+    }
+  )
+
+def checkEffect(qn: QualifiedName)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = ???
+
+def checkOperators(qn: QualifiedName)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] = ???
 
 private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
@@ -623,7 +669,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         case _ => Left(NotCSubsumption(sub, sup, ty, mode))
   yield r
 
-private def checkIsPureType(ty: VTerm)
+def checkIsPureType(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[Error, Unit] = ty match

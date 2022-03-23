@@ -25,13 +25,13 @@ enum Declaration:
     )
 
   /**
-   * Note: `tParamTys` can only contain pure value terms. That is, `U` and `Thunk` are not allowed.
-   * This is necessary because type-based handler matching needs a "simple" way to efficiently
-   * locate the corresponding handler. Arbitrary logic that can happen during conversion would make
-   * it very difficult to implement dynamic handlers efficiently. Also note that this means we also
-   * need to conservatively reject `tParamTys` like `[A: VUniverse, a: A]` because there is no way
-   * to statically know if `A` could be `U`. In addition, this also rules out any data type that
-   * wraps impure computation inside.
+   * Note: `tParamTys` can only contain pure value terms. That is, `U` or types that nest `U` are
+   * not allowed. This is necessary because type-based handler matching needs a "simple" way to
+   * efficiently locate the corresponding handler. Arbitrary logic that can happen during conversion
+   * would make it very difficult to implement dynamic handlers efficiently. Also note that this
+   * means we also need to conservatively reject `tParamTys` like `[A: VUniverse, a: A]` because
+   * there is no way to statically know if `A` could be `U`. In addition, this also rules out any
+   * data type that wraps impure computation inside.
    */
   case Effect(val qn: QualifiedName)(val tParamTys: Telescope)
 

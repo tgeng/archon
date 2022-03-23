@@ -115,3 +115,9 @@ extension[T] (elems: IterableOnce[T])
 
 def swap[A, B](t: (A, B)) : (B, A) = t match
   case (a, b) => (b, a)
+
+def transpose[A](l: List[Option[A]]): Option[List[A]] = l match
+  case Nil => Some(Nil)
+  case e :: l => e match
+    case None => None
+    case Some(e) => transpose(l).map(l => e :: l)

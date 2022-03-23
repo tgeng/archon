@@ -287,29 +287,29 @@ private final class StackMachine(
         elim match
           case (CPattern(PVar(idx)), ETerm(v)) => mapping(idx) = v
           case (CPattern(PRefl), ETerm(Refl)) |
-               (CPattern(PValueType(EffectsQn, Nil)), ETerm(EffectsType)) |
-               (CPattern(PValueType(LevelQn, Nil)), ETerm(LevelType)) |
-               (CPattern(PValueType(HeapQn, Nil)), ETerm(HeapType)) |
+               (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType)) |
+               (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType)) |
+               (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType)) |
                (CPattern(PForced(_)), ETerm(_)) =>
-          case (CPattern(PValueType(VUniverseQn, p :: Nil)), ETerm(VUniverse(l, upperBound))) =>
+          case (CPattern(PDataType(VUniverseQn, p :: Nil)), ETerm(VUniverse(l, upperBound))) =>
             l match
               case ULevel.USimpleLevel(l) => elims = (CPattern(p), ETerm(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
-          case (CPattern(PValueType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
+          case (CPattern(PDataType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
             elims = (CPattern(heapP), ETerm(heap)) :: (CPattern(tyP), ETerm(ty)) :: elims
-          case (CPattern(PValueType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
+          case (CPattern(PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
           ETerm(EqualityType(ty, left, right))) =>
             elims = (CPattern(tyP), ETerm(ty)) ::
               (CPattern(leftP), ETerm(left)) ::
               (CPattern(rightP), ETerm(right)) ::
               elims
-          case (CPattern(PValueType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
+          case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (CPattern(PForcedValueType(_, pArgs)), ETerm(DataType(qn2, args))) =>
+          case (CPattern(PForcedDataType(_, pArgs)), ETerm(DataType(qn2, args))) =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CPattern(PConstructor(pName, pArgs)), ETerm(Con(name, args))) if pName == name =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (CPattern(PForcedValueType(pName, pArgs)), ETerm(Con(name, args))) =>
+          case (CPattern(PForcedDataType(pName, pArgs)), ETerm(Con(name, args))) =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CProjection(n1), EProj(n2)) if n1 == n2 =>
           case (CProjection(_), ETerm(_)) |
