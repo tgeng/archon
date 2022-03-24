@@ -52,19 +52,19 @@ given RaisableVTerm: Raisable[VTerm] with
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
     case Hole | _: Def => c
-    case CType(effects, level, upperBound) => CType(
-      RaisableVTerm.raise(effects, amount, bar),
+    case CType(level, upperBound, effects) => CType(
       level.map(RaisableVTerm.raise(_, amount, bar)),
       raise(upperBound, amount, bar),
-    )
-    case CTop(effects, level) => CTop(
       RaisableVTerm.raise(effects, amount, bar),
+    )
+    case CTop(level, effects) => CTop(
       level.map(RaisableVTerm.raise(_, amount, bar)),
+      RaisableVTerm.raise(effects, amount, bar),
     )
     case Force(v) => Force(RaisableVTerm.raise(v, amount, bar))
-    case F(effects, vTerm) => F(
-      RaisableVTerm.raise(effects, amount, bar),
-      RaisableVTerm.raise(vTerm, amount, bar)
+    case F(vTerm, effects) => F(
+      RaisableVTerm.raise(vTerm, amount, bar),
+      RaisableVTerm.raise(effects, amount, bar)
     )
     case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
     case Let(t, eff, ty, ctx) => Let(
@@ -73,20 +73,20 @@ given RaisableCTerm: Raisable[CTerm] with
       ty.map(RaisableVTerm.raise(_, amount, bar)),
       raise(ctx, amount, bar + 1)
     )
-    case FunctionType(effects, binding, bodyTy) => FunctionType(
-      RaisableVTerm.raise(effects, amount, bar),
+    case FunctionType(binding, bodyTy, effects) => FunctionType(
       binding.map(RaisableVTerm.raise(_, amount, bar)),
-      raise(bodyTy, amount, bar + 1)
+      raise(bodyTy, amount, bar + 1),
+      RaisableVTerm.raise(effects, amount, bar)
     )
     //    case Lambda(body) => Lambda(raise(body, amount, bar + 1))
     case Application(fun, arg) => Application(
       raise(fun, amount, bar),
       RaisableVTerm.raise(arg, amount, bar)
     )
-    case RecordType(effects, qn, args) => RecordType(
-      RaisableVTerm.raise(effects, amount, bar),
+    case RecordType(qn, args, effects) => RecordType(
       qn,
-      args.map(RaisableVTerm.raise(_, amount, bar))
+      args.map(RaisableVTerm.raise(_, amount, bar)),
+      RaisableVTerm.raise(effects, amount, bar)
     )
     //    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
     case Projection(rec, name) => Projection(raise(rec, amount, bar), name)
@@ -218,19 +218,19 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     offset: Int
   ): CTerm = c match
     case Hole | _: Def => c
-    case CType(effects, level, upperBound) => CType(
-      SubstitutableVTerm.substitute(effects, substitution, offset),
+    case CType(level, upperBound, effects) => CType(
       level.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       substitute(upperBound, substitution, offset),
-    )
-    case CTop(effects, level) => CTop(
       SubstitutableVTerm.substitute(effects, substitution, offset),
-      level.map(SubstitutableVTerm.substitute(_, substitution, offset))
+    )
+    case CTop(level, effects) => CTop(
+      level.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      SubstitutableVTerm.substitute(effects, substitution, offset)
     )
     case Force(v) => Force(SubstitutableVTerm.substitute(v, substitution, offset))
-    case F(effects, vTerm) => F(
-      SubstitutableVTerm.substitute(effects, substitution, offset),
-      SubstitutableVTerm.substitute(vTerm, substitution, offset)
+    case F(vTerm, effects) => F(
+      SubstitutableVTerm.substitute(vTerm, substitution, offset),
+      SubstitutableVTerm.substitute(effects, substitution, offset)
     )
     case Return(v) => Return(SubstitutableVTerm.substitute(v, substitution, offset))
     case Let(t, eff, ty, ctx) => Let(
@@ -239,20 +239,20 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       ty.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       substitute(ctx, substitution, offset + 1)
     )
-    case FunctionType(effects, binding, bodyTy) => FunctionType(
-      SubstitutableVTerm.substitute(effects, substitution, offset),
+    case FunctionType(binding, bodyTy, effects) => FunctionType(
       binding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      substitute(bodyTy, substitution, offset + 1)
+      substitute(bodyTy, substitution, offset + 1),
+      SubstitutableVTerm.substitute(effects, substitution, offset)
     )
     //    case Lambda(body) => Lambda(substitute(body, substitution, offset + 1))
     case Application(fun, arg) => Application(
       substitute(fun, substitution, offset),
       SubstitutableVTerm.substitute(arg, substitution, offset)
     )
-    case RecordType(effects, qn, args) => RecordType(
-      SubstitutableVTerm.substitute(effects, substitution, offset),
+    case RecordType(qn, args, effects) => RecordType(
       qn,
-      args.map(SubstitutableVTerm.substitute(_, substitution, offset))
+      args.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+      SubstitutableVTerm.substitute(effects, substitution, offset)
     )
     //    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitution, offset)).toMap)
     case Projection(rec, name) => Projection(substitute(rec, substitution, offset), name)

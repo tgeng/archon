@@ -23,8 +23,8 @@ object TermBuilders:
     case Type(ul, None, _) => VType(ul, VTop(ul))
 
   given Conversion[Type[CTerm], CTerm] = _ match
-    case Type(ul, Some(upperBound), effects) => CType(effects, ul, upperBound)
-    case Type(ul, None, effects) => CType(effects, ul, CTop(Total, ul))
+    case Type(ul, Some(upperBound), effects) => CType(ul, upperBound, effects)
+    case Type(ul, None, effects) => CType(ul, CTop(ul, Total), effects)
 
   given Conversion[CTerm, VTerm] = Thunk(_)
 
@@ -58,7 +58,7 @@ object TermBuilders:
     case SomeCall(qn, args) =>
       Σ.getRecordOption(qn).flatMap { record =>
         if record.tParamTys.size == args.size then
-          Some(RecordType(Total, qn, args.map(_.asRight)))
+          Some(RecordType(qn, args.map(_.asRight), Total))
         else
           None
       }.orElse(

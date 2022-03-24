@@ -176,15 +176,15 @@ enum CTerm:
   case Hole
 
   /** archon.builtin.CType */
-  case CType(effects: VTerm, ul: ULevel, upperBound: CTerm) extends CTerm, IType
-  case CTop(effects: VTerm, ul: ULevel) extends CTerm, IType
+  case CType(ul: ULevel, upperBound: CTerm, effects: VTerm = VTerm.Total) extends CTerm, IType
+  case CTop(ul: ULevel, effects: VTerm = VTerm.Total) extends CTerm, IType
 
   case Def(qn: QualifiedName)
 
   case Force(v: VTerm)
 
   /** archon.builtin.F */
-  case F(effects: VTerm, vTy: VTerm) extends CTerm, IType
+  case F(vTy: VTerm, effects: VTerm = VTerm.Total) extends CTerm, IType
   case Return(v: VTerm)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
@@ -193,14 +193,14 @@ enum CTerm:
 
   /** archon.builtin.Function */
   case FunctionType(
-    effects: VTerm, // effects that needed for getting the function of this type. The effects caused
+    binding: Binding[VTerm], // effects that needed for getting the function of this type. The effects caused
     // by function application is tracked by the `bodyTy`.
-    binding: Binding[VTerm],
-    /* binding + 1 */ bodyTy: CTerm
+    bodyTy: CTerm, /* binding + 1 */
+    effects: VTerm = VTerm.Total
   ) extends CTerm, IType
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments = Nil) extends CTerm, IType
+  case RecordType(qn: QualifiedName, args: Arguments = Nil, effects: VTerm = VTerm.Total) extends CTerm, IType
   case Projection(rec: CTerm, name: Name)
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
@@ -322,22 +322,22 @@ def getFreeVars(tm: CTerm)
   import CTerm.*
   tm match
     case Hole => (Set(), Set())
-    case CType(eff, ul, upperBound) =>
+    case CType(ul, upperBound, eff) =>
       getFreeVars(eff) | getFreeVars(ul) | getFreeVars(upperBound)
-    case CTop(eff, ul) => getFreeVars(eff) | getFreeVars(ul)
+    case CTop(ul, eff) => getFreeVars(eff) | getFreeVars(ul)
     case Force(v) => getFreeVars(v)
-    case F(eff, vTy) => getFreeVars(eff) | getFreeVars(vTy)
+    case F(vTy, eff) => getFreeVars(eff) | getFreeVars(vTy)
     case Return(v) => getFreeVars(v)
     case Let(t, eff, binding, ctx) => getFreeVars(t) |
       getFreeVars(eff) |
       getFreeVars(binding.ty) |
       getFreeVars(ctx)(using bar + 1) - 1
-    case FunctionType(effects, binding, bodyTy) =>
+    case FunctionType(binding, bodyTy, effects) =>
       getFreeVars(effects) |
         swap(getFreeVars(binding.ty)) |
         getFreeVars(bodyTy)(using bar + 1) - 1
     case Application(fun, arg) => getFreeVars(fun) | getFreeVars(arg)
-    case RecordType(effects, qn, args) =>
+    case RecordType(qn, args, effects) =>
       val record = Σ.getRecord(qn)
       getFreeVars(effects) |
         record.tParamTys.zip(args).map { case ((_, variance), arg) => variance match

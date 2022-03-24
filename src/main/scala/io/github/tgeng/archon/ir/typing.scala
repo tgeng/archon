@@ -99,9 +99,9 @@ def checkRecordFields(qn: QualifiedName)
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U(
     RecordType(
-      Total,
       record.qn,
-      (record.tParamTys.size - 1).to(0, -1).map(Var(_)).toList
+      (record.tParamTys.size - 1).to(0, -1).map(Var(_)).toList,
+      Total
     )
   )
 )(gn"self")
@@ -199,7 +199,7 @@ def inferType(tm: VTerm)
   case U(cty) =>
     for ctyTy <- inferType(cty)
         r <- ctyTy match
-          case CType(eff, ul, _) if eff == Total => Right(VType(ul, tm))
+          case CType(ul, _, eff) if eff == Total => Right(VType(ul, tm))
           case CType(_, ul, _) => Left(EffectfulCType(cty))
           case _ => Left(NotVTypeError(tm))
     yield r
@@ -282,15 +282,15 @@ def inferType(tm: CTerm)
   (using ctx: TypingContext)
 : Either[Error, CTerm] = tm match
   case Hole => throw IllegalArgumentException("hole should only be present during reduction")
-  case CType(effects, ul, upperBound) =>
-    checkType(effects, EffectsType) >>
+  case CType(ul, upperBound, effects) =>
+    checkType(EffectsType, effects) >>
       checkULevel(ul) >>
       checkType(upperBound, tm) >>
-      Right(CType(Total, ULevelSuc(ul), tm))
-  case CTop(effects, ul) =>
-    checkType(effects, EffectsType) >>
+      Right(CType(ULevelSuc(ul), tm, Total))
+  case CTop(ul, effects) =>
+    checkType(EffectsType, effects) >>
       checkULevel(ul) >>
-      Right(CType(Total, ul, tm))
+      Right(CType(ul, tm, Total))
   case Def(qn) => Right(Σ.getDefinition(qn).ty)
   case Force(v) =>
     for vTy <- inferType(v)
@@ -298,16 +298,16 @@ def inferType(tm: CTerm)
           case U(cty) => Right(cty)
           case _ => Left(ExpectUType(vTy))
     yield r
-  case F(effects, vTy) =>
+  case F(vTy, effects) =>
     for _ <- checkType(effects, EffectsType)
         vTyTy <- inferType(vTy)
         r <- vTyTy match
-          case VType(ul, _) => Right(CType(Total, ul, tm))
+          case VType(ul, _) => Right(CType(ul, tm, Total))
           case _ => Left(NotVTypeError(vTy))
     yield r
   case Return(v) =>
     for vTy <- inferType(v)
-      yield F(Total, vTy)
+      yield F(vTy, Total)
   case Let(t, effects, binding, ctx) =>
     for _ <- checkIsVType(binding.ty)
         _ <- checkType(t, F(effects, binding.ty))
@@ -326,18 +326,18 @@ def inferType(tm: CTerm)
     // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
     //  the bound variable
     yield augmentEffect(effects, ctxTy)
-  case FunctionType(effects, binding, bodyTy) =>
+  case FunctionType(binding, bodyTy, effects) =>
     for _ <- checkType(effects, EffectsType)
         tyTy <- inferType(binding.ty)
         r <- tyTy match
           case VType(ul1, _) =>
             for bodyTyTy <- inferType(bodyTy)(using Γ :+ binding)
                 r <- bodyTyTy match
-                  case CType(_, ul2, _) => Right(
+                  case CType(ul2, _, _) => Right(
                     CType(
-                      Total,
                       ULevelMax(ul1, ul2.weakened),
-                      tm
+                      tm,
+                      Total
                     )
                   )
                   case _ => Left(NotCTypeError(bodyTy))
@@ -347,20 +347,20 @@ def inferType(tm: CTerm)
   case Application(fun, arg) =>
     for funTy <- inferType(fun)
         r <- funTy match
-          case FunctionType(effects, binding, bodyTy) =>
+          case FunctionType(binding, bodyTy, effects) =>
             checkType(arg, binding.ty) >>
               Right(augmentEffect(effects, bodyTy.substLowers(arg)))
           case _ => Left(ExpectFunction(fun))
     yield r
-  case RecordType(effects, qn, args) =>
+  case RecordType(qn, args, effects) =>
     val record = Σ.getRecord(qn)
     checkType(effects, EffectsType) >>
       checkTypes(args, record.tParamTys.map(_._1)) >>
-      Right(CType(Total, record.ul.map(_.substLowers(args: _*)), tm))
+      Right(CType(record.ul.map(_.substLowers(args: _*)), tm, Total))
   case Projection(rec, name) =>
     for recTy <- inferType(rec)
         r <- recTy match
-          case RecordType(effects, qn, args) =>
+          case RecordType(qn, args, effects) =>
             Σ.getFields(qn).first { f => if f.name == name then Some(f) else None } match
               case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
               case Some(f) => Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(tm): _*)))
@@ -412,9 +412,9 @@ def inferType(tm: CTerm)
                   Binding(
                     U(
                       FunctionType(
-                        otherEffects,
                         Binding(opDecl.resultTy)(gn"output"),
-                        F(otherEffects, opDecl.resultTy)
+                        F(opDecl.resultTy, otherEffects),
+                        otherEffects
                       )
                     )
                   )(gn"resume")
@@ -575,13 +575,13 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
       sup <- if isTotal then reduce(sup) else Right(sup)
       r <- (sub, sup, ty) match
         case (_, _, _) if sub == sup => Right(())
-        case (_, _, Some(FunctionType(_, binding, bodyTy))) =>
+        case (_, _, Some(FunctionType(binding, bodyTy, _))) =>
           checkSubsumption(
             Application(sub.weakened, Var(0)),
             Application(sup.weakened, Var(0)),
             Some(bodyTy),
           )(using mode)(using Γ :+ binding)
-        case (_, _, Some(RecordType(_, qn, args))) => allRight(
+        case (_, _, Some(RecordType(qn, args, _))) => allRight(
           Σ.getFields(qn).map { field =>
             checkSubsumption(
               Projection(sub, field.name),
@@ -590,14 +590,14 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             )
           }
         )
-        case (CType(eff1, ul1, upperBound1), CType(eff2, ul2, upperBound2), _) =>
+        case (CType(ul1, upperBound1, eff1), CType(ul2, upperBound2, eff2), _) =>
           checkEffSubsumption(eff1, eff2) >>
             checkULevelSubsumption(ul1, ul2) >>
             checkSubsumption(upperBound1, upperBound2, Some(sup))
-        case (ty: IType, CTop(eff2, ul2), _) =>
+        case (ty: IType, CTop(ul2, eff2), _) =>
           for tyTy <- inferType(sub)
               r <- tyTy match
-                case CType(_, ul1, _) => checkEffSubsumption(ty.effects, eff2) >>
+                case CType(ul1, _, _) => checkEffSubsumption(ty.effects, eff2) >>
                   checkULevelSubsumption(ul1, ul2)
                 case _ => Left(NotCTypeError(sub))
           yield r
@@ -611,7 +611,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             checkSubsumption(binding1.ty, binding2.ty, None) >>
             checkSubsumption(t1, t2, Some(F(eff1, binding1.ty))) >>
             checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(using Γ :+ binding1)
-        case (FunctionType(eff1, binding1, bodyTy1), FunctionType(eff2, binding2, bodyTy2), _) =>
+        case (FunctionType(binding1, bodyTy1, eff1), FunctionType(binding2, bodyTy2, eff2), _) =>
           checkSubsumption(eff1, eff2, Some(EffectsType)) >>
             checkSubsumption(binding2.ty, binding1.ty, None) >>
             checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
@@ -621,14 +621,14 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
               _ <- checkSubsumption(fun1Ty, fun2Ty, None)
               _ <- checkSubsumption(fun1, fun2, Some(fun1Ty))
               r <- fun1Ty match
-                case FunctionType(_, binding, _) => checkSubsumption(
+                case FunctionType(binding, _, _) => checkSubsumption(
                   arg1,
                   arg2,
                   Some(binding.ty)
                 )
                 case _ => Left(NotCSubsumption(sub, sup, ty, mode))
           yield r
-        case (RecordType(eff1, qn1, args1), RecordType(eff2, qn2, args2), _) if qn1 == qn2 =>
+        case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
           val record = Σ.getRecord(qn1)
           var args = IndexedSeq[VTerm]()
           checkSubsumption(eff1, eff2, Some(EffectsType)) >>
@@ -765,7 +765,7 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
 : Either[Error, Unit] =
   for cTyTy <- inferType(cTy)
       r <- cTyTy match
-        case CType(eff, ul, _) if eff == Total => levelBound match
+        case CType(ul, _, eff) if eff == Total => levelBound match
           case Some(bound) => checkULevelSubsumption(ul, bound)
           case _ => Right(())
         case _: CType => Left(EffectfulCType(cTy))
@@ -785,15 +785,15 @@ private def reduceForTyping(cTy: CTerm)
   yield r
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
-  case CType(effects, ul, upperBound) => CType(EffectsUnion(eff, effects), ul, upperBound)
-  case CTop(effects, ul) => CTop(EffectsUnion(eff, effects), ul)
-  case F(effects, vTy) => F(EffectsUnion(eff, effects), vTy)
-  case FunctionType(effects, binding, bodyTy) => FunctionType(
-    EffectsUnion(eff, effects),
+  case CType(ul, upperBound, effects) => CType(ul, upperBound, EffectsUnion(eff, effects))
+  case CTop(ul, effects) => CTop(ul, EffectsUnion(eff, effects))
+  case F(vTy, effects) => F(vTy, EffectsUnion(eff, effects))
+  case FunctionType(binding, bodyTy, effects) => FunctionType(
     binding,
-    bodyTy
+    bodyTy,
+    EffectsUnion(eff, effects)
   )
-  case RecordType(effects, qn, args) => RecordType(EffectsUnion(eff, effects), qn, args)
+  case RecordType(qn, args, effects) => RecordType(qn, args, EffectsUnion(eff, effects))
   case _ => throw IllegalArgumentException()
 
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
