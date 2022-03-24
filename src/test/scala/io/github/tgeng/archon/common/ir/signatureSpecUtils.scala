@@ -8,16 +8,17 @@ import Declaration.*
 
 import scala.annotation.targetName
 
-given TestSignature = TestSignature(
-  mutable.Map(),
-  mutable.Map(),
-  mutable.Map(),
-  mutable.Map(),
-  mutable.Map(),
-  mutable.Map(),
-  mutable.Map(),
-  mutable.Map(),
-)
+class SignatureSpec extends AnyFreeSpec :
+  given TestSignature = TestSignature(
+    mutable.Map(),
+    mutable.Map(),
+    mutable.Map(),
+    mutable.Map(),
+    mutable.Map(),
+    mutable.Map(),
+    mutable.Map(),
+    mutable.Map(),
+  )
 
 class TestSignature(
   val allData: mutable.Map[QualifiedName, Data],
