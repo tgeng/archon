@@ -30,23 +30,23 @@ class TestSignature(
   val allEffects: mutable.Map[QualifiedName, Effect],
   val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]],
 ) extends Signature :
-  override def getData(qn: QualifiedName): Declaration.Data = allData(qn)
+  override def getDataOption(qn: QualifiedName) = allData.get(qn)
 
-  override def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] = allConstructors(qn)
+  override def getConstructorsOption(qn: QualifiedName) = allConstructors.get(qn)
 
-  override def getRecord(qn: QualifiedName): Declaration.Record = allRecords(qn)
+  override def getRecordOption(qn: QualifiedName) = allRecords.get(qn)
 
-  override def getFields(qn: QualifiedName): IndexedSeq[Field] = allFields(qn)
+  override def getFieldsOption(qn: QualifiedName) = allFields.get(qn)
 
-  override def getDefinition(qn: QualifiedName): Declaration.Definition = allDefinitions(qn)
+  override def getDefinitionOption(qn: QualifiedName) = allDefinitions.get(qn)
 
-  override def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause] = allClauses(qn)
+  override def getClausesOption(qn: QualifiedName) = allClauses.get(qn)
 
-  override def getCaseTree(qn: QualifiedName): CaseTree = ???
+  override def getCaseTreeOption(qn: QualifiedName) = ???
 
-  override def getEffect(qn: QualifiedName): Declaration.Effect = allEffects(qn)
+  override def getEffectOption(qn: QualifiedName) = allEffects.get(qn)
 
-  override def getOperators(qn: QualifiedName): IndexedSeq[Operator] = allOperators(qn)
+  override def getOperatorsOption(qn: QualifiedName) = allOperators.get(qn)
 
   def copy: TestSignature = TestSignature(
     allData,

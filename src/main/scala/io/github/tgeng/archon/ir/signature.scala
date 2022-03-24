@@ -61,23 +61,32 @@ case class CheckedClause(
 )
 
 trait Signature:
-  def getData(qn: QualifiedName): Data
+  def getDataOption(qn: QualifiedName): Option[Data]
+  def getData(qn: QualifiedName): Data = getDataOption(qn).get
 
-  def getConstructors(qn: QualifiedName): IndexedSeq[Constructor]
-
-
-  def getRecord(qn: QualifiedName): Record
-
-  def getFields(qn: QualifiedName): IndexedSeq[Field]
+  def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
+  def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] = getConstructorsOption(qn).get
 
 
-  def getDefinition(qn: QualifiedName): Definition
+  def getRecordOption(qn: QualifiedName): Option[Record]
+  def getRecord(qn: QualifiedName): Record = getRecordOption(qn).get
 
-  def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause]
+  def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
+  def getFields(qn: QualifiedName): IndexedSeq[Field] = getFieldsOption(qn).get
 
-  def getCaseTree(qn: QualifiedName): CaseTree
+
+  def getDefinitionOption(qn: QualifiedName): Option[Definition]
+  def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).get
+
+  def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
+  def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause] = getClausesOption(qn).get
+
+  def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
+  def getCaseTree(qn: QualifiedName): CaseTree = getCaseTreeOption(qn).get
 
 
-  def getEffect(qn: QualifiedName): Effect
+  def getEffectOption(qn: QualifiedName): Option[Effect]
+  def getEffect(qn: QualifiedName): Effect = getEffectOption(qn).get
 
-  def getOperators(qn: QualifiedName): IndexedSeq[Operator]
+  def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
+  def getOperators(qn: QualifiedName): IndexedSeq[Operator] = getOperatorsOption(qn).get
