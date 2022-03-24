@@ -189,18 +189,18 @@ def inferType(tm: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, VTerm] = tm match
-  case VUniverse(level, upperBound) =>
+  case VType(level, upperBound) =>
     checkULevel(level) >>
       checkType(upperBound, tm) >>
-      Right(VUniverse(ULevelSuc(level), tm))
-  case Pure(ul) => Right(VUniverse(ul, tm))
-  case VTop(ul) => Right(VUniverse(ul, tm))
+      Right(VType(ULevelSuc(level), tm))
+  case Pure(ul) => Right(VType(ul, tm))
+  case VTop(ul) => Right(VType(ul, tm))
   case r: Var => Right(Γ(r).ty)
   case U(cty) =>
     for ctyTy <- inferType(cty)
         r <- ctyTy match
-          case CUniverse(eff, ul, _) if eff == Total => Right(VUniverse(ul, tm))
-          case CUniverse(_, ul, _) => Left(EffectfulCType(cty))
+          case CType(eff, ul, _) if eff == Total => Right(VType(ul, tm))
+          case CType(_, ul, _) => Left(EffectfulCType(cty))
           case _ => Left(NotVTypeError(tm))
     yield r
   case Thunk(c) =>
@@ -211,19 +211,19 @@ def inferType(tm: VTerm)
     checkTypes(
       args,
       data.tParamTys.map(_._1)
-    ) >> Right(VUniverse(data.ul.map(_.substLowers(args: _*)), tm))
+    ) >> Right(VType(data.ul.map(_.substLowers(args: _*)), tm))
   case _: Con => throw IllegalArgumentException("cannot infer type")
   case EqualityType(ty, left, right) =>
     for tyTy <- inferType(ty)
         r <- tyTy match
-          case VUniverse(ul, _) =>
+          case VType(ul, _) =>
             checkType(left, ty) >>
               checkType(right, ty) >>
-              Right(VUniverse(ul, tm))
+              Right(VType(ul, tm))
           case _ => Left(NotVTypeError(ty))
     yield r
   case Refl => throw IllegalArgumentException("cannot infer type")
-  case EffectsType => Right(VUniverse(ULevel.USimpleLevel(LevelLiteral(0)), EffectsType))
+  case EffectsType => Right(VType(ULevel.USimpleLevel(LevelLiteral(0)), EffectsType))
   case Effects(literal, unionOperands) =>
     allRight(
       literal.map { (qn, args) =>
@@ -233,16 +233,16 @@ def inferType(tm: VTerm)
     ) >> allRight(
       unionOperands.map { ref => checkType(ref, EffectsType) }
     ) >> Right(EffectsType)
-  case LevelType => Right(VUniverse(UωLevel(0), LevelType))
+  case LevelType => Right(VType(UωLevel(0), LevelType))
   case Level(literal, maxOperands) =>
     allRight(maxOperands.map { (ref, _) => checkType(ref, LevelType) }) >> Right(LevelType)
-  case HeapType => Right(VUniverse(USimpleLevel(LevelLiteral(0)), HeapType))
+  case HeapType => Right(VType(USimpleLevel(LevelLiteral(0)), HeapType))
   case _: Heap => Right(HeapType)
   case CellType(heap, ty, _) =>
     for _ <- checkType(heap, HeapType)
         tyTy <- inferType(ty)
         r <- tyTy match
-          case _: VUniverse => Right(tyTy)
+          case _: VType => Right(tyTy)
           case _ => Left(NotVTypeError(ty))
     yield r
   case Cell(heapKey, _) => throw IllegalArgumentException("cannot infer type")
@@ -282,15 +282,15 @@ def inferType(tm: CTerm)
   (using ctx: TypingContext)
 : Either[Error, CTerm] = tm match
   case Hole => throw IllegalArgumentException("hole should only be present during reduction")
-  case CUniverse(effects, ul, upperBound) =>
+  case CType(effects, ul, upperBound) =>
     checkType(effects, EffectsType) >>
       checkULevel(ul) >>
       checkType(upperBound, tm) >>
-      Right(CUniverse(Total, ULevelSuc(ul), tm))
+      Right(CType(Total, ULevelSuc(ul), tm))
   case CTop(effects, ul) =>
     checkType(effects, EffectsType) >>
       checkULevel(ul) >>
-      Right(CUniverse(Total, ul, tm))
+      Right(CType(Total, ul, tm))
   case Def(qn) => Right(Σ.getDefinition(qn).ty)
   case Force(v) =>
     for vTy <- inferType(v)
@@ -302,7 +302,7 @@ def inferType(tm: CTerm)
     for _ <- checkType(effects, EffectsType)
         vTyTy <- inferType(vTy)
         r <- vTyTy match
-          case VUniverse(ul, _) => Right(CUniverse(Total, ul, tm))
+          case VType(ul, _) => Right(CType(Total, ul, tm))
           case _ => Left(NotVTypeError(vTy))
     yield r
   case Return(v) =>
@@ -330,11 +330,11 @@ def inferType(tm: CTerm)
     for _ <- checkType(effects, EffectsType)
         tyTy <- inferType(binding.ty)
         r <- tyTy match
-          case VUniverse(ul1, _) =>
+          case VType(ul1, _) =>
             for bodyTyTy <- inferType(bodyTy)(using Γ :+ binding)
                 r <- bodyTyTy match
-                  case CUniverse(_, ul2, _) => Right(
-                    CUniverse(
+                  case CType(_, ul2, _) => Right(
+                    CType(
                       Total,
                       ULevelMax(ul1, ul2.weakened),
                       tm
@@ -356,7 +356,7 @@ def inferType(tm: CTerm)
     val record = Σ.getRecord(qn)
     checkType(effects, EffectsType) >>
       checkTypes(args, record.tParamTys.map(_._1)) >>
-      Right(CUniverse(Total, record.ul.map(_.substLowers(args: _*)), tm))
+      Right(CType(Total, record.ul.map(_.substLowers(args: _*)), tm))
   case Projection(rec, name) =>
     for recTy <- inferType(rec)
         r <- recTy match
@@ -495,18 +495,18 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
 : Either[Error, Unit] =
   if sub == sup then return Right(())
   (sub, sup, ty) match
-    case (VUniverse(ul1, upperBound1), VUniverse(ul2, upperBound2), _) =>
+    case (VType(ul1, upperBound1), VType(ul2, upperBound2), _) =>
       checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
     case (ty, VTop(ul2), _) =>
       for tyTy <- inferType(ty)
           r <- tyTy match
-            case VUniverse(ul1, _) => checkULevelSubsumption(ul1, ul2)
+            case VType(ul1, _) => checkULevelSubsumption(ul1, ul2)
             case _ => Left(NotVTypeError(sub))
       yield r
     case (ty, Pure(ul2), _) =>
       for tyTy <- inferType(ty)
           r <- tyTy match
-            case VUniverse(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
+            case VType(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
             case _ => Left(NotVTypeError(sub))
       yield r
     case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
@@ -570,7 +570,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
-  val isTotal = ty.forall(_.asInstanceOf[CType].effects == Total)
+  val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
   for sub <- if isTotal then reduce(sub) else Right(sub)
       sup <- if isTotal then reduce(sup) else Right(sup)
       r <- (sub, sup, ty) match
@@ -590,14 +590,14 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             )
           }
         )
-        case (CUniverse(eff1, ul1, upperBound1), CUniverse(eff2, ul2, upperBound2), _) =>
+        case (CType(eff1, ul1, upperBound1), CType(eff2, ul2, upperBound2), _) =>
           checkEffSubsumption(eff1, eff2) >>
             checkULevelSubsumption(ul1, ul2) >>
             checkSubsumption(upperBound1, upperBound2, Some(sup))
-        case (ty: CType, CTop(eff2, ul2), _) =>
+        case (ty: IType, CTop(eff2, ul2), _) =>
           for tyTy <- inferType(sub)
               r <- tyTy match
-                case CUniverse(_, ul1, _) => checkEffSubsumption(ty.effects, eff2) >>
+                case CType(_, ul1, _) => checkEffSubsumption(ty.effects, eff2) >>
                   checkULevelSubsumption(ul1, ul2)
                 case _ => Left(NotCTypeError(sub))
           yield r
@@ -695,9 +695,9 @@ def checkIsPureType(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[Error, Unit] = ty match
-  // Here we check if upper bound is pure because otherwise, the this universe type does not admit a
+  // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
   // normalized representation.
-  case VUniverse(_, upperBound) => checkIsPureType(upperBound)
+  case VType(_, upperBound) => checkIsPureType(upperBound)
   case CellType(_, ty, _) => checkIsPureType(ty)
   case DataType(qn, _) => Σ.getData(qn).isPure match
     case true => Right(())
@@ -705,7 +705,7 @@ def checkIsPureType(ty: VTerm)
   case _: U => Left(NotPureVType(ty))
   case _: VTop | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType => Right(())
   case v: Var => Γ(v).ty match
-    case VUniverse(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
+    case VType(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
     case _ => throw IllegalArgumentException(s"$v not a type")
   case _: Thunk | _: Con | Refl | _: Effects | _: Level | _: Heap | _: Cell =>
     throw IllegalArgumentException(s"$ty not a type")
@@ -752,7 +752,7 @@ def checkIsVType(vTy: VTerm, levelBound: Option[ULevel] = None)
 : Either[Error, Unit] =
   for vTyTy <- inferType(vTy)
       r <- vTyTy match
-        case VUniverse(ul, _) => levelBound match
+        case VType(ul, _) => levelBound match
           case Some(bound) => checkULevelSubsumption(ul, bound)
           case _ => Right(())
         case _ => Left(NotVTypeError(vTy))
@@ -765,10 +765,10 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
 : Either[Error, Unit] =
   for cTyTy <- inferType(cTy)
       r <- cTyTy match
-        case CUniverse(eff, ul, _) if eff == Total => levelBound match
+        case CType(eff, ul, _) if eff == Total => levelBound match
           case Some(bound) => checkULevelSubsumption(ul, bound)
           case _ => Right(())
-        case _: CUniverse => Left(EffectfulCType(cTy))
+        case _: CType => Left(EffectfulCType(cTy))
         case _ => Left(NotCTypeError(cTy))
   yield r
 
@@ -779,13 +779,13 @@ private def reduceForTyping(cTy: CTerm)
 : Either[Error, CTerm] =
   for cTyTy <- inferType(cTy)
       r <- cTyTy match
-        case CUniverse(eff, _, _) if eff == Total => reduce(cTy)
-        case _: CUniverse => Left(EffectfulCType(cTy))
+        case CType(eff, _, _) if eff == Total => reduce(cTy)
+        case _: CType => Left(EffectfulCType(cTy))
         case _ => Left(NotCTypeError(cTy))
   yield r
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
-  case CUniverse(effects, ul, upperBound) => CUniverse(EffectsUnion(eff, effects), ul, upperBound)
+  case CType(effects, ul, upperBound) => CType(EffectsUnion(eff, effects), ul, upperBound)
   case CTop(effects, ul) => CTop(EffectsUnion(eff, effects), ul)
   case F(effects, vTy) => F(EffectsUnion(eff, effects), vTy)
   case FunctionType(effects, binding, bodyTy) => FunctionType(

@@ -76,7 +76,7 @@ private final class StackMachine(
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
-      case _: CUniverse | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
+      case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.size == builtinHandlers.length then
           Right(pc)
         else
@@ -88,7 +88,7 @@ private final class StackMachine(
           //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
           //          val (count, body) = cases(q.qualifiedName)
           //          q match
-          //            case VUniverse(level) =>
+          //            case VType(level) =>
           //              assert(count == 1)
           //              run(body.substLowers(arg, level))
           //            case DataType(qn, args) =>
@@ -291,7 +291,7 @@ private final class StackMachine(
                (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType)) |
                (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType)) |
                (CPattern(PForced(_)), ETerm(_)) =>
-          case (CPattern(PDataType(VUniverseQn, p :: Nil)), ETerm(VUniverse(l, upperBound))) =>
+          case (CPattern(PDataType(VTypeQn, p :: Nil)), ETerm(VType(l, upperBound))) =>
             l match
               case ULevel.USimpleLevel(l) => elims = (CPattern(p), ETerm(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")

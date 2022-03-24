@@ -64,7 +64,7 @@ enum CellStatus extends Comparable[CellStatus] :
     else 1
 
 enum VTerm:
-  case VUniverse(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VUniverseQn)
+  case VType(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VTypeQn)
   case VTop(ul: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
 
   /**
@@ -162,7 +162,7 @@ object VTerm:
     case _ => throw IllegalArgumentException("type error")
 
 
-sealed trait CType:
+sealed trait IType:
   def effects: VTerm
 
 enum CTerm:
@@ -175,16 +175,16 @@ enum CTerm:
    */
   case Hole
 
-  /** archon.builtin.CUniverse */
-  case CUniverse(effects: VTerm, ul: ULevel, upperBound: CTerm) extends CTerm, CType
-  case CTop(effects: VTerm, ul: ULevel) extends CTerm, CType
+  /** archon.builtin.CType */
+  case CType(effects: VTerm, ul: ULevel, upperBound: CTerm) extends CTerm, IType
+  case CTop(effects: VTerm, ul: ULevel) extends CTerm, IType
 
   case Def(qn: QualifiedName)
 
   case Force(v: VTerm)
 
   /** archon.builtin.F */
-  case F(effects: VTerm, vTy: VTerm) extends CTerm, CType
+  case F(effects: VTerm, vTy: VTerm) extends CTerm, IType
   case Return(v: VTerm)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
@@ -197,10 +197,10 @@ enum CTerm:
     // by function application is tracked by the `bodyTy`.
     binding: Binding[VTerm],
     /* binding + 1 */ bodyTy: CTerm
-  ) extends CTerm, CType
+  ) extends CTerm, IType
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments = Nil) extends CTerm, CType
+  case RecordType(effects: VTerm, qn: QualifiedName, args: Arguments = Nil) extends CTerm, IType
   case Projection(rec: CTerm, name: Name)
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
@@ -293,7 +293,7 @@ def getFreeVars(tm: VTerm)
   (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   import VTerm.*
   tm match
-    case VUniverse(ul, upperBound) => getFreeVars(ul) | getFreeVars(upperBound)
+    case VType(ul, upperBound) => getFreeVars(ul) | getFreeVars(upperBound)
     case VTop(ul) => getFreeVars(ul)
     case Pure(ul) => getFreeVars(ul)
     case Var(index) => (if index < bar then Set() else Set(index), Set())
@@ -322,7 +322,7 @@ def getFreeVars(tm: CTerm)
   import CTerm.*
   tm match
     case Hole => (Set(), Set())
-    case CUniverse(eff, ul, upperBound) =>
+    case CType(eff, ul, upperBound) =>
       getFreeVars(eff) | getFreeVars(ul) | getFreeVars(upperBound)
     case CTop(eff, ul) => getFreeVars(eff) | getFreeVars(ul)
     case Force(v) => getFreeVars(v)

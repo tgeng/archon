@@ -1,7 +1,7 @@
 package io.github.tgeng.archon.ir
 
 import scala.collection.mutable
-import io.github.tgeng.archon.ir.VTerm.VUniverse
+import io.github.tgeng.archon.ir.VTerm.VType
 import io.github.tgeng.archon.common.*
 
 import scala.collection.immutable.{ListMap, ListSet}
@@ -20,7 +20,7 @@ import CTerm.*
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int): VTerm = v match
     case Refl | EffectsType | LevelType | HeapType | _: Heap => v
-    case VUniverse(level, upperBound) => VUniverse(
+    case VType(level, upperBound) => VType(
       level.map(raise(_, amount, bar)),
       raise(upperBound, amount, bar)
     )
@@ -52,7 +52,7 @@ given RaisableVTerm: Raisable[VTerm] with
 given RaisableCTerm: Raisable[CTerm] with
   override def raise(c: CTerm, amount: Int, bar: Int): CTerm = c match
     case Hole | _: Def => c
-    case CUniverse(effects, level, upperBound) => CUniverse(
+    case CType(effects, level, upperBound) => CType(
       RaisableVTerm.raise(effects, amount, bar),
       level.map(RaisableVTerm.raise(_, amount, bar)),
       raise(upperBound, amount, bar),
@@ -150,7 +150,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     offset: Int
   ): VTerm = v match
     case Refl | LevelType | EffectsType | HeapType | _: Heap => v
-    case VUniverse(level, upperBound) => VUniverse(
+    case VType(level, upperBound) => VType(
       level.map(l => substitute(l, substitution, offset)),
       substitute(upperBound, substitution, offset),
     )
@@ -218,7 +218,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     offset: Int
   ): CTerm = c match
     case Hole | _: Def => c
-    case CUniverse(effects, level, upperBound) => CUniverse(
+    case CType(effects, level, upperBound) => CType(
       SubstitutableVTerm.substitute(effects, substitution, offset),
       level.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       substitute(upperBound, substitution, offset),

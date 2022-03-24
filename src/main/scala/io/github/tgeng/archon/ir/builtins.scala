@@ -10,7 +10,7 @@ object Builtins:
   val UnitTy = DataType(BuiltinType / "Unit")
   val Unit = Con(Name.Normal("Unit"))
 
-  val VUniverseQn = BuiltinType / "VUniverse"
+  val VTypeQn = BuiltinType / "VType"
   val VTopQn = BuiltinType / "VTop"
   val PureQn = BuiltinType / "Pure"
   val EqualityQn = BuiltinType / "Equality"
