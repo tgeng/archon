@@ -37,35 +37,52 @@ object TermBuilders:
   extension (tm: VTerm)
     infix def ∪(tm2: VTerm) = LevelMax(tm, tm2)
 
-  case class SomeCall[F, A](f: F, args: List[A])
+  enum Elim:
+    case Arg(v: VTerm)
+    case Proj(n: Name)
 
-  extension (qn: QualifiedName)
-    def apply(args: VTerm*) = SomeCall(qn, args.toList)
+  import Elim.*
 
-  extension (n: Name)
-    def apply(args: VTerm*) = SomeCall(n, args.toList)
+  case class SomeCall[F](f: F, args: List[Elim])
 
-  given(using Σ: Signature): Conversion[SomeCall[QualifiedName, VTerm], VTerm] = _ match
-    case SomeCall(qn, args) =>
+  given(using Σ: Signature): Conversion[SomeCall[QualifiedName], VTerm] = _ match
+    case SomeCall(qn, elims) =>
+      val args = elims.map(_.asInstanceOf[Arg].v)
       Σ.getDataOption(qn).map(_ => DataType(qn, args)).orElse(
         Σ.getEffectOption(qn).map(_ => EffectsLiteral(ListSet((qn, args))))
       ).get
 
-  given Conversion[SomeCall[Name, VTerm], VTerm] = _ match
-    case SomeCall(n, args) => Con(n, args)
+  given Conversion[SomeCall[Name], VTerm] = _ match
+    case SomeCall(n, elims) => Con(n, elims.map(_.asInstanceOf[Arg].v))
 
-  given(using Σ: Signature): Conversion[SomeCall[QualifiedName, Either[Name, VTerm]], CTerm] = _ match
-    case SomeCall(qn, args) =>
+  extension (qn: QualifiedName)
+    def apply(elims: Elim*) = SomeCall(qn, elims.toList)
+
+  extension (n: Name)
+    def apply(elims: Elim*) = SomeCall(n, elims.toList)
+
+  extension (tm: CTerm)
+    def apply(elims: Elim*) = elims.foldLeft(tm) {
+      case (f, Arg(t)) => Application(f, t)
+      case (f, Proj(n)) => Projection(f, n)
+    }
+
+  given Conversion[VTerm, Elim] = Arg(_)
+
+  given Conversion[Name, Elim] = Proj(_)
+
+  given(using Σ: Signature): Conversion[SomeCall[QualifiedName], CTerm] = _ match
+    case SomeCall(qn, elims) =>
       Σ.getRecordOption(qn).flatMap { record =>
-        if record.tParamTys.size == args.size then
-          Some(RecordType(qn, args.map(_.asRight), Total))
+        if record.tParamTys.size == elims.size then
+          Some(RecordType(qn, elims.map(_.asInstanceOf[Arg].v), Total))
         else
           None
       }.orElse(
         Σ.getDefinitionOption(qn).map { _ =>
-          args.foldLeft(Def(qn)){
-            case (f, Right(t)) => Application(f, t)
-            case (f, Left(n)) => Projection(f, n)
+          elims.foldLeft(Def(qn)) {
+            case (f, Arg(t)) => Application(f, t)
+            case (f, Proj(n)) => Projection(f, n)
           }
         }
       ).get
