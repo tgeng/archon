@@ -52,6 +52,13 @@ object TermBuilders:
         Σ.getEffectOption(qn).map(_ => EffectsLiteral(ListSet((qn, args))))
       ).get
 
+  given(using Σ: Signature): Conversion[SomeCall[QualifiedName], Eff] = _ match
+    case SomeCall(qn, elims) =>
+      val args = elims.map(_.asInstanceOf[Arg].v)
+      Σ.getEffectOption(qn).map(_ => (qn, args)).get
+
+  def op(eff: Eff, name: Name, args: VTerm*) = OperatorCall(eff, name, args.toList)
+
   given Conversion[SomeCall[Name], VTerm] = _ match
     case SomeCall(n, elims) => Con(n, elims.map(_.asInstanceOf[Arg].v))
 
@@ -66,6 +73,13 @@ object TermBuilders:
       case (f, Arg(t)) => Application(f, t)
       case (f, Proj(n)) => Projection(f, n)
     }
+
+    infix def >>=:(t: CTerm) = Let(t, tm)
+
+    infix def ->:(argTy: VTerm) = FunctionType(Binding(argTy)(gn"Arg"), tm, Total)
+
+  extension (effAndBody:(VTerm, CTerm))
+    infix def ->:(argTy: VTerm) = FunctionType(Binding(argTy)(gn"Arg"), effAndBody._2, effAndBody._1)
 
   given Conversion[VTerm, Elim] = Arg(_)
 
