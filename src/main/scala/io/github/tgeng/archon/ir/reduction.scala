@@ -171,7 +171,7 @@ private final class StackMachine(
             handlers,
             input
             ) if eff == hEff =>
-              val (count, handlerBody) = handlers(name)
+              val handlerBody = handlers(name)
               val capturedStack = Handler(
                 hEff,
                 otherEffects,

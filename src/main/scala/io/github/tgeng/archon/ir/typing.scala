@@ -403,11 +403,10 @@ def inferType(tm: CTerm)
                   _ <- checkSubsumption(inputEff, EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))), Some(EffectsType))
                   _ <- allRight(
                     operators.map { opDecl =>
-                      val (n, handlerBody) = handlers(opDecl.name)
-                      assert(n == opDecl.paramTys.size)
+                      val handlerBody = handlers(opDecl.name)
                       checkType(
                         handlerBody,
-                        outputCType.weaken(n + 1, 0)
+                        outputCType.weaken(opDecl.paramTys.size + 1, 0)
                       )(
                         using Γ ++
                           opDecl.paramTys :+

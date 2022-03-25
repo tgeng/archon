@@ -62,31 +62,43 @@ case class CheckedClause(
 
 trait Signature:
   def getDataOption(qn: QualifiedName): Option[Data]
+
   def getData(qn: QualifiedName): Data = getDataOption(qn).get
 
   def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
+
   def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] = getConstructorsOption(qn).get
 
 
   def getRecordOption(qn: QualifiedName): Option[Record]
+
   def getRecord(qn: QualifiedName): Record = getRecordOption(qn).get
 
   def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
+
   def getFields(qn: QualifiedName): IndexedSeq[Field] = getFieldsOption(qn).get
 
 
   def getDefinitionOption(qn: QualifiedName): Option[Definition]
+
   def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).get
 
   def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
+
   def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause] = getClausesOption(qn).get
 
   def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
+
   def getCaseTree(qn: QualifiedName): CaseTree = getCaseTreeOption(qn).get
 
 
   def getEffectOption(qn: QualifiedName): Option[Effect]
+
   def getEffect(qn: QualifiedName): Effect = getEffectOption(qn).get
 
   def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
+
   def getOperators(qn: QualifiedName): IndexedSeq[Operator] = getOperatorsOption(qn).get
+
+  def getOperator(qn: QualifiedName, name: Name) =
+    getOperators(qn).getFirstOrDefault(_.name == name, throw IllegalArgumentException())

@@ -92,7 +92,7 @@ enum VTerm:
   case Effects(literal: ListSet[Eff], unionOperands: ListSet[VTerm.Var])
 
   case LevelType extends VTerm, QualifiedNameOwner(LevelQn)
-  case Level(literal: Nat, maxOperands: ListMap[VTerm.Var, /* offset */ Nat])
+  case Level(literal: Nat, maxOperands: ListMap[VTerm.Var, /* level offset */ Nat])
 
   /** archon.builtin.Heap */
   case HeapType extends VTerm, QualifiedNameOwner(HeapQn)
@@ -189,13 +189,13 @@ enum CTerm:
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
-  case Let(t: CTerm, /* binding + 1 */ ctx: CTerm)
+  case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)
 
   /** archon.builtin.Function */
   case FunctionType(
     binding: Binding[VTerm], // effects that needed for getting the function of this type. The effects caused
     // by function application is tracked by the `bodyTy`.
-    bodyTy: CTerm, /* binding + 1 */
+    bodyTy: CTerm, /* binding offset = 1 */
     effects: VTerm = VTerm.Total
   ) extends CTerm, IType
   case Application(fun: CTerm, arg: VTerm)
@@ -246,7 +246,7 @@ enum CTerm:
      *  - all declared parameters
      *  - a continuation parameter of type `declared operator output type -> outputType` and outputs `outputType`
      */
-    handlers: Map[Name, (Nat, /* binding + n + 1 (for resume) */ CTerm)],
+    handlers: Map[Name, /* binding offset = paramTys + 1 (for resume) */ CTerm],
     input: CTerm,
   )
 
@@ -337,12 +337,15 @@ def getFreeVars(tm: CTerm)
         }.reduce(_ | _)
     case Projection(rec, _) => getFreeVars(rec)
     case OperatorCall(eff, _, args) => getFreeVars(eff) | getFreeVars(args)
-    case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+    case Handler(eff@(qn, _), otherEffects, outputType, transform, handlers, input) =>
       getFreeVars(eff) |
         getFreeVars(otherEffects) |
         getFreeVars(outputType) |
         getFreeVars(transform)(using bar + 1) - 1 |
-        handlers.values.map { (n, t) => getFreeVars(t)(using bar + n + 1) - (n + 1) }.reduce(_ | _) |
+        handlers.map { (name, t) =>
+          val offset = Σ.getOperator(qn, name).paramTys.size + 1
+          getFreeVars(t)(using bar + offset) - offset
+        }.reduce(_ | _) |
         getFreeVars(input)
     case AllocOp(heap, ty) => getFreeVars(heap) | getFreeVars(ty)
     case SetOp(cell, value) => getFreeVars(cell) | getFreeVars(value)
