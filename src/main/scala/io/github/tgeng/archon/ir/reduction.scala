@@ -28,8 +28,7 @@ extension[T] (a: mutable.ArrayBuffer[T])
 
 private val builtinHandlers = Seq(
   CTerm.HeapHandler(
-    Binding(VTerm.VTop(ULevel.USimpleLevel(VTerm.LevelLiteral(0))))(gn"_"), // placeholder value, not important
-    VTerm.EffectsLiteral(ListSet()), // placeholder value, not important
+    VTerm.Total, // placeholder value, not important
     Some(GlobalHeapKey),
     IndexedSeq(),
     CTerm.Hole
@@ -58,7 +57,7 @@ private final class StackMachine(
   ).push(index)
 
   private def refreshHeapKeyIndex(startIndex: Nat = 0): Unit =
-    for case (HeapHandler(_, _, Some(heapKey), _, _), index) <- stack.view.zipWithIndex.drop(
+    for case (HeapHandler(_, Some(heapKey), _, _), index) <- stack.view.zipWithIndex.drop(
       startIndex
     ) do
       updateHeapKeyIndex(heapKey, index)
@@ -139,7 +138,7 @@ private final class StackMachine(
         case Thunk(c) => run(c)
         case _: Var => Right(reconstructTermFromStack(pc))
         case _ => throw IllegalArgumentException("type error")
-      case Let(t, _, ty, ctx) =>
+      case Let(t, ctx) =>
         t match
           case Return(v) => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
@@ -166,7 +165,6 @@ private final class StackMachine(
           c match
             case Handler(
             hEff,
-            inputBinding,
             otherEffects,
             outputType,
             transform,
@@ -176,7 +174,6 @@ private final class StackMachine(
               val (count, handlerBody) = handlers(name)
               val capturedStack = Handler(
                 hEff,
-                inputBinding,
                 otherEffects,
                 outputType,
                 transform,
@@ -188,7 +185,7 @@ private final class StackMachine(
               nextHole = handlerBody.substLowers(args :+ resume: _*)
             case _ if stack.isEmpty => throw IllegalArgumentException("type error")
             // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
-            case HeapHandler(_, _, Some(heapKey), _, _) =>
+            case HeapHandler(_, Some(heapKey), _, _) =>
               heapKeyIndex(heapKey).pop()
               cterms.addOne(substHole(c, Hole))
             case _ =>
@@ -203,7 +200,7 @@ private final class StackMachine(
             refreshHeapKeyIndex(currentStackHeight)
             run(Force(arg))
           case _ => throw IllegalArgumentException("type error")
-      case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) =>
+      case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
         if reduceDown then
           run(transform.substLowers(Thunk(input)))
         else
@@ -215,10 +212,9 @@ private final class StackMachine(
           case Heap(heapKey) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
+              case HeapHandler(otherEffects, key, heapContent, input) =>
                 val cell = new Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
-                  inputBinding,
                   otherEffects,
                   key,
                   heapContent :+ None,
@@ -233,9 +229,8 @@ private final class StackMachine(
           case Cell(heapKey, index) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
+              case HeapHandler(otherEffects, key, heapContent, input) =>
                 stack(heapHandlerIndex) = HeapHandler(
-                  inputBinding,
                   otherEffects,
                   key,
                   heapContent.updated(index, Some(value)),
@@ -250,13 +245,13 @@ private final class StackMachine(
           case Cell(heapKey, index) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case HeapHandler(_, _, _, heapContent, _) =>
+              case HeapHandler(_, _, heapContent, _) =>
                 heapContent(index) match
                   case None => Left(Error.UninitializedCell(reconstructTermFromStack(pc)))
                   case Some(value) => run(substHole(stack.pop(), Return(value)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case HeapHandler(inputBinding, otherEffects, currentKey, heapContent, input) =>
+      case HeapHandler(otherEffects, currentKey, heapContent, input) =>
         if reduceDown then
           assert(currentKey.nonEmpty)
           heapKeyIndex(currentKey.get).pop()
@@ -265,7 +260,7 @@ private final class StackMachine(
           assert(currentKey.isEmpty) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHeapKeyIndex(key, stack.length)
-          stack.push(HeapHandler(inputBinding, otherEffects, Some(key), heapContent, input))
+          stack.push(HeapHandler(otherEffects, Some(key), heapContent, input))
           run(input.substLowers(Heap(key)))
 
   private enum MatchingStatus:
@@ -322,18 +317,12 @@ private final class StackMachine(
         matchPattern(elims, mapping, status)
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
-    case Let(t, eff, ty, ctx) => Let(c, eff, ty, ctx)
+    case Let(t, ctx) => Let(c, ctx)
     case Application(fun, arg) => Application(c, arg)
     case Projection(rec, name) => Projection(c, name)
-    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) =>
-      Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, c)
-    case HeapHandler(inputBinding, otherEffects, key, heap, input) => HeapHandler(
-      inputBinding,
-      otherEffects,
-      key,
-      heap,
-      c
-    )
+    case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+      Handler(eff, otherEffects, outputType, transform, handlers, c)
+    case HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)
     case _ => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =

@@ -121,3 +121,9 @@ def transpose[A](l: List[Option[A]]): Option[List[A]] = l match
   case e :: l => e match
     case None => None
     case Some(e) => transpose(l).map(l => e :: l)
+
+def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
+  case Nil => Right(Nil)
+  case e :: l => e match
+    case Left(l) => Left(l)
+    case Right(r) => transpose(l).map(l => r :: l)

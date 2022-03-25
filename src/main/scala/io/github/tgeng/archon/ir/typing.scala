@@ -308,24 +308,28 @@ def inferType(tm: CTerm)
   case Return(v) =>
     for vTy <- inferType(v)
       yield F(vTy, Total)
-  case Let(t, effects, binding, ctx) =>
-    for _ <- checkIsVType(binding.ty)
-        _ <- checkType(t, F(effects, binding.ty))
-        ctxTy <- if effects == Total then
-        // Do the reduction onsite so that type checking in sub terms can leverage the more specific
-        // type.
-          for t <- reduce(t)
-              r <- t match
-                case Return(v) => inferType(ctx.substLowers(v))
-                case _ => throw IllegalStateException(
-                  "impossible since we have checked type of t to be F(...)"
-                )
-          yield r
-        // Otherwise, just add the binding to the context and continue type checking.
-        else inferType(ctx)(using Γ :+ binding).map(_.weakened)
+  case Let(t, ctx) =>
+    for tTy <- inferType(t)
+        r <- tTy match
+          case F(effects, ty) =>
+            for ctxTy <-
+                  if effects == Total then
+                  // Do the reduction onsite so that type checking in sub terms can leverage the more specific
+                  // type.
+                    for t <- reduce(t)
+                        r <- t match
+                          case Return(v) => inferType(ctx.substLowers(v))
+                          case _ => throw IllegalStateException(
+                            "impossible since we have checked type of t to be F(...)"
+                          )
+                    yield r
+                  // Otherwise, just add the binding to the context and continue type checking.
+                  else inferType(ctx)(using Γ :+ Binding(ty)(gn"LetVar")).map(_.weakened)
+            yield augmentEffect(effects, ctxTy)
+          case _ => Left(ExpectFType(tTy))
     // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
     //  the bound variable
-    yield augmentEffect(effects, ctxTy)
+    yield r
   case FunctionType(binding, bodyTy, effects) =>
     for _ <- checkType(effects, EffectsType)
         tyTy <- inferType(binding.ty)
@@ -378,7 +382,6 @@ def inferType(tm: CTerm)
   )
   case Handler(
   eff@(qn, args),
-  inputBinding,
   otherEffects,
   outputType,
   transform,
@@ -393,35 +396,36 @@ def inferType(tm: CTerm)
     else
       val outputCType = F(otherEffects, outputType)
       for _ <- checkTypes(args, effect.tParamTys)
-          _ <- checkIsVType(inputBinding.ty)
-          _ <- checkType(
-            input,
-            F(EffectsUnion(EffectsLiteral(ListSet(eff)), otherEffects), inputBinding.ty)
-          )
-          _ <- checkType(transform, outputCType.weakened)(using Γ :+ inputBinding)
-          _ <- allRight(
-            operators.map { opDecl =>
-              val (n, handlerBody) = handlers(opDecl.name)
-              assert(n == opDecl.paramTys.size)
-              checkType(
-                handlerBody,
-                outputCType.weaken(n + 1, 0)
-              )(
-                using Γ ++
-                  opDecl.paramTys :+
-                  Binding(
-                    U(
-                      FunctionType(
-                        Binding(opDecl.resultTy)(gn"output"),
-                        F(opDecl.resultTy, otherEffects),
-                        otherEffects
+          inputCTy <- inferType(input)
+          r <- inputCTy match
+            case F(inputTy, inputEff) =>
+              for _ <- checkType(transform, outputCType.weakened)(using Γ :+ Binding(inputTy)(gn""))
+                  _ <- checkSubsumption(inputEff, EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))), Some(EffectsType))
+                  _ <- allRight(
+                    operators.map { opDecl =>
+                      val (n, handlerBody) = handlers(opDecl.name)
+                      assert(n == opDecl.paramTys.size)
+                      checkType(
+                        handlerBody,
+                        outputCType.weaken(n + 1, 0)
+                      )(
+                        using Γ ++
+                          opDecl.paramTys :+
+                          Binding(
+                            U(
+                              FunctionType(
+                                Binding(opDecl.resultTy)(gn"output"),
+                                F(opDecl.resultTy, otherEffects),
+                                otherEffects
+                              )
+                            )
+                          )(gn"resume")
                       )
-                    )
-                  )(gn"resume")
-              )
-            }
-          )
-      yield outputCType
+                    }
+                  )
+              yield outputCType
+            case _ => Left(ExpectFType(inputCTy))
+      yield r
   case AllocOp(heap, vTy) =>
     checkType(heap, HeapType) >>
       checkIsVType(vTy) >>
@@ -456,15 +460,16 @@ def inferType(tm: CTerm)
           case _: CellType => Left(UninitializedCell(tm))
           case _ => Left(ExpectCell(cell))
     yield r
-  case HeapHandler(inputBinding, otherEffects, key, heapContent, input) =>
+  case HeapHandler(otherEffects, key, heapContent, input) =>
     val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
-    checkIsVType(inputBinding.ty) >>
-      // TODO: check heap variable is not leaked.
-      checkType(
-        input,
-        F(EffectsUnion(Var(0), otherEffects.weakened), inputBinding.ty.weakened)
-      )(using Γ :+ heapVarBinding) >>
-      Right(F(otherEffects, inputBinding.ty))
+    for inputCTy <- inferType(input)
+        r <- inputCTy match
+          case F(inputTy, eff) =>
+            checkSubsumption(eff, EffectsUnion(Var(0), otherEffects.weakened), Some(EffectsType))(using SUBSUMPTION)(using Γ :+ heapVarBinding)
+           // TODO: check heap variable is not leaked.
+            Right(F(otherEffects, inputTy))
+          case _ => Left(ExpectFType(inputCTy))
+    yield r
 
 def checkType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
@@ -606,11 +611,17 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
               r <- checkSubsumption(vTy1, vTy2, None)
           yield r
         case (Return(v1), Return(v2), Some(F(_, ty))) => checkSubsumption(v1, v2, Some(ty))
-        case (Let(t1, eff1, binding1, ctx1), Let(t2, eff2, binding2, ctx2), ty) =>
-          checkSubsumption(eff1, eff2, Some(EffectsType)) >>
-            checkSubsumption(binding1.ty, binding2.ty, None) >>
-            checkSubsumption(t1, t2, Some(F(eff1, binding1.ty))) >>
-            checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(using Γ :+ binding1)
+        case (Let(t1, ctx1), Let(t2, ctx2), ty) =>
+          for t1CTy <- inferType(t1)
+              r <- t1CTy match
+                case F(t1Ty, _) =>
+                  for t2CTy <- inferType(t2)
+                      _ <- checkSubsumption(t1CTy, t2CTy, None)
+                      _ <- checkSubsumption(t1, t2, Some(t2CTy))
+                      r <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(using Γ :+ Binding(t1Ty)(gn"LetVar"))
+                  yield r
+                case _ => Left(ExpectFType(t1CTy))
+          yield r
         case (FunctionType(binding1, bodyTy1, eff1), FunctionType(binding2, bodyTy2, eff2), _) =>
           checkSubsumption(eff1, eff2, Some(EffectsType)) >>
             checkSubsumption(binding2.ty, binding1.ty, None) >>

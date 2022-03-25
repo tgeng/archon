@@ -67,10 +67,8 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(effects, amount, bar)
     )
     case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
-    case Let(t, eff, ty, ctx) => Let(
+    case Let(t, ctx) => Let(
       raise(t, amount, bar),
-      RaisableVTerm.raise(eff, amount, bar),
-      ty.map(RaisableVTerm.raise(_, amount, bar)),
       raise(ctx, amount, bar + 1)
     )
     case FunctionType(binding, bodyTy, effects) => FunctionType(
@@ -111,9 +109,8 @@ given RaisableCTerm: Raisable[CTerm] with
       name,
       args.map(RaisableVTerm.raise(_, amount, bar))
     )
-    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) => Handler(
+    case Handler(eff, otherEffects, outputType, transform, handlers, input) => Handler(
       eff.map(RaisableVTerm.raise(_, amount, bar)),
-      inputBinding.map(RaisableVTerm.raise(_, amount, bar)),
       RaisableVTerm.raise(otherEffects, amount, bar),
       RaisableVTerm.raise(outputType, amount, bar),
       raise(transform, amount, bar + 1),
@@ -129,8 +126,7 @@ given RaisableCTerm: Raisable[CTerm] with
       RaisableVTerm.raise(value, amount, bar)
     )
     case GetOp(cell) => GetOp(RaisableVTerm.raise(cell, amount, bar))
-    case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
-      inputBinding.map(RaisableVTerm.raise(_, amount, bar)),
+    case HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(
       RaisableVTerm.raise(otherEffects, amount, bar + 1),
       key,
       heapContent.map(_.map(RaisableVTerm.raise(_, amount, bar))),
@@ -233,10 +229,8 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       SubstitutableVTerm.substitute(effects, substitution, offset)
     )
     case Return(v) => Return(SubstitutableVTerm.substitute(v, substitution, offset))
-    case Let(t, eff, ty, ctx) => Let(
+    case Let(t, ctx) => Let(
       substitute(t, substitution, offset),
-      SubstitutableVTerm.substitute(eff, substitution, offset),
-      ty.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       substitute(ctx, substitution, offset + 1)
     )
     case FunctionType(binding, bodyTy, effects) => FunctionType(
@@ -278,9 +272,8 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       name,
       args.map(SubstitutableVTerm.substitute(_, substitution, offset))
     )
-    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) => Handler(
+    case Handler(eff, otherEffects, outputType, transform, handlers, input) => Handler(
       eff.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      inputBinding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
       SubstitutableVTerm.substitute(otherEffects, substitution, offset),
       SubstitutableVTerm.substitute(outputType, substitution, offset),
       substitute(transform, substitution, offset + 1),
@@ -301,8 +294,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
       SubstitutableVTerm.substitute(value, substitution, offset)
     )
     case GetOp(cell) => GetOp(SubstitutableVTerm.substitute(cell, substitution, offset))
-    case HeapHandler(inputBinding, otherEffects, key, heapContent, input) => HeapHandler(
-      inputBinding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
+    case HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(
       SubstitutableVTerm.substitute(otherEffects, substitution, offset + 1),
       key,
       heapContent.map(_.map(SubstitutableVTerm.substitute(_, substitution, offset))),

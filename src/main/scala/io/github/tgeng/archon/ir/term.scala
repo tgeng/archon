@@ -189,7 +189,7 @@ enum CTerm:
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
-  case Let(t: CTerm, effects: VTerm, binding: Binding[VTerm], /* binding + 1 */ ctx: CTerm)
+  case Let(t: CTerm, /* binding + 1 */ ctx: CTerm)
 
   /** archon.builtin.Function */
   case FunctionType(
@@ -200,7 +200,11 @@ enum CTerm:
   ) extends CTerm, IType
   case Application(fun: CTerm, arg: VTerm)
 
-  case RecordType(qn: QualifiedName, args: Arguments = Nil, effects: VTerm = VTerm.Total) extends CTerm, IType
+  case RecordType(
+    qn: QualifiedName,
+    args: Arguments = Nil,
+    effects: VTerm = VTerm.Total
+  ) extends CTerm, IType
   case Projection(rec: CTerm, name: Name)
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
@@ -222,11 +226,6 @@ enum CTerm:
   case Handler(
     eff: Eff,
 
-    /**
-     * A handler is a computation transformer. The input value type is then `U inputBinding`. Note that the effects of
-     * input should be `eff ⊎ effect of outputType`.
-     */
-    inputBinding: Binding[VTerm],
     otherEffects: VTerm,
 
     /**
@@ -255,13 +254,6 @@ enum CTerm:
   case SetOp(cell: VTerm, value: VTerm)
   case GetOp(cell: VTerm)
   case HeapHandler(
-    /**
-     * Similar to `inputBinidng` of [[Handler]]. But note that the type of `input` is
-     * `F(heap(var 0) ⊎ otherEffects, inputBinding.ty)` where referenced terms are weakened to
-     * accommodate the heap variable created by this heap handler. Note that this type must not. The
-     * output type of this handler should be `F(otherEffects, inputBinding.ty)`.
-     */
-    inputBinding: Binding[VTerm],
     otherEffects: VTerm,
 
     /**
@@ -328,9 +320,7 @@ def getFreeVars(tm: CTerm)
     case Force(v) => getFreeVars(v)
     case F(vTy, eff) => getFreeVars(eff) | getFreeVars(vTy)
     case Return(v) => getFreeVars(v)
-    case Let(t, eff, binding, ctx) => getFreeVars(t) |
-      getFreeVars(eff) |
-      getFreeVars(binding.ty) |
+    case Let(t, ctx) => getFreeVars(t) |
       getFreeVars(ctx)(using bar + 1) - 1
     case FunctionType(binding, bodyTy, effects) =>
       getFreeVars(effects) |
@@ -347,20 +337,18 @@ def getFreeVars(tm: CTerm)
         }.reduce(_ | _)
     case Projection(rec, _) => getFreeVars(rec)
     case OperatorCall(eff, _, args) => getFreeVars(eff) | getFreeVars(args)
-    case Handler(eff, inputBinding, otherEffects, outputType, transform, handlers, input) =>
+    case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
       getFreeVars(eff) |
-        getFreeVars(inputBinding.ty) |
         getFreeVars(otherEffects) |
         getFreeVars(outputType) |
         getFreeVars(transform)(using bar + 1) - 1 |
-        handlers.values.map{ (n, t) => getFreeVars(t)(using bar + n + 1) - (n + 1) }.reduce(_ | _) |
+        handlers.values.map { (n, t) => getFreeVars(t)(using bar + n + 1) - (n + 1) }.reduce(_ | _) |
         getFreeVars(input)
     case AllocOp(heap, ty) => getFreeVars(heap) | getFreeVars(ty)
     case SetOp(cell, value) => getFreeVars(cell) | getFreeVars(value)
     case GetOp(cell) => getFreeVars(cell)
-    case HeapHandler(inputBinding, otherEffects, _, _, input) =>
-      getFreeVars(inputBinding.ty) |
-        getFreeVars(otherEffects) |
+    case HeapHandler(otherEffects, _, _, input) =>
+      getFreeVars(otherEffects) |
         getFreeVars(input)(using bar + 1) - 1
     case _: Def | _: Continuation => (Set(), Set())
 
