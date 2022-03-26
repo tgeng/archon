@@ -32,7 +32,6 @@ object TermBuilders:
 
   extension (i: Int)
     infix def unary_! = Var(i)
-    infix def unary_~ = UωLevel(i)
 
   extension (tm: VTerm)
     infix def ∪(tm2: VTerm) = LevelMax(tm, tm2)
@@ -100,3 +99,5 @@ object TermBuilders:
           }
         }
       ).get
+
+  given Conversion[VTerm, Binding[VTerm]] = Binding(_)(gn"_")

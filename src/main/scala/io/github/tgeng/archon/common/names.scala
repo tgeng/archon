@@ -33,6 +33,6 @@ object QualifiedName:
   def Builtin = Root / "archon" / "builtin"
 
 extension (ctx: StringContext)
-  def qn(args: String*) = QualifiedName.from(ctx.s(args))
-  def gn(args: String*) = Name.Generated(ctx.s(args))
-  def n(args: String*) = Name.Normal(ctx.s(args))
+  def qn(args: String*) = QualifiedName.from(ctx.s(args: _*))
+  def gn(args: String*) = Name.Generated(ctx.s(args: _*))
+  def n(args: String*) = Name.Normal(ctx.s(args: _*))

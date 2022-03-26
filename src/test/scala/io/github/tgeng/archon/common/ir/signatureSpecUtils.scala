@@ -8,7 +8,11 @@ import Declaration.*
 
 import scala.annotation.targetName
 
+type MutableContext = mutable.ArrayBuffer[Binding[VTerm]]
+
 class SignatureSpec extends AnyFreeSpec :
+  given TypingContext = new TypingContext {}
+  given Γ: MutableContext = mutable.ArrayBuffer()
   given TestSignature = TestSignature(
     mutable.Map(),
     mutable.Map(),
@@ -19,6 +23,17 @@ class SignatureSpec extends AnyFreeSpec :
     mutable.Map(),
     mutable.Map(),
   )
+
+  extension (tm: VTerm)
+    infix def hasType(ty: VTerm)(using Context)(using Signature)(using TypingContext) =
+      checkType(tm, ty) match
+        case Right(_) =>
+        case Left(e) => fail(e.toString)
+
+    infix def doesNotHaveType(ty: VTerm)(using Context)(using Signature)(using TypingContext) =
+      checkType(tm, ty) match
+        case Right(_) => fail(s"expect $tm to not have type $ty")
+        case Left(e) =>
 
 class TestSignature(
   val allData: mutable.Map[QualifiedName, Data],
@@ -59,8 +74,8 @@ class TestSignature(
     allOperators,
   )
 
-extension (b: TestSignature ?=> Unit)
-  def unary_!(using Σ: TestSignature): () => Unit = () => b(using Σ.copy)
+extension (b: MutableContext ?=> TestSignature ?=> Unit)
+  def unary_~(using Γ: MutableContext)(using Σ: TestSignature) = b(using mutable.ArrayBuffer(Γ.toArray: _*))(using Σ.copy)
 
 extension (declaration: Declaration)
   def unary_+(using Σ: TestSignature): QualifiedName =
@@ -70,6 +85,9 @@ extension (declaration: Declaration)
       case definition: Definition => Σ.allDefinitions(declaration.qn) = definition
       case effect: Effect => Σ.allEffects(declaration.qn) = effect
     declaration.qn
+
+extension (binding: Binding[VTerm])
+  def unary_+(using Γ: MutableContext) = Γ.addOne(binding)
 
 extension (qn: QualifiedName)
   @targetName("addConstructors")
