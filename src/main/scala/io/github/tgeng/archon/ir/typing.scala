@@ -252,29 +252,28 @@ def checkType(tm: VTerm, ty: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
-  checkIsVType(ty) >>
-    (tm match
-      case Con(name, args) => ty match
-        case DataType(qn, tArgs) =>
-          Σ.getConstructors(qn).first { c => if c.name == name then Some(c) else None } match
-            case None => Left(MissingConstructor(name, qn))
-            case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
-        case _ => Left(ExpectDataType(ty))
-      case Refl => ty match
-        case EqualityType(ty, left, right) => checkSubsumption(
-          left,
-          right,
-          Some(ty)
-        )(using CONVERSION)
-        case _ => Left(ExpectEqualityType(ty))
-      case Cell(heapKey, _) => ty match
-        case CellType(heap, _, _) if Heap(heapKey) == heap => Right(())
-        case _: CellType => Left(ExpectCellTypeWithHeap(heapKey))
-        case _ => Left(ExpectCellType(ty))
-      case _ =>
-        for inferred <- inferType(tm)
-            r <- checkSubsumption(inferred, ty, None)
-        yield r)
+  tm match
+    case Con(name, args) => ty match
+      case DataType(qn, tArgs) =>
+        Σ.getConstructors(qn).first { c => if c.name == name then Some(c) else None } match
+          case None => Left(MissingConstructor(name, qn))
+          case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
+      case _ => Left(ExpectDataType(ty))
+    case Refl => ty match
+      case EqualityType(ty, left, right) => checkSubsumption(
+        left,
+        right,
+        Some(ty)
+      )(using CONVERSION)
+      case _ => Left(ExpectEqualityType(ty))
+    case Cell(heapKey, _) => ty match
+      case CellType(heap, _, _) if Heap(heapKey) == heap => Right(())
+      case _: CellType => Left(ExpectCellTypeWithHeap(heapKey))
+      case _ => Left(ExpectCellType(ty))
+    case _ =>
+      for inferred <- inferType(tm)
+          r <- checkSubsumption(inferred, ty, None)
+      yield r
 
 def inferType(tm: CTerm)
   (using Γ: Context)
@@ -400,7 +399,11 @@ def inferType(tm: CTerm)
           r <- inputCTy match
             case F(inputTy, inputEff) =>
               for _ <- checkType(transform, outputCType.weakened)(using Γ :+ Binding(inputTy)(gn""))
-                  _ <- checkSubsumption(inputEff, EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))), Some(EffectsType))
+                  _ <- checkSubsumption(
+                    inputEff,
+                    EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))),
+                    Some(EffectsType)
+                  )
                   _ <- allRight(
                     operators.map { opDecl =>
                       val handlerBody = handlers(opDecl.name)
@@ -464,8 +467,12 @@ def inferType(tm: CTerm)
     for inputCTy <- inferType(input)
         r <- inputCTy match
           case F(inputTy, eff) =>
-            checkSubsumption(eff, EffectsUnion(Var(0), otherEffects.weakened), Some(EffectsType))(using SUBSUMPTION)(using Γ :+ heapVarBinding)
-           // TODO: check heap variable is not leaked.
+            checkSubsumption(
+              eff,
+              EffectsUnion(Var(0), otherEffects.weakened),
+              Some(EffectsType)
+            )(using SUBSUMPTION)(using Γ :+ heapVarBinding)
+            // TODO: check heap variable is not leaked.
             Right(F(otherEffects, inputTy))
           case _ => Left(ExpectFType(inputCTy))
     yield r
@@ -617,7 +624,11 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                   for t2CTy <- inferType(t2)
                       _ <- checkSubsumption(t1CTy, t2CTy, None)
                       _ <- checkSubsumption(t1, t2, Some(t2CTy))
-                      r <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(using Γ :+ Binding(t1Ty)(gn"LetVar"))
+                      r <- checkSubsumption(
+                        ctx1,
+                        ctx2,
+                        ty.map(_.weakened)
+                      )(using mode)(using Γ :+ Binding(t1Ty)(gn"LetVar"))
                   yield r
                 case _ => Left(ExpectFType(t1CTy))
           yield r

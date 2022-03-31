@@ -15,5 +15,11 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     !0 doesNotHaveType  EffectsType
     0L hasType LevelType
     0L doesNotHaveType EffectsType
+    v(Type(0L)) hasType v(Type(1L))
+    v(Type(0L)) hasType v(Type(2L))
+    v(Type(0L)) doesNotHaveType  v(Type(0L))
+    c(Type(0L)) hasType c(Type(1L))
+    c(Type(0L)) hasType c(Type(2L))
+    c(Type(0L)) doesNotHaveType  c(Type(0L))
   }
 }
