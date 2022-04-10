@@ -34,7 +34,8 @@ object TermBuilders:
     infix def unary_! = Var(i)
 
   extension (tm: VTerm)
-    infix def ∪(tm2: VTerm) = LevelMax(tm, tm2)
+    infix def ∨(tm2: VTerm) = LevelMax(tm, tm2)
+    infix def ∪(tm2: VTerm) = EffectsUnion(tm, tm2)
 
   enum Elim:
     case Arg(v: VTerm)
@@ -73,12 +74,17 @@ object TermBuilders:
       case (f, Proj(n)) => Projection(f, n)
     }
 
-    infix def >>=:(t: CTerm) = Let(t, tm)
+    infix def >>=:(ctx: CTerm) = Let(tm, ctx)
 
-    infix def ->:(argTy: VTerm) = FunctionType(Binding(argTy)(gn"Arg"), tm, Total)
+  extension (argTy: VTerm)
+    infix def ->:(bodyTy: CTerm) = FunctionType(Binding(argTy)(gn"Arg"), bodyTy, Total)
 
-  extension (effAndBody:(VTerm, CTerm))
-    infix def ->:(argTy: VTerm) = FunctionType(Binding(argTy)(gn"Arg"), effAndBody._2, effAndBody._1)
+    infix def ->:(effAndBody: (VTerm, CTerm)) =
+      FunctionType(
+        Binding(argTy)(gn"Arg"),
+        effAndBody._2,
+        effAndBody._1
+      )
 
   given Conversion[VTerm, Elim] = Arg(_)
 
@@ -103,4 +109,5 @@ object TermBuilders:
   given Conversion[VTerm, Binding[VTerm]] = Binding(_)(gn"_")
 
   def v(tm: VTerm): VTerm = tm
+
   def c(tm: CTerm): CTerm = tm

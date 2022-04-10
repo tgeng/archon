@@ -433,7 +433,7 @@ def inferType(tm: CTerm)
       checkIsVType(vTy) >>
       Right(
         F(
-          EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+          EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
           CellType(heap, vTy, CellStatus.Uninitialized),
         )
       )
@@ -443,7 +443,7 @@ def inferType(tm: CTerm)
           case CellType(heap, vTy, status) => checkType(value, vTy) >>
             Right(
               F(
-                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+                EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                 CellType(heap, vTy, CellStatus.Initialized),
               )
             )
@@ -455,7 +455,7 @@ def inferType(tm: CTerm)
           case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
             Right(
               F(
-                EffectsLiteral(ListSet((Builtins.HeapEf, heap :: Nil))),
+                EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                 CellType(heap, vTy, CellStatus.Initialized),
               )
             )
@@ -469,7 +469,7 @@ def inferType(tm: CTerm)
           case F(inputTy, eff) =>
             checkSubsumption(
               eff,
-              EffectsUnion(Var(0), otherEffects.weakened),
+              EffectsUnion(EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(0) :: Nil))), otherEffects.weakened),
               Some(EffectsType)
             )(using SUBSUMPTION)(using Γ :+ heapVarBinding)
             // TODO: check heap variable is not leaked.

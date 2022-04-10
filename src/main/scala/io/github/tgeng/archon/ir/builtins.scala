@@ -21,5 +21,5 @@ object Builtins:
   val UnitQn = BuiltinType / "Unit"
   
   val BuiltinEffects = Builtin / "effect"
-  val HeapEf = BuiltinEffects / "Heap"
+  val HeapEffQn = BuiltinEffects / "HeapEff"
 
