@@ -12,7 +12,9 @@ type MutableContext = mutable.ArrayBuffer[Binding[VTerm]]
 
 class SignatureSpec extends AnyFreeSpec :
   given TypingContext = new TypingContext {}
+
   given Γ: MutableContext = mutable.ArrayBuffer()
+
   given TestSignature = TestSignature(
     mutable.Map(),
     mutable.Map(),
@@ -33,6 +35,57 @@ class SignatureSpec extends AnyFreeSpec :
     infix def doesNotHaveType(ty: VTerm)(using Context)(using Signature)(using TypingContext) =
       checkType(tm, ty) match
         case Right(_) => fail(s"expect $tm to not have type $ty")
+        case Left(e) =>
+
+    infix def ⪯(tm2: VTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
+        case Right(_) =>
+        case Left(e) => fail(e.toString)
+
+    infix def ⋠(tm2: VTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
+        case Right(_) => fail(s"expect $tm ⋠ $tm2")
+        case Left(e) =>
+
+    infix def ≡(tm2: VTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.CONVERSION) match
+        case Right(_) =>
+        case Left(e) => fail(e.toString)
+
+    infix def ≢(tm2: VTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.CONVERSION) match
+        case Right(_) => fail(s"expect $tm ≢ $tm2")
+        case Left(e) =>
+
+  extension (tm: CTerm)
+    infix def hasType(ty: CTerm)(using Context)(using Signature)(using TypingContext) =
+      checkType(tm, ty) match
+        case Right(_) =>
+        case Left(e) => fail(e.toString)
+
+    infix def doesNotHaveType(ty: CTerm)(using Context)(using Signature)(using TypingContext) =
+      checkType(tm, ty) match
+        case Right(_) => fail(s"expect $tm to not have type $ty")
+        case Left(e) =>
+
+    infix def ⪯(tm2: CTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
+        case Right(_) =>
+        case Left(e) => fail(e.toString)
+
+    infix def ⋠(tm2: CTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
+        case Right(_) => fail(s"expect $tm ⋠ $tm2")
+        case Left(e) =>
+
+    infix def ≡(tm2: CTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.CONVERSION) match
+        case Right(_) =>
+        case Left(e) => fail(e.toString)
+
+    infix def ≢(tm2: CTerm)(using Context)(using Signature)(using TypingContext) =
+      checkSubsumption(tm, tm2, None)(using CheckSubsumptionMode.CONVERSION) match
+        case Right(_) => fail(s"expect $tm ≢ $tm2")
         case Left(e) =>
 
 class TestSignature(
@@ -75,7 +128,8 @@ class TestSignature(
   )
 
 extension (b: MutableContext ?=> TestSignature ?=> Unit)
-  def unary_~(using Γ: MutableContext)(using Σ: TestSignature) = b(using mutable.ArrayBuffer(Γ.toArray: _*))(using Σ.copy)
+  def unary_~(using Γ: MutableContext)
+    (using Σ: TestSignature) = b(using mutable.ArrayBuffer(Γ.toArray: _*))(using Σ.copy)
 
 extension (declaration: Declaration)
   def unary_+(using Σ: TestSignature): QualifiedName =

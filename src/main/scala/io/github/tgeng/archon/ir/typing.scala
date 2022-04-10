@@ -282,12 +282,12 @@ def inferType(tm: CTerm)
 : Either[Error, CTerm] = tm match
   case Hole => throw IllegalArgumentException("hole should only be present during reduction")
   case CType(ul, upperBound, effects) =>
-    checkType(EffectsType, effects) >>
+    checkType(effects, EffectsType) >>
       checkULevel(ul) >>
       checkType(upperBound, tm) >>
       Right(CType(ULevelSuc(ul), tm, Total))
   case CTop(ul, effects) =>
-    checkType(EffectsType, effects) >>
+    checkType(effects, EffectsType) >>
       checkULevel(ul) >>
       Right(CType(ul, tm, Total))
   case Def(qn) => Right(Σ.getDefinition(qn).ty)
@@ -797,13 +797,15 @@ private def reduceForTyping(cTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, CTerm] =
-  for cTyTy <- inferType(cTy)
-      r <- cTyTy match
-        case CType(eff, _, _) if eff == Total => reduce(cTy)
-        case _: CType => Left(EffectfulCType(cTy))
-        case _ => Left(NotCTypeError(cTy))
-  yield r
+: Either[Error, CTerm] = cTy match
+  case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop => Right(cTy)
+  case _ =>
+    for cTyTy <- inferType(cTy)
+        r <- cTyTy match
+          case CType(eff, _, _) if eff == Total => reduce(cTy)
+          case _: CType => Left(EffectfulCType(cTy))
+          case _ => Left(NotCTypeError(cTy))
+    yield r
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   case CType(ul, upperBound, effects) => CType(ul, upperBound, EffectsUnion(eff, effects))

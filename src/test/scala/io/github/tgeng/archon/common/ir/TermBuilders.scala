@@ -103,4 +103,4 @@ object TermBuilders:
   given Conversion[VTerm, Binding[VTerm]] = Binding(_)(gn"_")
 
   def v(tm: VTerm): VTerm = tm
-  def c(tm: VTerm): VTerm = tm
+  def c(tm: CTerm): CTerm = tm

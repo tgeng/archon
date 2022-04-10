@@ -21,5 +21,8 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     c(Type(0L)) hasType c(Type(1L))
     c(Type(0L)) hasType c(Type(2L))
     c(Type(0L)) doesNotHaveType  c(Type(0L))
+
+    v(Type(0L)) ⪯ v(Type(1L))
+    c(Type(0L)) ⪯ c(Type(1L))
   }
 }
