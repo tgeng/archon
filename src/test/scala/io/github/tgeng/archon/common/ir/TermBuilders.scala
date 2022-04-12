@@ -45,6 +45,8 @@ object TermBuilders:
 
   case class SomeCall[F](f: F, args: List[Elim])
 
+  given(using Σ: Signature): Conversion[SomeCall[QualifiedName], Elim] = Elim.Arg(_)
+
   given(using Σ: Signature): Conversion[SomeCall[QualifiedName], VTerm] = _ match
     case SomeCall(qn, elims) =>
       val args = elims.map(_.asInstanceOf[Arg].v)
@@ -61,6 +63,9 @@ object TermBuilders:
 
   given Conversion[SomeCall[Name], VTerm] = _ match
     case SomeCall(n, elims) => Con(n, elims.map(_.asInstanceOf[Arg].v))
+
+  given(using Σ: Signature): Conversion[SomeCall[QualifiedName], Binding[VTerm]] =
+    c => Binding(v(c))(gn"arg")
 
   extension (qn: QualifiedName)
     def apply(elims: Elim*) = SomeCall(qn, elims.toList)
@@ -106,8 +111,17 @@ object TermBuilders:
         }
       ).get
 
+  given Conversion[SomeCall[Name], Elim] = Elim.Arg(_)
+
+  given Conversion[SomeCall[Name], Constructor] = _ match
+    case SomeCall(n, elims) => Constructor(n, elims.map(_.asInstanceOf[Arg].v))
+
   given Conversion[VTerm, Binding[VTerm]] = Binding(_)(gn"_")
 
   def v(tm: VTerm): VTerm = tm
 
   def c(tm: CTerm): CTerm = tm
+
+  def constructor(name: Name, args: Binding[VTerm]*)
+    (equalities: Binding[VTerm.EqualityType]*): Constructor =
+    Constructor(name, args.toList, equalities.toList)

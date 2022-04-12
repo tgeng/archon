@@ -297,13 +297,17 @@ def getFreeVars(tm: VTerm)
         case Variance.COVARIANT => getFreeVars(arg)
         case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
         case Variance.INVARIANT => mix(getFreeVars(arg))
-      }.reduce(_ | _)
+      }.reduceOption(_ | _).getOrElse((Set.empty, Set.empty))
     case Con(_, args) => getFreeVars(args)
     case EqualityType(ty, left, right) => getFreeVars(ty) | getFreeVars(left) | getFreeVars(right)
     case Effects(literal, unionOperands) =>
       getFreeVars(literal.flatMap { (_, args) => args }) |
         getFreeVars(unionOperands)
-    case Level(_, maxOperands) => maxOperands.map { (v, _) => getFreeVars(v) }.reduce(_ | _)
+    case Level(_, maxOperands) =>
+      maxOperands
+        .map { (v, _) => getFreeVars(v) }
+        .reduceOption(_ | _)
+        .getOrElse((Set.empty, Set.empty))
     case CellType(heap, ty, status) => getFreeVars(heap) | mix(getFreeVars(ty))
     case Refl | EffectsType | LevelType | HeapType | _: Heap | _: Cell => (Set(), Set())
 
@@ -334,7 +338,8 @@ def getFreeVars(tm: CTerm)
           case Variance.COVARIANT => getFreeVars(arg)
           case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
           case Variance.INVARIANT => mix(getFreeVars(arg))
-        }.reduce(_ | _)
+        }.reduceOption(_ | _)
+          .getOrElse((Set.empty, Set.empty))
     case Projection(rec, _) => getFreeVars(rec)
     case OperatorCall(eff, _, args) => getFreeVars(eff) | getFreeVars(args)
     case Handler(eff@(qn, _), otherEffects, outputType, transform, handlers, input) =>
@@ -345,7 +350,8 @@ def getFreeVars(tm: CTerm)
         handlers.map { (name, t) =>
           val offset = Σ.getOperator(qn, name).paramTys.size + 1
           getFreeVars(t)(using bar + offset) - offset
-        }.reduce(_ | _) |
+        }.reduceOption(_ | _)
+          .getOrElse((Set.empty, Set.empty)) |
         getFreeVars(input)
     case AllocOp(heap, ty) => getFreeVars(heap) | getFreeVars(ty)
     case SetOp(cell, value) => getFreeVars(cell) | getFreeVars(value)
@@ -367,12 +373,15 @@ def getFreeVars(ul: ULevel)
 def getFreeVars(eff: Eff)
   (using bar: Nat)
   (using Σ: Signature)
-: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2.map(getFreeVars).reduce(_ | _)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2.map(getFreeVars).reduceOption(_ | _)
+  .getOrElse((Set.empty, Set.empty))
 
 def getFreeVars(args: Iterable[VTerm])
   (using bar: Nat)
   (using Σ: Signature)
-: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = args.map(getFreeVars).reduce(_ | _)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = args.map(getFreeVars)
+  .reduceOption(_ | _)
+  .getOrElse((Set.empty, Set.empty))
 
 extension (freeVars1: (Set[Nat], Set[Nat]))
   def |(freeVars2: (Set[Nat], Set[Nat])): (Set[Nat], Set[Nat]) =

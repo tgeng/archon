@@ -22,39 +22,42 @@ def checkDataType(qn: QualifiedName)
   checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
     checkULevel(data.ul)
 
+def checkDataConstructor(qn: QualifiedName, con: Constructor)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  val data = Σ.getData(qn)
+
+  given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+
+  for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
+      _ <- if data.isPure then
+        allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+      else Right(())
+      _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ ++ con.paramTys)
+  yield
+    // binding of positiveVars must be either covariant or invariant
+    // binding of negativeVars must be either contravariant or invariant
+    val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
+    val tParamTysSize = data.tParamTys.size
+    val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
+      case ((binding, variance), reverseIndex) =>
+        val index = tParamTysSize - reverseIndex - 1
+        variance match
+          case Variance.INVARIANT => false
+          case Variance.COVARIANT => negativeVars(index)
+          case Variance.CONTRAVARIANT => positiveVars(index)
+    }
+    if bindingWithIncorrectUsage.isEmpty then ()
+    else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
+
 def checkDataConstructors(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
   given Context = IndexedSeq()
 
-  val data = Σ.getData(qn)
-  allRight(
-    Σ.getConstructors(qn).map { con =>
-      given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
-
-      for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <- if data.isPure then
-            allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
-          else Right(())
-          _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ ++ con.paramTys)
-      yield
-        // binding of positiveVars must be either covariant or invariant
-        // binding of negativeVars must be either contravariant or invariant
-        val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
-        val tParamTysSize = data.tParamTys.size
-        val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
-          case ((binding, variance), reverseIndex) =>
-            val index = tParamTysSize - reverseIndex - 1
-            variance match
-              case Variance.INVARIANT => false
-              case Variance.COVARIANT => negativeVars(index)
-              case Variance.CONTRAVARIANT => positiveVars(index)
-        }
-        if bindingWithIncorrectUsage.isEmpty then ()
-        else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
-    }
-  )
+  allRight(Σ.getConstructors(qn).map { con => checkDataConstructor(qn, con) })
 
 def checkRecordType(qn: QualifiedName)
   (using Σ: Signature)
@@ -66,6 +69,31 @@ def checkRecordType(qn: QualifiedName)
   checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
     checkULevel(record.ul)
 
+def checkRecordField(qn: QualifiedName, field: Field)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  val record = Σ.getRecord(qn)
+
+  given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
+
+  for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
+    yield
+      // binding of positiveVars must be either covariant or invariant
+      // binding of negativeVars must be either contravariant or invariant
+      val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
+      val tParamTysSize = record.tParamTys.size
+      val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
+        case ((binding, variance), reverseIndex) =>
+          val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
+          variance match
+            case Variance.INVARIANT => false
+            case Variance.COVARIANT => negativeVars(index)
+            case Variance.CONTRAVARIANT => positiveVars(index)
+      }
+      if bindingWithIncorrectUsage.isEmpty then ()
+      else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
+
 def checkRecordFields(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -73,28 +101,7 @@ def checkRecordFields(qn: QualifiedName)
   given Context = IndexedSeq()
 
   val record = Σ.getRecord(qn)
-  allRight(
-    Σ.getFields(qn).map { field =>
-      given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
-
-      for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
-        yield
-          // binding of positiveVars must be either covariant or invariant
-          // binding of negativeVars must be either contravariant or invariant
-          val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
-          val tParamTysSize = record.tParamTys.size
-          val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
-            case ((binding, variance), reverseIndex) =>
-              val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
-              variance match
-                case Variance.INVARIANT => false
-                case Variance.COVARIANT => negativeVars(index)
-                case Variance.CONTRAVARIANT => positiveVars(index)
-          }
-          if bindingWithIncorrectUsage.isEmpty then ()
-          else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
-    }
-  )
+  allRight(Σ.getFields(qn).map { field => checkRecordField(qn, field) })
 
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U(
@@ -115,31 +122,32 @@ def checkDef(qn: QualifiedName)
   val definition = Σ.getDefinition(qn)
   checkIsCType(definition.ty)
 
+def checkClause(qn: QualifiedName, clause: CheckedClause)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  val definition = Σ.getDefinition(qn)
+  val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
+    case (Some(f), p) => p.toElimination match
+      case Some(ETerm(t)) => Some(Application(f, t))
+      case Some(EProj(name)) => Some(Projection(f, name))
+      case None => None
+    case (None, _) => None
+  }
+  lhs match
+    case None => Right(()) // skip checking absurd clauses
+    case Some(lhs) =>
+      given Context = clause.bindings.toIndexedSeq
+
+      checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty)
+
 def checkClauses(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[Error, Unit] =
-  given Context = IndexedSeq()
-
   val definition = Σ.getDefinition(qn)
   val clauses = Σ.getClauses(qn)
-  allRight(
-    clauses.map { clause =>
-      val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
-        case (Some(f), p) => p.toElimination match
-          case Some(ETerm(t)) => Some(Application(f, t))
-          case Some(EProj(name)) => Some(Projection(f, name))
-          case None => None
-        case (None, _) => None
-      }
-      lhs match
-        case None => Right(()) // skip checking absurd clauses
-        case Some(lhs) =>
-          given Context = clause.bindings.toIndexedSeq
-
-          checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty)
-    }
-  )
+  allRight(clauses.map { clause => checkClause(qn, clause) })
 
 def checkEffect(qn: QualifiedName)
   (using Σ: Signature)
@@ -150,6 +158,17 @@ def checkEffect(qn: QualifiedName)
   val effect = Σ.getEffect(qn)
   checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
 
+def checkOperator(qn: QualifiedName, operator: Operator)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[Error, Unit] =
+  val effect = Σ.getEffect(qn)
+
+  given Γ: Context = effect.tParamTys.toIndexedSeq
+
+  checkParameterTypeDeclarations(operator.paramTys) >>
+    checkIsVType(operator.resultTy)(using Γ ++ operator.paramTys)
+
 def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -157,14 +176,7 @@ def checkOperators(qn: QualifiedName)
   val effect = Σ.getEffect(qn)
   val operators = Σ.getOperators(qn)
 
-  given Γ: Context = effect.tParamTys.toIndexedSeq
-
-  allRight(
-    operators.map { operator =>
-      checkParameterTypeDeclarations(operator.paramTys) >>
-        checkIsVType(operator.resultTy)(using Γ ++ operator.paramTys)
-    }
-  )
+  allRight(operators.map { operator => checkOperator(qn, operator) })
 
 private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
@@ -469,7 +481,10 @@ def inferType(tm: CTerm)
           case F(inputTy, eff) =>
             checkSubsumption(
               eff,
-              EffectsUnion(EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(0) :: Nil))), otherEffects.weakened),
+              EffectsUnion(
+                EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(0) :: Nil))),
+                otherEffects.weakened
+              ),
               Some(EffectsType)
             )(using SUBSUMPTION)(using Γ :+ heapVarBinding)
             // TODO: check heap variable is not leaked.

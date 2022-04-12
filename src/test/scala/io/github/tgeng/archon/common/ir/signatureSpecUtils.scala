@@ -132,12 +132,24 @@ extension (b: MutableContext ?=> TestSignature ?=> Unit)
     (using Σ: TestSignature) = b(using mutable.ArrayBuffer(Γ.toArray: _*))(using Σ.copy)
 
 extension (declaration: Declaration)
-  def unary_+(using Σ: TestSignature): QualifiedName =
-    declaration match
-      case data: Data => Σ.allData(declaration.qn) = data
-      case record: Record => Σ.allRecords(declaration.qn) = record
-      case definition: Definition => Σ.allDefinitions(declaration.qn) = definition
-      case effect: Effect => Σ.allEffects(declaration.qn) = effect
+  def unary_+(using Σ: TestSignature)(using ctx: TypingContext): QualifiedName =
+    val checkResult = declaration match
+      case data: Data =>
+        Σ.allData(declaration.qn) = data
+        checkDataType(declaration.qn)
+      case record: Record =>
+        Σ.allRecords(declaration.qn) = record
+        checkRecordType(declaration.qn)
+      case definition: Definition =>
+        Σ.allDefinitions(declaration.qn) = definition
+        checkDef(declaration.qn)
+      case effect: Effect =>
+        Σ.allEffects(declaration.qn) = effect
+        checkEffect(declaration.qn)
+
+    checkResult match
+      case Left(error) => throw IllegalArgumentException(s"error when checking ${declaration.qn}: $error")
+      case _ =>
     declaration.qn
 
 extension (binding: Binding[VTerm])
@@ -146,24 +158,43 @@ extension (binding: Binding[VTerm])
 extension (qn: QualifiedName)
   @targetName("addConstructors")
   infix def +(constructor: Constructor)
-    (using Σ: TestSignature): QualifiedName =
+    (using Σ: TestSignature)
+    (using ctx: TypingContext): QualifiedName =
+    checkDataConstructor(qn, constructor) match
+      case Left(error) => throw IllegalArgumentException(s"error when checking constructor ${constructor.name}: $error")
+      case _ =>
     Σ.allConstructors(qn) = Σ.allConstructors.getOrElseUpdate(qn, IndexedSeq()) :+ constructor
     qn
 
   @targetName("addFields")
   infix def +(field: Field)
-    (using Σ: TestSignature): QualifiedName =
+    (using Σ: TestSignature)
+    (using ctx: TypingContext)
+  : QualifiedName =
+    checkRecordField(qn, field) match
+      case Left(error) => throw IllegalArgumentException(s"error when checking field ${field.name}: $error")
+      case _ =>
     Σ.allFields(qn) = Σ.allFields.getOrElseUpdate(qn, IndexedSeq()) :+ field
     qn
 
   @targetName("addClauses")
   infix def +(clause: CheckedClause)
-    (using Σ: TestSignature): QualifiedName =
+    (using Σ: TestSignature)
+    (using ctx: TypingContext)
+  : QualifiedName =
+    checkClause(qn, clause) match
+      case Left(error) => throw IllegalArgumentException(s"error when checking clause ${clause}: $error")
+      case _ =>
     Σ.allClauses(qn) = Σ.allClauses.getOrElseUpdate(qn, IndexedSeq()) :+ clause
     qn
 
   @targetName("addOperators")
   infix def +(operator: Operator)
-    (using Σ: TestSignature): QualifiedName =
+    (using Σ: TestSignature)
+    (using ctx: TypingContext)
+  : QualifiedName =
+    checkOperator(qn, operator) match
+      case Left(error) => throw IllegalArgumentException(s"error when checking operator ${operator}: $error")
+      case _ =>
     Σ.allOperators(qn) = Σ.allOperators.getOrElseUpdate(qn, IndexedSeq()) :+ operator
     qn
