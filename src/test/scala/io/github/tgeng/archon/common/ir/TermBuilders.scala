@@ -5,6 +5,7 @@ import io.github.tgeng.archon.ir.*
 import ULevel.*
 import VTerm.*
 import CTerm.*
+import Declaration.*
 
 import scala.collection.immutable.ListSet
 
@@ -21,6 +22,8 @@ object TermBuilders:
   given Conversion[Type[VTerm], VTerm] = _ match
     case Type(ul, Some(upperBound), _) => VType(ul, upperBound)
     case Type(ul, None, _) => VType(ul, VTop(ul))
+
+  given Conversion[Type[VTerm], Binding[VTerm]] = t => Binding(v(t))(gn"arg")
 
   given Conversion[Type[CTerm], CTerm] = _ match
     case Type(ul, Some(upperBound), effects) => CType(ul, upperBound, effects)
@@ -117,11 +120,10 @@ object TermBuilders:
     case SomeCall(n, elims) => Constructor(n, elims.map(_.asInstanceOf[Arg].v))
 
   given Conversion[VTerm, Binding[VTerm]] = Binding(_)(gn"_")
+  given Conversion[VTerm.EqualityType, Binding[VTerm.EqualityType]] = Binding(_)(gn"eq")
 
   def v(tm: VTerm): VTerm = tm
 
   def c(tm: CTerm): CTerm = tm
 
-  def constructor(name: Name, args: Binding[VTerm]*)
-    (equalities: Binding[VTerm.EqualityType]*): Constructor =
-    Constructor(name, args.toList, equalities.toList)
+  given Conversion[VTerm, (Binding[VTerm], Variance)] = t => (Binding(t)(gn"arg"), Variance.INVARIANT)

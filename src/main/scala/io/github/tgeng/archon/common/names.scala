@@ -16,7 +16,7 @@ enum QualifiedName:
 
   override def toString: String = this match
     case Root => "__root"
-    case Node(parent, name) => s"$parent.$name"
+    case Node(parent, name) => s"$parent/$name"
 
   infix def /(name: Name): QualifiedName = Node(this, name)
 

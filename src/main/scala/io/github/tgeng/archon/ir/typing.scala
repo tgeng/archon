@@ -19,8 +19,9 @@ def checkDataType(qn: QualifiedName)
   given Context = IndexedSeq()
 
   val data = Σ.getData(qn)
-  checkParameterTypeDeclarations(data.tParamTys.map(_._1)) >>
-    checkULevel(data.ul)
+  val tParams = data.tParamTys.map(_._1)
+  checkParameterTypeDeclarations(tParams) >>
+    checkULevel(data.ul)(using tParams.toIndexedSeq)
 
 def checkDataConstructor(qn: QualifiedName, con: Constructor)
   (using Σ: Signature)
@@ -66,8 +67,9 @@ def checkRecordType(qn: QualifiedName)
   given Context = IndexedSeq()
 
   val record = Σ.getRecord(qn)
-  checkParameterTypeDeclarations(record.tParamTys.map(_._1)) >>
-    checkULevel(record.ul)
+  val tParams = record.tParamTys.map(_._1)
+  checkParameterTypeDeclarations(tParams) >>
+    checkULevel(record.ul)(using tParams.toIndexedSeq)
 
 def checkRecordField(qn: QualifiedName, field: Field)
   (using Σ: Signature)
@@ -759,15 +761,23 @@ private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
  * Check that `ul1` is lower or equal to `ul2`.
  */
 private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)
-  (using mode: CheckSubsumptionMode): Either[Error, Unit] = (ul1, ul2) match
-  case _ if ul1 == ul2 => Right(())
-  case _ if mode == CONVERSION => Left(NotLevelSubsumption(ul1, ul2, mode))
-  case (USimpleLevel(Level(l1, maxOperands1)), USimpleLevel(Level(l2, maxOperands2)))
-    if l1 <= l2 &&
-      maxOperands1.forall { (k, v) => maxOperands2.getOrElse(k, -1) >= v } => Right(())
-  case (USimpleLevel(_), UωLevel(_)) => Right(())
-  case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(())
-  case _ => Left(NotLevelSubsumption(ul1, ul2, mode))
+  (using mode: CheckSubsumptionMode): Either[Error, Unit] =
+  val ul1Normalized = ul1 match
+    case USimpleLevel(v@Var(_)) => USimpleLevel(Level(0, ListMap(v -> 0)))
+    case _ => ul1
+  val ul2Normalized = ul2 match
+    case USimpleLevel(v@Var(_)) => USimpleLevel(Level(0, ListMap(v -> 0)))
+    case _ => ul2
+
+  (ul1Normalized, ul2Normalized) match
+    case _ if ul1Normalized == ul2Normalized => Right(())
+    case _ if mode == CONVERSION => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
+    case (USimpleLevel(Level(l1, maxOperands1)), USimpleLevel(Level(l2, maxOperands2)))
+      if l1 <= l2 &&
+        maxOperands1.forall { (k, v) => maxOperands2.getOrElse(k, -1) >= v } => Right(())
+    case (USimpleLevel(_), UωLevel(_)) => Right(())
+    case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(())
+    case _ => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
 
 def checkTypes(tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)

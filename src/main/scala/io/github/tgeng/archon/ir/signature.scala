@@ -10,8 +10,8 @@ type TTelescope = List[(Binding[VTerm], Variance)]
 enum Declaration:
   case Data(val qn: QualifiedName)
     (
-      val tParamTys: TTelescope = Nil, /* binding + paramTys */
-      val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+      val tParamTys: TTelescope = Nil,
+      /* binding + tParamTys */ val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
       val isPure: Boolean = true,
     )
   case Record(val qn: QualifiedName)

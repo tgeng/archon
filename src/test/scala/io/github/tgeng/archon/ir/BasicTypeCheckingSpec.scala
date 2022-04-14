@@ -58,14 +58,27 @@ class BasicTypeCheckingSpec extends SignatureSpec {
   }
 
   "basic data type" - ~ {
-    val natQn = qn"archon/data/Nat"
-    +Data(natQn)()
-      + constructor(n"Z")()
-      + constructor(n"S", natQn())()
+    val nat = qn"archon/data/Nat"
+    val z = n"Z"
+    val s = n"S"
+
+    +data(nat)()
+      + constructor(z)()
+      + constructor(s, nat())()
+
     "nat" in ~ {
-      n"Z"() hasType natQn()
-      n"Z"() doesNotHaveType LevelType
-      n"S"(n"Z"()) hasType natQn()
+      z() hasType nat()
+      z() doesNotHaveType LevelType
+      s(z()) hasType nat()
+
+      nat() ->: F(nat()) hasType Type(0L)
     }
+
+    val vector = qn"archon/data/Vector"
+    val nil = n"Nil"
+    val cons = n"Cons"
+    +data(vector, LevelType, v(Type(!0)), v(nat()))(!2)
+      + constructor(nil)(EqualityType(nat(), !0, z()))
+      + constructor(cons, !1, nat(), vector(!4, !3, !0))(EqualityType(nat(), !1, !3))
   }
 }
