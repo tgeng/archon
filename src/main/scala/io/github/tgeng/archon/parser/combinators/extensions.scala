@@ -131,7 +131,7 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
 
   def foldLeft[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for
-      (acc, opElems) <- (acc, (op, elem)*)
+      (acc, opElems) <- P.lift((acc, (op, elem)*))
     yield
       opElems.foldLeft(acc) { (acc, opElem) =>
         val (op, elem) = opElem
@@ -140,7 +140,7 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
 
   def foldRight[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
     for
-      (opElems, acc) <- ((elem, op).*, acc)
+      (opElems, acc) <- P.lift(((elem, op).*, acc))
     yield
       opElems.foldRight(acc) { (elemOp, acc) =>
         val (elem, op) = elemOp
@@ -149,7 +149,7 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
 
   def foldLeft1[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for
-      (acc, opElems) <- (acc, (op, elem)+)
+      (acc, opElems) <- P.lift((acc, (op, elem)+))
     yield
       opElems.foldLeft(acc) { (acc, opElem) =>
         val (op, elem) = opElem
@@ -158,7 +158,7 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
 
   def foldRight1[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
     for
-      (opElems, acc) <- ((elem, op).+, acc)
+      (opElems, acc) <- P.lift(((elem, op).+, acc))
     yield
       opElems.foldRight(acc) { (elemOp, acc) =>
         val (elem, op) = elemOp

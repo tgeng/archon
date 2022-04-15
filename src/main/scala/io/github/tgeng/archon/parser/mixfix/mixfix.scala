@@ -133,7 +133,7 @@ def createMixfixParserImpl[N, M[+_] : Alternative : Monad : Applicative : Functo
         P.cached(
           node,
           for
-            ops <- (node.pUp, node.op(Infix(Associativity.Non)), node.pUp)
+            ops <- P.lift((node.pUp, node.op(Infix(Associativity.Non)), node.pUp))
               .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
                 // somehow type inferencing is not working here and requires explicit type arguments
                 P.foldRight1[(Operator, List[MixfixAst[N, L]], List[N]), MixfixAst[N, L]](
@@ -155,12 +155,14 @@ def createMixfixParserImpl[N, M[+_] : Alternative : Monad : Applicative : Functo
 
     def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
       P.cached((node, "right"),
-        node.op(Prefix) | (node.pUp, node.op(Infix(Associativity.Right))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
+        node.op(Prefix) |
+          P.lift((node.pUp, node.op(Infix(Associativity.Right)))).map((preArg, t) => (t(0), preArg +: t(1), t(2)))
       )
 
     def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[N]), M] =
       P.cached((node, "left"),
-        node.op(Postfix) | (node.op(Infix(Associativity.Left)), node.pUp).map((t, postArg) => (t(0), t(1) :+ postArg, t(2)))
+        node.op(Postfix) |
+          P.lift((node.op(Infix(Associativity.Left)), node.pUp)).map((t, postArg) => (t(0), t(1) :+ postArg, t(2)))
       )
 
     def pUp: ParserT[N, MixfixAst[N, L], M] =

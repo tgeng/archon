@@ -32,7 +32,7 @@ class Parsers[M[+_] : Alternative : Monad : Applicative : Functor]
   def doubleQuoted = P(P.quoted() << P.eos)
   def abc = P(P.anyOf("abc") << P.eos)
   def threeWords = P(
-    for (first, _, second, _, third) <- (P.word, P.spaces, P.word, P.spaces, P.word)
+    for (first, _, second, _, third) <- P.lift((P.word, P.spaces, P.word, P.spaces, P.word))
     yield (first, second, third)
   )
   def integer = P(P.integer)
