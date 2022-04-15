@@ -268,6 +268,8 @@ enum CTerm:
   )
 
 // TODO: support array operations on heap
+// TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
+//  support quotient type and set semantic is very common in software engineering.
 
 def getFreeVars(tele: Telescope)
   (using bar: Nat)
