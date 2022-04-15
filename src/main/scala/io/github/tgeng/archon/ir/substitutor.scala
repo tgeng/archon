@@ -1,5 +1,7 @@
 package io.github.tgeng.archon.ir
 
+import io.github.tgeng.archon.common.*
+
 import scala.annotation.targetName
 
 trait DeBruijn[T]:

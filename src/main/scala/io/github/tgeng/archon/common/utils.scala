@@ -127,3 +127,9 @@ def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
   case e :: l => e match
     case Left(l) => Left(l)
     case Right(r) => transpose(l).map(l => r :: l)
+
+/**
+ * Non negative int. Note that this is only a visual hint and nothing actually checks this.
+ */
+type Nat = Int
+

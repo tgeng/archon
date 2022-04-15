@@ -16,11 +16,6 @@ case class Binding[+T](ty: T)(name: Name):
  */
 type Arguments = List[VTerm]
 
-/**
- * Non negative int. Note that this is only a visual hint and nothing actually checks this.
- */
-type Nat = Int
-
 class HeapKey
 
 val GlobalHeapKey = new HeapKey
