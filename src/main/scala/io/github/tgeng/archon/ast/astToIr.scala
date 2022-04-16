@@ -6,28 +6,39 @@ import io.github.tgeng.archon.ir.*
 import collection.immutable.{ListMap, ListSet}
 import collection.mutable
 import AstTerm.*
+import AstULevel.*
 import VTerm.*
 import CTerm.*
 import ULevel.*
+import AstError.*
 
-class NameContext(
-  private val mapping: mutable.LinkedHashMap[Name, mutable.ArrayBuffer[Int]],
-  private val names: mutable.ArrayBuffer[Name]):
-  def apply(astVar: AstVar): Either[AstError, Var] =
-    mapping.get(astVar.name) match
-      case None => Left(???)
-      case _ => ???
+type NameContext = (Int, Map[Name, Int])
 
-def astToVTerm(ast: AstTerm): Either[AstError | IrError, VTerm] = ast match
-  case AstType(level) =>
-    for level <- astToVTerm(ast)
-    yield
-      val ul = USimpleLevel(level)
-      VType(ul, VTop(ul))
-  case AstBoundedType(upperBound) => ???
-  case AstωType(layer) => ???
-  case AstTop(level) => ???
-  case AstPure(level) => ???
+given emptyNameContext: NameContext = (1, Map.empty)
+
+private def resolve(astVar: AstVar)(using ctx: NameContext): Either[AstError, Var] =
+  ctx._2.get(astVar.name) match
+    case None => Left(UnresolvedVar(astVar))
+    case Some(dbNumber) => Right(Var(ctx._1 - dbNumber))
+
+private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
+  block(using (ctx._1 + 1, ctx._2.updated(name, ctx._1)))
+
+def astToULevel(astULevel: AstULevel): Either[AstError, ULevel] = astULevel match
+  case AstUSimpleLevel(level) =>
+    for level <- astToVTerm(level)
+    yield USimpleLevel(level)
+  case AstUωLevel(layer) => Right(UωLevel(layer))
+
+def astToVTerm(ast: AstTerm)(using NameContext): Either[AstError, VTerm] = ast match
+  case AstType(ul, upperBound) =>
+    for ul <- astToULevel(ul)
+        upperBound <- astToVTerm(upperBound)
+    yield VType(ul, upperBound)
+  case AstTop(ul) =>
+    for ul <- astToULevel(ul)
+    yield VTop(ul)
+  case AstPure(ul) => ???
   case AstVar(name) => ???
   case AstU(cty) => ???
   case AstThunk(c) => ???
@@ -36,6 +47,7 @@ def astToVTerm(ast: AstTerm): Either[AstError | IrError, VTerm] = ast match
   case AstEffectsType => ???
   case AstEffectsLiteral(effects) => ???
   case AstEffectsUnion(eff1, eff2) => ???
+  case AstEffectfulCType(effect, ty) => ???
   case AstLevelType => ???
   case AstLevelLiteral(level) => ???
   case AstLevelMax(l1, l2) => ???
@@ -66,13 +78,12 @@ def astToVTerm(ast: AstTerm): Either[AstError | IrError, VTerm] = ast match
   heapVarName,
   input,
   ) => ???
+  case AstExSeq(expressions) => ???
 
 def astToCTerm(ast: AstTerm): Either[IrError, CTerm] = ast match
-  case AstType(level) => ???
-  case AstBoundedType(upperBound) => ???
-  case AstωType(layer) => ???
-  case AstTop(level) => ???
-  case AstPure(level) => ???
+  case AstType(ul, upperBound) => ???
+  case AstTop(ul) => ???
+  case AstPure(ul) => ???
   case AstVar(name) => ???
   case AstU(cty) => ???
   case AstThunk(c) => ???
@@ -81,6 +92,7 @@ def astToCTerm(ast: AstTerm): Either[IrError, CTerm] = ast match
   case AstEffectsType => ???
   case AstEffectsLiteral(effects) => ???
   case AstEffectsUnion(eff1, eff2) => ???
+  case AstEffectfulCType(effect, ty) => ???
   case AstLevelType => ???
   case AstLevelLiteral(level) => ???
   case AstLevelMax(l1, l2) => ???
@@ -111,3 +123,4 @@ def astToCTerm(ast: AstTerm): Either[IrError, CTerm] = ast match
   heapVarName,
   input,
   ) => ???
+  case AstExSeq(expressions) => ???

@@ -6,12 +6,14 @@ import scala.collection.immutable.{ListMap, ListSet}
 
 type AstEff = (QualifiedName, List[AstTerm])
 
+enum AstULevel:
+  case AstUSimpleLevel(level: AstTerm)
+  case AstUωLevel(layer: Nat)
+
 enum AstTerm:
-  case AstType(level: AstTerm)
-  case AstBoundedType(upperBound: AstTerm)
-  case AstωType(layer: Nat)
-  case AstTop(level: AstTerm)
-  case AstPure(level: AstTerm)
+  case AstType(ul: AstULevel, upperBound: AstTerm)
+  case AstTop(ul: AstULevel)
+  case AstPure(ul: AstULevel)
   case AstVar(name: Name)
   case AstU(cty: AstTerm)
   case AstThunk(c: AstTerm)
@@ -20,6 +22,7 @@ enum AstTerm:
   case AstEffectsType
   case AstEffectsLiteral(effects: ListSet[AstEff])
   case AstEffectsUnion(eff1: AstTerm, eff2: AstTerm)
+  case AstEffectfulCType(effects: AstTerm, ty: AstTerm)
   case AstLevelType
   case AstLevelLiteral(level: Nat)
   case AstLevelMax(l1: AstTerm, l2: AstTerm)
@@ -50,3 +53,4 @@ enum AstTerm:
     heapVarName: Name,
     input: AstTerm,
   )
+  case AstExSeq(expressions: List[AstTerm])
