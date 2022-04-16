@@ -736,12 +736,11 @@ def checkIsPureType(ty: VTerm)
   // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
   // normalized representation.
   case VType(_, upperBound) => checkIsPureType(upperBound)
-  case CellType(_, ty, _) => checkIsPureType(ty)
   case DataType(qn, _) => Σ.getData(qn).isPure match
     case true => Right(())
     case false => Left(NotPureVType(ty))
   case _: U => Left(NotPureVType(ty))
-  case _: VTop | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType => Right(())
+  case _: VTop | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType => Right(())
   case v: Var => Γ(v).ty match
     case VType(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
     case _ => throw IllegalArgumentException(s"$v not a type")
