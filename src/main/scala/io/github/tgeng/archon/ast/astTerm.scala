@@ -17,8 +17,6 @@ enum AstTerm:
   case AstThunk(c: AstTerm)
   case AstDataType(qn: QualifiedName, args: List[AstTerm])
   case AstCon(conName: Name, args: List[AstTerm])
-  case AstEqualityType(ty: AstTerm, left: AstTerm, right: AstTerm)
-  case AstRefl
   case AstEffectsType
   case AstEffectsLiteral(effects: ListSet[AstEff])
   case AstEffectsUnion(eff1: AstTerm, eff2: AstTerm)
@@ -38,7 +36,7 @@ enum AstTerm:
   case AstRecordType(qn: QualifiedName, args: List[AstTerm], effects: AstTerm)
   case AstProjection(rec: AstTerm, fieldName: Name)
   case AstOperatorCall(effect: AstEff, opName: Name, args: List[AstTerm])
-  case Handler(
+  case AstHandler(
     effect: AstEff,
     otherEffects: AstTerm,
     outputType: AstTerm,
@@ -47,9 +45,6 @@ enum AstTerm:
     handlers: Map[Name, AstTerm],
     input: AstTerm
   )
-  case AstAllocOp(heap: AstTerm, ty: AstTerm)
-  case AstSetOp(cell: AstTerm, value: AstTerm)
-  case AstGetOp(cell: AstTerm)
   case AstHeapHandler(
     otherEffects: AstTerm,
     heapVarName: Name,
