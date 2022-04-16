@@ -3,13 +3,22 @@ package io.github.tgeng.archon.ast
 import io.github.tgeng.archon.common.*
 import io.github.tgeng.archon.ir.*
 
-import scala.collection.immutable.{ListMap, ListSet}
+import collection.immutable.{ListMap, ListSet}
+import collection.mutable
 import AstTerm.*
 import VTerm.*
 import CTerm.*
 import ULevel.*
 
-def astToVTerm(ast: AstTerm): Either[Error, VTerm] = ast match
+class NameContext(
+  private val mapping: mutable.LinkedHashMap[Name, mutable.ArrayBuffer[Int]],
+  private val names: mutable.ArrayBuffer[Name]):
+  def apply(astVar: AstVar): Either[AstError, Var] =
+    mapping.get(astVar.name) match
+      case None => Left(???)
+      case _ => ???
+
+def astToVTerm(ast: AstTerm): Either[AstError | IrError, VTerm] = ast match
   case AstType(level) =>
     for level <- astToVTerm(ast)
     yield
@@ -58,7 +67,7 @@ def astToVTerm(ast: AstTerm): Either[Error, VTerm] = ast match
   input,
   ) => ???
 
-def astToCTerm(ast: AstTerm): Either[Error, CTerm] = ast match
+def astToCTerm(ast: AstTerm): Either[IrError, CTerm] = ast match
   case AstType(level) => ???
   case AstBoundedType(upperBound) => ???
   case AstωType(layer) => ???

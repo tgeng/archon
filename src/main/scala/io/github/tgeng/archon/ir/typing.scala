@@ -6,7 +6,7 @@ import io.github.tgeng.archon.ir.Reducible.reduce
 import VTerm.*
 import CTerm.*
 import ULevel.*
-import Error.*
+import IrError.*
 import Declaration.*
 import Elimination.*
 
@@ -15,7 +15,7 @@ trait TypingContext
 def checkDataType(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   val data = Σ.getData(qn)
@@ -26,7 +26,7 @@ def checkDataType(qn: QualifiedName)
 def checkDataConstructor(qn: QualifiedName, con: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val data = Σ.getData(qn)
 
   given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
@@ -55,7 +55,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
 def checkDataConstructors(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   allRight(Σ.getConstructors(qn).map { con => checkDataConstructor(qn, con) })
@@ -63,7 +63,7 @@ def checkDataConstructors(qn: QualifiedName)
 def checkRecordType(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   val record = Σ.getRecord(qn)
@@ -74,7 +74,7 @@ def checkRecordType(qn: QualifiedName)
 def checkRecordField(qn: QualifiedName, field: Field)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val record = Σ.getRecord(qn)
 
   given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
@@ -99,7 +99,7 @@ def checkRecordField(qn: QualifiedName, field: Field)
 def checkRecordFields(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   val record = Σ.getRecord(qn)
@@ -118,7 +118,7 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
 def checkDef(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   val definition = Σ.getDefinition(qn)
@@ -127,7 +127,7 @@ def checkDef(qn: QualifiedName)
 def checkClause(qn: QualifiedName, clause: CheckedClause)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val definition = Σ.getDefinition(qn)
   val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
     case (Some(f), p) => p.toElimination match
@@ -146,7 +146,7 @@ def checkClause(qn: QualifiedName, clause: CheckedClause)
 def checkClauses(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val definition = Σ.getDefinition(qn)
   val clauses = Σ.getClauses(qn)
   allRight(clauses.map { clause => checkClause(qn, clause) })
@@ -154,7 +154,7 @@ def checkClauses(qn: QualifiedName)
 def checkEffect(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   val effect = Σ.getEffect(qn)
@@ -163,7 +163,7 @@ def checkEffect(qn: QualifiedName)
 def checkOperator(qn: QualifiedName, operator: Operator)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val effect = Σ.getEffect(qn)
 
   given Γ: Context = effect.tParamTys.toIndexedSeq
@@ -174,7 +174,7 @@ def checkOperator(qn: QualifiedName, operator: Operator)
 def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val effect = Σ.getEffect(qn)
   val operators = Σ.getOperators(qn)
 
@@ -184,7 +184,7 @@ private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Opt
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = tParamTys match
+: Either[IrError, Unit] = tParamTys match
   case Nil => Right(())
   case binding :: rest => checkIsVType(binding.ty, levelBound) >> checkParameterTypeDeclarations(
     rest
@@ -194,7 +194,7 @@ private def checkULevel(ul: ULevel)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = ul match
+: Either[IrError, Unit] = ul match
   case ULevel.USimpleLevel(l) => checkType(l, LevelType)
   case _ => Right(())
 
@@ -202,7 +202,7 @@ def inferType(tm: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, VTerm] = tm match
+: Either[IrError, VTerm] = tm match
   case VType(level, upperBound) =>
     checkULevel(level) >>
       checkType(upperBound, tm) >>
@@ -265,7 +265,7 @@ def checkType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   tm match
     case Con(name, args) => ty match
       case DataType(qn, tArgs) =>
@@ -293,7 +293,7 @@ def inferType(tm: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, CTerm] = tm match
+: Either[IrError, CTerm] = tm match
   case Hole => throw IllegalArgumentException("hole should only be present during reduction")
   case CType(ul, upperBound, effects) =>
     checkType(effects, EffectsType) >>
@@ -498,7 +498,7 @@ def checkType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] = tm match
+: Either[IrError, Unit] = tm match
   case _ =>
     for tmTy <- inferType(tm)
         ty <- reduceForTyping(ty)
@@ -520,7 +520,7 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   if sub == sup then return Right(())
   (sub, sup, ty) match
     case (VType(ul1, upperBound1), VType(ul2, upperBound2), _) =>
@@ -597,7 +597,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
   for sub <- if isTotal then reduce(sub) else Right(sub)
       sup <- if isTotal then reduce(sup) else Right(sup)
@@ -725,14 +725,14 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
 def checkArePureTypes(telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[Error, Unit] = telescope match
+  (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
   case binding :: telescope => checkIsPureType(binding.ty) >> checkArePureTypes(telescope)(using Γ :+ binding)
 
 def checkIsPureType(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[Error, Unit] = ty match
+  (using ctx: TypingContext): Either[IrError, Unit] = ty match
   // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
   // normalized representation.
   case VType(_, upperBound) => checkIsPureType(upperBound)
@@ -748,7 +748,7 @@ def checkIsPureType(ty: VTerm)
     throw IllegalArgumentException(s"$ty not a type")
 
 private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
-  (using mode: CheckSubsumptionMode): Either[Error, Unit] = (eff1, eff2) match
+  (using mode: CheckSubsumptionMode): Either[IrError, Unit] = (eff1, eff2) match
   case (_, _) if eff1 == eff2 => Right(())
   case (Effects(literals1, unionOperands1), Effects(literals2, unionOperands2))
     if mode == CheckSubsumptionMode && literals1.subsetOf(literals2) && unionOperands1.subsetOf(
@@ -760,7 +760,7 @@ private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
  * Check that `ul1` is lower or equal to `ul2`.
  */
 private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)
-  (using mode: CheckSubsumptionMode): Either[Error, Unit] =
+  (using mode: CheckSubsumptionMode): Either[IrError, Unit] =
   val ul1Normalized = ul1 match
     case USimpleLevel(v@Var(_)) => USimpleLevel(Level(0, ListMap(v -> 0)))
     case _ => ul1
@@ -782,7 +782,7 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
   else allRight(
     tms.zip(tys).zipWithIndex.map {
@@ -794,7 +794,7 @@ def checkIsVType(vTy: VTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   for vTyTy <- inferType(vTy)
       r <- vTyTy match
         case VType(ul, _) => levelBound match
@@ -807,7 +807,7 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, Unit] =
+: Either[IrError, Unit] =
   for cTyTy <- inferType(cTy)
       r <- cTyTy match
         case CType(ul, _, eff) if eff == Total => levelBound match
@@ -821,7 +821,7 @@ private def reduceForTyping(cTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[Error, CTerm] = cTy match
+: Either[IrError, CTerm] = cTy match
   case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop => Right(cTy)
   case _ =>
     for cTyTy <- inferType(cTy)

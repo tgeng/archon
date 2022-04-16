@@ -1,9 +1,9 @@
-package io.github.tgeng.archon.common
+package io.github.tgeng.archon.ir
 
 import io.github.tgeng.archon.common.*
 import io.github.tgeng.archon.ir.*
 
-enum Error:
+enum IrError:
   case Unknown
   case EffectfulCType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
   case ExpectCell(tm: VTerm)

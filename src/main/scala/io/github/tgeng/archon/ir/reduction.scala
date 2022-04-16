@@ -18,7 +18,7 @@ trait Reducible[T]:
    */
   def reduce(t: T, useCaseTree: Boolean = false)
     (using ctx: Context)
-    (using signature: Signature): Either[Error, T]
+    (using signature: Signature): Either[IrError, T]
 
 extension[T] (a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
@@ -71,7 +71,7 @@ private final class StackMachine(
    * @return
    */
   @tailrec
-  def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context)(using Σ: Signature): Either[Error, CTerm] =
+  def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context)(using Σ: Signature): Either[IrError, CTerm] =
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -247,7 +247,7 @@ private final class StackMachine(
             stack(heapHandlerIndex) match
               case HeapHandler(_, _, heapContent, _) =>
                 heapContent(index) match
-                  case None => Left(Error.UninitializedCell(reconstructTermFromStack(pc)))
+                  case None => Left(IrError.UninitializedCell(reconstructTermFromStack(pc)))
                   case Some(value) => run(substHole(stack.pop(), Return(value)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
@@ -339,7 +339,7 @@ given Reducible[CTerm] with
    */
   override def reduce(t: CTerm, useCaseTree: Boolean)
     (using ctx: Context)
-    (using signature: Signature): Either[Error, CTerm] = StackMachine(
+    (using signature: Signature): Either[IrError, CTerm] = StackMachine(
     mutable.ArrayBuffer(),
     signature,
     useCaseTree
