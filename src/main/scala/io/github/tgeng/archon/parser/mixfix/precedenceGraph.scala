@@ -18,8 +18,8 @@ class PrecedenceGraphBuilder
   private val precedenceMap: mutable.Map[Operator, mutable.ArrayBuffer[Operator]] = mutable.Map()
 ):
 
-  def add(operator: Operator, precedences: Seq[Precedence]): Either[Error, Unit] =
-    def error(kind: ErrorKind) = Left(Error(operator, kind))
+  def add(operator: Operator, precedences: Seq[Precedence]): Either[PrecedenceGraphError, Unit] =
+    def error(kind: ErrorKind) = Left(PrecedenceGraphError(operator, kind))
 
     if representatives.contains(operator) then return error(AlreadyExist)
     val sameAsOperators = precedences.flatMap(p => p.kind match
@@ -83,7 +83,7 @@ class PrecedenceGraphBuilder
   override def clone(): PrecedenceGraphBuilder = new PrecedenceGraphBuilder(representatives.clone(), precedenceMap.clone())
 
 object PrecedenceGraphBuilder:
-  case class Error(operator: Operator, kind: ErrorKind)
+  case class PrecedenceGraphError(operator: Operator, kind: ErrorKind)
 
   enum ErrorKind:
     case AlreadyExist
