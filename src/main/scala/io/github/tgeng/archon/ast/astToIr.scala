@@ -34,10 +34,10 @@ def astToVTerm(ast: AstTerm)(using NameContext): Either[AstError, VTerm] = ast m
   case AstType(ul, upperBound) =>
     for ul <- astToULevel(ul)
         upperBound <- astToVTerm(upperBound)
-    yield VType(ul, upperBound)
+    yield Type(ul, upperBound)
   case AstTop(ul) =>
     for ul <- astToULevel(ul)
-    yield VTop(ul)
+    yield Top(ul)
   case AstPure(ul) => ???
   case AstVar(name) => ???
   case AstU(cty) => ???

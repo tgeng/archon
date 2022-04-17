@@ -59,8 +59,8 @@ enum CellStatus extends Comparable[CellStatus] :
     else 1
 
 enum VTerm:
-  case VType(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(VTypeQn)
-  case VTop(ul: ULevel) extends VTerm, QualifiedNameOwner(VTopQn)
+  case Type(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(TypeQn)
+  case Top(ul: ULevel) extends VTerm, QualifiedNameOwner(TopQn)
 
   /**
    * Top type of pure value types.
@@ -282,8 +282,8 @@ def getFreeVars(tm: VTerm)
   (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   import VTerm.*
   tm match
-    case VType(ul, upperBound) => getFreeVars(ul) | getFreeVars(upperBound)
-    case VTop(ul) => getFreeVars(ul)
+    case Type(ul, upperBound) => getFreeVars(ul) | getFreeVars(upperBound)
+    case Top(ul) => getFreeVars(ul)
     case Pure(ul) => getFreeVars(ul)
     case Var(index) => (if index < bar then Set() else Set(index), Set())
     case U(cty) => getFreeVars(cty)

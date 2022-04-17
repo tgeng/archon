@@ -169,7 +169,7 @@ def checkOperator(qn: QualifiedName, operator: Operator)
   given Γ: Context = effect.tParamTys.toIndexedSeq
 
   checkParameterTypeDeclarations(operator.paramTys) >>
-    checkIsVType(operator.resultTy)(using Γ ++ operator.paramTys)
+    checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
 
 def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
@@ -186,7 +186,7 @@ private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Opt
   (using ctx: TypingContext)
 : Either[IrError, Unit] = tParamTys match
   case Nil => Right(())
-  case binding :: rest => checkIsVType(binding.ty, levelBound) >> checkParameterTypeDeclarations(
+  case binding :: rest => checkIsType(binding.ty, levelBound) >> checkParameterTypeDeclarations(
     rest
   )(using Γ :+ binding)
 
@@ -203,19 +203,19 @@ def inferType(tm: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, VTerm] = tm match
-  case VType(level, upperBound) =>
+  case Type(level, upperBound) =>
     checkULevel(level) >>
       checkType(upperBound, tm) >>
-      Right(VType(ULevelSuc(level), tm))
-  case Pure(ul) => Right(VType(ul, tm))
-  case VTop(ul) => Right(VType(ul, tm))
+      Right(Type(ULevelSuc(level), tm))
+  case Pure(ul) => Right(Type(ul, tm))
+  case Top(ul) => Right(Type(ul, tm))
   case r: Var => Right(Γ(r).ty)
   case U(cty) =>
     for ctyTy <- inferType(cty)
         r <- ctyTy match
-          case CType(ul, _, eff) if eff == Total => Right(VType(ul, tm))
+          case CType(ul, _, eff) if eff == Total => Right(Type(ul, tm))
           case CType(_, ul, _) => Left(EffectfulCType(cty))
-          case _ => Left(NotVTypeError(tm))
+          case _ => Left(NotTypeError(tm))
     yield r
   case Thunk(c) =>
     for cty <- inferType(c)
@@ -225,19 +225,19 @@ def inferType(tm: VTerm)
     checkTypes(
       args,
       data.tParamTys.map(_._1)
-    ) >> Right(VType(data.ul.map(_.substLowers(args: _*)), tm))
+    ) >> Right(Type(data.ul.map(_.substLowers(args: _*)), tm))
   case _: Con => throw IllegalArgumentException("cannot infer type")
   case EqualityType(ty, left, right) =>
     for tyTy <- inferType(ty)
         r <- tyTy match
-          case VType(ul, _) =>
+          case Type(ul, _) =>
             checkType(left, ty) >>
               checkType(right, ty) >>
-              Right(VType(ul, tm))
-          case _ => Left(NotVTypeError(ty))
+              Right(Type(ul, tm))
+          case _ => Left(NotTypeError(ty))
     yield r
   case Refl => throw IllegalArgumentException("cannot infer type")
-  case EffectsType => Right(VType(ULevel.USimpleLevel(LevelLiteral(0)), EffectsType))
+  case EffectsType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), EffectsType))
   case Effects(literal, unionOperands) =>
     allRight(
       literal.map { (qn, args) =>
@@ -247,17 +247,17 @@ def inferType(tm: VTerm)
     ) >> allRight(
       unionOperands.map { ref => checkType(ref, EffectsType) }
     ) >> Right(EffectsType)
-  case LevelType => Right(VType(UωLevel(0), LevelType))
+  case LevelType => Right(Type(UωLevel(0), LevelType))
   case Level(literal, maxOperands) =>
     allRight(maxOperands.map { (ref, _) => checkType(ref, LevelType) }) >> Right(LevelType)
-  case HeapType => Right(VType(USimpleLevel(LevelLiteral(0)), HeapType))
+  case HeapType => Right(Type(USimpleLevel(LevelLiteral(0)), HeapType))
   case _: Heap => Right(HeapType)
   case CellType(heap, ty, _) =>
     for _ <- checkType(heap, HeapType)
         tyTy <- inferType(ty)
         r <- tyTy match
-          case _: VType => Right(tyTy)
-          case _ => Left(NotVTypeError(ty))
+          case _: Type => Right(tyTy)
+          case _ => Left(NotTypeError(ty))
     yield r
   case Cell(heapKey, _) => throw IllegalArgumentException("cannot infer type")
 
@@ -315,8 +315,8 @@ def inferType(tm: CTerm)
     for _ <- checkType(effects, EffectsType)
         vTyTy <- inferType(vTy)
         r <- vTyTy match
-          case VType(ul, _) => Right(CType(ul, tm, Total))
-          case _ => Left(NotVTypeError(vTy))
+          case Type(ul, _) => Right(CType(ul, tm, Total))
+          case _ => Left(NotTypeError(vTy))
     yield r
   case Return(v) =>
     for vTy <- inferType(v)
@@ -347,7 +347,7 @@ def inferType(tm: CTerm)
     for _ <- checkType(effects, EffectsType)
         tyTy <- inferType(binding.ty)
         r <- tyTy match
-          case VType(ul1, _) =>
+          case Type(ul1, _) =>
             for bodyTyTy <- inferType(bodyTy)(using Γ :+ binding)
                 r <- bodyTyTy match
                   case CType(ul2, _, _) => Right(
@@ -359,7 +359,7 @@ def inferType(tm: CTerm)
                   )
                   case _ => Left(NotCTypeError(bodyTy))
             yield r
-          case _ => Left(NotVTypeError(binding.ty))
+          case _ => Left(NotTypeError(binding.ty))
     yield r
   case Application(fun, arg) =>
     for funTy <- inferType(fun)
@@ -444,7 +444,7 @@ def inferType(tm: CTerm)
       yield r
   case AllocOp(heap, vTy) =>
     checkType(heap, HeapType) >>
-      checkIsVType(vTy) >>
+      checkIsType(vTy) >>
       Right(
         F(
           EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
@@ -523,19 +523,19 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
 : Either[IrError, Unit] =
   if sub == sup then return Right(())
   (sub, sup, ty) match
-    case (VType(ul1, upperBound1), VType(ul2, upperBound2), _) =>
+    case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
       checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
-    case (ty, VTop(ul2), _) =>
+    case (ty, Top(ul2), _) =>
       for tyTy <- inferType(ty)
           r <- tyTy match
-            case VType(ul1, _) => checkULevelSubsumption(ul1, ul2)
-            case _ => Left(NotVTypeError(sub))
+            case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
+            case _ => Left(NotTypeError(sub))
       yield r
     case (ty, Pure(ul2), _) =>
       for tyTy <- inferType(ty)
           r <- tyTy match
-            case VType(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
-            case _ => Left(NotVTypeError(sub))
+            case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
+            case _ => Left(NotTypeError(sub))
       yield r
     case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
     case (Thunk(c1), Thunk(c2), Some(U(ty))) => checkSubsumption(c1, c2, Some(ty))
@@ -735,14 +735,14 @@ def checkIsPureType(ty: VTerm)
   (using ctx: TypingContext): Either[IrError, Unit] = ty match
   // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
   // normalized representation.
-  case VType(_, upperBound) => checkIsPureType(upperBound)
+  case Type(_, upperBound) => checkIsPureType(upperBound)
   case DataType(qn, _) => Σ.getData(qn).isPure match
     case true => Right(())
-    case false => Left(NotPureVType(ty))
-  case _: U => Left(NotPureVType(ty))
-  case _: VTop | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType => Right(())
+    case false => Left(NotPureType(ty))
+  case _: U => Left(NotPureType(ty))
+  case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType => Right(())
   case v: Var => Γ(v).ty match
-    case VType(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
+    case Type(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
     case _ => throw IllegalArgumentException(s"$v not a type")
   case _: Thunk | _: Con | Refl | _: Effects | _: Level | _: Heap | _: Cell =>
     throw IllegalArgumentException(s"$ty not a type")
@@ -790,17 +790,17 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)
     }
   )
 
-def checkIsVType(vTy: VTerm, levelBound: Option[ULevel] = None)
+def checkIsType(vTy: VTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
   for vTyTy <- inferType(vTy)
       r <- vTyTy match
-        case VType(ul, _) => levelBound match
+        case Type(ul, _) => levelBound match
           case Some(bound) => checkULevelSubsumption(ul, bound)
           case _ => Right(())
-        case _ => Left(NotVTypeError(vTy))
+        case _ => Left(NotTypeError(vTy))
   yield r
 
 def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)

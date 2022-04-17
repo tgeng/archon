@@ -1,7 +1,7 @@
 package io.github.tgeng.archon.ir
 
 import scala.collection.mutable
-import io.github.tgeng.archon.ir.VTerm.VType
+import io.github.tgeng.archon.ir.VTerm.Type
 import io.github.tgeng.archon.common.*
 
 import scala.collection.immutable.{ListMap, ListSet}
@@ -20,11 +20,11 @@ import CTerm.*
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int)(using Σ: Signature): VTerm = v match
     case Refl | EffectsType | LevelType | HeapType | _: Heap => v
-    case VType(level, upperBound) => VType(
+    case Type(level, upperBound) => Type(
       level.map(raise(_, amount, bar)),
       raise(upperBound, amount, bar)
     )
-    case VTop(ul) => VTop(ul.map(raise(_, amount, bar)))
+    case Top(ul) => Top(ul.map(raise(_, amount, bar)))
     case Pure(ul) => Pure(ul.map(raise(_, amount, bar)))
     case Var(idx) => if idx >= bar then Var(idx + amount) else v
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
@@ -153,11 +153,11 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     offset: Int
   )(using Σ: Signature): VTerm = v match
     case Refl | LevelType | EffectsType | HeapType | _: Heap => v
-    case VType(level, upperBound) => VType(
+    case Type(level, upperBound) => Type(
       level.map(l => substitute(l, substitution, offset)),
       substitute(upperBound, substitution, offset),
     )
-    case VTop(ul) => VTop(ul.map(substitute(_, substitution, offset)))
+    case Top(ul) => Top(ul.map(substitute(_, substitution, offset)))
     case Pure(ul) => Pure(ul.map(substitute(_, substitution, offset)))
     case Var(idx) => substitution(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)

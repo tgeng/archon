@@ -20,8 +20,8 @@ object TermBuilders:
   case class Type[+T](ul: ULevel, upperBound: Option[T] = None, effects: Effects = Total)
 
   given Conversion[Type[VTerm], VTerm] = _ match
-    case Type(ul, Some(upperBound), _) => VType(ul, upperBound)
-    case Type(ul, None, _) => VType(ul, VTop(ul))
+    case Type(ul, Some(upperBound), _) => Type(ul, upperBound)
+    case Type(ul, None, _) => Type(ul, Top(ul))
 
   given Conversion[Type[VTerm], Binding[VTerm]] = t => Binding(v(t))(gn"arg")
 

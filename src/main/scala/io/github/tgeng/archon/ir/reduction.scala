@@ -87,7 +87,7 @@ private final class StackMachine(
           //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
           //          val (count, body) = cases(q.qualifiedName)
           //          q match
-          //            case VType(level) =>
+          //            case Type(level) =>
           //              assert(count == 1)
           //              run(body.substLowers(arg, level))
           //            case DataType(qn, args) =>
@@ -286,7 +286,7 @@ private final class StackMachine(
                (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType)) |
                (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType)) |
                (CPattern(PForced(_)), ETerm(_)) =>
-          case (CPattern(PDataType(VTypeQn, p :: Nil)), ETerm(VType(l, upperBound))) =>
+          case (CPattern(PDataType(TypeQn, p :: Nil)), ETerm(Type(l, upperBound))) =>
             l match
               case ULevel.USimpleLevel(l) => elims = (CPattern(p), ETerm(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
