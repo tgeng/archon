@@ -20,6 +20,13 @@ object Builtins:
   val CellQn = BuiltinType / "Cell"
   val UnitQn = BuiltinType / "Unit"
   
-  val BuiltinEffects = Builtin / "effect"
+  val BuiltinEffects = Builtin / "effects"
   val HeapEffQn = BuiltinEffects / "HeapEff"
+  val EffectsUnion = BuiltinEffects / "|"
+
+  val BuiltinLevel = Builtin / "level"
+  val LevelSuc = BuiltinLevel / "suc"
+  val LevelMax = BuiltinLevel / "max"
+
+
 
