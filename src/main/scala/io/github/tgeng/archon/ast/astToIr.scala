@@ -110,8 +110,24 @@ def astToIr(ast: AstTerm)
         }
     yield r
   case AstReturn(v) => astToIr(v)
-  case AstLet(boundName, t, ctx) => ???
-  case AstFunctionType(argName, argTy, bodyTy, effects) => ???
+  case AstLet(boundName, t, ctx) =>
+    for t <- astToIr(t)
+        r <- chain(t, boundName) { _ =>
+          astToIr(ctx)
+        }
+    yield r
+  case AstFunctionType(argName, argTy, bodyTy, effects) =>
+    for argTy <- astToIr(argTy)
+        r <- chain(argTy, argName) { argTy =>
+          for effects <- astToIr(effects)
+              r <- chain(effects) { effects =>
+                for bodyTy <- astToIr(bodyTy)
+                    r <- Right(FunctionType(Binding(argTy)(argName), bodyTy, effects))
+                yield r
+              }
+          yield r
+        }
+    yield r
   case AstRedux(head, elims) => ???
   case AstOperatorCall(effect, opName, args) => ???
   case AstHandler(
@@ -130,11 +146,11 @@ def astToIr(ast: AstTerm)
   ) => ???
   case AstExSeq(expressions) => ???
 
-private def chain(t: CTerm)
+private def chain(t: CTerm, name: Name = gn"_")
   (ctx: NameContext ?=> VTerm => Either[AstError, CTerm])
   (using NameContext): Either[AstError, CTerm] = t match
   case Return(v) => ctx(v)
-  case _ => bind(gn"v") {
+  case _ => bind(name) {
     for ctx <- ctx(Var(0))
       yield Let(t, ctx)()
   }
