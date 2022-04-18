@@ -184,7 +184,7 @@ enum CTerm:
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
-  case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)
+  case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)(val boundName: Name = gn"_")
 
   /** archon.builtin.Function */
   case FunctionType(

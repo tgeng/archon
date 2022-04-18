@@ -317,7 +317,7 @@ private final class StackMachine(
         matchPattern(elims, mapping, status)
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
-    case Let(t, ctx) => Let(c, ctx)
+    case l@Let(t, ctx) => Let(c, ctx)(l.boundName)
     case Application(fun, arg) => Application(c, arg)
     case Projection(rec, name) => Projection(c, name)
     case Handler(eff, otherEffects, outputType, transform, handlers, input) =>

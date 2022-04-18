@@ -81,12 +81,35 @@ def astToIr(ast: AstTerm)
             Var(numBinding - nonTrivialIdx)
         })
       }
-      letBoundComputations.foldRight(Return(EffectsLiteral(ListSet(vEffects: _*))))(Let.apply)
-  case AstLevelLiteral(level) => ???
-  case AstCellType(heap, ty, status) => ???
-  case AstForce(v) => ???
-  case AstF(vTy, effects) => ???
-  case AstReturn(v) => ???
+      letBoundComputations.foldRight(Return(EffectsLiteral(ListSet(vEffects: _*))))(Let(_, _)())
+  case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
+  case AstCellType(heap, ty, status) =>
+    for heap <- astToIr(heap)
+        r <- chain(heap) { heap =>
+          for ty <- astToIr(ty)
+              r <- chain(ty) { ty =>
+                Right(Return(CellType(heap, ty, status)))
+              }
+          yield r
+        }
+    yield r
+  case AstForce(v) =>
+    for v <- astToIr(v)
+        r <- chain(v) { v =>
+          Right(Force(v))
+        }
+    yield r
+  case AstF(vTy, effects) =>
+    for vTy <- astToIr(vTy)
+        r <- chain(vTy) { vTy =>
+          for effects <- astToIr(effects)
+              r <- chain(effects) { effects =>
+                Right(F(vTy, effects))
+              }
+          yield r
+        }
+    yield r
+  case AstReturn(v) => astToIr(v)
   case AstLet(boundName, t, ctx) => ???
   case AstFunctionType(argName, argTy, bodyTy, effects) => ???
   case AstRedux(head, elims) => ???
@@ -107,17 +130,11 @@ def astToIr(ast: AstTerm)
   ) => ???
   case AstExSeq(expressions) => ???
 
-private def chain(ts: List[CTerm])
-  (ctx: NameContext ?=> List[VTerm] => Either[AstError, CTerm])
-  (using NameContext): Either[AstError, CTerm] =
-  ???
-
-
 private def chain(t: CTerm)
   (ctx: NameContext ?=> VTerm => Either[AstError, CTerm])
   (using NameContext): Either[AstError, CTerm] = t match
   case Return(v) => ctx(v)
   case _ => bind(gn"v") {
     for ctx <- ctx(Var(0))
-      yield Let(t, ctx)
+      yield Let(t, ctx)()
   }
