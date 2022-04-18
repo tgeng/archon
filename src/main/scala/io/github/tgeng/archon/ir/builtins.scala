@@ -13,6 +13,8 @@ object Builtins:
   val TypeQn = BuiltinType / "Type"
   val TopQn = BuiltinType / "Top"
   val PureQn = BuiltinType / "Pure"
+  val CTypeQn = BuiltinType / "CType"
+  val CTopQn = BuiltinType / "CTop"
   val EqualityQn = BuiltinType / "Equality"
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"

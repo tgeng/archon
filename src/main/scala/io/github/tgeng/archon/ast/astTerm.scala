@@ -2,7 +2,6 @@ package io.github.tgeng.archon.ast
 
 import io.github.tgeng.archon.common.*
 import io.github.tgeng.archon.ir.*
-import scala.collection.immutable.{ListMap, ListSet}
 
 type AstEff = (QualifiedName, List[AstTerm])
 
@@ -15,17 +14,13 @@ enum AstElim:
   case AstProj(name: Name)
 
 enum AstTerm:
-  case AstType(ul: AstULevel, upperBound: AstTerm)
-  case AstTop(ul: AstULevel)
-  case AstPure(ul: AstULevel)
+  case AstDef(qn: QualifiedName)
   case AstVar(name: Name)
   case AstU(cty: AstTerm)
   case AstThunk(c: AstTerm)
-  case AstEffectsLiteral(effects: ListSet[AstEff])
-  case AstEffectfulCType(effects: AstTerm, ty: AstTerm)
+  case AstEffectsLiteral(effects: List[AstEff])
   case AstLevelLiteral(level: Nat)
   case AstCellType(heap: AstTerm, ty: AstTerm, status: CellStatus)
-  case AstDef(qn: QualifiedName)
   case AstForce(v: AstTerm)
   case AstF(vTy: AstTerm, effects: AstTerm)
   case AstReturn(v: AstTerm)

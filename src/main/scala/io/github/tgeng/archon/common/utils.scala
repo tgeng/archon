@@ -3,6 +3,7 @@ package io.github.tgeng.archon.common
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import scala.collection.immutable.ListSet
 import scala.collection.mutable
 import scala.math.max
 
@@ -127,6 +128,9 @@ def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
   case e :: l => e match
     case Left(l) => Left(l)
     case Right(r) => transpose(l).map(l => r :: l)
+
+def transpose[L, R](l: ListSet[Either[L, R]]): Either[L, ListSet[R]] =
+  transpose(l.toList).map(ListSet(_: _*))
 
 /**
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.
