@@ -30,7 +30,7 @@ enum AstTerm:
     outputType: AstTerm,
     transformInputName: Name,
     transform: AstTerm,
-    handlers: Map[Name, AstTerm],
+    handlers: Map[Name, (/* op args */List[Name], /* resume */ Name, AstTerm)],
     input: AstTerm
   )
   case AstHeapHandler(
