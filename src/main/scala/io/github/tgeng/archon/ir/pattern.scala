@@ -46,15 +46,15 @@ enum CoPattern:
   case CPattern(p: Pattern)
   case CProjection(name: Name)
 
-enum Elimination:
-  case ETerm(v: VTerm)
+enum Elimination[T]:
+  case ETerm(v: T)
   case EProj(n: Name)
 
 import CoPattern.*
 import Elimination.*
 
 extension (q: CoPattern)
-  def toElimination: Option[Elimination] = q match
+  def toElimination: Option[Elimination[VTerm]] = q match
     case CPattern(p) => p.toTerm.map(ETerm.apply)
     case CProjection(name) => Some(EProj(name))
 

@@ -9,10 +9,6 @@ enum AstULevel:
   case AstUSimpleLevel(level: AstTerm)
   case AstUωLevel(layer: Nat)
 
-enum AstElim:
-  case AstArg(arg: AstTerm)
-  case AstProj(name: Name)
-
 enum AstTerm:
   case AstDef(qn: QualifiedName)
   case AstVar(name: Name)
@@ -26,7 +22,7 @@ enum AstTerm:
   case AstReturn(v: AstTerm)
   case AstLet(boundName: Name, t: AstTerm, ctx: AstTerm)
   case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
-  case AstRedux(head: AstTerm, elims: List[AstElim])
+  case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])
   case AstOperatorCall(effect: AstEff, opName: Name, args: List[AstTerm])
   case AstHandler(
     effect: AstEff,

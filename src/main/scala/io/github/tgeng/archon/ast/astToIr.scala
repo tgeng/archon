@@ -11,6 +11,8 @@ import VTerm.*
 import CTerm.*
 import ULevel.*
 import AstError.*
+import Elimination.*
+import io.github.tgeng.archon.ir.Elimination.EProj
 
 type NameContext = (Int, Map[Name, Int])
 
@@ -128,8 +130,44 @@ def astToIr(ast: AstTerm)
           yield r
         }
     yield r
-  case AstRedux(head, elims) => ???
-  case AstOperatorCall(effect, opName, args) => ???
+  case AstRedux(head, elims) =>
+    // Similarly to handle AstEffectsLiteral above. We need to manually unroll non-trivial args in
+    // elims.
+    for head <- astToIr(head)
+        elims <- transpose(elims.map(astToIr))
+    yield
+      val numNonTrivialArgs = elims.count {
+        case ETerm(Return(_)) => true
+        case _ => false
+      }
+
+      val boundComputations = mutable.ArrayBuffer[CTerm]()
+      var index = 0
+      val vElims: Seq[Elimination[VTerm]] = elims.map {
+        case ETerm(Return(v)) => ETerm(v.weaken(numNonTrivialArgs, 0))
+        case ETerm(c) =>
+          boundComputations.addOne(c.weaken(index, 0))
+          index += 1
+          ETerm(Var(numNonTrivialArgs - index))
+        case EProj(name) => EProj(name)
+      }
+      boundComputations.foldRight(
+        vElims.foldLeft(head) { (c, e) => e match
+          case ETerm(v) => Application(c, v)
+          case EProj(n) => Projection(c, n)
+        }
+      )(Let(_, _)())
+
+  case AstOperatorCall(effect, opName, args) =>
+    val (effectQn, effectArgs) = effect
+    val n = effectArgs.size
+    for effectArgs <- transpose(effectArgs.map(astToIr))
+        args <- transpose(args.map(astToIr))
+    yield chain(effectArgs ++ args) { allArgs =>
+      val effectArgs = allArgs.take(n)
+      val args = allArgs.drop(n)
+      OperatorCall((effectQn, effectArgs), opName, args)
+    }
   case AstHandler(
   effect,
   otherEffects,
@@ -145,6 +183,30 @@ def astToIr(ast: AstTerm)
   input,
   ) => ???
   case AstExSeq(expressions) => ???
+
+
+private def astToIr(elim: Elimination[AstTerm])
+  (using ctx: NameContext)
+  (using Σ: Signature): Either[AstError, Elimination[CTerm]] = elim match
+  case ETerm(astTerm) => astToIr(astTerm).map(ETerm(_))
+  case EProj(name) => Right(EProj(name))
+
+private def chain(ts: List[CTerm])(block: List[VTerm] => CTerm)(using Signature): CTerm =
+  val numNonTrivialArgs = ts.count {
+    case Return(_) => true
+    case _ => false
+  }
+  val boundComputations = mutable.ArrayBuffer[CTerm]()
+  var index = 0
+  val vTs: List[VTerm] = ts.map {
+    case Return(v) => v.weaken(numNonTrivialArgs, 0)
+    case c =>
+      boundComputations.addOne(c.weaken(index, 0))
+      index += 1
+      Var(numNonTrivialArgs - index)
+  }
+  boundComputations.foldRight(block(vTs))(Let(_, _)())
+
 
 private def chain(t: CTerm, name: Name = gn"_")
   (ctx: NameContext ?=> VTerm => Either[AstError, CTerm])

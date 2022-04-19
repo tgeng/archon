@@ -268,7 +268,7 @@ private final class StackMachine(
 
   @tailrec
   private def matchPattern(
-    elims: List[(CoPattern, Elimination)],
+    elims: List[(CoPattern, Elimination[VTerm])],
     mapping: mutable.Map[Nat, VTerm],
     matchingStatus: MatchingStatus
   ): MatchingStatus =
