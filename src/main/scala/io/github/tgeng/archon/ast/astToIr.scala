@@ -43,130 +43,59 @@ def astToIr(ast: AstTerm)
     for c <- astToIr(c)
       yield Return(Thunk(c))
   case AstEffectsLiteral(effects) =>
-    // The following is a bit convoluted. Expressions appear in effect arguments may contain
-    // arbitrary computation. Hence, they must be hoisted up to let bindings. For example
-    // `<eff1 computeArg1 computeArg2 | eff2 valueArg3>` is converted to
-    // `let arg1 = computeArg1 in
-    //  let arg2 = computeArg2 in
-    //  return <eff1 arg1 arg2 | eff2 valueArg3>`
-
-    // Step 1. Get all CTerms of all effects arguments.
-    for effects <- transpose(
-      effects.map {
-        (qn, args) =>
-          for args <- transpose(args.map(astToIr))
-            yield (qn, args)
-      }
-    )
-    yield
-      // Step 2. Count the number of non-trivial computations present in the effects args. This is
-      // used to populate DeBruijn index of let bound variables for these non-trivial
-      // computations.
-      var numBinding = 0
-      effects.foreach { (_, args) =>
-        args.foreach {
-          case Return(_) => numBinding += 1
-          case _ =>
-        }
-      }
-
-      // Step 3. Transform the computations into values and track non-trivial computations that need
-      // to appear in let bindings. Weakening is performed where appropriate.
-      val letBoundComputations = mutable.ArrayBuffer[CTerm]()
-      var nonTrivialIdx = 0
-      val vEffects = effects.map { (qn, args) =>
-        (qn, args.map {
-          case Return(v) => v.weaken(numBinding, 0)
-          case c =>
-            letBoundComputations.addOne(c.weaken(nonTrivialIdx, 0))
-            nonTrivialIdx += 1
-            Var(numBinding - nonTrivialIdx)
-        })
-      }
-      letBoundComputations.foldRight(Return(EffectsLiteral(ListSet(vEffects: _*))))(Let(_, _)())
+    chainAstWithDefaultName[[X] =>> List[(QualifiedName, List[X])]](gn"eArg", effects) {
+      effs => Return(EffectsLiteral(ListSet(effs: _*)))
+    }
   case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
-  case AstCellType(heap, ty, status) =>
-    for heap <- astToIr(heap)
-        r <- chain(heap) { heap =>
-          for ty <- astToIr(ty)
-              r <- chain(ty) { ty =>
-                Right(Return(CellType(heap, ty, status)))
-              }
-          yield r
-        }
-    yield r
-  case AstForce(v) =>
-    for v <- astToIr(v)
-        r <- chain(v) { v =>
-          Right(Force(v))
-        }
-    yield r
-  case AstF(vTy, effects) =>
-    for vTy <- astToIr(vTy)
-        r <- chain(vTy) { vTy =>
-          for effects <- astToIr(effects)
-              r <- chain(effects) { effects =>
-                Right(F(vTy, effects))
-              }
-          yield r
-        }
-    yield r
+  case AstCellType(heap, ty, status) => chainAst((gn"heap", heap), (gn"ty", ty)) {
+    case heap :: ty :: Nil => Return(CellType(heap, ty, status))
+    case _ => throw IllegalStateException()
+  }
+  case AstForce(v) => chainAst(gn"v", v)(Force(_))
+  case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
+    case vTy :: effects :: Nil => F(vTy, effects)
+    case _ => throw IllegalStateException()
+  }
   case AstReturn(v) => astToIr(v)
   case AstLet(boundName, t, ctx) =>
     for t <- astToIr(t)
-        r <- chain(t, boundName) { _ =>
+        ctx <- bind(boundName) {
           astToIr(ctx)
         }
-    yield r
+    yield Let(t, ctx)(boundName)
   case AstFunctionType(argName, argTy, bodyTy, effects) =>
     for argTy <- astToIr(argTy)
-        r <- chain(argTy, argName) { argTy =>
-          for effects <- astToIr(effects)
-              r <- chain(effects) { effects =>
-                for bodyTy <- astToIr(bodyTy)
-                    r <- Right(FunctionType(Binding(argTy)(argName), bodyTy, effects))
-                yield r
-              }
-          yield r
+        effects <- bind(argName) {
+          astToIr(effects)
+        }
+        bodyTy <- bind(argName) {
+          astToIr(bodyTy)
+        }
+        r <- chain((gn"argTy", argTy), (gn"eff", effects)) {
+          case (argTy :: effects :: Nil, n) => FunctionType(
+            Binding(argTy)(argName),
+            bodyTy.weaken(n, 1),
+            effects
+          )
+          case _ => throw IllegalStateException()
         }
     yield r
   case AstRedux(head, elims) =>
-    // Similarly to handle AstEffectsLiteral above. We need to manually unroll non-trivial args in
-    // elims.
     for head <- astToIr(head)
-        elims <- transpose(elims.map(astToIr))
-    yield
-      val numNonTrivialArgs = elims.count {
-        case ETerm(Return(_)) => true
-        case _ => false
-      }
-
-      val boundComputations = mutable.ArrayBuffer[CTerm]()
-      var index = 0
-      val vElims: Seq[Elimination[VTerm]] = elims.map {
-        case ETerm(Return(v)) => ETerm(v.weaken(numNonTrivialArgs, 0))
-        case ETerm(c) =>
-          boundComputations.addOne(c.weaken(index, 0))
-          index += 1
-          ETerm(Var(numNonTrivialArgs - index))
-        case EProj(name) => EProj(name)
-      }
-      boundComputations.foldRight(
-        vElims.foldLeft(head) { (c, e) => e match
-          case ETerm(v) => Application(c, v)
-          case EProj(n) => Projection(c, n)
+        r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](gn"arg", elims) {
+          _.foldLeft(head) { (c, e) =>
+            e match
+              case ETerm(v) => Application(c, v)
+              case EProj(n) => Projection(c, n)
+          }
         }
-      )(Let(_, _)())
-
-  case AstOperatorCall(effect, opName, args) =>
-    val (effectQn, effectArgs) = effect
-    val n = effectArgs.size
-    for effectArgs <- transpose(effectArgs.map(astToIr))
-        args <- transpose(args.map(astToIr))
-    yield chain(effectArgs ++ args) { allArgs =>
-      val effectArgs = allArgs.take(n)
+    yield r
+  case AstOperatorCall((effQn, effArgs), opName, args) =>
+    val n = effArgs.size
+    chainAstWithDefaultName(gn"arg", effArgs ++ args) { allArgs =>
+      val effArgs = allArgs.take(n)
       val args = allArgs.drop(n)
-      OperatorCall((effectQn, effectArgs), opName, args)
+      OperatorCall((effQn, effArgs), opName, args)
     }
   case AstHandler(
   effect,
@@ -191,28 +120,104 @@ private def astToIr(elim: Elimination[AstTerm])
   case ETerm(astTerm) => astToIr(astTerm).map(ETerm(_))
   case EProj(name) => Right(EProj(name))
 
-private def chain(ts: List[CTerm])(block: List[VTerm] => CTerm)(using Signature): CTerm =
-  val numNonTrivialArgs = ts.count {
-    case Return(_) => true
-    case _ => false
-  }
-  val boundComputations = mutable.ArrayBuffer[CTerm]()
-  var index = 0
-  val vTs: List[VTerm] = ts.map {
-    case Return(v) => v.weaken(numNonTrivialArgs, 0)
-    case c =>
-      boundComputations.addOne(c.weaken(index, 0))
-      index += 1
-      Var(numNonTrivialArgs - index)
-  }
-  boundComputations.foldRight(block(vTs))(Let(_, _)())
+private def chainAst(name: Name, t: AstTerm)
+  (block: Signature ?=> VTerm => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] = chainAst(List((name, t))) {
+  case v :: Nil => block(v)
+  case _ => throw IllegalStateException()
+}
 
+private def chainAst(ts: (Name, AstTerm)*)
+  (block: Signature ?=> List[VTerm] => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] = chainAst(ts.toList)(block)
 
-private def chain(t: CTerm, name: Name = gn"_")
-  (ctx: NameContext ?=> VTerm => Either[AstError, CTerm])
-  (using NameContext): Either[AstError, CTerm] = t match
-  case Return(v) => ctx(v)
-  case _ => bind(name) {
-    for ctx <- ctx(Var(0))
-      yield Let(t, ctx)()
+private def chainAst[T[_] : EitherFunctor](ts: T[(Name, AstTerm)])
+  (block: Signature ?=> T[VTerm] => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] =
+  val f = summon[EitherFunctor[T]]
+  for ts <- f.map(ts) { case (n, t) => astToIr(t).map((n, _)) }
+      r <- chain(ts) { (t, _) => block(t) }
+  yield r
+
+private def chainAstWithDefaultName[T[_] : EitherFunctor](defaultName: Name, ts: T[AstTerm])
+  (block: Signature ?=> T[VTerm] => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] =
+  val f = summon[EitherFunctor[T]]
+  for ts <- f.map(ts) { t => astToIr(t).map((defaultName, _)) }
+      r <- chain(ts) { (t, _) => block(t) }
+  yield r
+
+private def chain(name: Name, t: CTerm)
+  (block: Signature ?=> (VTerm, Int) => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] = chain(List((name, t))) {
+  case (v :: Nil, n) => block(v, n)
+  case _ => throw IllegalStateException()
+}
+
+private def chain(ts: (Name, CTerm)*)
+  (block: Signature ?=> (List[VTerm], Int) => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] = chain(ts.toList)(block)
+
+private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
+  (block: Signature ?=> (T[VTerm], Int) => CTerm)
+  (using NameContext)
+  (using Signature): Either[AstError, CTerm] =
+  for r <- {
+    // Step 1. Count the number of non-trivial computations present in the computation args.
+    // This is used to populate DeBruijn index of let bound variables for these non-trivial
+    // computations.
+    var nonTrivialComputations = 0
+    val f = summon[EitherFunctor[T]]
+    f.map(ts) {
+      case (_, Return(_)) => Right(())
+      case _ => Right(nonTrivialComputations += 1)
+    }
+    val boundComputations = mutable.ArrayBuffer[(Name, CTerm)]()
+    var index = 0
+    // Step 2. Transform the computations into values and track non-trivial computations that
+    // need to appear in let bindings. Weakening is performed where appropriate.
+    for vTs <- f.map(ts) {
+      case (_, Return(v)) => Right(v.weaken(nonTrivialComputations, 0))
+      case (n, c) =>
+        boundComputations.addOne((n, c.weaken(index, 0)))
+        index += 1
+        Right(Var(nonTrivialComputations - index))
+    }
+    yield boundComputations.foldRight(block(vTs, nonTrivialComputations)) { (elem, ctx) =>
+      elem match
+        case (n, t) => Let(t, ctx)(n)
+    }
   }
+  yield r
+
+given listEitherFunctor: EitherFunctor[List[*]] with
+  override def map[L, T, S](l: List[T])(g: T => Either[L, S]): Either[L, List[S]] =
+    transpose(l.map(g))
+
+given effectsEitherFunctor: EitherFunctor[[X] =>> List[(QualifiedName, List[X])]] with
+  override def map[L, T, S](l: List[(QualifiedName, List[T])])
+    (g: T => Either[L, S]): Either[L, List[(QualifiedName, List[S])]] =
+    l match
+      case Nil => Right(Nil)
+      case (qn, ts) :: rest =>
+        for ts <- listEitherFunctor.map(ts)(g)
+            rest <- map(rest)(g)
+        yield (qn, ts) :: rest
+
+given EitherFunctor[[X] =>> List[Elimination[X]]] with
+  override def map[L, T, S](l: List[Elimination[T]])
+    (g: T => Either[L, S]): Either[L, List[Elimination[S]]] =
+    listEitherFunctor.map(l) {
+      _ match
+        case ETerm(t) => g(t).map(ETerm(_))
+        case EProj(n) => Right(EProj(n))
+    }
+
+private trait EitherFunctor[F[_]]:
+  def map[L, T, S](f: F[T])(g: T => Either[L, S]): Either[L, F[S]]
