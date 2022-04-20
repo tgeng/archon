@@ -26,8 +26,15 @@ private def resolve(astVar: AstVar)(using ctx: NameContext): Either[AstError, Va
 private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx :+ name)
 
+private def bind[T](names: List[Name])(block: NameContext ?=> T)(using ctx: NameContext): T =
+  block(using ctx ++ names)
+
 extension (ctx: NameContext)
   private def :+(name: Name) = (ctx._1 + 1, ctx._2.updated(name, ctx._1))
+  private def ++(names: Seq[Name]) = (ctx._1 + names.size, names.zipWithIndex.foldLeft(ctx._2) { (map, tuple) =>
+    tuple match
+      case (name, offset) => map.updated(name, ctx._1 + offset)
+  })
 
 def astToIr(ast: AstTerm)
   (using ctx: NameContext)
@@ -98,19 +105,56 @@ def astToIr(ast: AstTerm)
       OperatorCall((effQn, effArgs), opName, args)
     }
   case AstHandler(
-  effect,
+  (effQn, effArgs),
   otherEffects,
   outputType,
   transformInputName,
   transform,
   handlers,
   input
-  ) => ???
+  ) =>
+    for effArgs <- transpose(effArgs.map(astToIr))
+        otherEffects <- astToIr(otherEffects)
+        outputType <- astToIr(outputType)
+        transform <- bind(transformInputName) {
+          astToIr(transform)
+        }
+        handlers <- transposeValues(
+          handlers.view.mapValues { (argNames, resumeName, astTerm) =>
+            bind(argNames :+ resumeName) {
+              astToIr(astTerm).map((argNames.size + 1, _))
+            }
+          }.toMap
+        )
+        input <- astToIr(input)
+        r <- chain[[X] =>> List[List[X]]](
+          effArgs.map((gn"effArg", _)) :: List((gn"otherEff", otherEffects)) :: List((gn"outputType", outputType)) :: Nil
+        ) {
+          case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
+            Handler(
+              (effQn, effArgs),
+              otherEffects,
+              outputType,
+              transform.weaken(n, 1),
+              handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
+              input.weaken(n, 0)
+            )
+          case _ => throw IllegalStateException()
+        }
+    yield r
   case AstHeapHandler(
   otherEffects,
   heapVarName,
   input,
-  ) => ???
+  ) =>
+    for otherEffects <- astToIr(otherEffects)
+        input <- bind(heapVarName) {
+          astToIr(input)
+        }
+        r <- chain(gn"otherEff", otherEffects) {
+          case (otherEffects, n) => HeapHandler(otherEffects, None, IndexedSeq(), input.weaken(n, 1))
+        }
+    yield r
   case AstExSeq(expressions) => ???
 
 
@@ -165,7 +209,7 @@ private def chain(ts: (Name, CTerm)*)
   (using Signature): Either[AstError, CTerm] = chain(ts.toList)(block)
 
 private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
-  (block: Signature ?=> (T[VTerm], /* number of non-trivial computations bound */Int) => CTerm)
+  (block: Signature ?=> (T[VTerm], /* number of non-trivial computations bound */ Int) => CTerm)
   (using NameContext)
   (using Signature): Either[AstError, CTerm] =
   for r <- {
@@ -210,13 +254,20 @@ given effectsEitherFunctor: EitherFunctor[[X] =>> List[(QualifiedName, List[X])]
             rest <- map(rest)(g)
         yield (qn, ts) :: rest
 
-given EitherFunctor[[X] =>> List[Elimination[X]]] with
+given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
   override def map[L, T, S](l: List[Elimination[T]])
     (g: T => Either[L, S]): Either[L, List[Elimination[S]]] =
     listEitherFunctor.map(l) {
       _ match
         case ETerm(t) => g(t).map(ETerm(_))
         case EProj(n) => Right(EProj(n))
+    }
+
+given listListEitherFunctor: EitherFunctor[[X] =>> List[List[X]]] with
+  override def map[L, T, S](l: List[List[T]])
+    (g: T => Either[L, S]): Either[L, List[List[S]]] =
+    listEitherFunctor.map(l) {
+      listEitherFunctor.map(_)(g)
     }
 
 private trait EitherFunctor[F[_]]:

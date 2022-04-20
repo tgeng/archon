@@ -132,6 +132,12 @@ def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
 def transpose[L, R](l: ListSet[Either[L, R]]): Either[L, ListSet[R]] =
   transpose(l.toList).map(ListSet(_: _*))
 
+def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
+  transpose(m.toList.map { (k, v) => v match
+    case Right(r) => Right((k, r))
+    case Left(l) => Left(l)
+  }).map(Map.from)
+
 /**
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.
  */
