@@ -165,7 +165,7 @@ private def chain(ts: (Name, CTerm)*)
   (using Signature): Either[AstError, CTerm] = chain(ts.toList)(block)
 
 private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
-  (block: Signature ?=> (T[VTerm], Int) => CTerm)
+  (block: Signature ?=> (T[VTerm], /* number of non-trivial computations bound */Int) => CTerm)
   (using NameContext)
   (using Signature): Either[AstError, CTerm] =
   for r <- {
