@@ -39,7 +39,7 @@ extension (ctx: NameContext)
 def astToIr(ast: AstTerm)
   (using ctx: NameContext)
   (using Σ: Signature): Either[AstError, CTerm] = ast match
-  case AstDef(qn) => ???
+  case AstDef(qn) => Right(Def(qn))
   case v: AstVar =>
     for v <- resolve(v)
       yield Return(v)
@@ -155,8 +155,14 @@ def astToIr(ast: AstTerm)
           case (otherEffects, n) => HeapHandler(otherEffects, None, IndexedSeq(), input.weaken(n, 1))
         }
     yield r
-  case AstExSeq(expressions) => ???
-
+  case AstExSeq(expressions) =>
+    if (expressions.isEmpty) then
+      Right(Def(Builtins.UnitQn))
+    else
+      for expressions <- transpose(expressions.map(astToIr))
+      yield
+        val weakenedExpressions = expressions.zipWithIndex.map { (c, i) => c.weaken(i, 0) }
+        weakenedExpressions.dropRight(1).foldRight(weakenedExpressions.last)(Let(_, _)(gn"_"))
 
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)

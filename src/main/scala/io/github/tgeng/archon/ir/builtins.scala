@@ -7,7 +7,9 @@ import VTerm.*
 
 object Builtins:
   val BuiltinType = Builtin / "type"
-  val UnitTy = DataType(BuiltinType / "Unit")
+  val UnitTyQn = BuiltinType / "Unit"
+  val UnitTy = DataType(UnitTyQn)
+  val UnitQn = UnitTyQn / "Unit"
   val Unit = Con(Name.Normal("Unit"))
 
   val TypeQn = BuiltinType / "Type"
@@ -20,7 +22,6 @@ object Builtins:
   val LevelQn = BuiltinType / "Level"
   val HeapQn = BuiltinType / "Heap"
   val CellQn = BuiltinType / "Cell"
-  val UnitQn = BuiltinType / "Unit"
   
   val BuiltinEffects = Builtin / "effects"
   val HeapEffQn = BuiltinEffects / "HeapEff"
