@@ -128,7 +128,6 @@ def checkClause(qn: QualifiedName, clause: CheckedClause)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val definition = Σ.getDefinition(qn)
   val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
     case (Some(f), p) => p.toElimination match
       case Some(ETerm(t)) => Some(Application(f, t))
