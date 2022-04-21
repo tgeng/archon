@@ -205,7 +205,7 @@ def inferType(tm: VTerm)
 : Either[IrError, VTerm] = tm match
   case Type(level, upperBound) =>
     checkULevel(level) >>
-      checkType(upperBound, tm) >>
+      checkType(upperBound, Type(level, Top(level))) >>
       Right(Type(ULevelSuc(level), tm))
   case Pure(ul) => Right(Type(ul, tm))
   case Top(ul) => Right(Type(ul, tm))
@@ -298,7 +298,7 @@ def inferType(tm: CTerm)
   case CType(ul, upperBound, effects) =>
     checkType(effects, EffectsType) >>
       checkULevel(ul) >>
-      checkType(upperBound, tm) >>
+      checkType(upperBound, CType(ul, CTop(ul), effects)) >>
       Right(CType(ULevelSuc(ul), tm, Total))
   case CTop(ul, effects) =>
     checkType(effects, EffectsType) >>

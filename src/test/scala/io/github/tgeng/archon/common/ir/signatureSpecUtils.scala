@@ -97,7 +97,7 @@ class TestSignature(
   val allClauses: mutable.Map[QualifiedName, IndexedSeq[CheckedClause]],
   val allEffects: mutable.Map[QualifiedName, Effect],
   val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]],
-) extends Signature :
+) extends BuiltinSignature :
   override def getDataOption(qn: QualifiedName) = allData.get(qn)
 
   override def getConstructorsOption(qn: QualifiedName) = allConstructors.get(qn)
@@ -106,9 +106,9 @@ class TestSignature(
 
   override def getFieldsOption(qn: QualifiedName) = allFields.get(qn)
 
-  override def getDefinitionOption(qn: QualifiedName) = allDefinitions.get(qn)
+  override def getUserDefinitionOption(qn: QualifiedName) = allDefinitions.get(qn)
 
-  override def getClausesOption(qn: QualifiedName) = allClauses.get(qn)
+  override def getUserClausesOption(qn: QualifiedName) = allClauses.get(qn)
 
   override def getCaseTreeOption(qn: QualifiedName) = ???
 

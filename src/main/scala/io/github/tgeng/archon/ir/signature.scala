@@ -102,3 +102,16 @@ trait Signature:
 
   def getOperator(qn: QualifiedName, name: Name) =
     getOperators(qn).getFirstOrDefault(_.name == name, throw IllegalArgumentException())
+
+trait BuiltinSignature extends Signature :
+  override def getDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    Builtins.builtinDefinitions.get(qn).map(_._1)
+      // TODO: return derived definitions from record, data, and effects.
+      .orElse(getUserDefinitionOption(qn))
+
+  def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
+
+  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+
+  def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
+
