@@ -290,14 +290,18 @@ private final class StackMachine(
             l match
               case ULevel.USimpleLevel(l) => elims = (CPattern(p), ETerm(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
-          case (CPattern(PDataType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
-            elims = (CPattern(heapP), ETerm(heap)) :: (CPattern(tyP), ETerm(ty)) :: elims
-          case (CPattern(PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
-          ETerm(EqualityType(ty, left, right))) =>
-            elims = (CPattern(tyP), ETerm(ty)) ::
-              (CPattern(leftP), ETerm(left)) ::
-              (CPattern(rightP), ETerm(right)) ::
-              elims
+          // TODO: matching cell type is probably not a good idea because it's unknown at what
+          //  level `tyP` should be.
+          // case (CPattern(PDataType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
+          //   elims = (CPattern(heapP), ETerm(heap)) :: (CPattern(tyP), ETerm(ty)) :: elims
+
+          // TODO: similarly, matching equality type is not good either.
+          // case (CPattern(PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
+          // ETerm(EqualityType(ty, left, right))) =>
+          //   elims = (CPattern(tyP), ETerm(ty)) ::
+          //     (CPattern(leftP), ETerm(left)) ::
+          //     (CPattern(rightP), ETerm(right)) ::
+          //     elims
           case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CPattern(PForcedDataType(_, pArgs)), ETerm(DataType(qn2, args))) =>

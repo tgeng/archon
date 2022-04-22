@@ -80,7 +80,7 @@ enum VTerm:
     ty: VTerm,
     left: VTerm,
     right: VTerm
-  ) extends VTerm, QualifiedNameOwner(EqualityQn)
+  ) extends VTerm //, QualifiedNameOwner(EqualityQn)
   case Refl
 
   case EffectsType extends VTerm, QualifiedNameOwner(EffectsQn)
@@ -102,7 +102,7 @@ enum VTerm:
     heap: VTerm,
     ty: VTerm,
     status: CellStatus
-  ) extends VTerm, QualifiedNameOwner(CellQn)
+  ) extends VTerm //, QualifiedNameOwner(CellQn)
 
   /**
    * Internal only, created by [[CTerm.AllocOp]]

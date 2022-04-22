@@ -14,11 +14,11 @@ object Builtins:
   val TopQn = BuiltinType / "Top"
   val PureQn = BuiltinType / "Pure"
 
-  val EqualityQn = BuiltinType / "Equality"
+//  val EqualityQn = BuiltinType / "Equality"
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"
   val HeapQn = BuiltinType / "Heap"
-  val CellQn = BuiltinType / "Cell"
+//  val CellQn = BuiltinType / "Cell"
 
   val UnitTyQn = BuiltinType / "Unit"
   val UnitTy = DataType(UnitTyQn)
@@ -129,37 +129,37 @@ object Builtins:
       )
     ),
 
-    /**
-     * Equality : (level : LevelType) -> (ty : Type(level, Top(level)) -> (x : ty) -> (y : ty) -> Type(level, Equality(ty, x, y))
-     * {level: Level, ty : Type... , x : ty, y : ty} |- _ ty x y = Equality(ty, x, y)
-     */
-    (
-      Builtins.EqualityQn,
-      FunctionType(
-        Binding(LevelType)(n"level"),
-        FunctionType(
-          Binding(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))(n"type"),
-          FunctionType(
-            Binding(Var(0))(n"x"),
-            FunctionType(
-              Binding(Var(1))(n"y"),
-              F(Type(USimpleLevel(Var(3)), EqualityType(Var(2), Var(1), Var(0))))
-            )
-          )
-        )
-      ),
-      IndexedSeq(
-        CheckedClause(
-          Binding(LevelType)(n"level") ::
-            Binding(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))(n"type") ::
-            Binding(Var(0))(n"x") ::
-            Binding(Var(1))(n"y") :: Nil,
-          CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
-          Return(EqualityType(Var(2), Var(1), Var(0))),
-          F(Type(USimpleLevel(Var(3)), EqualityType(Var(2), Var(1), Var(0))))
-        )
-      )
-    ),
+//    /**
+//     * Equality : (level : LevelType) -> (ty : Type(level, Top(level)) -> (x : ty) -> (y : ty) -> Type(level, Equality(ty, x, y))
+//     * {level: Level, ty : Type... , x : ty, y : ty} |- _ ty x y = Equality(ty, x, y)
+//     */
+//    (
+//      Builtins.EqualityQn,
+//      FunctionType(
+//        Binding(LevelType)(n"level"),
+//        FunctionType(
+//          Binding(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))(n"type"),
+//          FunctionType(
+//            Binding(Var(0))(n"x"),
+//            FunctionType(
+//              Binding(Var(1))(n"y"),
+//              F(Type(USimpleLevel(Var(3)), EqualityType(Var(2), Var(1), Var(0))))
+//            )
+//          )
+//        )
+//      ),
+//      IndexedSeq(
+//        CheckedClause(
+//          Binding(LevelType)(n"level") ::
+//            Binding(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))(n"type") ::
+//            Binding(Var(0))(n"x") ::
+//            Binding(Var(1))(n"y") :: Nil,
+//          CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+//          Return(EqualityType(Var(2), Var(1), Var(0))),
+//          F(Type(USimpleLevel(Var(3)), EqualityType(Var(2), Var(1), Var(0))))
+//        )
+//      )
+//    ),
 
     /**
      * Effects : Type(0, Effects)
@@ -246,7 +246,6 @@ object Builtins:
             CType(UωLevel(layer + 1), CType(UωLevel(layer), CTop(UωLevel(layer))))
           else
             F(Type(UωLevel(layer + 1), Type(UωLevel(layer), Top(UωLevel(layer)))))
-
         )
       )
     )
