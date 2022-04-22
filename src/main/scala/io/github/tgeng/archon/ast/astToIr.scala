@@ -58,6 +58,10 @@ def astToIr(ast: AstTerm)
     case heap :: ty :: Nil => Return(CellType(heap, ty, status))
     case _ => throw IllegalStateException()
   }
+  case AstEqualityType(ty, left, right) => chainAst((gn"ty", ty), (gn"left", left), (gn"right", right)) {
+    case ty :: left :: right :: Nil => Return(EqualityType(ty, left, right))
+    case _ => throw IllegalStateException()
+  }
   case AstForce(v) => chainAst(gn"v", v)(Force(_))
   case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
     case vTy :: effects :: Nil => F(vTy, effects)

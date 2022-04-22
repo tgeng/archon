@@ -17,6 +17,7 @@ enum AstTerm:
   case AstEffectsLiteral(effects: List[AstEff])
   case AstLevelLiteral(level: Nat)
   case AstCellType(heap: AstTerm, ty: AstTerm, status: CellStatus)
+  case AstEqualityType(ty: AstTerm, left: AstTerm, right: AstTerm)
   case AstForce(v: AstTerm)
   case AstF(vTy: AstTerm, effects: AstTerm)
   case AstReturn(v: AstTerm)
