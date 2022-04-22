@@ -32,7 +32,7 @@ object Builtins:
 
   val BuiltinEffects = Builtin / "effects"
   val HeapEffQn = BuiltinEffects / "HeapEff"
-  val EffectsUnion = BuiltinEffects / "|"
+  val EffectsUnionQn = BuiltinEffects / "union"
 
   val BuiltinLevel = Builtin / "level"
   val LevelSucQn = BuiltinLevel / "suc"
@@ -320,7 +320,73 @@ object Builtins:
           CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0)))
         )
       )
-    )
+    ),
+
+    /**
+     * union : (eff1 : EffectsType) -> (eff2 : EffectsType) -> EffectsType
+     * {eff1 : EffectsType, eff2 : EffectsType} |- eff1 eff2 := EffectsUnion(eff1, eff2)
+     */
+    (
+      Builtins.EffectsUnionQn,
+      FunctionType(
+        Binding(EffectsType)(n"eff1"),
+        FunctionType(
+          Binding(EffectsType)(n"eff2"),
+          F(EffectsType)
+        )
+      ),
+      IndexedSeq(
+        CheckedClause(
+          Binding(EffectsType)(n"eff1") :: Binding(EffectsType)(n"eff2") :: Nil,
+          CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+          Return(EffectsUnion(Var(1), Var(0))),
+          F(EffectsType)
+        )
+      )
+    ),
+
+    /**
+     * suc : (level : LevelType) -> LevelType
+     * {level : LevelType} |- level := level + 1
+     */
+    (
+      Builtins.LevelSucQn,
+      FunctionType(
+        Binding(LevelType)(n"level"),
+        F(LevelType)
+      ),
+      IndexedSeq {
+        CheckedClause(
+          Binding(LevelType)(n"level") :: Nil,
+          CPattern(PVar(0)) :: Nil,
+          Return(LevelSuc(Var(0))),
+          F(LevelType)
+        )
+      }
+    ),
+
+    /**
+     * max : (level1 : LevelType) -> (level2 : LevelType) -> LevelType
+     * {eff1 : LevelType, eff2 : LevelType} |- eff1 eff2 := EffectsUnion(eff1, eff2)
+     */
+    (
+      Builtins.LevelMaxQn,
+      FunctionType(
+        Binding(LevelType)(n"level1"),
+        FunctionType(
+          Binding(LevelType)(n"level2"),
+          F(LevelType)
+        )
+      ),
+      IndexedSeq(
+        CheckedClause(
+          Binding(LevelType)(n"level1") :: Binding(LevelType)(n"level2") :: Nil,
+          CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+          Return(LevelMax(Var(1), Var(0))),
+          F(LevelType)
+        )
+      )
+    ),
 
   ).map { case (qn, ty, clauses) => (qn, (new Definition(qn)(ty), clauses)) }.toMap
 
