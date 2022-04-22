@@ -62,6 +62,7 @@ def astToIr(ast: AstTerm)
     case ty :: left :: right :: Nil => Return(EqualityType(ty, left, right))
     case _ => throw IllegalStateException()
   }
+  case AstRefl => Right(Return(Refl))
   case AstForce(v) => chainAst(gn"v", v)(Force(_))
   case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
     case vTy :: effects :: Nil => F(vTy, effects)
