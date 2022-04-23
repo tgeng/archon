@@ -21,10 +21,7 @@ object Builtins:
   //  val CellQn = BuiltinType / "Cell"
 
   val UnitTypeQn = BuiltinType / "Unit"
-  val UnitType = DataType(UnitTypeQn)
   val UnitQn = UnitTypeQn / "Unit"
-  val Unit = Con(Name.Normal("Unit"))
-
 
   val CTypeQn = BuiltinCType / "Type"
   val CSubtypeOfQn = BuiltinCType / "SubtypeOf"
@@ -44,6 +41,30 @@ object Builtins:
   import ULevel.*
   import CoPattern.*
   import Pattern.*
+
+  val builtinData: Map[QualifiedName, (Data, IndexedSeq[Constructor])] = Seq(
+    (Builtins.UnitQn,
+      /* tParamTys*/ Nil,
+      /* ul */ USimpleLevel(LevelLiteral(0)),
+      /* isPure */ true,
+      /* constructors */ IndexedSeq(
+      Constructor(n"Unit", Nil, Nil)
+    ))
+  ).map {
+    case (qn, tParamTys, ul, isPure, constructors) =>
+      (qn, (new Data(qn)(tParamTys, ul, isPure), constructors))
+  }.toMap
+
+  val builtinRecords: Map[QualifiedName, (Record, IndexedSeq[Field])] = Seq(
+    // There does not seem to be any essential records that should included here.
+    //    (???,
+    //      /* tParamTys*/ ???,
+    //      /* ul */ ???,
+    //      /* fields */ ???)
+  ).map {
+    case (qn, tParamTys, ul, fields) =>
+      (qn, (new Record(qn)(tParamTys, ul), fields))
+  }.toMap
 
   val builtinDefinitions: Map[QualifiedName, (Definition, IndexedSeq[CheckedClause])] = Seq(
 
@@ -425,3 +446,12 @@ object Builtins:
         )
       )
     )
+
+  val builtinEffects: Map[QualifiedName, (Effect, IndexedSeq[Operator])] = Seq(
+    (Builtins.HeapEffQn,
+      /* tParamTys*/ Binding(HeapType)(n"heap") :: Nil,
+      /* operators */ IndexedSeq())
+  ).map {
+    case (qn, tParamTys, operators) =>
+      (qn, (new Effect(qn)(tParamTys), operators))
+  }.toMap

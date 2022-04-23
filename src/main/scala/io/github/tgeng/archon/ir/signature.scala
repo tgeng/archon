@@ -100,10 +100,36 @@ trait Signature:
 
   def getOperators(qn: QualifiedName): IndexedSeq[Operator] = getOperatorsOption(qn).get
 
-  def getOperator(qn: QualifiedName, name: Name) =
+  def getOperator(qn: QualifiedName, name: Name): Operator =
     getOperators(qn).getFirstOrDefault(_.name == name, throw IllegalArgumentException())
 
 trait BuiltinSignature extends Signature :
+  override def getDataOption(qn: QualifiedName): Option[Declaration.Data] =
+    Builtins.builtinData.get(qn).map(_._1)
+      .orElse(getUserDataOption(qn))
+
+  def getUserDataOption(qn: QualifiedName): Option[Declaration.Data]
+
+  override def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]] =
+    Builtins.builtinData.get(qn).map(_._2)
+      .orElse(getUserConstructorsOption(qn))
+
+  def getUserConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
+
+
+  override def getRecordOption(qn: QualifiedName): Option[Declaration.Record] =
+    Builtins.builtinRecords.get(qn).map(_._1)
+      .orElse(getUserRecordOption(qn))
+
+  def getUserRecordOption(qn: QualifiedName): Option[Declaration.Record]
+
+  override def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]] =
+    Builtins.builtinRecords.get(qn).map(_._2)
+      .orElse(getUserFieldsOption(qn))
+
+  def getUserFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
+
+
   override def getDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     Builtins.builtinDefinitions.get(qn).map(_._1)
       // TODO: return derived definitions from record, data, and effects.
@@ -111,7 +137,25 @@ trait BuiltinSignature extends Signature :
 
   def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
 
-  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+    Builtins.builtinDefinitions.get(qn).map(_._2)
+      // TODO: return derived clauses from record, data, and effects.
+      .orElse(getUserClausesOption(qn))
 
   def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
+
+  // TODO: getUserCaseTree...
+
+  override def getEffectOption(qn: QualifiedName): Option[Declaration.Effect] =
+    Builtins.builtinEffects.get(qn).map(_._1)
+      .orElse(getUserEffectOption(qn))
+
+  def getUserEffectOption(qn: QualifiedName): Option[Declaration.Effect]
+
+  override def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]] =
+    Builtins.builtinEffects.get(qn).map(_._2)
+      .orElse(getUserOperatorsOption(qn))
+
+  def getUserOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
+
 

@@ -98,13 +98,13 @@ class TestSignature(
   val allEffects: mutable.Map[QualifiedName, Effect],
   val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]],
 ) extends BuiltinSignature :
-  override def getDataOption(qn: QualifiedName) = allData.get(qn)
+  override def getUserDataOption(qn: QualifiedName) = allData.get(qn)
 
-  override def getConstructorsOption(qn: QualifiedName) = allConstructors.get(qn)
+  override def getUserConstructorsOption(qn: QualifiedName) = allConstructors.get(qn)
 
-  override def getRecordOption(qn: QualifiedName) = allRecords.get(qn)
+  override def getUserRecordOption(qn: QualifiedName) = allRecords.get(qn)
 
-  override def getFieldsOption(qn: QualifiedName) = allFields.get(qn)
+  override def getUserFieldsOption(qn: QualifiedName) = allFields.get(qn)
 
   override def getUserDefinitionOption(qn: QualifiedName) = allDefinitions.get(qn)
 
@@ -112,9 +112,9 @@ class TestSignature(
 
   override def getCaseTreeOption(qn: QualifiedName) = ???
 
-  override def getEffectOption(qn: QualifiedName) = allEffects.get(qn)
+  override def getUserEffectOption(qn: QualifiedName) = allEffects.get(qn)
 
-  override def getOperatorsOption(qn: QualifiedName) = allOperators.get(qn)
+  override def getUserOperatorsOption(qn: QualifiedName) = allOperators.get(qn)
 
   def copy: TestSignature = TestSignature(
     allData,
