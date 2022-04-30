@@ -156,6 +156,8 @@ object VTerm:
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
+  def vars(firstIndex: Nat, lastIndex: Nat = 0) : List[VTerm] = firstIndex.to(lastIndex, -1).map(Var(_)).toList
+
 
 sealed trait IType:
   def effects: VTerm

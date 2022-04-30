@@ -103,6 +103,56 @@ trait Signature:
   def getOperator(qn: QualifiedName, name: Name): Operator =
     getOperators(qn).getFirstOrDefault(_.name == name, throw IllegalArgumentException())
 
+  import VTerm.*
+  import CTerm.*
+  import CoPattern.*
+  import QualifiedName.*
+
+  def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    for
+      data <- getDataOption(qn)
+    yield Definition(qn)(
+      data.tParamTys.foldRight(
+        F(Type(data.ul, DataType(qn, vars(data.tParamTys.size - 1))))
+      ) { (bindingAndVariance, bodyTy) => bindingAndVariance match
+        case (binding, _) => FunctionType(binding, bodyTy)
+      }
+    )
+
+  def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+    for
+      data <- getDataOption(qn)
+    yield {
+      val highestDbIndex = data.tParamTys.size - 1
+      IndexedSeq(
+        CheckedClause(
+          data.tParamTys.map(_._1),
+          pVars(highestDbIndex),
+          Return(DataType(qn, vars(highestDbIndex))),
+          F(Type(data.ul, DataType(qn, vars(highestDbIndex))))
+        )
+      )
+    }
+
+  def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
+    case Node(qn, conName) => ???
+    case _ => None
+
+
+  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+
+  def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
+
+  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+
+  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
+
+  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+
+  def getEffectsDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
+
+  def getEffectsDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+
 trait BuiltinSignature extends Signature :
   override def getDataOption(qn: QualifiedName): Option[Declaration.Data] =
     Builtins.builtinData.get(qn).map(_._1)
@@ -132,14 +182,22 @@ trait BuiltinSignature extends Signature :
 
   override def getDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     Builtins.builtinDefinitions.get(qn).map(_._1)
-      // TODO: return derived definitions from record, data, and effects.
+      .orElse(getDataDerivedDefinitionOption(qn))
+      .orElse(getDataConDerivedDefinitionOption(qn))
+      .orElse(getRecordDerivedDefinitionOption(qn))
+      .orElse(getRecordFieldDerivedDefinitionOption(qn))
+      .orElse(getEffectsDerivedDefinitionOption(qn))
       .orElse(getUserDefinitionOption(qn))
 
   def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
 
   override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
     Builtins.builtinDefinitions.get(qn).map(_._2)
-      // TODO: return derived clauses from record, data, and effects.
+      .orElse(getDataDerivedClausesOption(qn))
+      .orElse(getDataConDerivedClausesOption(qn))
+      .orElse(getRecordDerivedClausesOption(qn))
+      .orElse(getRecordFieldDerivedClausesOption(qn))
+      .orElse(getEffectsDerivedClausesOption(qn))
       .orElse(getUserClausesOption(qn))
 
   def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
@@ -157,5 +215,3 @@ trait BuiltinSignature extends Signature :
       .orElse(getUserOperatorsOption(qn))
 
   def getUserOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
-
-

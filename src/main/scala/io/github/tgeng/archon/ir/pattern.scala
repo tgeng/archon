@@ -29,7 +29,7 @@ extension (p: Pattern)
     case PRefl => Some(Refl)
     case PDataType(qn, args) =>
       for args <- transpose(args.map(_.toTerm))
-      yield DataType(qn, args)
+        yield DataType(qn, args)
     case PForcedDataType(qn, args) =>
       for args <- transpose(args.map(_.toTerm))
         yield DataType(qn, args)
@@ -45,6 +45,11 @@ extension (p: Pattern)
 enum CoPattern:
   case CPattern(p: Pattern)
   case CProjection(name: Name)
+
+object CoPattern:
+  def pVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] = firstIndex
+    .to(lastIndex, -1)
+    .map(i => CPattern(Pattern.PVar(i))).toList
 
 enum Elimination[T]:
   case ETerm(v: T)
