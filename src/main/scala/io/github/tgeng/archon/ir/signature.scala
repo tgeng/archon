@@ -1,6 +1,8 @@
 package io.github.tgeng.archon.ir
 
+import scala.collection.immutable.ListSet
 import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.ir.ULevel.USimpleLevel
 
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
@@ -191,17 +193,88 @@ trait Signature:
         )
     case _ => None
 
-  def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
+  def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    for
+      record <- getRecordOption(qn)
+    yield Definition(qn)(
+      record.tParamTys.foldRight(
+        CType(record.ul, RecordType(qn, vars(record.tParamTys.size - 1)))
+      ) { (bindingAndVariance, bodyTy) =>
+        bindingAndVariance match
+          case (binding, _) => FunctionType(binding, bodyTy)
+      }
+    )
 
-  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+    for
+      record <- getRecordOption(qn)
+    yield {
+      val highestDbIndex = record.tParamTys.size - 1
+      IndexedSeq(
+        CheckedClause(
+          record.tParamTys.map(_._1),
+          pVars(highestDbIndex),
+          RecordType(qn, vars(highestDbIndex)),
+          CType(record.ul, RecordType(qn, vars(highestDbIndex)))
+        )
+      )
+    }
 
-  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
+  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
+    case Node(recordQn, fieldName) =>
+      for
+        record <- getRecordOption(qn)
+        field <- getFieldOption(qn, fieldName)
+      yield Definition(qn)(
+        record.tParamTys.foldRight(
+          FunctionType(
+            Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
+            field.ty
+          )
+        ) { (bindingAndVariance, bodyTy) => bindingAndVariance match
+          case (binding, _) => FunctionType(binding, bodyTy)
+        }
+      )
+    case _ => None
 
-  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = qn match
+    case Node(recordQn, fieldName) =>
+      for
+        record <- getRecordOption(qn)
+        field <- getFieldOption(qn, fieldName)
+      yield IndexedSeq(
+        CheckedClause(
+          record.tParamTys.map(_._1) :+ Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
+          pVars(record.tParamTys.size),
+          Projection(Force(Var(0)), fieldName),
+          field.ty
+        )
+      )
+    case _ => None
 
-  def getEffectsDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
+  def getEffectsDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    for
+      effect <- getEffectOption(qn)
+    yield Definition(qn)(
+      effect.tParamTys.foldRight(F(EffectsType)) {
+        case (binding, bodyTy) => FunctionType(binding, bodyTy)
+      }
+    )
 
-  def getEffectsDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+  def getEffectsDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+    for
+      effect <- getEffectOption(qn)
+    yield {
+      val highestDbIndex = effect.tParamTys.size - 1
+      IndexedSeq(
+        CheckedClause(
+          effect.tParamTys,
+          pVars(highestDbIndex),
+          Return(EffectsLiteral(ListSet((qn, vars(highestDbIndex))))),
+          F(EffectsType)
+        )
+      )
+    }
 
 trait BuiltinSignature extends Signature :
   override def getDataOption(qn: QualifiedName): Option[Declaration.Data] =

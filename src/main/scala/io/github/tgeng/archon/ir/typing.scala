@@ -387,7 +387,7 @@ def inferType(tm: CTerm)
           case RecordType(qn, args, effects) =>
             Σ.getFields(qn).first { f => if f.name == name then Some(f) else None } match
               case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
-              case Some(f) => Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(tm): _*)))
+              case Some(f) => Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(rec): _*)))
           case _ => Left(ExpectRecord(rec))
     yield r
   case OperatorCall(eff@(qn, tArgs), name, args) =>
