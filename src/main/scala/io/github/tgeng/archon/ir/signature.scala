@@ -42,7 +42,16 @@ import Declaration.*
 case class Constructor(
   name: Name,
   paramTys: Telescope = Nil, /* + tParamTys */
-  idTys: List[Binding[VTerm.EqualityType]] = Nil /* + tParamTys + paramTys */
+  /**
+   * Arguments passed to the data type constructor. For non-indexed type this should just be a
+   * sequence of variables referencing the `tParamTys`. For indexed families, the argument here
+   * can be any expressions. For example, for `Vec : (A: Type) -> (n: Nat) -> Type`, this would be
+   * [A, 0] for `Nil` and `[A, n + 1]` for `Cons`.
+   *
+   * Semantically, this is simply adding some equality constraints that requires `tParamTys` to be
+   * convertible to these args.
+   */
+  tArgs: Arguments = Nil, /* + tParamTys + paramTys */
 )
 
 case class Operator(
@@ -69,6 +78,14 @@ trait Signature:
 
   def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] = getConstructorsOption(qn).get
 
+  def getConstructorOption(qn: QualifiedName, conName: Name): Option[Constructor] =
+    for
+      constructors <- getConstructorsOption(qn)
+      r <- constructors.collectFirst {
+        case con if con.name == conName => con
+      }
+    yield r
+
 
   def getRecordOption(qn: QualifiedName): Option[Record]
 
@@ -77,6 +94,14 @@ trait Signature:
   def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
 
   def getFields(qn: QualifiedName): IndexedSeq[Field] = getFieldsOption(qn).get
+
+  def getFieldOption(qn: QualifiedName, fieldName: Name): Option[Field] =
+    for
+      fields <- getFieldsOption(qn)
+      r <- fields.collectFirst {
+        case field if field.name == fieldName => field
+      }
+    yield r
 
 
   def getDefinitionOption(qn: QualifiedName): Option[Definition]
@@ -114,8 +139,9 @@ trait Signature:
     yield Definition(qn)(
       data.tParamTys.foldRight(
         F(Type(data.ul, DataType(qn, vars(data.tParamTys.size - 1))))
-      ) { (bindingAndVariance, bodyTy) => bindingAndVariance match
-        case (binding, _) => FunctionType(binding, bodyTy)
+      ) { (bindingAndVariance, bodyTy) =>
+        bindingAndVariance match
+          case (binding, _) => FunctionType(binding, bodyTy)
       }
     )
 
@@ -135,11 +161,35 @@ trait Signature:
     }
 
   def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
-    case Node(qn, conName) => ???
+    case Node(dataQn, conName) =>
+      for
+        data <- getDataOption(dataQn)
+        constructor <- getConstructorOption(dataQn, conName)
+      yield Definition(qn)(
+        (data.tParamTys.map(_._1) ++ constructor.paramTys)
+          .foldRight(F(DataType(dataQn, constructor.tArgs))) { (binding, ty) =>
+            FunctionType(binding, ty)
+          }
+      )
     case _ => None
 
 
-  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = ???
+  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = qn match
+    case Node(dataQn, conName) =>
+      for
+        data <- getDataOption(dataQn)
+        constructor <- getConstructorOption(dataQn, conName)
+      yield
+        val allBindings = data.tParamTys.map(_._1) ++ constructor.paramTys
+        IndexedSeq(
+          CheckedClause(
+            allBindings,
+            pVars(allBindings.size - 1),
+            Return(Con(conName, vars(constructor.paramTys.size - 1))),
+            F(DataType(dataQn, constructor.tArgs))
+          )
+        )
+    case _ => None
 
   def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = ???
 

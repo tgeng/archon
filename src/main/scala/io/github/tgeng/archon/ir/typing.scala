@@ -32,10 +32,18 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
   given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
   for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-      _ <- if data.isPure then
-        allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
-      else Right(())
-      _ <- checkParameterTypeDeclarations(con.idTys, Some(data.ul))(using Γ ++ con.paramTys)
+      _ <-
+        if data.isPure then
+          allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+        else
+          Right(())
+      _ <- {
+        given Γ2: Context = Γ ++ con.paramTys
+
+        // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no free
+        // vars
+        checkTypes(con.tArgs, data.tParamTys.map(_._1))
+      }
   yield
     // binding of positiveVars must be either covariant or invariant
     // binding of negativeVars must be either contravariant or invariant
@@ -739,7 +747,9 @@ def checkIsPureType(ty: VTerm)
     case true => Right(())
     case false => Left(NotPureType(ty))
   case _: U => Left(NotPureType(ty))
-  case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType => Right(())
+  case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType => Right(
+    ()
+  )
   case v: Var => Γ(v).ty match
     case Type(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
     case _ => throw IllegalArgumentException(s"$v not a type")
