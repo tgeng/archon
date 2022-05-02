@@ -594,6 +594,7 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
           NotVSubsumption(sub, sup, ty, mode)
         ))
       yield r
+    case (_, Heap(GlobalHeapKey), Some(HeapType)) if mode == SUBSUMPTION => Right(())
     case _ => Left(NotVSubsumption(sub, sup, ty, mode))
 
 /**
