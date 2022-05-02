@@ -291,11 +291,16 @@ private final class StackMachine(
               case ULevel.USimpleLevel(l) => elims = (CPattern(p), ETerm(l)) :: elims
               case ULevel.UωLevel(_) => throw IllegalArgumentException("type error")
           // TODO: matching cell type is probably not a good idea because it's unknown at what
-          //  level `tyP` should be.
+          //  level `tyP` should be. In order to allow this, we need to make each `Cell`
+          //  self-contained, just like all declared `Data`. The downside is then the need to carry
+          //  a level everywhere with the cell. On the other hand, whether to allow this does not
+          //  affect the expressive power because one can simulate such by declaring a wrapper
+          //  data class. This same trick can be used for equality type, function type, and record
+          //  type.
           // case (CPattern(PDataType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
           //   elims = (CPattern(heapP), ETerm(heap)) :: (CPattern(tyP), ETerm(ty)) :: elims
 
-          // TODO: similarly, matching equality type is not good either.
+          // TODO: similarly, we don't allow matching equality type either for the same reason.
           // case (CPattern(PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
           // ETerm(EqualityType(ty, left, right))) =>
           //   elims = (CPattern(tyP), ETerm(ty)) ::
