@@ -10,6 +10,8 @@ import IrError.*
 import Declaration.*
 import Elimination.*
 
+import scala.annotation.tailrec
+
 trait TypingContext
 
 def checkDataType(qn: QualifiedName)
@@ -50,7 +52,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
     val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
     val tParamTysSize = data.tParamTys.size
     val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
-      case ((binding, variance), reverseIndex) =>
+      case ((_, variance), reverseIndex) =>
         val index = tParamTysSize - reverseIndex - 1
         variance match
           case Variance.INVARIANT => false
@@ -94,7 +96,7 @@ def checkRecordField(qn: QualifiedName, field: Field)
       val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
       val tParamTysSize = record.tParamTys.size
       val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
-        case ((binding, variance), reverseIndex) =>
+        case ((_, variance), reverseIndex) =>
           val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
           variance match
             case Variance.INVARIANT => false
@@ -110,7 +112,6 @@ def checkRecordFields(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  val record = Σ.getRecord(qn)
   allRight(Σ.getFields(qn).map { field => checkRecordField(qn, field) })
 
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
@@ -154,7 +155,6 @@ def checkClauses(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val definition = Σ.getDefinition(qn)
   val clauses = Σ.getClauses(qn)
   allRight(clauses.map { clause => checkClause(qn, clause) })
 
@@ -182,7 +182,6 @@ def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val effect = Σ.getEffect(qn)
   val operators = Σ.getOperators(qn)
 
   allRight(operators.map { operator => checkOperator(qn, operator) })
@@ -221,7 +220,7 @@ def inferType(tm: VTerm)
     for ctyTy <- inferType(cty)
         r <- ctyTy match
           case CType(ul, _, eff) if eff == Total => Right(Type(ul, tm))
-          case CType(_, ul, _) => Left(EffectfulCType(cty))
+          case CType(_, _, _) => Left(EffectfulCType(cty))
           case _ => Left(NotTypeError(tm))
     yield r
   case Thunk(c) =>
@@ -255,7 +254,7 @@ def inferType(tm: VTerm)
       unionOperands.map { ref => checkType(ref, EffectsType) }
     ) >> Right(EffectsType)
   case LevelType => Right(Type(UωLevel(0), LevelType))
-  case Level(literal, maxOperands) =>
+  case Level(_, maxOperands) =>
     allRight(maxOperands.map { (ref, _) => checkType(ref, LevelType) }) >> Right(LevelType)
   case HeapType => Right(Type(USimpleLevel(LevelLiteral(0)), HeapType))
   case _: Heap => Right(HeapType)
@@ -266,7 +265,7 @@ def inferType(tm: VTerm)
           case _: Type => Right(tyTy)
           case _ => Left(NotTypeError(ty))
     yield r
-  case Cell(heapKey, _) => throw IllegalArgumentException("cannot infer type")
+  case Cell(_, _) => throw IllegalArgumentException("cannot infer type")
 
 def checkType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
@@ -387,7 +386,12 @@ def inferType(tm: CTerm)
           case RecordType(qn, args, effects) =>
             Σ.getFields(qn).first { f => if f.name == name then Some(f) else None } match
               case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
-              case Some(f) => Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(rec): _*)))
+              case Some(f) => Right(
+                augmentEffect(
+                  effects,
+                  f.ty.substLowers(args :+ Thunk(rec): _*)
+                )
+              )
           case _ => Left(ExpectRecord(rec))
     yield r
   case OperatorCall(eff@(qn, tArgs), name, args) =>
@@ -461,7 +465,7 @@ def inferType(tm: CTerm)
   case SetOp(cell, value) =>
     for cellTy <- inferType(cell)
         r <- cellTy match
-          case CellType(heap, vTy, status) => checkType(value, vTy) >>
+          case CellType(heap, vTy, _) => checkType(value, vTy) >>
             Right(
               F(
                 EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
@@ -483,7 +487,7 @@ def inferType(tm: CTerm)
           case _: CellType => Left(UninitializedCell(tm))
           case _ => Left(ExpectCell(cell))
     yield r
-  case HeapHandler(otherEffects, key, heapContent, input) =>
+  case HeapHandler(otherEffects, _, _, input) =>
     val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
     for inputCTy <- inferType(input)
         r <- inputCTy match
@@ -569,7 +573,7 @@ def checkSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm])
                 r
         }
       )
-    case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, tArgs))) if name1 == name2 =>
+    case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
       val con = Σ.getConstructors(qn).getFirstOrDefault(
         _.name == name1,
         throw IllegalArgumentException(s"missing constructor $name1 in data $qn")
@@ -617,7 +621,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             Application(sup.weakened, Var(0)),
             Some(bodyTy),
           )(using mode)(using Γ :+ binding)
-        case (_, _, Some(RecordType(qn, args, _))) => allRight(
+        case (_, _, Some(RecordType(qn, _, _))) => allRight(
           Σ.getFields(qn).map { field =>
             checkSubsumption(
               Projection(sub, field.name),
@@ -705,18 +709,22 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
               rec2Ty <- inferType(rec2)
               r <- checkSubsumption(rec1Ty, rec2Ty, None)
           yield r
-        case (OperatorCall(
-        eff1@(qn1, tArgs1), name1, args1
-        ), OperatorCall(
-        eff2@(qn2, tArgs2), name2, args2
-        ), _) if qn1 == qn2 && name1 == name2 =>
-          val effect = Σ.getEffect(qn1)
+        case (OperatorCall((qn1, tArgs1), name1, args1),
+        OperatorCall((qn2, tArgs2), name2, args2), _) if qn1 == qn2 && name1 == name2 =>
           val operator = Σ.getOperators(qn1).getFirstOrDefault(
             _.name == name1,
             throw IllegalArgumentException(s"expect effect $qn1 to have operation $name1")
           )
           var args = IndexedSeq[VTerm]()
+          val effect = Σ.getEffect(qn1)
           allRight(
+            tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
+              case ((tArg1, tArg2), binding) =>
+                val r = checkSubsumption(tArg1, tArg2, Some(binding.ty))
+                args = args :+ tArg1
+                r
+            }
+          ) >> allRight(
             args1.zip(args2).zip(operator.paramTys).map {
               case ((arg1, arg2), binding) =>
                 val r = checkSubsumption(arg1, arg2, Some(binding.ty))
@@ -737,6 +745,7 @@ def checkArePureTypes(telescope: Telescope)
   case Nil => Right(())
   case binding :: telescope => checkIsPureType(binding.ty) >> checkArePureTypes(telescope)(using Γ :+ binding)
 
+@tailrec
 def checkIsPureType(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -748,9 +757,8 @@ def checkIsPureType(ty: VTerm)
     case true => Right(())
     case false => Left(NotPureType(ty))
   case _: U => Left(NotPureType(ty))
-  case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType => Right(
-    ()
-  )
+  case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType =>
+    Right(())
   case v: Var => Γ(v).ty match
     case Type(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
     case _ => throw IllegalArgumentException(s"$v not a type")
