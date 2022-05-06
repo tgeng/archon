@@ -12,6 +12,10 @@ import CTerm.*
 import ULevel.*
 import AstError.*
 import Elimination.*
+import AstPattern.*
+import AstCoPattern.*
+import Pattern.*
+import CoPattern.*
 import io.github.tgeng.archon.ir.Elimination.EProj
 
 type NameContext = (Int, Map[Name, Int])
@@ -22,6 +26,11 @@ private def resolve(astVar: AstVar)(using ctx: NameContext): Either[AstError, Va
   ctx._2.get(astVar.name) match
     case None => Left(UnresolvedVar(astVar))
     case Some(dbNumber) => Right(Var(ctx._1 - dbNumber))
+
+private def resolve(astPVar: AstPVar)(using ctx: NameContext): Either[AstError, PVar] =
+  ctx._2.get(astPVar.name) match
+    case None => Left(UnresolvedPVar(astPVar))
+    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber))
 
 private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx :+ name)
@@ -35,6 +44,26 @@ extension (ctx: NameContext)
     tuple match
       case (name, offset) => map.updated(name, ctx._1 + offset)
   })
+
+def astToIr(ast: AstCoPattern)
+  (using ctx: NameContext)
+  (using Σ: Signature): Either[AstError, CoPattern] = ???
+
+def astToIr(ast: AstPattern)
+  (using ctx: NameContext)
+  (using Σ: Signature): Either[AstError, Pattern] = ast match
+  case v: AstPVar => resolve(v)
+  case AstPRefl => Right(PRefl)
+  case AstPDataType(qn, args) => transpose(args.map(astToIr)).map(PDataType(qn, _))
+  case AstPForcedDataType(qn, args) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
+  case AstPConstructor(name, args) => transpose(args.map(astToIr)).map(PConstructor(name, _))
+  case AstPForcedConstructor(name, args) =>
+    transpose(args.map(astToIr)).map(PForcedConstructor(name, _))
+  case AstPForced(term) =>
+    for
+      cTerm <- astToIr(term)
+    yield ???
+  case AstPAbsurd => Right(PAbsurd)
 
 def astToIr(ast: AstTerm)
   (using ctx: NameContext)
@@ -58,7 +87,11 @@ def astToIr(ast: AstTerm)
     case heap :: ty :: Nil => Return(CellType(heap, ty, status))
     case _ => throw IllegalStateException()
   }
-  case AstEqualityType(ty, left, right) => chainAst((gn"ty", ty), (gn"left", left), (gn"right", right)) {
+  case AstEqualityType(ty, left, right) => chainAst(
+    (gn"ty", ty),
+    (gn"left", left),
+    (gn"right", right)
+  ) {
     case ty :: left :: right :: Nil => Return(EqualityType(ty, left, right))
     case _ => throw IllegalStateException()
   }
@@ -157,7 +190,12 @@ def astToIr(ast: AstTerm)
           astToIr(input)
         }
         r <- chain(gn"otherEff", otherEffects) {
-          case (otherEffects, n) => HeapHandler(otherEffects, None, IndexedSeq(), input.weaken(n, 1))
+          case (otherEffects, n) => HeapHandler(
+            otherEffects,
+            None,
+            IndexedSeq(),
+            input.weaken(n, 1)
+          )
         }
     yield r
   case AstExSeq(expressions) =>
@@ -165,9 +203,9 @@ def astToIr(ast: AstTerm)
       Right(Def(Builtins.UnitQn))
     else
       for expressions <- transpose(expressions.map(astToIr))
-      yield
-        val weakenedExpressions = expressions.zipWithIndex.map { (c, i) => c.weaken(i, 0) }
-        weakenedExpressions.dropRight(1).foldRight(weakenedExpressions.last)(Let(_, _)(gn"_"))
+        yield
+          val weakenedExpressions = expressions.zipWithIndex.map { (c, i) => c.weaken(i, 0) }
+          weakenedExpressions.dropRight(1).foldRight(weakenedExpressions.last)(Let(_, _)(gn"_"))
 
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)
