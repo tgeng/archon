@@ -110,19 +110,19 @@ enum VTerm:
   case Cell(heapKey: HeapKey, index: Nat)
 
 object VTerm:
-  def LevelLiteral(n: Nat): Level = new Level(n, ListMap())
+  def LevelLiteral(n: Nat): Level = Level(n, ListMap())
 
   def LevelSuc(t: VTerm): Level = t match
-    case Level(literal, maxOperands) => new Level(
+    case Level(literal, maxOperands) => Level(
       literal + 1,
       maxOperands.map { (r, o) => (r, o + 1) }
     )
-    case r: Var => new Level(1, ListMap((r, 1)))
+    case r: Var => Level(1, ListMap((r, 1)))
     case _ => throw IllegalArgumentException("type error")
 
   def LevelMax(t1: VTerm, t2: VTerm): Level = t1 match
     case Level(literal1, maxOperands1) => t2 match
-      case Level(literal2, maxOperands2) => new Level(
+      case Level(literal2, maxOperands2) => Level(
         math.max(literal1, literal2),
         ListMap.from(
           (maxOperands1.toSeq ++ maxOperands2.toSeq)
@@ -130,11 +130,11 @@ object VTerm:
             .map { (k, vs) => (k, vs.map(_._2).max) }
         )
       )
-      case r: Var => new Level(literal1, maxOperands1.updated(r, 0))
+      case r: Var => Level(literal1, maxOperands1.updated(r, 0))
       case _ => throw IllegalArgumentException("type error")
     case r1: Var => t2 match
-      case Level(literal2, maxOperands2) => new Level(literal2, maxOperands2.updated(r1, 0))
-      case r2: Var => new Level(0, ListMap((r1, 0), (r2, 0)))
+      case Level(literal2, maxOperands2) => Level(literal2, maxOperands2.updated(r1, 0))
+      case r2: Var => Level(0, ListMap((r1, 0), (r2, 0)))
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
@@ -144,15 +144,15 @@ object VTerm:
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects = effects1 match
     case Effects(literal1, unionOperands1) => effects2 match
-      case Effects(literal2, unionOperands2) => new Effects(
+      case Effects(literal2, unionOperands2) => Effects(
         literal1 ++ literal2,
         unionOperands1 ++ unionOperands2
       )
-      case r: Var => new Effects(literal1, unionOperands1 + r)
+      case r: Var => Effects(literal1, unionOperands1 + r)
       case _ => throw IllegalArgumentException("type error")
     case r1: Var => effects2 match
-      case Effects(literal2, unionOperands2) => new Effects(literal2, unionOperands2 + r1)
-      case r2: Var => new Effects(ListSet(), ListSet(r1, r2))
+      case Effects(literal2, unionOperands2) => Effects(literal2, unionOperands2 + r1)
+      case r2: Var => Effects(ListSet(), ListSet(r1, r2))
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 

@@ -213,7 +213,7 @@ private final class StackMachine(
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(otherEffects, key, heapContent, input) =>
-                val cell = new Cell(heapKey, heapContent.size)
+                val cell = Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
                   otherEffects,
                   key,
@@ -236,7 +236,7 @@ private final class StackMachine(
                   heapContent.updated(index, Some(value)),
                   input
                 )
-                run(substHole(stack.pop(), Return(new Cell(heapKey, index))))
+                run(substHole(stack.pop(), Return(Cell(heapKey, index))))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case GetOp(cell) =>

@@ -199,18 +199,18 @@ extension (qn: QualifiedName)
     Σ.allOperators(qn) = Σ.allOperators.getOrElseUpdate(qn, IndexedSeq()) :+ operator
     qn
 
-def data(qn: QualifiedName, tArgs: (Binding[VTerm], Variance)*)
-  (
-    ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
-    isPure: Boolean = true
-  ) : Data = Data(qn)(tArgs.toList, ul, isPure)
-
-def constructor(name: Name, args: Binding[VTerm]*)
-  (equalities: Binding[VTerm.EqualityType]*): Constructor =
-  Constructor(name, args.toList, equalities.toList)
-
-
-extension (ty: VTerm)
-  def unary_+ = (Binding(ty)(gn"arg"), Variance.COVARIANT)
-  def unary_- = (Binding(ty)(gn"arg"), Variance.CONTRAVARIANT)
-
+//def data(qn: QualifiedName, tArgs: (Binding[VTerm], Variance)*)
+//  (
+//    ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+//    isPure: Boolean = true
+//  ) : Data = Data(qn)(tArgs.toList, ul, isPure)
+//
+//def constructor(name: Name, args: Binding[VTerm]*)
+//  (equalities: Binding[VTerm.EqualityType]*): Constructor =
+//  Constructor(name, args.toList, equalities.toList)
+//
+//
+//extension (ty: VTerm)
+//  def unary_+ = (Binding(ty)(gn"arg"), Variance.COVARIANT)
+//  def unary_- = (Binding(ty)(gn"arg"), Variance.CONTRAVARIANT)
+//
