@@ -47,7 +47,12 @@ extension (ctx: NameContext)
 
 def astToIr(ast: AstCoPattern)
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, CoPattern] = ???
+  (using Σ: Signature): Either[AstError, CoPattern] = ast match
+  case AstCPattern(p) =>
+    for
+      p <- astToIr(p)
+    yield CPattern(p)
+  case AstCProjection(name) => Right(CProjection(name))
 
 def astToIr(ast: AstPattern)
   (using ctx: NameContext)
@@ -62,7 +67,7 @@ def astToIr(ast: AstPattern)
   case AstPForced(term) =>
     for
       cTerm <- astToIr(term)
-    yield ???
+    yield PForced(Collapse(cTerm))
   case AstPAbsurd => Right(PAbsurd)
 
 def astToIr(ast: AstTerm)
