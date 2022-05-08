@@ -29,3 +29,6 @@ enum IrError:
   case IllegalVarianceInData(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])
   case IllegalVarianceInRecord(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])
   case NotPureType(ty: VTerm)
+  case NormalizationError(ctm: CTerm)
+  case CollapsingEffectfulTerm(ctm: CTerm)
+  case NotCollapsable(ctm: CTerm)

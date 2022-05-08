@@ -69,7 +69,14 @@ enum VTerm:
 
   case Var(index: Nat)
 
-  /** archon.builtin.U */
+  /**
+   * Execute a effect free computation and get the returned value. That is, `cTm` must be of type
+   * `F(V, Total)` for some value type `V`. This VTerm construct is used to embed effect free
+   * computations into values so that the type theory is as expressive as typical dependent type
+   * theory.
+   */
+  case Collapse(cTm: CTerm)
+
   case U(cty: CTerm)
   case Thunk(c: CTerm)
 

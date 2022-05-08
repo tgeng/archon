@@ -6,6 +6,11 @@ import scala.annotation.tailrec
 import scala.collection.immutable.ListSet
 import scala.collection.mutable
 
+import CTerm.*
+import VTerm.*
+import Pattern.*
+import CoPattern.*
+
 trait Reducible[T]:
   /**
    * @param useCaseTree reduction during type checking should not use case tree because it can get
@@ -46,11 +51,6 @@ private final class StackMachine(
   private val heapKeyIndex = mutable.WeakHashMap[HeapKey, mutable.Stack[Nat]]()
   refreshHeapKeyIndex()
 
-  import CTerm.*
-  import VTerm.*
-  import Pattern.*
-  import CoPattern.*
-
   private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) = heapKeyIndex.getOrElseUpdate(
     heapKey,
     mutable.Stack()
@@ -71,7 +71,9 @@ private final class StackMachine(
    * @return
    */
   @tailrec
-  def run(pc: CTerm, reduceDown: Boolean = false)(using ctx: Context)(using Σ: Signature): Either[IrError, CTerm] =
+  def run(pc: CTerm, reduceDown: Boolean = false)
+    (using ctx: Context)
+    (using Σ: Signature): Either[IrError, CTerm] =
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -82,36 +84,36 @@ private final class StackMachine(
           run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
         if useCaseTree then
-          //      case TypeCase(arg, cases, default) => arg match
-          //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
-          //          val (count, body) = cases(q.qualifiedName)
-          //          q match
-          //            case Type(level) =>
-          //              assert(count == 1)
-          //              run(body.substLowers(arg, level))
-          //            case DataType(qn, args) =>
-          //              assert(count == args.length)
-          //              run(body.substLowers(arg +: args: _*))
-          //            case EqualityType(level, ty, left, right) =>
-          //              assert(count == 4)
-          //              run(body.substLowers(arg, level, ty, left, right))
-          //            case EffectsType | LevelType | HeapType =>
-          //              assert(count == 1)
-          //              run(body.substLowers(arg))
-          //        case _ => run(default.substLowers(arg))
-          //      case DataCase(arg, cases) => arg match
-          //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          //        case Con(name, args) if cases.contains(name) =>
-          //          val (count, body) = cases(name)
-          //          assert(count == args.length)
-          //          run(body.substLowers(arg +: args: _*))
-          //        case _ => throw IllegalArgumentException("type error")
-          //      case EqualityCase(arg, body) =>
-          //        arg match
-          //          case Refl => run(body.substLowers(Refl))
-          //          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-          //          case _ => throw IllegalArgumentException("type error")
+        //      case TypeCase(arg, cases, default) => arg match
+        //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
+        //          val (count, body) = cases(q.qualifiedName)
+        //          q match
+        //            case Type(level) =>
+        //              assert(count == 1)
+        //              run(body.substLowers(arg, level))
+        //            case DataType(qn, args) =>
+        //              assert(count == args.length)
+        //              run(body.substLowers(arg +: args: _*))
+        //            case EqualityType(level, ty, left, right) =>
+        //              assert(count == 4)
+        //              run(body.substLowers(arg, level, ty, left, right))
+        //            case EffectsType | LevelType | HeapType =>
+        //              assert(count == 1)
+        //              run(body.substLowers(arg))
+        //        case _ => run(default.substLowers(arg))
+        //      case DataCase(arg, cases) => arg match
+        //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        //        case Con(name, args) if cases.contains(name) =>
+        //          val (count, body) = cases(name)
+        //          assert(count == args.length)
+        //          run(body.substLowers(arg +: args: _*))
+        //        case _ => throw IllegalArgumentException("type error")
+        //      case EqualityCase(arg, body) =>
+        //        arg match
+        //          case Refl => run(body.substLowers(Refl))
+        //          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
+        //          case _ => throw IllegalArgumentException("type error")
           ??? // TODO: implement reduction with case tree
         else
           Σ.getClauses(qn).first {
@@ -134,9 +136,10 @@ private final class StackMachine(
           } match
             case Some(Right(t)) => run(t)
             case None => throw IllegalArgumentException(s"leaky pattern in $qn")
-      case Force(v) => v match
-        case Thunk(c) => run(c)
-        case _: Var => Right(reconstructTermFromStack(pc))
+      case Force(v) => v.normalized match
+        case Left(e) => Left(e)
+        case Right(Thunk(c)) => run(c)
+        case Right(_: Var | _: Collapse) => Right(reconstructTermFromStack(pc))
         case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
@@ -148,50 +151,58 @@ private final class StackMachine(
       case Application(fun, arg) =>
         fun match
           case _ if reduceDown => throw IllegalArgumentException("type error")
-          case _ =>
-            stack.push(pc)
-            run(fun)
+          case _ => arg.normalized match
+            case Left(e) => Left(e)
+            case Right(v) =>
+              stack.push(Application(Hole, v))
+              run(fun)
       case Projection(rec, name) =>
         rec match
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(rec)
-      case OperatorCall(eff, name, args) =>
-        val cterms = mutable.ArrayBuffer[CTerm]()
-        var nextHole: CTerm | Null = null
-        while (nextHole == null) {
-          val c = stack.pop()
-          c match
-            case Handler(
-            hEff,
-            otherEffects,
-            outputType,
-            transform,
-            handlers,
-            input
-            ) if eff == hEff =>
-              val handlerBody = handlers(name)
-              val capturedStack = Handler(
-                hEff,
-                otherEffects,
-                outputType,
-                transform,
-                handlers,
-                Hole
-              ) +: cterms.reverseIterator.toSeq
+      case OperatorCall((effQn, effArgs), name, args) =>
+        effArgs.normalized match
+          case Left(e) => Left(e)
+          case Right(effArgs) =>
+            args.normalized match
+              case Left(e) => Left(e)
+              case Right(args) =>
+                val cterms = mutable.ArrayBuffer[CTerm]()
+                var nextHole: CTerm | Null = null
+                while (nextHole == null) {
+                  val c = stack.pop()
+                  c match
+                    case Handler(
+                    hEff,
+                    otherEffects,
+                    outputType,
+                    transform,
+                    handlers,
+                    input
+                    ) if (effQn, effArgs) == hEff =>
+                      val handlerBody = handlers(name)
+                      val capturedStack = Handler(
+                        hEff,
+                        otherEffects,
+                        outputType,
+                        transform,
+                        handlers,
+                        Hole
+                      ) +: cterms.reverseIterator.toSeq
 
-              val resume = Thunk(Continuation(capturedStack))
-              nextHole = handlerBody.substLowers(args :+ resume: _*)
-            case _ if stack.isEmpty => throw IllegalArgumentException("type error")
-            // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
-            case HeapHandler(_, Some(heapKey), _, _) =>
-              heapKeyIndex(heapKey).pop()
-              cterms.addOne(substHole(c, Hole))
-            case _ =>
-              cterms.addOne(substHole(c, Hole))
-        }
-        run(nextHole.!!)
+                      val resume = Thunk(Continuation(capturedStack))
+                      nextHole = handlerBody.substLowers(args :+ resume: _*)
+                    case _ if stack.isEmpty => throw IllegalArgumentException("type error")
+                    // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
+                    case HeapHandler(_, Some(heapKey), _, _) =>
+                      heapKeyIndex(heapKey).pop()
+                      cterms.addOne(substHole(c, Hole))
+                    case _ =>
+                      cterms.addOne(substHole(c, Hole))
+                }
+                run(nextHole.!!)
       case Continuation(capturedStack) =>
         stack.pop() match
           case Application(_, arg) =>
@@ -200,16 +211,20 @@ private final class StackMachine(
             refreshHeapKeyIndex(currentStackHeight)
             run(Force(arg))
           case _ => throw IllegalArgumentException("type error")
-      case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+      case Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, input) =>
         if reduceDown then
           run(transform.substLowers(Thunk(input)))
         else
-          stack.push(pc)
-          run(input)
+          effArgs.normalized match
+            case Left(e) => Left(e)
+            case Right(effArgs) =>
+              stack.push(Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, Hole))
+              run(input)
       case AllocOp(heap, ty) =>
-        heap match
-          case _: Var => Right(reconstructTermFromStack(pc))
-          case Heap(heapKey) =>
+        heap.normalized match
+          case Left(e) => Left(e)
+          case Right(_: Var | _: Collapse) => Right(reconstructTermFromStack(pc))
+          case Right(Heap(heapKey)) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(otherEffects, key, heapContent, input) =>
@@ -224,25 +239,30 @@ private final class StackMachine(
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case SetOp(cell, value) =>
-        cell match
-          case _: Var => Right(reconstructTermFromStack(pc))
-          case Cell(heapKey, index) =>
-            val heapHandlerIndex = heapKeyIndex(heapKey).top
-            stack(heapHandlerIndex) match
-              case HeapHandler(otherEffects, key, heapContent, input) =>
-                stack(heapHandlerIndex) = HeapHandler(
-                  otherEffects,
-                  key,
-                  heapContent.updated(index, Some(value)),
-                  input
-                )
-                run(substHole(stack.pop(), Return(Cell(heapKey, index))))
-              case _ => throw IllegalStateException("corrupted heap key index")
+        cell.normalized match
+          case Left(e) => Left(e)
+          case Right(_: Var | _: Collapse) => Right(reconstructTermFromStack(pc))
+          case Right(Cell(heapKey, index)) =>
+            value.normalized match
+              case Left(e) => Left(e)
+              case Right(value) =>
+                val heapHandlerIndex = heapKeyIndex(heapKey).top
+                stack(heapHandlerIndex) match
+                  case HeapHandler(otherEffects, key, heapContent, input) =>
+                    stack(heapHandlerIndex) = HeapHandler(
+                      otherEffects,
+                      key,
+                      heapContent.updated(index, Some(value)),
+                      input
+                    )
+                    run(substHole(stack.pop(), Return(Cell(heapKey, index))))
+                  case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case GetOp(cell) =>
-        cell match
-          case _: Var => Right(reconstructTermFromStack(pc))
-          case Cell(heapKey, index) =>
+        cell.normalized match
+          case Left(e) => Left(e)
+          case Right(_: Var| _: Collapse) => Right(reconstructTermFromStack(pc))
+          case Right(Cell(heapKey, index)) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
               case HeapHandler(_, _, heapContent, _) =>
@@ -340,6 +360,20 @@ private final class StackMachine(
       current = substHole(stack.pop(), current)
     }
     current
+
+extension (v: VTerm)
+  def normalized(using ctx: Context)(using Σ: Signature): Either[IrError, VTerm] = v match
+    case Collapse(cTm) =>
+      for reduced <- Reducible.reduce(cTm)
+          r <- reduced match
+            case Return(v) => Right(v)
+            case _ => Left(IrError.NormalizationError(cTm))
+      yield r
+    case _ => Right(v)
+
+extension (vs: List[VTerm])
+  def normalized(using ctx: Context)(using Σ: Signature): Either[IrError, List[VTerm]] =
+    transpose(vs.map(_.normalized))
 
 given Reducible[CTerm] with
 

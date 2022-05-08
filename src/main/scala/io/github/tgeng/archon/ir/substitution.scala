@@ -27,6 +27,7 @@ given RaisableVTerm: Raisable[VTerm] with
     case Top(ul) => Top(ul.map(raise(_, amount, bar)))
     case Pure(ul) => Pure(ul.map(raise(_, amount, bar)))
     case Var(idx) => if idx >= bar then Var(idx + amount) else v
+    case Collapse(cTm) => Collapse(RaisableCTerm.raise(cTm, amount, bar))
     case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
     case Thunk(c) => Thunk(RaisableCTerm.raise(c, amount, bar))
     case DataType(qn, args) => DataType(qn, args.map((v: VTerm) => raise(v, amount, bar)))
@@ -162,6 +163,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     case Var(idx) => substitution(idx - offset) match
       case Some(t) => RaisableVTerm.raise(t, offset)
       case _ => v
+    case Collapse(cTm) => Collapse(SubstitutableCTerm.substitute(cTm, substitution, offset))
     case U(cty) => U(SubstitutableCTerm.substitute(cty, substitution, offset))
     case Thunk(cty) => Thunk(SubstitutableCTerm.substitute(cty, substitution, offset))
     case DataType(qn, args) => DataType(qn, args.map(substitute(_, substitution, offset)))
