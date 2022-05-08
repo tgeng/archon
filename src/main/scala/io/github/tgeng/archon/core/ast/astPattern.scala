@@ -1,6 +1,6 @@
-package io.github.tgeng.archon.ast
+package io.github.tgeng.archon.core.ast
 
-import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.core.common.*
 
 enum AstPattern:
   case AstPVar(name: Name)

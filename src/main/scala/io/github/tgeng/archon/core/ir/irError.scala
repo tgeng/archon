@@ -1,7 +1,8 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.ir.*
+import io.github.tgeng.archon.core.common.*
+import io.github.tgeng.archon.core.ir.*
 
 enum IrError:
   case Unknown

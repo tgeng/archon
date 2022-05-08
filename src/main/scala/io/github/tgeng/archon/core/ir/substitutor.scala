@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import io.github.tgeng.archon.common.*
 

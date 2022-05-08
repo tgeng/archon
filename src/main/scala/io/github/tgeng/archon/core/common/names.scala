@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.common
+package io.github.tgeng.archon.core.common
 
 enum Name:
   case Normal(value: String)
@@ -8,7 +8,7 @@ enum Name:
     case Normal(v) => v
     case Generated(v) => s"<$v>"
 
-import io.github.tgeng.archon.common.Name.{Generated, *}
+import Name.*
 
 enum QualifiedName:
   case Root
@@ -24,7 +24,7 @@ enum QualifiedName:
 
   infix def /#(s: String): QualifiedName = Node(this, Generated(s))
 
-import io.github.tgeng.archon.common.QualifiedName.*
+import QualifiedName.*
 
 object QualifiedName:
   def from(string: String) = string.split('.').asInstanceOf[Array[String]].foldLeft(Root) { (p, n) =>

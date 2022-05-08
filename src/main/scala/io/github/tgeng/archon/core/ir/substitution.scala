@@ -1,7 +1,7 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import scala.collection.mutable
-import io.github.tgeng.archon.ir.VTerm.Type
+import io.github.tgeng.archon.core.ir.VTerm.Type
 import io.github.tgeng.archon.common.*
 
 import scala.collection.immutable.{ListMap, ListSet}

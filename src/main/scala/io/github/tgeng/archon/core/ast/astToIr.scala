@@ -1,7 +1,8 @@
-package io.github.tgeng.archon.ast
+package io.github.tgeng.archon.core.ast
 
 import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.ir.*
+import io.github.tgeng.archon.core.common.*
+import io.github.tgeng.archon.core.ir.*
 
 import collection.immutable.{ListMap, ListSet}
 import collection.mutable
@@ -16,7 +17,7 @@ import AstPattern.*
 import AstCoPattern.*
 import Pattern.*
 import CoPattern.*
-import io.github.tgeng.archon.ir.Elimination.EProj
+import io.github.tgeng.archon.core.ir.Elimination.EProj
 
 type NameContext = (Int, Map[Name, Int])
 

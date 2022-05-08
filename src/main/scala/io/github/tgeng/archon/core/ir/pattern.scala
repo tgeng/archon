@@ -1,6 +1,7 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.core.common.*
 
 enum Pattern:
   case PVar(idx: Nat)
@@ -62,5 +63,3 @@ extension (q: CoPattern)
   def toElimination: Option[Elimination[VTerm]] = q match
     case CPattern(p) => p.toTerm.map(ETerm.apply)
     case CProjection(name) => Some(EProj(name))
-
-

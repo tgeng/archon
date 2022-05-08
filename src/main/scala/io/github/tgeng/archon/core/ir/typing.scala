@@ -1,8 +1,9 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import scala.collection.immutable.{ListMap, ListSet}
 import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.ir.Reducible.reduce
+import io.github.tgeng.archon.core.common.*
+import io.github.tgeng.archon.core.ir.Reducible.reduce
 import VTerm.*
 import CTerm.*
 import ULevel.*

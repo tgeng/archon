@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.ast
+package io.github.tgeng.archon.core.ast
 
 import AstTerm.*
 import AstPattern.*

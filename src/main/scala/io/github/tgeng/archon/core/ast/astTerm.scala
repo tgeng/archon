@@ -1,7 +1,8 @@
-package io.github.tgeng.archon.ast
+package io.github.tgeng.archon.core.ast
 
 import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.ir.*
+import io.github.tgeng.archon.core.common.*
+import io.github.tgeng.archon.core.ir.*
 
 type AstEff = (QualifiedName, List[AstTerm])
 

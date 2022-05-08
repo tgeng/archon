@@ -1,6 +1,7 @@
 package io.github.tgeng.archon.parser.mixfix
 
 import io.github.tgeng.archon.common.{*, given}
+import io.github.tgeng.archon.core.common.{*, given}
 import io.github.tgeng.archon.parser.combinators.{*, given}
 import io.github.tgeng.archon.parser.mixfix.*
 

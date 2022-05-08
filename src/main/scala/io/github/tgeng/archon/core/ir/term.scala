@@ -1,7 +1,8 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import scala.collection.immutable.{ListMap, ListSet}
 import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.core.common.*
 import QualifiedName.*
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
@@ -295,6 +296,7 @@ def getFreeVars(tm: VTerm)
     case Top(ul) => getFreeVars(ul)
     case Pure(ul) => getFreeVars(ul)
     case Var(index) => (if index < bar then Set() else Set(index), Set())
+    case Collapse(cTm) => getFreeVars(cTm)
     case U(cty) => getFreeVars(cty)
     case Thunk(c) => getFreeVars(c)
     case DataType(qn, args) =>

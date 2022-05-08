@@ -2,8 +2,9 @@ package io.github.tgeng.archon.common.ir
 
 import collection.mutable
 import org.scalatest.freespec.AnyFreeSpec
-import io.github.tgeng.archon.ir.*
+import io.github.tgeng.archon.core.ir.*
 import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.core.common.*
 import Declaration.*
 
 import scala.annotation.targetName
@@ -213,4 +214,3 @@ def constructor(name: Name, args: Binding[VTerm]*)
 extension (ty: VTerm)
   def unary_+ = (Binding(ty)(gn"arg"), Variance.COVARIANT)
   def unary_- = (Binding(ty)(gn"arg"), Variance.CONTRAVARIANT)
-

@@ -1,6 +1,7 @@
 package io.github.tgeng.archon.parser.mixfix
 
 import io.github.tgeng.archon.common.*
+import io.github.tgeng.archon.core.common.*
 import io.github.tgeng.archon.parser.combinators.{*, given}
 import scala.collection.mutable
 

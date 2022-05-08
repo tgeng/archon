@@ -1,8 +1,9 @@
-package io.github.tgeng.archon.ir
+package io.github.tgeng.archon.core.ir
 
 import scala.collection.immutable.ListSet
 import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.ir.ULevel.USimpleLevel
+import io.github.tgeng.archon.core.common.*
+import io.github.tgeng.archon.core.ir.ULevel.USimpleLevel
 
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
