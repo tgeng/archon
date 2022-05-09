@@ -1,4 +1,4 @@
-package io.github.tgeng.archon.common.ir
+package io.github.tgeng.archon.core.common
 
 import collection.mutable
 import org.scalatest.freespec.AnyFreeSpec

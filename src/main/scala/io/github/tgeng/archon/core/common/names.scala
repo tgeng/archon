@@ -6,7 +6,7 @@ enum Name:
 
   override def toString: String = this match
     case Normal(v) => v
-    case Generated(v) => s"<$v>"
+    case Generated(v) => s"#$v"
 
 import Name.*
 
@@ -15,7 +15,7 @@ enum QualifiedName:
   case Node(parent: QualifiedName, name: Name)
 
   override def toString: String = this match
-    case Root => "__root"
+    case Root => ".root"
     case Node(parent, name) => s"$parent/$name"
 
   infix def /(name: Name): QualifiedName = Node(this, name)
