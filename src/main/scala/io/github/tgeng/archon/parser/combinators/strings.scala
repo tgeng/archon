@@ -129,6 +129,8 @@ extension[M[+_]]
       case _ => None
   )
 
+  def stringFrom(r: Regex) : ParserT[Char, String, M] = P.from(r).map(_.matched)
+
 
 given [M[+_] : Alternative : Monad : Applicative]
   (using Functor[ParserT[Char, *, M]])
@@ -161,3 +163,22 @@ extension (failure: ParseResult[?, ?])
         sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
         sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
     sb.toString.trim.!!
+
+extension [M[+_]]
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
+  (using Applicative[M])
+  (using Monad[M])
+  (using Alternative[M])
+  (p: ParserT[Char, String, M])
+  infix def +++ (q: ParserT[Char, String, M]) =
+    for p <- p
+        q <- q
+    yield p + q
+
+  def orEmptyString: ParserT[Char, String, M] = p.?.map {
+    case Some(s) => s
+    case None => ""
+  }

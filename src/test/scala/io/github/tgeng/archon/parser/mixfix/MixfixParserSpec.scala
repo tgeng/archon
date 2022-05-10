@@ -10,7 +10,7 @@ import scala.io.Source
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
+class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
   override def runTest(file: File, source: Source) =
     import MixfixParserSpec.*
     import QualifiedName.*
@@ -24,12 +24,26 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
     val operatorMap = mutable.Map[String, Operator]()
     for rule <- rules do
       for operatorName <- rule.operatorNames do
-        val operator = Operator(Root, rule.fixity, operatorName.split2("_").filter(_.nonEmpty).toList)
+        val operator = Operator(
+          Root,
+          rule.fixity,
+          operatorName
+            .split2("_")
+            .filter(_.nonEmpty)
+            .map(_.split2("\\b").toSeq)
+            .toList
+        )
         operatorMap(operatorName) = operator
 
     for rule <- rules do
       val headOperator = operatorMap(rule.operatorNames.head)
-      val precedences = rule.precedences.map((kind, operatorName) => Precedence(operatorMap(operatorName), kind))
+      val precedences = rule.precedences.map(
+        (kind, operatorName) => Precedence(
+          operatorMap(
+            operatorName
+          ), kind
+        )
+      )
       assert(gb.add(headOperator, precedences) == Right(()))
       for operatorName <- rule.operatorNames.tail do
         val operator = operatorMap(operatorName)
@@ -38,7 +52,9 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
 
     given NamePart[String] with
       override def asString(n: String): String = n
+
     given ParserCache[String, List] = ParserCache()
+
     val p = createMixfixParser[String, List, Unit](g, P.fail("<literal>"))
 
     val testCases = parts(1).split2("\n\n")
@@ -69,5 +85,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
 
 
 object MixfixParserSpec:
+
   import io.github.tgeng.archon.parser.combinators.single.given
-  val rulesParser = PrecedenceRule.precedenceRuleParser.+
+
+  val rulesParser = PrecedenceRule.precedenceRuleParser.++

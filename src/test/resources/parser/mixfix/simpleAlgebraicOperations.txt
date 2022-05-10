@@ -18,6 +18,7 @@ prefix if_then_else_ if_then_
   looser than _||_
 postfix _#
   looser than (_)
+closed trans<_>
 
 ====
 a + b * c / d - e
@@ -104,3 +105,7 @@ a # b c d
 a `+` b * c
 ----
 5 | [[@ `a` ``+`` `b`] * `c`]
+
+a + trans < b > + c
+----
+8 | [[`a` + [trans< `b` >]] + `c`]
