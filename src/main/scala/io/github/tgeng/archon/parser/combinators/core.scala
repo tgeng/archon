@@ -49,6 +49,8 @@ object ParseResult:
 import ParseResult.*
 
 abstract class ParserT[-I, +T, M[+_]]:
+  final def parse(input: IndexedSeq[I]): ParseResult[M, (Int, T)] = doParse(0)(using input)
+
   final def doParse(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
     parseImpl(index).onExitFromTarget(targetName)
 
