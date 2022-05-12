@@ -30,6 +30,9 @@ object QualifiedName:
   def from(string: String) = string.split('.').asInstanceOf[Array[String]].foldLeft(Root) { (p, n) =>
     if n.startsWith("#") then p /# n.drop(1) else p / n
   }
+
+  def from(names: Seq[Name]) = names.foldLeft(Root)(_/_)
+
   def Builtin = Root / "archon" / "builtin"
 
 extension (ctx: StringContext)

@@ -95,7 +95,8 @@ extension[M[+_]]
   def lower = P.satisfySingle("<lower case>", Character.isLowerCase)
   def alphanum = P.digit | P.alphabetic
   def word = P.from("""\p{Alpha}+""".r).map(_.matched)
-  def integer = P.from("""\d+""".r).map(_.matched.toInt) asAtom "<integer>"
+  def nat = P.from("""\d+""".r).map(_.matched.toInt) asAtom "<nat>"
+  def integer = P.from("""[-+]?\d+""".r).map(_.matched.toInt) asAtom "<integer>"
   def decimal = P.from("""[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?""".r).map(_.matched.toDouble) asAtom "<decimal>"
 
   def quoted(quoteSymbol: Char = '"',

@@ -84,9 +84,9 @@ def astToIr(ast: AstTerm)
   case AstThunk(c) =>
     for c <- astToIr(c)
       yield Return(Thunk(c))
-  case AstEffectsLiteral(effects) =>
-    chainAstWithDefaultName[[X] =>> List[(QualifiedName, List[X])]](gn"eArg", effects) {
-      effs => Return(EffectsLiteral(ListSet(effs: _*)))
+  case AstEffectLiteral(effect) =>
+    chainAstWithDefaultName[[X] =>> (QualifiedName, List[X])](gn"eArg", effect) {
+      eff => Return(EffectsLiteral(ListSet(eff)))
     }
   case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
   case AstCellType(heap, ty, status) => chainAst((gn"heap", heap), (gn"ty", ty)) {
@@ -299,15 +299,13 @@ given listEitherFunctor: EitherFunctor[List[*]] with
   override def map[L, T, S](l: List[T])(g: T => Either[L, S]): Either[L, List[S]] =
     transpose(l.map(g))
 
-given effectsEitherFunctor: EitherFunctor[[X] =>> List[(QualifiedName, List[X])]] with
-  override def map[L, T, S](l: List[(QualifiedName, List[T])])
-    (g: T => Either[L, S]): Either[L, List[(QualifiedName, List[S])]] =
+given effectsEitherFunctor: EitherFunctor[[X] =>> (QualifiedName, List[X])] with
+  override def map[L, T, S](l: (QualifiedName, List[T]))
+    (g: T => Either[L, S]): Either[L, (QualifiedName, List[S])] =
     l match
-      case Nil => Right(Nil)
-      case (qn, ts) :: rest =>
+      case (qn, ts) =>
         for ts <- listEitherFunctor.map(ts)(g)
-            rest <- map(rest)(g)
-        yield (qn, ts) :: rest
+        yield (qn, ts)
 
 given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
   override def map[L, T, S](l: List[Elimination[T]])
