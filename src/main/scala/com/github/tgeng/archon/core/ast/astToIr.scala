@@ -80,7 +80,7 @@ def astToIr(ast: AstTerm)
       yield Return(v)
   case AstCollapse(c) =>
     for c <- astToIr(c)
-    yield Collapse(c)
+    yield Return(Collapse(c))
   case AstU(cty) =>
     for cty <- astToIr(cty)
       yield Return(U(cty))
