@@ -78,6 +78,9 @@ def astToIr(ast: AstTerm)
   case v: AstVar =>
     for v <- resolve(v)
       yield Return(v)
+  case AstCollapse(c) =>
+    for c <- astToIr(c)
+    yield Collapse(c)
   case AstU(cty) =>
     for cty <- astToIr(cty)
       yield Return(U(cty))

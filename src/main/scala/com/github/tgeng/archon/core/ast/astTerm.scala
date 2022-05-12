@@ -13,6 +13,7 @@ enum AstULevel:
 enum AstTerm:
   case AstDef(qn: QualifiedName)
   case AstVar(name: Name)
+  case AstCollapse(c: AstTerm)
   case AstU(cty: AstTerm)
   case AstThunk(c: AstTerm)
   case AstEffectLiteral(eff: AstEff)
