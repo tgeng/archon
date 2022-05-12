@@ -24,7 +24,6 @@ enum AstTerm:
   case AstForce(v: AstTerm)
   case AstF(vTy: AstTerm, effects: AstTerm)
   case AstReturn(v: AstTerm)
-  case AstLet(boundName: Name, t: AstTerm, ctx: AstTerm)
   case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
   case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])
   case AstOperatorCall(effect: AstEff, opName: Name, args: List[AstTerm])
@@ -42,4 +41,4 @@ enum AstTerm:
     heapVarName: Name,
     input: AstTerm,
   )
-  case AstExSeq(expressions: List[AstTerm])
+  case AstBlock(expressions: List[(Option[Name], AstTerm)])

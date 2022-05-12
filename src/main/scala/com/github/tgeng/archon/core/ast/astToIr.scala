@@ -80,7 +80,7 @@ def astToIr(ast: AstTerm)
       yield Return(v)
   case AstCollapse(c) =>
     for c <- astToIr(c)
-    yield Return(Collapse(c))
+      yield Return(Collapse(c))
   case AstU(cty) =>
     for cty <- astToIr(cty)
       yield Return(U(cty))
@@ -111,12 +111,6 @@ def astToIr(ast: AstTerm)
     case _ => throw IllegalStateException()
   }
   case AstReturn(v) => astToIr(v)
-  case AstLet(boundName, t, ctx) =>
-    for t <- astToIr(t)
-        ctx <- bind(boundName) {
-          astToIr(ctx)
-        }
-    yield Let(t, ctx)(boundName)
   case AstFunctionType(argName, argTy, bodyTy, effects) =>
     for argTy <- astToIr(argTy)
         effects <- bind(argName) {
@@ -207,14 +201,21 @@ def astToIr(ast: AstTerm)
           )
         }
     yield r
-  case AstExSeq(expressions) =>
-    if (expressions.isEmpty) then
-      Right(Def(Builtins.UnitQn))
-    else
-      for expressions <- transpose(expressions.map(astToIr))
-        yield
-          val weakenedExpressions = expressions.zipWithIndex.map { (c, i) => c.weaken(i, 0) }
-          weakenedExpressions.dropRight(1).foldRight(weakenedExpressions.last)(Let(_, _)(gn"_"))
+  case AstBlock(expressions) =>
+    def foldSequence(expressions: List[(Option[Name], AstTerm)])
+      (using ctx: NameContext): Either[AstError, CTerm] =
+      expressions match
+        case Nil => Right(Def(Builtins.UnitQn))
+        case (_, astTerm) :: Nil => astToIr(astTerm)
+        case (nameOption, t) :: rest =>
+          val name = nameOption match
+            case None => gn"_"
+            case Some(name) => name
+          for
+            t <- astToIr(t)
+            ctx <- bind(name) {foldSequence(rest)}
+          yield Let(t, ctx)(name)
+    foldSequence(expressions)
 
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)
@@ -308,7 +309,7 @@ given effectsEitherFunctor: EitherFunctor[[X] =>> (QualifiedName, List[X])] with
     l match
       case (qn, ts) =>
         for ts <- listEitherFunctor.map(ts)(g)
-        yield (qn, ts)
+          yield (qn, ts)
 
 given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
   override def map[L, T, S](l: List[Elimination[T]])
