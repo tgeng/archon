@@ -87,6 +87,7 @@ def astToIr(ast: AstTerm)
   case AstThunk(c) =>
     for c <- astToIr(c)
       yield Return(Thunk(c))
+  case AstTotal => Right(Return(EffectsLiteral(ListSet())))
   case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
   case AstCellType(heap, ty, status) => chainAst((gn"heap", heap), (gn"ty", ty)) {
     case heap :: ty :: Nil => Return(CellType(heap, ty, status))

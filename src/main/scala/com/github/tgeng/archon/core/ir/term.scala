@@ -234,7 +234,7 @@ enum CTerm:
     otherEffects: VTerm,
 
     /**
-     * This is the output value type. The computation type of this handler is `F(otherEffects, outputType)`.
+     * This is the output value type. The computation type of this handler is `F(outputType, otherEffects)`.
      */
     outputType: VTerm,
 

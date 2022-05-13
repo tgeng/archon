@@ -27,22 +27,58 @@ object AstParser:
   )
 
   def sHandler: StrParser[SHandler] = P(
-    ???
+    for
+      _ <- P.from(".handler") << P.whitespaces
+      eff <- astEff << P.whitespaces
+      otherEffects <- atom << P.whitespaces
+      outputType <- atom << P.whitespaces
+      _ <- P.from("(")
+      (transformInputName, transform) <- transformHandler
+      handlers <- opHandlers
+      _ <- P.from(")")
+    yield SHandler(eff, otherEffects, outputType, transformInputName, transform, handlers)
+  )
+
+  def transformHandler: StrParser[(Name, AstTerm)] = P(
+    (for
+      name <- P.from(".return") >%> name <%< P.from("->") << P.whitespaces
+      body <- app <%< P.from(";")
+    yield (name, body)).?.map {
+      case Some(t) => t
+      case None => (n"x", AstVar(n"x"))
+    }
+  )
+
+  def opHandlers: StrParser[Map[Name, (/* op args */List[Name], /* resume */ Name, AstTerm)]] = P(
+    opHandler.*.map(_.toMap)
+  )
+
+  def opHandler: StrParser[(Name, (List[Name], Name, AstTerm))] = P(
+    for
+      handlerName <- name << P.whitespaces
+      argNames <- name sepBy1 P.whitespaces
+      _ <- P.whitespaces >> P.from("->") << P.whitespaces
+      body <- app <%< P.from(";")
+    yield (handlerName, (argNames.dropRight(1), argNames.last, body))
   )
 
   def sHeapHandler: StrParser[SHeapHandler] = P(
-    ???
+    for
+      _ <- P.from(".heap") << P.whitespaces
+      heapVarName <- name << P.whitespaces
+      otherEffects <- atom << P.whitespaces
+    yield SHeapHandler(otherEffects, heapVarName)
   )
 
   def sBinding: StrParser[SBinding] = P(
     for name <- P.from(".let") >%> name <%< P.from("=") << P.whitespaces
-        t <- rhs
+        t <- app
     yield SBinding(name, t)
   )
 
-  def sTerm: StrParser[STerm] = P(rhs.map(STerm(_)))
+  def sTerm: StrParser[STerm] = P(app.map(STerm(_)))
 
-  def rhs: StrParser[AstTerm] = P(opCall | builtins | redux)
+  def app: StrParser[AstTerm] = P(opCall | builtins | redux)
 
   def redux: StrParser[AstTerm] = P(
     for
@@ -77,6 +113,7 @@ object AstParser:
 
   def atom: StrParser[AstTerm] = P(
     astRefl |
+      astTotal |
       astLevelLiteral |
       P.from("(") >%> term <%< P.from(")") |
       astVar |
@@ -109,13 +146,15 @@ object AstParser:
 
   def astEffAtom: StrParser[AstEff] =
     for qn <- qualifiedName
-    yield (qn, Nil)
+      yield (qn, Nil)
 
   def astLevelLiteral = P(
     P.from(".L") >> P.nat.map(AstLevelLiteral(_))
   )
 
   def astRefl = P(P.from(".refl").map(_ => AstRefl))
+
+  def astTotal = P(P.from(".total").map(_ => AstTotal))
 
   def qualifiedName: StrParser[QualifiedName] = P(
     for
@@ -141,7 +180,7 @@ object AstParser:
   def word: StrParser[String] =
     P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r)
 
-  def reservedSymbols = Set("(", ")", "|", "@", "#")
+  def reservedSymbols = Set("(", ")", "|", "@", "#", "->")
 
   def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.;]]+".r).withFilter(!reservedSymbols(_))

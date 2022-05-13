@@ -17,6 +17,7 @@ enum AstTerm:
   case AstU(cty: AstTerm)
   case AstThunk(c: AstTerm)
   case AstLevelLiteral(level: Nat)
+  case AstTotal
   case AstCellType(heap: AstTerm, ty: AstTerm, status: CellStatus)
   case AstEqualityType(ty: AstTerm, left: AstTerm, right: AstTerm)
   case AstRefl
