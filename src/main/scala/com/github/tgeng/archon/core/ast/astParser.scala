@@ -40,10 +40,11 @@ object AstParser:
 
   def builtins: StrParser[AstTerm] = P(
     for
-      head <- P.stringFrom("\\.(U|thunk|Cell|UCell|Equality|force|F|return)".r)
+      head <- P.stringFrom("\\.(collapse|U|thunk|Cell|UCell|Equality|force|F|return)".r)
       _ <- P.whitespaces
       args <- atom sepBy P.whitespaces
       r <- (head, args) match
+        case ("collapse", t :: Nil) => P.pure(AstCollapse(t))
         case ("U", t :: Nil) => P.pure(AstU(t))
         case ("thunk", t :: Nil) => P.pure(AstThunk(t))
         case ("Cell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Initialized))
