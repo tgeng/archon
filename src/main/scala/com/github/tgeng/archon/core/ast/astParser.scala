@@ -20,7 +20,7 @@ object AstParser:
     }
   )
 
-   def binding: StrParser[(Option[Name], AstTerm)] = P(
+  def binding: StrParser[(Option[Name], AstTerm)] = P(
     for name <- (P.from(".let") >%> name <%< P.from("=") << P.whitespaces).?
         t <- opCall | builtins | redux
     yield (name, t)
@@ -37,6 +37,7 @@ object AstParser:
   def elim: StrParser[Elimination[AstTerm]] = P(
     P.from("#") >> name.map(Elimination.EProj(_)) | atom.map(Elimination.ETerm(_))
   )
+
   def builtins: StrParser[AstTerm] = P(
     for
       head <- P.stringFrom("\\.(U|thunk|Cell|UCell|Equality|force|F|return)".r)
@@ -58,50 +59,53 @@ object AstParser:
   def atom: StrParser[AstTerm] = P(
     astRefl |
       astLevelLiteral |
-      astEffectLiteral |
       P.from("(") >%> term <%< P.from(")") |
       astVar |
       astDef
   )
 
-
   def opCall: StrParser[AstTerm] = P(
     for
       name <- name
-      _ <- P.from("@(")
+      _ <- P.whitespaces
       eff <- astEff
-      _ <- P.from(")")
       _ <- P.whitespaces
       args <- atom sepBy P.whitespaces
     yield AstOperatorCall(eff, name, args)
   )
 
-   def astDef = P(qualifiedName.map(AstDef(_)))
+  def astDef = P(qualifiedName.map(AstDef(_)))
 
-   def astVar = P(name.map(AstVar(_)))
+  def astVar = P(name.map(AstVar(_)))
 
-   def astEffectLiteral = P(astEff.map(AstEffectLiteral(_)))
+  def astEff: StrParser[AstEff] = P(P.from("@") >%> (astEffWithArgs | astEffAtom))
 
-   def astEff: StrParser[AstEff] = P(
-    for qn <- qualifiedName
-        terms <- atom.*
-    yield (qn, terms)
+  def astEffWithArgs: StrParser[AstEff] = P(
+    for _ <- P.from("(") << P.whitespaces
+        qn <- qualifiedName << P.whitespaces
+        args <- atom sepBy P.whitespaces
+        _ <- P.whitespaces >> P.from(")")
+    yield (qn, args)
   )
 
-   def astLevelLiteral = P(
+  def astEffAtom: StrParser[AstEff] =
+    for qn <- qualifiedName
+    yield (qn, Nil)
+
+  def astLevelLiteral = P(
     P.from(".L") >> P.nat.map(AstLevelLiteral(_))
   )
 
-   def astRefl = P(P.from(".refl").map(_ => AstRefl))
+  def astRefl = P(P.from(".refl").map(_ => AstRefl))
 
-   def qualifiedName: StrParser[QualifiedName] = P(
+  def qualifiedName: StrParser[QualifiedName] = P(
     for
       _ <- P.from(".")
       parts <- (P.from(".") >> name).+
     yield QualifiedName.from(parts)
   )
 
-   def name: StrParser[Name] = P(
+  def name: StrParser[Name] = P(
     (
       for headUnderscore <- underscore.orEmptyString
           components <- nameComponent sepBy1 underscore
@@ -111,14 +115,14 @@ object AstParser:
       "`" >> P.stringFrom("[^`]+".r).map(Name.Normal(_)) << "`"
   )
 
-   def nameComponent: StrParser[String] = word | symbol
+  def nameComponent: StrParser[String] = word | symbol
 
-   def underscore: StrParser[String] = P.stringFrom("_".r)
+  def underscore: StrParser[String] = P.stringFrom("_".r)
 
-   def word: StrParser[String] =
+  def word: StrParser[String] =
     P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r)
 
-   def reservedSymbols = Set("(", ")", "|", "@", "#")
+  def reservedSymbols = Set("(", ")", "|", "@", "#")
 
-   def symbol: StrParser[String] =
+  def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.;]]+".r).withFilter(!reservedSymbols(_))
