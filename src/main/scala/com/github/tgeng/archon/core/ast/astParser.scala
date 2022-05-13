@@ -7,6 +7,7 @@ import com.github.tgeng.archon.core.ir.Elimination
 import com.github.tgeng.archon.parser.combinators.{*, given}
 import com.github.tgeng.archon.parser.combinators.single.given
 import AstTerm.*
+import Statement.*
 
 object AstParser:
   def pattern: StrParser[AstPattern] = P(
@@ -14,17 +15,34 @@ object AstParser:
   )
 
   def term: StrParser[AstTerm] = P(
-    (binding sepBy (P.whitespaces >> P.from(";") << P.whitespaces)).map {
-      case (_, t) :: Nil => t
-      case bindings => AstBlock(bindings)
+    (statement sepBy (P.whitespaces >> P.from(";") << P.whitespaces)).map {
+      case STerm(t) :: Nil => t
+      case SBinding(_, t) :: Nil => t
+      case statements => AstBlock(statements)
     }
   )
 
-  def binding: StrParser[(Option[Name], AstTerm)] = P(
-    for name <- (P.from(".let") >%> name <%< P.from("=") << P.whitespaces).?
-        t <- opCall | builtins | redux
-    yield (name, t)
+  def statement: StrParser[Statement] = P(
+    sTerm | sBinding | sHandler | sHeapHandler
   )
+
+  def sHandler: StrParser[SHandler] = P(
+    ???
+  )
+
+  def sHeapHandler: StrParser[SHeapHandler] = P(
+    ???
+  )
+
+  def sBinding: StrParser[SBinding] = P(
+    for name <- P.from(".let") >%> name <%< P.from("=") << P.whitespaces
+        t <- rhs
+    yield SBinding(name, t)
+  )
+
+  def sTerm: StrParser[STerm] = P(rhs.map(STerm(_)))
+
+  def rhs: StrParser[AstTerm] = P(opCall | builtins | redux)
 
   def redux: StrParser[AstTerm] = P(
     for

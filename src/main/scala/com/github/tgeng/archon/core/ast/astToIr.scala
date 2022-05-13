@@ -141,77 +141,85 @@ def astToIr(ast: AstTerm)
       val args = allArgs.drop(n)
       OperatorCall((effQn, effArgs), opName, args)
     }
-  case AstHandler(
-  (effQn, effArgs),
-  otherEffects,
-  outputType,
-  transformInputName,
-  transform,
-  handlers,
-  input
-  ) =>
-    for effArgs <- transpose(effArgs.map(astToIr))
-        otherEffects <- astToIr(otherEffects)
-        outputType <- astToIr(outputType)
-        transform <- bind(transformInputName) {
-          astToIr(transform)
-        }
-        handlers <- transposeValues(
-          handlers.view.mapValues { (argNames, resumeName, astTerm) =>
-            bind(argNames :+ resumeName) {
-              astToIr(astTerm).map((argNames.size + 1, _))
-            }
-          }.toMap
-        )
-        input <- astToIr(input)
-        r <- chain[[X] =>> List[List[X]]](
-          effArgs.map((gn"effArg", _)) :: List((gn"otherEff", otherEffects)) :: List((gn"outputType", outputType)) :: Nil
-        ) {
-          case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
-            Handler(
-              (effQn, effArgs),
-              otherEffects,
-              outputType,
-              transform.weaken(n, 1),
-              handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
-              input.weaken(n, 0)
-            )
-          case _ => throw IllegalStateException()
-        }
-    yield r
-  case AstHeapHandler(
-  otherEffects,
-  heapVarName,
-  input,
-  ) =>
-    for otherEffects <- astToIr(otherEffects)
-        input <- bind(heapVarName) {
-          astToIr(input)
-        }
-        r <- chain(gn"otherEff", otherEffects) {
-          case (otherEffects, n) => HeapHandler(
-            otherEffects,
-            None,
-            IndexedSeq(),
-            input.weaken(n, 1)
-          )
-        }
-    yield r
-  case AstBlock(expressions) =>
-    def foldSequence(expressions: List[(Option[Name], AstTerm)])
+  case AstBlock(statements) =>
+    import Statement.*
+    def foldSequence(statements: List[Statement])
       (using ctx: NameContext): Either[AstError, CTerm] =
-      expressions match
+      statements match
         case Nil => Right(Def(Builtins.UnitQn))
-        case (_, astTerm) :: Nil => astToIr(astTerm)
-        case (nameOption, t) :: rest =>
-          val name = nameOption match
-            case None => gn"_"
-            case Some(name) => name
+        case STerm(astTerm) :: Nil => astToIr(astTerm)
+        case SBinding(_, astTerm) :: Nil => astToIr(astTerm)
+        case STerm(t) :: rest =>
+          val name = gn"_"
           for
             t <- astToIr(t)
-            ctx <- bind(name) {foldSequence(rest)}
+            ctx <- bind(name) {
+              foldSequence(rest)
+            }
           yield Let(t, ctx)(name)
-    foldSequence(expressions)
+        case SBinding(name, t) :: rest =>
+          for
+            t <- astToIr(t)
+            ctx <- bind(name) {
+              foldSequence(rest)
+            }
+          yield Let(t, ctx)(name)
+        case SHandler(
+        (effQn, effArgs),
+        otherEffects,
+        outputType,
+        transformInputName,
+        transform,
+        handlers,
+        ) :: rest =>
+          for effArgs <- transpose(effArgs.map(astToIr))
+              otherEffects <- astToIr(otherEffects)
+              outputType <- astToIr(outputType)
+              transform <- bind(transformInputName) {
+                astToIr(transform)
+              }
+              handlers <- transposeValues(
+                handlers.view.mapValues { (argNames, resumeName, astTerm) =>
+                  bind(argNames :+ resumeName) {
+                    astToIr(astTerm).map((argNames.size + 1, _))
+                  }
+                }.toMap
+              )
+              input <- foldSequence(rest)
+              r <- chain[[X] =>> List[List[X]]](
+                effArgs.map((gn"effArg", _)) :: List((gn"otherEff", otherEffects)) :: List((gn"outputType", outputType)) :: Nil
+              ) {
+                case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
+                  Handler(
+                    (effQn, effArgs),
+                    otherEffects,
+                    outputType,
+                    transform.weaken(n, 1),
+                    handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
+                    input.weaken(n, 0)
+                  )
+                case _ => throw IllegalStateException()
+              }
+          yield r
+        case SHeapHandler(
+          otherEffects,
+          heapVarName,
+        ) :: rest =>
+          for otherEffects <- astToIr(otherEffects)
+              input <- bind(heapVarName) {
+                foldSequence(rest)
+              }
+              r <- chain(gn"otherEff", otherEffects) {
+                case (otherEffects, n) => HeapHandler(
+                  otherEffects,
+                  None,
+                  IndexedSeq(),
+                  input.weaken(n, 1)
+                )
+              }
+          yield r
+
+    foldSequence(statements)
 
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)

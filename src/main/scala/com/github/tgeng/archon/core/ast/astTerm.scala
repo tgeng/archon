@@ -26,18 +26,20 @@ enum AstTerm:
   case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
   case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])
   case AstOperatorCall(effect: AstEff, opName: Name, args: List[AstTerm])
-  case AstHandler(
+  case AstBlock(statements: List[Statement])
+
+enum Statement:
+  case STerm(term: AstTerm)
+  case SBinding(name: Name, term: AstTerm)
+  case SHandler(
     effect: AstEff,
     otherEffects: AstTerm,
     outputType: AstTerm,
     transformInputName: Name,
     transform: AstTerm,
     handlers: Map[Name, (/* op args */List[Name], /* resume */ Name, AstTerm)],
-    input: AstTerm
   )
-  case AstHeapHandler(
+  case SHeapHandler(
     otherEffects: AstTerm,
     heapVarName: Name,
-    input: AstTerm,
   )
-  case AstBlock(expressions: List[(Option[Name], AstTerm)])
