@@ -2,6 +2,7 @@ package com.github.tgeng.archon.core.ast
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.Builtins
 import com.github.tgeng.archon.core.ir.CellStatus
 import com.github.tgeng.archon.core.ir.Elimination
 import com.github.tgeng.archon.parser.combinators.{*, given}
@@ -23,7 +24,7 @@ object AstParser:
   )
 
   def statement: StrParser[Statement] = P(
-    sTerm | sBinding | sHandler | sHeapHandler
+    sBinding | sHandler | sHeapHandler | sTerm
   )
 
   def sHandler: StrParser[SHandler] = P(
@@ -42,14 +43,14 @@ object AstParser:
   def transformHandler: StrParser[(Name, AstTerm)] = P(
     (for
       name <- P.from(".return") >%> name <%< P.from("->") << P.whitespaces
-      body <- app <%< P.from(";")
+      body <- rhs <%< P.from(";")
     yield (name, body)).?.map {
       case Some(t) => t
       case None => (n"x", AstVar(n"x"))
     }
   )
 
-  def opHandlers: StrParser[Map[Name, (/* op args */List[Name], /* resume */ Name, AstTerm)]] = P(
+  def opHandlers: StrParser[Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]] = P(
     opHandler.*.map(_.toMap)
   )
 
@@ -58,7 +59,7 @@ object AstParser:
       handlerName <- name << P.whitespaces
       argNames <- name sepBy1 P.whitespaces
       _ <- P.whitespaces >> P.from("->") << P.whitespaces
-      body <- app <%< P.from(";")
+      body <- rhs <%< P.from(";")
     yield (handlerName, (argNames.dropRight(1), argNames.last, body))
   )
 
@@ -72,20 +73,51 @@ object AstParser:
 
   def sBinding: StrParser[SBinding] = P(
     for name <- P.from(".let") >%> name <%< P.from("=") << P.whitespaces
-        t <- app
+        t <- rhs
     yield SBinding(name, t)
   )
 
-  def sTerm: StrParser[STerm] = P(app.map(STerm(_)))
+  def sTerm: StrParser[STerm] = P(rhs.map(STerm(_)))
 
   def app: StrParser[AstTerm] = P(opCall | builtins | redux)
+
+  def effUnion: StrParser[AstTerm] = (app sepBy1 (P.whitespaces >> P.from("|") << P.whitespaces))
+    .map {
+      case Nil => throw IllegalStateException()
+      case t :: rest => rest.foldLeft(t) { (a, b) =>
+        AstRedux(
+          AstDef(Builtins.EffectsUnionQn),
+          Elimination.ETerm(a) :: Elimination.ETerm(b) :: Nil
+        )
+      }
+    }
+
+  def rhs: StrParser[AstTerm] =
+    for
+      bindings <- (argBinding <%< P.from("->") << P.whitespaces).*
+      bodyTy <- app
+    yield bindings.foldRight(bodyTy) { (binding, bodyTy) =>
+      binding match
+        case (eff, argName, argTy) => AstFunctionType(argName, argTy, bodyTy, eff)
+    }
+
+  def argBinding: StrParser[( /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm)] =
+    for
+      eff <- eff.?.map(_.getOrElse(AstTotal))
+      argName <- (name <%< P.from(":") << P.whitespaces).?.map(_.getOrElse(gn"_"))
+      argTy <- app
+    yield (eff, argName, argTy)
+
+  def eff: StrParser[AstTerm] = (P.from("<") >%> effUnion <%< P.from(">") << P.whitespaces)
 
   def redux: StrParser[AstTerm] = P(
     for
       head <- atom
       _ <- P.whitespaces
       elims <- elim sepBy P.whitespaces
-    yield AstRedux(head, elims)
+    yield elims match
+      case Nil => head
+      case elims => AstRedux(head, elims)
   )
 
   def elim: StrParser[Elimination[AstTerm]] = P(
@@ -93,22 +125,33 @@ object AstParser:
   )
 
   def builtins: StrParser[AstTerm] = P(
-    for
-      head <- P.stringFrom("\\.(collapse|U|thunk|Cell|UCell|Equality|force|F|return)".r)
+    (for
+      head <- P.stringFrom("(\\.(collapse|U|thunk|Cell|UCell|Equality|force|return))".r)
       _ <- P.whitespaces
       args <- atom sepBy P.whitespaces
       r <- (head, args) match
-        case ("collapse", t :: Nil) => P.pure(AstCollapse(t))
-        case ("U", t :: Nil) => P.pure(AstU(t))
-        case ("thunk", t :: Nil) => P.pure(AstThunk(t))
-        case ("Cell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Initialized))
-        case ("UCell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Uninitialized))
-        case ("Equality", ty :: left :: right :: Nil) => P.pure(AstEqualityType(ty, left, right))
-        case ("force", t :: Nil) => P.pure(AstForce(t))
-        case ("F", t :: eff :: Nil) => P.pure(AstF(t, eff))
-        case ("return", t :: Nil) => P.pure(AstReturn(t))
+        case (".collapse", t :: Nil) => P.pure(AstCollapse(t))
+        case (".U", t :: Nil) => P.pure(AstU(t))
+        case (".thunk", t :: Nil) => P.pure(AstThunk(t))
+        case (".Cell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Initialized))
+        case (".UCell", heap :: ty :: Nil) => P.pure(
+          AstCellType(
+            heap,
+            ty,
+            CellStatus.Uninitialized
+          )
+        )
+        case (".Equality", ty :: left :: right :: Nil) => P.pure(AstEqualityType(ty, left, right))
+        case (".force", t :: Nil) => P.pure(AstForce(t))
+        case (".return", t :: Nil) => P.pure(AstReturn(t))
         case _ => P.fail(s"Unexpected number of args for $head")
-    yield r
+    yield r) |
+      (
+        for
+          eff <- eff
+          t <- atom
+        yield AstF(t, eff)
+        )
   )
 
   def atom: StrParser[AstTerm] = P(
@@ -154,7 +197,7 @@ object AstParser:
 
   def astRefl = P(P.from(".refl").map(_ => AstRefl))
 
-  def astTotal = P(P.from(".total").map(_ => AstTotal))
+  def astTotal = P(P.from("<>").map(_ => AstTotal))
 
   def qualifiedName: StrParser[QualifiedName] = P(
     for
@@ -180,7 +223,7 @@ object AstParser:
   def word: StrParser[String] =
     P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r)
 
-  def reservedSymbols = Set("(", ")", "|", "@", "#", "->")
+  def reservedSymbols = Set("(", ")", "|", "@", "#", "->", "<", ">", "<>", ":")
 
   def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.;]]+".r).withFilter(!reservedSymbols(_))
