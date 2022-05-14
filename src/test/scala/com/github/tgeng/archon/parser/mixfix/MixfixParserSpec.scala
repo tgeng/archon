@@ -19,7 +19,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
     val expected = file.read()
     val parts = expected.split2("\n====\n")
     assert(parts.size == 2)
-    val rules = rulesParser.parse(parts(0)).asRight(1)
+    val rules = rulesParser.parse(parts(0)).asRight
     val gb = PrecedenceGraphBuilder()
     val operatorMap = mutable.Map[String, Operator]()
     for rule <- rules do

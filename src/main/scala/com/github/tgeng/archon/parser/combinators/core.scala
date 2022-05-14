@@ -136,20 +136,6 @@ extension[I, T, M[+_]]
         if pResult.result == am.empty && !pResult.committed then ap.or(pResult, q.doParse(index))
         else pResult
 
-extension[I, T] (p: Parser[I, T])
-  def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], (Int, T)] =
-    val ParseResult(result, errors, _) = p.doParse(index)(using input)
-    result match
-      case Some(result) => Right(result)
-      case None => Left(errors)
-
-extension[I, T] (p: MultiParser[I, T])
-  def multiParse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], List[(Int, T)]] =
-    val ParseResult(results, errors, _) = p.doParse(index)(using input)
-    results match
-      case Nil => Left(errors)
-      case _ => Right(results)
-
 package multi:
   given Flattener[List] with
     override def flatten[T](seqs: List[Seq[T]]): Seq[T] = seqs.flatten.toSeq

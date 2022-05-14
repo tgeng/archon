@@ -3,6 +3,22 @@ package com.github.tgeng.archon.parser.combinators
 import com.github.tgeng.archon.common.{*, given}
 import com.github.tgeng.archon.parser.combinators.{*, given}
 
+extension[I, T] (p: Parser[I, T])
+  def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], T] =
+    import com.github.tgeng.archon.parser.combinators.single.given
+    val ParseResult(result, errors, _) = (p << P.eos).doParse(index)(using input)
+    result match
+      case None => Left(errors)
+      case Some(result) => Right(result._2)
+
+extension[I, T] (p: MultiParser[I, T])
+  def multiParse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], List[T]] =
+    import com.github.tgeng.archon.parser.combinators.multi.given
+    val ParseResult(results, errors, _) = (p << P.eos).doParse(index)(using input)
+    results match
+      case Nil => Left(errors)
+      case _ => Right(results.map(_._2))
+
 extension[I, T, S, M[+_]] (using ap: Applicative[ParserT[I, *, M]])(f: ParserT[I, T => S, M])
   infix def <*>(p: ParserT[I, T, M]) = ap.starApply(f, p)
 
