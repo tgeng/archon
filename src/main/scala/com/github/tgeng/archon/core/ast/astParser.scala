@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ast
 
+import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Builtins
@@ -27,52 +28,61 @@ object AstParser:
     sBinding | sHandler | sHeapHandler | sTerm
   )
 
+  private enum Handler:
+    case HTransform(varName: Name, body: AstTerm)
+    case HOp(opName: Name, argsName: List[Name], resumeName: Name, body: AstTerm)
+
+  import Handler.*
+
+
   def sHandler: StrParser[SHandler] = P(
     for
-      _ <- P.from(".handler") << P.whitespaces
+      _ <- P.from("hdl") << P.whitespaces
       eff <- astEff << P.whitespaces
       otherEffects <- atom << P.whitespaces
       outputType <- atom << P.whitespaces
-      _ <- P.from("(")
-      (transformInputName, transform) <- transformHandler
-      handlers <- opHandlers
+      _ <- P.from("(") << P.whitespaces
+      allHandlers <- transformOrOpHandler sepBy (P.whitespaces >> P.from(";") << P.whitespaces)
       _ <- P.from(")")
-    yield SHandler(eff, otherEffects, outputType, transformInputName, transform, handlers)
+    yield
+      val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
+      var transformHandler = (n"x", AstVar(n"x"))
+      for h <- allHandlers do
+        h match
+          case HOp(name, opArgs, resume, body) => handlers(name) = (opArgs, resume, body)
+          case HTransform(name, t) => transformHandler = (name, t)
+      SHandler(eff, otherEffects, outputType, transformHandler._1, transformHandler._2, handlers.toMap)
   )
 
-  def transformHandler: StrParser[(Name, AstTerm)] = P(
-    (for
-      name <- P.from(".return") >%> name <%< P.from("->") << P.whitespaces
-      body <- rhs <%< P.from(";")
-    yield (name, body)).?.map {
-      case Some(t) => t
-      case None => (n"x", AstVar(n"x"))
-    }
+  private def transformOrOpHandler : StrParser[Handler] =
+    transformHandler | opHandler
+
+  private def transformHandler: StrParser[Handler] = P(
+    for
+      name <- P.from("rtn") >%> name <%< P.from("->") << P.whitespaces
+      body <- rhs
+    yield HTransform(name, body)
   )
 
-  def opHandlers: StrParser[Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]] = P(
-    opHandler.*.map(_.toMap)
-  )
-
-  def opHandler: StrParser[(Name, (List[Name], Name, AstTerm))] = P(
+  private def opHandler: StrParser[Handler] = P(
     for
       handlerName <- name << P.whitespaces
       argNames <- name sepBy1 P.whitespaces
       _ <- P.whitespaces >> P.from("->") << P.whitespaces
-      body <- rhs <%< P.from(";")
-    yield (handlerName, (argNames.dropRight(1), argNames.last, body))
+      body <- rhs
+    yield HOp(handlerName, argNames.dropRight(1), argNames.last, body)
   )
 
   def sHeapHandler: StrParser[SHeapHandler] = P(
     for
-      _ <- P.from(".heap") << P.whitespaces
+      _ <- P.from("hpv") << P.whitespaces
       heapVarName <- name << P.whitespaces
       otherEffects <- atom << P.whitespaces
     yield SHeapHandler(otherEffects, heapVarName)
   )
 
   def sBinding: StrParser[SBinding] = P(
-    for name <- P.from(".let") >%> name <%< P.from("=") << P.whitespaces
+    for name <- P.from("let") >%> name <%< P.from("=") << P.whitespaces
         t <- rhs
     yield SBinding(name, t)
   )
@@ -128,23 +138,23 @@ object AstParser:
 
   def builtins: StrParser[AstTerm] = P(
     (for
-      head <- P.stringFrom("(\\.(collapse|U|thunk|Cell|UCell|Equality|force|return))".r)
+      head <- P.stringFrom("clp|U|thk|Cell|UCell|Equality|frc".r)
       _ <- P.whitespaces
       args <- atom sepBy P.whitespaces
       r <- (head, args) match
-        case (".collapse", t :: Nil) => P.pure(AstCollapse(t))
-        case (".U", t :: Nil) => P.pure(AstU(t))
-        case (".thunk", t :: Nil) => P.pure(AstThunk(t))
-        case (".Cell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Initialized))
-        case (".UCell", heap :: ty :: Nil) => P.pure(
+        case ("clp", t :: Nil) => P.pure(AstCollapse(t))
+        case ("U", t :: Nil) => P.pure(AstU(t))
+        case ("thk", t :: Nil) => P.pure(AstThunk(t))
+        case ("Cell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Initialized))
+        case ("UCell", heap :: ty :: Nil) => P.pure(
           AstCellType(
             heap,
             ty,
             CellStatus.Uninitialized
           )
         )
-        case (".Equality", ty :: left :: right :: Nil) => P.pure(AstEqualityType(ty, left, right))
-        case (".force", t :: Nil) => P.pure(AstForce(t))
+        case ("Equality", ty :: left :: right :: Nil) => P.pure(AstEqualityType(ty, left, right))
+        case ("frc", t :: Nil) => P.pure(AstForce(t))
         case _ => P.fail(s"Unexpected number of args for $head")
     yield r) |
       (
@@ -193,10 +203,10 @@ object AstParser:
       yield (qn, Nil)
 
   def astLevelLiteral = P(
-    P.from(".L") >> P.nat.map(AstLevelLiteral(_))
+    P.from("L") >> P.nat.map(AstLevelLiteral(_))
   )
 
-  def astRefl = P(P.from(".refl").map(_ => AstRefl))
+  def astRefl = P(P.from("Refl").map(_ => AstRefl))
 
   def astTotal = P(P.from("<>").map(_ => AstTotal))
 
@@ -221,10 +231,26 @@ object AstParser:
 
   def underscore: StrParser[String] = P.stringFrom("_".r)
 
-  def word: StrParser[String] =
-    P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r)
+  def keyWords = Set(
+    "hdl",
+    "hpv",
+    "rtn",
+    "let",
+    "U",
+    "clp",
+    "U",
+    "thk",
+    "Cell",
+    "UCell",
+    "Equality",
+    "frc",
+    "Refl",
+  )
 
-  def reservedSymbols = Set("(", ")", "|", "@", "#", "->", "<", ">", "<>", ":")
+  def word: StrParser[String] =
+    P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r).withFilter(!keyWords(_))
+
+  def reservedSymbols = Set("(", ")", "|", "@", "@(", "#", "->", "<", ">", "<>", ":")
 
   def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.;]]+".r).withFilter(!reservedSymbols(_))
