@@ -108,7 +108,9 @@ object AstParser:
       argTy <- app
     yield (eff, argName, argTy)
 
-  def eff: StrParser[AstTerm] = (P.from("<") >%> effUnion <%< P.from(">") << P.whitespaces)
+  def eff: StrParser[AstTerm] = (P.from("<") >%>
+    effUnion.?.map(_.getOrElse(AstTotal))
+    <%< P.from(">") << P.whitespaces)
 
   def redux: StrParser[AstTerm] = P(
     for
