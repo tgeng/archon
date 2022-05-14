@@ -143,7 +143,6 @@ object AstParser:
         )
         case (".Equality", ty :: left :: right :: Nil) => P.pure(AstEqualityType(ty, left, right))
         case (".force", t :: Nil) => P.pure(AstForce(t))
-        case (".return", t :: Nil) => P.pure(AstReturn(t))
         case _ => P.fail(s"Unexpected number of args for $head")
     yield r) |
       (

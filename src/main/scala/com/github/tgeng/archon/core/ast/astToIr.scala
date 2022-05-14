@@ -107,7 +107,6 @@ def astToIr(ast: AstTerm)
     case vTy :: effects :: Nil => F(vTy, effects)
     case _ => throw IllegalStateException()
   }
-  case AstReturn(v) => astToIr(v)
   case AstFunctionType(argName, argTy, bodyTy, effects) =>
     for argTy <- astToIr(argTy)
         effects <- bind(argName) {

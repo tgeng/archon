@@ -23,7 +23,6 @@ enum AstTerm:
   case AstRefl
   case AstForce(v: AstTerm)
   case AstF(vTy: AstTerm, effects: AstTerm)
-  case AstReturn(v: AstTerm)
   case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
   case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])
   case AstOperatorCall(effect: AstEff, opName: Name, args: List[AstTerm])
