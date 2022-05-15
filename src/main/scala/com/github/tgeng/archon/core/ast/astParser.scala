@@ -69,12 +69,13 @@ object AstParser:
         val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
         var transformHandler = (n"x", AstVar(n"x"))
 
-        for h <- allHandlers do
+        for (h <- allHandlers) { // Use old syntax here because IntelliJ's formatter keeps messing up indentations
           h match
             case HOp(name, opArgs, resume, body) => handlers(name) = (opArgs, resume, body)
             case HTransform(name, t) => transformHandler = (name, t)
+        }
 
-        SHandler(eff, otherEffects, outputType, transformHandler._1, transformHandler._2, handlers.toMap)
+          SHandler(eff, otherEffects, outputType, transformHandler._1, transformHandler._2, handlers.toMap)
     )
 
   private def sHeapHandler: StrParser[SHeapHandler] = P(
@@ -93,12 +94,12 @@ object AstParser:
 
   private def sTerm: StrParser[STerm] = P(rhs.map(STerm(_)))
 
-  private def app: StrParser[AstTerm] = P(opCall | builtins | redux)
+  private def app: StrParser[AstTerm] = P(builtins | redux)
 
   private def rhs: StrParser[AstTerm] =
     val argBinding: StrParser[( /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm)] =
       for
-        eff <- eff.?.map(_.getOrElse(AstTotal))
+        eff <- eff.?.map(_.getOrElse(AstDef(Builtins.TotalQn)))
         argName <- (name <%< P.from(":") << P.whitespaces).?.map(_.getOrElse(gn"_"))
         argTy <- app
       yield (eff, argName, argTy)
@@ -124,7 +125,7 @@ object AstParser:
         }
       }
 
-    (P.from("<") >%> effUnion.?.map(_.getOrElse(AstTotal)) <%< P.from(">") << P.whitespaces)
+    (P.from("<") >%> effUnion.?.map(_.getOrElse(AstDef(Builtins.TotalQn))) <%< P.from(">") << P.whitespaces)
 
   private def redux: StrParser[AstTerm] =
     val elim: StrParser[Elimination[AstTerm]] = P(
@@ -150,15 +151,6 @@ object AstParser:
         case ("clp", t :: Nil) => P.pure(AstCollapse(t))
         case ("U", t :: Nil) => P.pure(AstU(t))
         case ("thk", t :: Nil) => P.pure(AstThunk(t))
-        case ("Cell", heap :: ty :: Nil) => P.pure(AstCellType(heap, ty, CellStatus.Initialized))
-        case ("UCell", heap :: ty :: Nil) => P.pure(
-          AstCellType(
-            heap,
-            ty,
-            CellStatus.Uninitialized
-          )
-        )
-        case ("Equality", ty :: left :: right :: Nil) => P.pure(AstEqualityType(ty, left, right))
         case ("frc", t :: Nil) => P.pure(AstForce(t))
         case _ => P.fail(s"Unexpected number of args for $head")
     yield r) |
@@ -175,32 +167,19 @@ object AstParser:
       P.from("L") >> P.nat.map(AstLevelLiteral(_))
     )
 
-    val astRefl = P(P.from("Refl").map(_ => AstRefl))
-
-    val astTotal = P(P.from("<>").map(_ => AstTotal))
+    val astTotal = P(P.from("<>").map(_ => AstDef(Builtins.TotalQn)))
 
     val astDef = P(qualifiedName.map(AstDef(_)))
 
     val astVar = P(name.map(AstVar(_)))
 
     P(
-      astRefl |
-        astTotal |
+      astTotal |
         astLevelLiteral |
         astVar |
         astDef |
         P.from("(") >%> term <%< P.from(")")
     )
-
-  private def opCall: StrParser[AstTerm] = P(
-    for
-      name <- name
-      _ <- P.whitespaces
-      eff <- astEff
-      _ <- P.whitespaces
-      args <- atom sepBy P.whitespaces
-    yield AstOperatorCall(eff, name, args)
-  )
 
   private def astEff: StrParser[AstEff] =
     val astEffWithArgs: StrParser[AstEff] = P(

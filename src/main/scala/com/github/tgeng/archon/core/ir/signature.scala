@@ -128,6 +128,15 @@ trait Signature:
 
   def getOperators(qn: QualifiedName): IndexedSeq[Operator] = getOperatorsOption(qn).get
 
+  def getOperatorOption(qn: QualifiedName, conName: Name): Option[Operator] =
+    for
+      operators <- getOperatorsOption(qn)
+      r <- operators.collectFirst {
+        case op if op.name == conName => op
+      }
+    yield r
+
+
   def getOperator(qn: QualifiedName, name: Name): Operator =
     getOperators(qn).getFirstOrDefault(_.name == name, throw IllegalArgumentException())
 
@@ -232,8 +241,9 @@ trait Signature:
             Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
             field.ty
           )
-        ) { (bindingAndVariance, bodyTy) => bindingAndVariance match
-          case (binding, _) => FunctionType(binding, bodyTy)
+        ) { (bindingAndVariance, bodyTy) =>
+          bindingAndVariance match
+            case (binding, _) => FunctionType(binding, bodyTy)
         }
       )
     case _ => None
@@ -245,7 +255,14 @@ trait Signature:
         field <- getFieldOption(qn, fieldName)
       yield IndexedSeq(
         CheckedClause(
-          record.tParamTys.map(_._1) :+ Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
+          record.tParamTys.map(_._1) :+ Binding(
+            U(
+              RecordType(
+                recordQn,
+                vars(record.tParamTys.size - 1)
+              )
+            )
+          )(gn"self"),
           pVars(record.tParamTys.size),
           Projection(Force(Var(0)), fieldName),
           field.ty
@@ -253,7 +270,7 @@ trait Signature:
       )
     case _ => None
 
-  def getEffectsDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+  def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     for
       effect <- getEffectOption(qn)
     yield Definition(qn)(
@@ -262,7 +279,7 @@ trait Signature:
       }
     )
 
-  def getEffectsDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+  def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
     for
       effect <- getEffectOption(qn)
     yield {
@@ -276,6 +293,40 @@ trait Signature:
         )
       )
     }
+
+  def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
+    case Node(effectQn, opName) =>
+      for
+        eff <- getEffectOption(effectQn)
+        op <- getOperatorOption(effectQn, opName)
+      yield Definition(qn)(
+        (eff.tParamTys ++ op.paramTys)
+          .foldRight(F(op.resultTy)) { (binding, ty) =>
+            FunctionType(binding, ty)
+          }
+      )
+    case _ => None
+
+  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = qn match
+    case Node(effectQn, opName) =>
+      for
+        eff <- getEffectOption(effectQn)
+        op <- getOperatorOption(effectQn, opName)
+      yield
+        val allBindings = eff.tParamTys ++ op.paramTys
+        IndexedSeq(
+          CheckedClause(
+            allBindings,
+            pVars(allBindings.size - 1),
+            OperatorCall(
+              (effectQn, vars(eff.tParamTys.size - 1)),
+              opName,
+              vars(op.paramTys.size - 1)
+            ),
+            F(op.resultTy)
+          )
+        )
+    case _ => None
 
 trait BuiltinSignature extends Signature :
   override def getDataOption(qn: QualifiedName): Option[Declaration.Data] =
@@ -310,7 +361,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getDataConDerivedDefinitionOption(qn))
       .orElse(getRecordDerivedDefinitionOption(qn))
       .orElse(getRecordFieldDerivedDefinitionOption(qn))
-      .orElse(getEffectsDerivedDefinitionOption(qn))
+      .orElse(getEffectDerivedDefinitionOption(qn))
       .orElse(getUserDefinitionOption(qn))
 
   def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
@@ -321,7 +372,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getDataConDerivedClausesOption(qn))
       .orElse(getRecordDerivedClausesOption(qn))
       .orElse(getRecordFieldDerivedClausesOption(qn))
-      .orElse(getEffectsDerivedClausesOption(qn))
+      .orElse(getEffectDerivedClausesOption(qn))
       .orElse(getUserClausesOption(qn))
 
   def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]

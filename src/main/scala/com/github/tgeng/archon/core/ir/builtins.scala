@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.core.common.*
+import collection.immutable.ListSet
 
 import QualifiedName.*
 import VTerm.*
@@ -14,11 +15,12 @@ object Builtins:
   val TopQn = BuiltinType / "Top"
   val PureQn = BuiltinType / "Pure"
 
-  //  val EqualityQn = BuiltinType / "Equality"
+  val EqualityQn = BuiltinType / "Equality"
+  val CellQn = BuiltinType / "Cell"
+  val UCellQn = BuiltinType / "UCell"
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"
   val HeapQn = BuiltinType / "Heap"
-  //  val CellQn = BuiltinType / "Cell"
 
   val UnitTypeQn = BuiltinType / "Unit"
   val UnitQn = UnitTypeQn / "Unit"
@@ -28,8 +30,12 @@ object Builtins:
   val CTopQn = BuiltinCType / "Top"
 
   val BuiltinEffects = Builtin / "effects"
-  val HeapEffQn = BuiltinEffects / "HeapEff"
+  val HeapEffQn = BuiltinEffects / "heap"
+  val AllocOpQn = HeapEffQn / "alloc"
+  val GetOpQn = HeapEffQn / "get"
+  val SetOpQn = HeapEffQn / "set"
   val EffectsUnionQn = BuiltinEffects / "union"
+  val TotalQn = BuiltinEffects / "total"
 
   val BuiltinLevel = Builtin / "level"
   val LevelSucQn = BuiltinLevel / "suc"
@@ -49,7 +55,64 @@ object Builtins:
       /* isPure */ true,
       /* constructors */ IndexedSeq(
       Constructor(n"Unit", Nil, Nil)
-    ))
+    )),
+    (Builtins.EqualityQn,
+      /* tParamTys*/
+      (Binding(LevelType)(n"level"), Variance.COVARIANT) ::
+        (Binding(
+          Type(
+            USimpleLevel(Var(0)),
+            Top(USimpleLevel(Var(0)))
+          )
+        )(n"A"), Variance.COVARIANT) ::
+        (Binding(Var(0))(n"x"), Variance.COVARIANT) ::
+        (Binding(Var(1))(n"y"), Variance.COVARIANT) ::
+        Nil,
+      /* ul */ USimpleLevel(Var(3)),
+      /* isPure */ true,
+      /* constructors */ IndexedSeq(
+      Constructor(n"Refl", Nil, Var(3) :: Var(2) :: Var(1) :: Var(1) :: Nil)
+    )),
+    (Builtins.CellQn,
+      /* tParamTys*/
+      (Binding(LevelType)(n"level"), Variance.COVARIANT) ::
+        (Binding(HeapType)(n"h"), Variance.COVARIANT) ::
+        (Binding(
+          Type(
+            USimpleLevel(Var(1)),
+            Top(USimpleLevel(Var(1)))
+          )
+        )(n"A"), Variance.INVARIANT) ::
+        Nil,
+      /* ul */ USimpleLevel(Var(2)),
+      /* isPure */ true,
+      /* constructors */ IndexedSeq(
+      Constructor(
+        n"Cell",
+        Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"delegate") :: Nil,
+        Var(2) :: Var(1) :: Var(0) :: Nil
+      )
+    )),
+    (Builtins.UCellQn,
+      /* tParamTys*/
+      (Binding(LevelType)(n"level"), Variance.COVARIANT) ::
+        (Binding(HeapType)(n"h"), Variance.COVARIANT) ::
+        (Binding(
+          Type(
+            USimpleLevel(Var(1)),
+            Top(USimpleLevel(Var(1)))
+          )
+        )(n"A"), Variance.INVARIANT) ::
+        Nil,
+      /* ul */ USimpleLevel(Var(2)),
+      /* isPure */ true,
+      /* constructors */ IndexedSeq(
+      Constructor(
+        n"UCell",
+        Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"delegate") :: Nil,
+        Var(2) :: Var(1) :: Var(0) :: Nil
+      )
+    )),
   ).map {
     case (qn, tParamTys, ul, isPure, constructors) =>
       (qn, (new Data(qn)(tParamTys, ul, isPure), constructors))
@@ -169,38 +232,6 @@ object Builtins:
         )
       )
     ),
-
-    //    /**
-    //     * Equality : (level : LevelType) -> (ty : Type(level, Top(level)) -> (x : ty) -> (y : ty) -> Type(level, Equality(ty, x, y))
-    //     * {level: Level, ty : Type... , x : ty, y : ty} |- _ ty x y = Equality(ty, x, y)
-    //     */
-    //    (
-    //      Builtins.EqualityQn,
-    //      FunctionType(
-    //        Binding(LevelType)(n"level"),
-    //        FunctionType(
-    //          Binding(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))(n"type"),
-    //          FunctionType(
-    //            Binding(Var(0))(n"x"),
-    //            FunctionType(
-    //              Binding(Var(1))(n"y"),
-    //              F(Type(USimpleLevel(Var(3)), EqualityType(Var(2), Var(1), Var(0))))
-    //            )
-    //          )
-    //        )
-    //      ),
-    //      IndexedSeq(
-    //        CheckedClause(
-    //          Binding(LevelType)(n"level") ::
-    //            Binding(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))(n"type") ::
-    //            Binding(Var(0))(n"x") ::
-    //            Binding(Var(1))(n"y") :: Nil,
-    //          CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
-    //          Return(EqualityType(Var(2), Var(1), Var(0))),
-    //          F(Type(USimpleLevel(Var(3)), EqualityType(Var(2), Var(1), Var(0))))
-    //        )
-    //      )
-    //    ),
 
     /**
      * Effects : Type(0, Effects)
@@ -409,6 +440,130 @@ object Builtins:
       )
     ),
 
+    (
+      Builtins.TotalQn,
+      F(EffectsType),
+      IndexedSeq(
+        CheckedClause(
+          Nil,
+          Nil,
+          Return(EffectsLiteral(ListSet())),
+          F(EffectsType)
+        )
+      )
+    ),
+
+    (
+      Builtins.AllocOpQn,
+      FunctionType(
+        Binding(LevelType)(n"level"),
+        FunctionType(
+          Binding(HeapType)(n"h"),
+          FunctionType(
+            Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
+            F(
+              DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil),
+              EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(1) :: Nil)))
+            )
+          )
+        )
+      ),
+      IndexedSeq(
+        CheckedClause(
+          Binding(LevelType)(n"level") ::
+            Binding(HeapType)(n"h") ::
+            Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
+            Nil,
+          CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+          Let(
+            AllocOp(Var(1), Var(0)),
+            Return(Con(n"UCell", Var(0) :: Nil))
+          )(n"cell"),
+          F(
+            DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil),
+            EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(1) :: Nil)))
+          )
+        )
+      )
+    ),
+    (
+      Builtins.GetOpQn,
+      FunctionType(
+        Binding(LevelType)(n"level"),
+        FunctionType(
+          Binding(HeapType)(n"h"),
+          FunctionType(
+            Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
+            FunctionType(
+              Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell"),
+              F(
+                DataType(Builtins.CellQn, Var(3) :: Var(2) :: Var(1) :: Nil),
+                EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
+              )
+            )
+          )
+        )
+      ),
+      IndexedSeq(
+        CheckedClause(
+          Binding(LevelType)(n"level") ::
+            Binding(HeapType)(n"h") ::
+            Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
+            Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell") ::
+            Binding(Var(1))(n"value") ::
+            Nil,
+          CPattern(PVar(3)) :: CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+          GetOp(Var(0)),
+          F(
+            DataType(Builtins.CellQn, Var(3) :: Var(2) :: Var(1) :: Nil),
+            EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
+          )
+        )
+      )
+    ),
+    (
+      Builtins.SetOpQn,
+      FunctionType(
+        Binding(LevelType)(n"level"),
+        FunctionType(
+          Binding(HeapType)(n"h"),
+          FunctionType(
+            Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
+            FunctionType(
+              Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell"),
+              FunctionType(
+                Binding(Var(1))(n"value"),
+                F(
+                  DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
+                  EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
+                )
+              )
+            )
+
+          )
+        )
+      ),
+      IndexedSeq(
+        CheckedClause(
+          Binding(LevelType)(n"level") ::
+            Binding(HeapType)(n"h") ::
+            Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
+            Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell") ::
+            Binding(Var(1))(n"value") ::
+            Nil,
+          CPattern(PVar(4)) :: CPattern(PVar(3)) :: CPattern(PVar(2)) :: CPattern(PVar(1)) ::
+            CPattern(PVar(0)) :: Nil,
+          Let(
+            SetOp(Var(1), Var(0)),
+            Return(Con(n"Cell", Var(0) :: Nil))
+          )(n"cell"),
+          F(
+            DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
+            EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
+          )
+        )
+      )
+    ),
   ).map { case (qn, ty, clauses) => (qn, (new Definition(qn)(ty), clauses)) }.toMap
 
   def getBigType(qn: QualifiedName): Option[(Definition, IndexedSeq[CheckedClause])] =
@@ -449,8 +604,12 @@ object Builtins:
 
   val builtinEffects: Map[QualifiedName, (Effect, IndexedSeq[Operator])] = Seq(
     (Builtins.HeapEffQn,
-      /* tParamTys*/ Binding(HeapType)(n"heap") :: Nil,
-      /* operators */ IndexedSeq())
+      /* tParamTys*/ Binding(HeapType)(n"h") :: Nil,
+      /* operators */ IndexedSeq(
+      // Note: we declare no operations here because operations of heap effect is represented
+      // specially in CTerm. Instead, the derived definitions for these operations (alloc, set, get)
+      // are directly added as builtin definitions.
+    ))
   ).map {
     case (qn, tParamTys, operators) =>
       (qn, (new Effect(qn)(tParamTys), operators))

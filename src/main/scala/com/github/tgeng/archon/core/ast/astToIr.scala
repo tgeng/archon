@@ -59,7 +59,6 @@ def astToIr(ast: AstPattern)
   (using ctx: NameContext)
   (using Σ: Signature): Either[AstError, Pattern] = ast match
   case v: AstPVar => resolve(v)
-  case AstPRefl => Right(PRefl)
   case AstPDataType(qn, args) => transpose(args.map(astToIr)).map(PDataType(qn, _))
   case AstPForcedDataType(qn, args) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
   case AstPConstructor(name, args) => transpose(args.map(astToIr)).map(PConstructor(name, _))
@@ -87,21 +86,7 @@ def astToIr(ast: AstTerm)
   case AstThunk(c) =>
     for c <- astToIr(c)
       yield Return(Thunk(c))
-  case AstTotal => Right(Return(EffectsLiteral(ListSet())))
   case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
-  case AstCellType(heap, ty, status) => chainAst((gn"heap", heap), (gn"ty", ty)) {
-    case heap :: ty :: Nil => Return(CellType(heap, ty, status))
-    case _ => throw IllegalStateException()
-  }
-  case AstEqualityType(ty, left, right) => chainAst(
-    (gn"ty", ty),
-    (gn"left", left),
-    (gn"right", right)
-  ) {
-    case ty :: left :: right :: Nil => Return(EqualityType(ty, left, right))
-    case _ => throw IllegalStateException()
-  }
-  case AstRefl => Right(Return(Refl))
   case AstForce(v) => chainAst(gn"v", v)(Force(_))
   case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
     case vTy :: effects :: Nil => F(vTy, effects)
@@ -134,13 +119,6 @@ def astToIr(ast: AstTerm)
           }
         }
     yield r
-  case AstOperatorCall((effQn, effArgs), opName, args) =>
-    val n = effArgs.size
-    chainAstWithDefaultName(gn"arg", effArgs ++ args) { allArgs =>
-      val effArgs = allArgs.take(n)
-      val args = allArgs.drop(n)
-      OperatorCall((effQn, effArgs), opName, args)
-    }
   case AstBlock(statements) =>
     import Statement.*
     def foldSequence(statements: List[Statement])

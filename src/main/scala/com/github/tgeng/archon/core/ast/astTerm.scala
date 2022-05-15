@@ -17,15 +17,10 @@ enum AstTerm:
   case AstU(cty: AstTerm)
   case AstThunk(c: AstTerm)
   case AstLevelLiteral(level: Nat)
-  case AstTotal
-  case AstCellType(heap: AstTerm, ty: AstTerm, status: CellStatus)
-  case AstEqualityType(ty: AstTerm, left: AstTerm, right: AstTerm)
-  case AstRefl
   case AstForce(v: AstTerm)
   case AstF(vTy: AstTerm, effects: AstTerm)
   case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
   case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])
-  case AstOperatorCall(effect: AstEff, opName: Name, args: List[AstTerm])
   case AstBlock(statements: List[Statement])
 
 enum Statement:

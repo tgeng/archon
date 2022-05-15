@@ -4,7 +4,6 @@ import com.github.tgeng.archon.core.common.*
 
 enum AstPattern:
   case AstPVar(name: Name)
-  case AstPRefl
   case AstPDataType(qn: QualifiedName, args: List[AstPattern])
   case AstPForcedDataType(qn: QualifiedName, args: List[AstPattern])
   case AstPConstructor(name: Name, args: List[AstPattern])
