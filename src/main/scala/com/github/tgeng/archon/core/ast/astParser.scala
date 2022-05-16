@@ -10,16 +10,32 @@ import com.github.tgeng.archon.parser.combinators.{*, given}
 import com.github.tgeng.archon.parser.combinators.single.given
 import AstTerm.*
 import Statement.*
+import AstPattern.*
+import AstCoPattern.*
 
 object AstParser:
 
   def copattern: StrParser[AstCoPattern] = P(
-    ???
+    pattern.map(AstCPattern(_)) | P.from("#") >> name.map(AstCProjection(_))
   )
 
-  private def pattern: StrParser[AstPattern] = P(
-    ???
-  )
+  private def pattern: StrParser[AstPattern] =
+    val pVar = name.map(AstPVar(_))
+
+    val dataType =
+      for qn <- qualifiedName << P.whitespaces
+          args <- P.from("{") >%> (pattern sepBy P.whitespaces) <%< P.from("}")
+      yield AstPDataType(qn, args)
+    val forcedDataType = P.from(".") >> dataType
+
+    val con =
+      for name <- name << P.whitespaces
+          args <- P.from("{") >%> (pattern sepBy P.whitespaces) <%< P.from("}")
+      yield AstPConstructor(name, args)
+    val forcedCon = P.from(".") >> con
+
+    val forced = P.from(".(") >%> term.map(AstPForced(_)) <%< P.from(")")
+    P(pVar | dataType | forcedDataType | con | forcedCon | forced)
 
   def term: StrParser[AstTerm] = P(
     (statement sepBy (P.whitespaces >> P.from(";") << P.whitespaces)).map {
@@ -181,25 +197,17 @@ object AstParser:
         P.from("(") >%> term <%< P.from(")")
     )
 
-  private def astEff: StrParser[AstEff] =
-    val astEffWithArgs: StrParser[AstEff] = P(
-      for _ <- P.from("(") << P.whitespaces
-          qn <- qualifiedName << P.whitespaces
-          args <- atom sepBy P.whitespaces
-          _ <- P.whitespaces >> P.from(")")
-      yield (qn, args)
-    )
+  private def astEff: StrParser[AstEff] = P(
+    for qn <- qualifiedName
+        args <- P.from("{") >%> (atom sepBy P.whitespaces) <%< P.from("}")
+    yield (qn, args)
+  )
 
-    val astEffAtom: StrParser[AstEff] =
-      for qn <- qualifiedName
-        yield (qn, Nil)
-
-    P(P.from("@") >%> (astEffWithArgs | astEffAtom))
 
   private def qualifiedName: StrParser[QualifiedName] = P(
     for
-      _ <- P.from(".")
-      parts <- (P.from(".") >> name).+
+      _ <- P.from("@")
+      parts <- name sepBy P.from(".")
     yield QualifiedName.from(parts)
   )
 
@@ -227,11 +235,7 @@ object AstParser:
     "clp",
     "U",
     "thk",
-    "Cell",
-    "UCell",
-    "Equality",
     "frc",
-    "Refl",
   )
 
   private def word: StrParser[String] =
