@@ -6,14 +6,21 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Builtins
 import com.github.tgeng.archon.core.ir.CellStatus
 import com.github.tgeng.archon.core.ir.Elimination
+import com.github.tgeng.archon.core.ir.Declaration
 import com.github.tgeng.archon.parser.combinators.{*, given}
 import com.github.tgeng.archon.parser.combinators.single.given
 import AstTerm.*
 import Statement.*
 import AstPattern.*
 import AstCoPattern.*
+import Declaration.*
 
-class AstParser(private val globalNameMap: Name => List[QualifiedName]):
+class AstParser(
+  private val globalNameMap: Name => List[QualifiedName],
+  private val moduleQn: QualifiedName,
+):
+
+  def dataDecl: StrParser[Data] = ???
 
   def copattern: StrParser[AstCoPattern] = P {
     pattern.map(AstCPattern(_)) | P.from("#") >> name.map(AstCProjection(_))
