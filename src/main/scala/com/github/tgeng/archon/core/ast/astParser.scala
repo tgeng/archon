@@ -13,7 +13,7 @@ import Statement.*
 import AstPattern.*
 import AstCoPattern.*
 
-object AstParser:
+class AstParser(private val globalNameMap: Name => List[QualifiedName]):
 
   def copattern: StrParser[AstCoPattern] = P {
     pattern.map(AstCPattern(_)) | P.from("#") >> name.map(AstCProjection(_))
@@ -212,9 +212,12 @@ object AstParser:
 
   private def qualifiedName: StrParser[QualifiedName] = P {
     for
-      _ <- P.from("@")
-      parts <- name sepBy P.from(".")
-    yield QualifiedName.from(parts)
+      name <- name
+      r <- globalNameMap(name) match
+        case qn :: Nil => P.pure(qn)
+        case Nil => P.fail(s"'$name' not found")
+        case allNames => P.fail(s"'$name' can be any of $allNames")
+    yield r
   }
 
   private def name: StrParser[Name] = P {
@@ -244,7 +247,7 @@ object AstParser:
   private def word: StrParser[String] =
     P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r).withFilter(!keyWords(_))
 
-  private val reservedSymbols = Set("|", "@", "#", "->", "<", ">", "<>", ":")
+  private val reservedSymbols = Set("|", "#", "->", "<", ">", "<>", ":")
 
   private def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.;(){}]]+".r).withFilter(!reservedSymbols(_))

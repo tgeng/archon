@@ -23,7 +23,7 @@ object Builtins:
   val HeapQn = BuiltinType / "Heap"
 
   val UnitTypeQn = BuiltinType / "Unit"
-  val UnitQn = UnitTypeQn / "Unit"
+  val UnitQn = UnitTypeQn / "MkUnit"
 
   val CTypeQn = BuiltinCType / "Type"
   val CSubtypeOfQn = BuiltinCType / "SubtypeOf"
@@ -54,7 +54,7 @@ object Builtins:
       /* ul */ USimpleLevel(LevelLiteral(0)),
       /* isPure */ true,
       /* constructors */ IndexedSeq(
-      Constructor(n"Unit", Nil, Nil)
+      Constructor(n"MkUnit", Nil, Nil)
     )),
     (Builtins.EqualityQn,
       /* tParamTys*/
@@ -88,7 +88,7 @@ object Builtins:
       /* isPure */ true,
       /* constructors */ IndexedSeq(
       Constructor(
-        n"Cell",
+        n"MkCell",
         Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"delegate") :: Nil,
         Var(2) :: Var(1) :: Var(0) :: Nil
       )
@@ -108,7 +108,7 @@ object Builtins:
       /* isPure */ true,
       /* constructors */ IndexedSeq(
       Constructor(
-        n"UCell",
+        n"MkUCell",
         Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"delegate") :: Nil,
         Var(2) :: Var(1) :: Var(0) :: Nil
       )
@@ -477,7 +477,7 @@ object Builtins:
           CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           Let(
             AllocOp(Var(1), Var(0)),
-            Return(Con(n"UCell", Var(0) :: Nil))
+            Return(Con(n"MkUCell", Var(0) :: Nil))
           )(n"cell"),
           F(
             DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil),
@@ -555,7 +555,7 @@ object Builtins:
             CPattern(PVar(0)) :: Nil,
           Let(
             SetOp(Var(1), Var(0)),
-            Return(Con(n"Cell", Var(0) :: Nil))
+            Return(Con(n"MkCell", Var(0) :: Nil))
           )(n"cell"),
           F(
             DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
