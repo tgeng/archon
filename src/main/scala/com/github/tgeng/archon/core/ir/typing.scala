@@ -508,7 +508,10 @@ def inferType(tm: CTerm)
               ),
               Some(EffectsType)
             )(using SUBSUMPTION)(using Γ :+ heapVarBinding)
-            // TODO: check heap variable is not leaked.
+            // TODO: check heap variable is not leaked. If it's leaked, there is no point using
+            //  this handler at all. Simply using GlobalHeapKey is the right thing to do. This is
+            //  because a creating a leaked heap key itself is performing a side effect with global
+            //  heap.
             Right(F(otherEffects, inputTy))
           case _ => Left(ExpectFType(inputCTy))
     yield r

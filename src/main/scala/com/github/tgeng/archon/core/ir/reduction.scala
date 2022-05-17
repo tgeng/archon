@@ -43,23 +43,21 @@ private final class StackMachine(
   private val heapKeyIndex = mutable.WeakHashMap[HeapKey, mutable.Stack[Nat]]()
   refreshHeapKeyIndex()
 
-  private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) = heapKeyIndex.getOrElseUpdate(
-    heapKey,
-    mutable.Stack()
-  ).push(index)
+  private def updateHeapKeyIndex(heapKey: HeapKey, index: Nat) =
+    heapKeyIndex.getOrElseUpdate(heapKey, mutable.Stack()).push(index)
 
   private def refreshHeapKeyIndex(startIndex: Nat = 0): Unit =
-    for case (HeapHandler(_, Some(heapKey), _, _), index) <- stack.view.zipWithIndex.drop(
-      startIndex
-    ) do
+    for
+      case (HeapHandler(_, Some(heapKey), _, _), index) <- stack.view.zipWithIndex.drop(startIndex)
+    do
       updateHeapKeyIndex(heapKey, index)
 
   /**
-   * @param pc "program counter"
+   * @param pc         "program counter"
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
-   * This is useful so that the run logic does not spin into infinite loop if the given term has type
-   * errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
-   * in type checking code.)
+   *                   This is useful so that the run logic does not spin into infinite loop if the given term has type
+   *                   errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
+   *                   in type checking code.)
    * @return
    */
   @tailrec
