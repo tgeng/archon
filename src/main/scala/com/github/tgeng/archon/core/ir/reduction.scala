@@ -76,7 +76,7 @@ private final class StackMachine(
           run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
         Σ.getClauses(qn).first {
-          case CheckedClause(bindings, lhs, rhs, ty) =>
+          case Clause(bindings, lhs, rhs, ty) =>
             val mapping = mutable.Map[Nat, VTerm]()
             matchPattern(
               lhs.zip(

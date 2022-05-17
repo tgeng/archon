@@ -95,7 +95,7 @@ class TestSignature(
   val allRecords: mutable.Map[QualifiedName, Record],
   val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]],
   val allDefinitions: mutable.Map[QualifiedName, Definition],
-  val allClauses: mutable.Map[QualifiedName, IndexedSeq[CheckedClause]],
+  val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]],
   val allEffects: mutable.Map[QualifiedName, Effect],
   val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]],
 ) extends BuiltinSignature :
@@ -179,7 +179,7 @@ extension (qn: QualifiedName)
     qn
 
   @targetName("addClauses")
-  infix def +(clause: CheckedClause)
+  infix def +(clause: Clause)
     (using Σ: TestSignature)
     (using ctx: TypingContext)
   : QualifiedName =

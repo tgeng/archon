@@ -129,7 +129,7 @@ object Builtins:
       (qn, (new Record(qn)(tParamTys, ul), fields))
   }.toMap
 
-  val builtinDefinitions: Map[QualifiedName, (Definition, IndexedSeq[CheckedClause])] = Seq(
+  val builtinDefinitions: Map[QualifiedName, (Definition, IndexedSeq[Clause])] = Seq(
 
     /**
      * Type : (level : LevelType) -> Type(level + 1, Type(level, Top(l)))
@@ -146,7 +146,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") :: Nil,
           CPattern(PVar(0)) :: Nil,
           Return(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0))))),
@@ -177,7 +177,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") ::
             Binding(
               Type(
@@ -204,7 +204,7 @@ object Builtins:
         F(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") :: Nil,
           CPattern(PVar(0)) :: Nil,
           Return(Top(USimpleLevel(Var(0)))),
@@ -224,7 +224,7 @@ object Builtins:
         F(Type(USimpleLevel(Var(0)), Pure(USimpleLevel(Var(0)))))
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") :: Nil,
           CPattern(PVar(0)) :: Nil,
           Return(Pure(USimpleLevel(Var(0)))),
@@ -241,7 +241,7 @@ object Builtins:
       Builtins.EffectsQn,
       F(Type(USimpleLevel(LevelLiteral(0)), EffectsType)),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Nil,
           Nil,
           Return(EffectsType),
@@ -258,7 +258,7 @@ object Builtins:
       Builtins.LevelQn,
       F(Type(UωLevel(0), LevelType)),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Nil,
           Nil,
           Return(LevelType),
@@ -275,7 +275,7 @@ object Builtins:
       Builtins.HeapQn,
       F(Type(USimpleLevel(LevelLiteral(0)), HeapType)),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Nil,
           Nil,
           Return(HeapType),
@@ -301,7 +301,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") :: Binding(EffectsType)(n"effects") :: Nil,
           CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0))),
@@ -334,7 +334,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") ::
             Binding(EffectsType)(n"effects") ::
             Binding(
@@ -365,7 +365,7 @@ object Builtins:
         ),
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") :: Binding(EffectsType)(n"effects") :: Nil,
           CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           CTop(USimpleLevel(Var(1)), Var(0)),
@@ -388,7 +388,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(EffectsType)(n"eff1") :: Binding(EffectsType)(n"eff2") :: Nil,
           CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           Return(EffectsUnion(Var(1), Var(0))),
@@ -408,7 +408,7 @@ object Builtins:
         F(LevelType)
       ),
       IndexedSeq {
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") :: Nil,
           CPattern(PVar(0)) :: Nil,
           Return(LevelSuc(Var(0))),
@@ -431,7 +431,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level1") :: Binding(LevelType)(n"level2") :: Nil,
           CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           Return(LevelMax(Var(1), Var(0))),
@@ -444,7 +444,7 @@ object Builtins:
       Builtins.TotalQn,
       F(EffectsType),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Nil,
           Nil,
           Return(EffectsLiteral(ListSet())),
@@ -469,7 +469,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") ::
             Binding(HeapType)(n"h") ::
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
@@ -505,7 +505,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") ::
             Binding(HeapType)(n"h") ::
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
@@ -544,7 +544,7 @@ object Builtins:
         )
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Binding(LevelType)(n"level") ::
             Binding(HeapType)(n"h") ::
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
@@ -566,7 +566,7 @@ object Builtins:
     ),
   ).map { case (qn, ty, clauses) => (qn, (new Definition(qn)(ty), clauses)) }.toMap
 
-  def getBigType(qn: QualifiedName): Option[(Definition, IndexedSeq[CheckedClause])] =
+  def getBigType(qn: QualifiedName): Option[(Definition, IndexedSeq[Clause])] =
     // TODO: it seems big SubtypeOf is not that useful so I will skip it for now.
     import Name.*
     import QualifiedName.*
@@ -587,7 +587,7 @@ object Builtins:
           F(Type(UωLevel(layer + 1), Type(UωLevel(layer), Top(UωLevel(layer)))))
       ),
       IndexedSeq(
-        CheckedClause(
+        Clause(
           Nil,
           Nil,
           if isComputation then

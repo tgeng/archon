@@ -134,7 +134,7 @@ def checkDef(qn: QualifiedName)
   val definition = Σ.getDefinition(qn)
   checkIsCType(definition.ty)
 
-def checkClause(qn: QualifiedName, clause: CheckedClause)
+def checkClause(qn: QualifiedName, clause: Clause)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =

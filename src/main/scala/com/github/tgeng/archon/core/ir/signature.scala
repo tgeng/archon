@@ -65,7 +65,7 @@ case class Operator(
 
 case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
 
-case class CheckedClause(
+case class Clause(
   bindings: Telescope,
   lhs: List[CoPattern], /* + bindings */
   rhs: CTerm, /* + bindings */
@@ -111,9 +111,9 @@ trait Signature:
 
   def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).get
 
-  def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
+  def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
-  def getClauses(qn: QualifiedName): IndexedSeq[CheckedClause] = getClausesOption(qn).get
+  def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(qn).get
 
   def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
 
@@ -157,13 +157,13 @@ trait Signature:
       }
     )
 
-  def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+  def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for
       data <- getDataOption(qn)
     yield {
       val highestDbIndex = data.tParamTys.size - 1
       IndexedSeq(
-        CheckedClause(
+        Clause(
           data.tParamTys.map(_._1),
           pVars(highestDbIndex),
           Return(DataType(qn, vars(highestDbIndex))),
@@ -186,7 +186,7 @@ trait Signature:
     case _ => None
 
 
-  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = qn match
+  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
     case Node(dataQn, conName) =>
       for
         data <- getDataOption(dataQn)
@@ -194,7 +194,7 @@ trait Signature:
       yield
         val allBindings = data.tParamTys.map(_._1) ++ constructor.paramTys
         IndexedSeq(
-          CheckedClause(
+          Clause(
             allBindings,
             pVars(allBindings.size - 1),
             Return(Con(conName, vars(constructor.paramTys.size - 1))),
@@ -215,13 +215,13 @@ trait Signature:
       }
     )
 
-  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for
       record <- getRecordOption(qn)
     yield {
       val highestDbIndex = record.tParamTys.size - 1
       IndexedSeq(
-        CheckedClause(
+        Clause(
           record.tParamTys.map(_._1),
           pVars(highestDbIndex),
           RecordType(qn, vars(highestDbIndex)),
@@ -248,13 +248,13 @@ trait Signature:
       )
     case _ => None
 
-  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = qn match
+  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
     case Node(recordQn, fieldName) =>
       for
         record <- getRecordOption(qn)
         field <- getFieldOption(qn, fieldName)
       yield IndexedSeq(
-        CheckedClause(
+        Clause(
           record.tParamTys.map(_._1) :+ Binding(
             U(
               RecordType(
@@ -279,13 +279,13 @@ trait Signature:
       }
     )
 
-  def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+  def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for
       effect <- getEffectOption(qn)
     yield {
       val highestDbIndex = effect.tParamTys.size - 1
       IndexedSeq(
-        CheckedClause(
+        Clause(
           effect.tParamTys,
           pVars(highestDbIndex),
           Return(EffectsLiteral(ListSet((qn, vars(highestDbIndex))))),
@@ -307,7 +307,7 @@ trait Signature:
       )
     case _ => None
 
-  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] = qn match
+  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
     case Node(effectQn, opName) =>
       for
         eff <- getEffectOption(effectQn)
@@ -315,7 +315,7 @@ trait Signature:
       yield
         val allBindings = eff.tParamTys ++ op.paramTys
         IndexedSeq(
-          CheckedClause(
+          Clause(
             allBindings,
             pVars(allBindings.size - 1),
             OperatorCall(
@@ -366,7 +366,7 @@ trait BuiltinSignature extends Signature :
 
   def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
 
-  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]] =
+  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     Builtins.builtinDefinitions.get(qn).map(_._2)
       .orElse(getDataDerivedClausesOption(qn))
       .orElse(getDataConDerivedClausesOption(qn))
@@ -375,7 +375,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getEffectDerivedClausesOption(qn))
       .orElse(getUserClausesOption(qn))
 
-  def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[CheckedClause]]
+  def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
   // TODO: getUserCaseTree...
 
