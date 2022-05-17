@@ -628,7 +628,9 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
 : Either[IrError, Unit] =
   val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
   for sub <- if isTotal then reduce(sub) else Right(sub)
+      sub <- simplifyLet(sub)
       sup <- if isTotal then reduce(sup) else Right(sup)
+      sup <- simplifyLet(sup)
       r <- (sub, sup, ty) match
         case (_, _, _) if sub == sup => Right(())
         case (_, _, Some(FunctionType(binding, bodyTy, _))) =>
@@ -754,6 +756,20 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
         case _ => Left(NotCSubsumption(sub, sup, ty, mode))
   yield r
 
+private def simplifyLet(t: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[IrError, CTerm] = t match
+  case Let(t, ctx) =>
+    for
+      tTy <- inferType(t)
+      r <- tTy match
+        case F(_, eff) if eff == Total => simplifyLet(ctx.substLowers(Collapse(t)))
+        case _ => Right(t)
+    yield r
+  case _ => Right(t)
+
 def checkArePureTypes(telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
@@ -788,6 +804,7 @@ private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
+  (using TypingContext)
 : Either[IrError, Unit] = (eff1.normalized, eff2.normalized) match
   case (Left(e), _) => Left(e)
   case (_, Left(e)) => Left(e)
@@ -805,6 +822,7 @@ private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
+  (using TypingContext)
 : Either[IrError, Unit] =
   val ul1Normalized = ul1 match
     case USimpleLevel(v) => v.normalized match

@@ -12,18 +12,11 @@ import Pattern.*
 import CoPattern.*
 
 trait Reducible[T]:
-  /**
-   * @param useCaseTree reduction during type checking should not use case tree because it can get
-   *                    stuck more often than evaluating by clauses in presence of local variables.
-   *                    Note that we are taking a different strategy than in Agda: when evaluating
-   *                    pattern match, we let mismatch dominate stuckness because we always eval by
-   *                    clauses during type checking. We may even support overlapping patterns at
-   *                    some point later. Eval by case tree, on the other hand, is only used to
-   *                    evaluate a complete program, similar to running a compiled program.
-   */
-  def reduce(t: T, useCaseTree: Boolean = false)
+  def reduce(t: T)
     (using ctx: Context)
-    (using signature: Signature): Either[IrError, T]
+    (using signature: Signature)
+    (using TypingContext)
+  : Either[IrError, T]
 
 extension[T] (a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
@@ -43,7 +36,6 @@ private val builtinHandlers = Seq(
 private final class StackMachine(
   val stack: mutable.ArrayBuffer[CTerm],
   val signature: Signature,
-  val useCaseTree: Boolean
 ):
 
   stack.prependAll(builtinHandlers)
@@ -63,17 +55,19 @@ private final class StackMachine(
       updateHeapKeyIndex(heapKey, index)
 
   /**
-   * @param pc         "program counter"
+   * @param pc "program counter"
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
-   *                   This is useful so that the run logic does not spin into infinite loop if the given term has type
-   *                   errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
-   *                   in type checking code.)
+   * This is useful so that the run logic does not spin into infinite loop if the given term has type
+   * errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
+   * in type checking code.)
    * @return
    */
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false)
     (using ctx: Context)
-    (using Σ: Signature): Either[IrError, CTerm] =
+    (using Σ: Signature)
+    (using TypingContext)
+  : Either[IrError, CTerm] =
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -83,59 +77,26 @@ private final class StackMachine(
         else
           run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
-        if useCaseTree then
-        //      case TypeCase(arg, cases, default) => arg match
-        //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-        //        case q: QualifiedNameOwner if cases.contains(q.qualifiedName) =>
-        //          val (count, body) = cases(q.qualifiedName)
-        //          q match
-        //            case Type(level) =>
-        //              assert(count == 1)
-        //              run(body.substLowers(arg, level))
-        //            case DataType(qn, args) =>
-        //              assert(count == args.length)
-        //              run(body.substLowers(arg +: args: _*))
-        //            case EqualityType(level, ty, left, right) =>
-        //              assert(count == 4)
-        //              run(body.substLowers(arg, level, ty, left, right))
-        //            case EffectsType | LevelType | HeapType =>
-        //              assert(count == 1)
-        //              run(body.substLowers(arg))
-        //        case _ => run(default.substLowers(arg))
-        //      case DataCase(arg, cases) => arg match
-        //        case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-        //        case Con(name, args) if cases.contains(name) =>
-        //          val (count, body) = cases(name)
-        //          assert(count == args.length)
-        //          run(body.substLowers(arg +: args: _*))
-        //        case _ => throw IllegalArgumentException("type error")
-        //      case EqualityCase(arg, body) =>
-        //        arg match
-        //          case Refl => run(body.substLowers(Refl))
-        //          case _: Var => Left(ReductionStuck(reconstructTermFromStack(pc)))
-        //          case _ => throw IllegalArgumentException("type error")
-          ??? // TODO: implement reduction with case tree
-        else
-          Σ.getClauses(qn).first {
-            case CheckedClause(bindings, lhs, rhs, ty) =>
-              val mapping = mutable.Map[Nat, VTerm]()
-              matchPattern(
-                lhs.zip(
-                  stack.reverseIterator.map {
-                    case Application(_, arg) => Elimination.ETerm(arg)
-                    case Projection(_, name) => Elimination.EProj(name)
-                    case _ => throw IllegalArgumentException("type error")
-                  }
-                ), mapping, MatchingStatus.Matched
-              ) match
-                case MatchingStatus.Matched =>
-                  stack.dropRightInPlace(lhs.length)
-                  Some(Right(rhs.subst(mapping.get)))
-                case MatchingStatus.Stuck => Some(Right(reconstructTermFromStack(pc)))
-                case MatchingStatus.Mismatch => None
-          } match
-            case Some(Right(t)) => run(t)
-            case None => throw IllegalArgumentException(s"leaky pattern in $qn")
+        Σ.getClauses(qn).first {
+          case CheckedClause(bindings, lhs, rhs, ty) =>
+            val mapping = mutable.Map[Nat, VTerm]()
+            matchPattern(
+              lhs.zip(
+                stack.reverseIterator.map {
+                  case Application(_, arg) => Elimination.ETerm(arg)
+                  case Projection(_, name) => Elimination.EProj(name)
+                  case _ => throw IllegalArgumentException("type error")
+                }
+              ), mapping, MatchingStatus.Matched
+            ) match
+              case MatchingStatus.Matched =>
+                stack.dropRightInPlace(lhs.length)
+                Some(Right(rhs.subst(mapping.get)))
+              case MatchingStatus.Stuck => Some(Right(reconstructTermFromStack(pc)))
+              case MatchingStatus.Mismatch => None
+        } match
+          case Some(Right(t)) => run(t)
+          case None => throw IllegalArgumentException(s"leaky pattern in $qn")
       case Force(v) => v.normalized match
         case Left(e) => Left(e)
         case Right(Thunk(c)) => run(c)
@@ -169,19 +130,42 @@ private final class StackMachine(
             args.normalized match
               case Left(e) => Left(e)
               case Right(args) =>
+                def areEffArgsConvertible(
+                  ts1: List[VTerm],
+                  ts2: List[VTerm],
+                  tys: Telescope
+                ): Boolean =
+                  (ts1, ts2, tys) match
+                    case (Nil, Nil, Nil) => true
+                    case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
+                      checkSubsumption(
+                        t1,
+                        t2,
+                        Some(ty.ty)
+                      )(using CheckSubsumptionMode.CONVERSION) match
+                        case Right(_) => areEffArgsConvertible(ts1, ts2, tys.substLowers(t1))
+                        case _ => false
+                    case _ => throw IllegalArgumentException()
+
                 val cterms = mutable.ArrayBuffer[CTerm]()
                 var nextHole: CTerm | Null = null
                 while (nextHole == null) {
                   val c = stack.pop()
                   c match
                     case Handler(
-                    hEff,
+                    hEff@(hEffQn, hEffArgs),
                     otherEffects,
                     outputType,
                     transform,
                     handlers,
                     input
-                    ) if (effQn, effArgs) == hEff =>
+                    ) if {
+                      val tys = Σ.getEffect(effQn).tParamTys
+                      effQn == hEffQn &&
+                        effArgs.size == hEffArgs.size &&
+                        effArgs.size == tys.size &&
+                        areEffArgsConvertible(effArgs, hEffArgs, tys)
+                    } =>
                       val handlerBody = handlers(name)
                       val capturedStack = Handler(
                         hEff,
@@ -218,7 +202,16 @@ private final class StackMachine(
           effArgs.normalized match
             case Left(e) => Left(e)
             case Right(effArgs) =>
-              stack.push(Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, Hole))
+              stack.push(
+                Handler(
+                  (effQn, effArgs),
+                  otherEffects,
+                  outputType,
+                  transform,
+                  handlers,
+                  Hole
+                )
+              )
               run(input)
       case AllocOp(heap, ty) =>
         heap.normalized match
@@ -261,7 +254,7 @@ private final class StackMachine(
       case GetOp(cell) =>
         cell.normalized match
           case Left(e) => Left(e)
-          case Right(_: Var| _: Collapse) => Right(reconstructTermFromStack(pc))
+          case Right(_: Var | _: Collapse) => Right(reconstructTermFromStack(pc))
           case Right(Cell(heapKey, index)) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
@@ -362,7 +355,8 @@ private final class StackMachine(
     current
 
 extension (v: VTerm)
-  def normalized(using ctx: Context)(using Σ: Signature): Either[IrError, VTerm] = v match
+  def normalized(using ctx: Context)(using Σ: Signature)(using TypingContext)
+  : Either[IrError, VTerm] = v match
     case Collapse(cTm) =>
       for reduced <- Reducible.reduce(cTm)
           r <- reduced match
@@ -372,7 +366,9 @@ extension (v: VTerm)
     case _ => Right(v)
 
 extension (vs: List[VTerm])
-  def normalized(using ctx: Context)(using Σ: Signature): Either[IrError, List[VTerm]] =
+  def normalized(using ctx: Context)
+    (using Σ: Signature)
+    (using TypingContext): Either[IrError, List[VTerm]] =
     transpose(vs.map(_.normalized))
 
 given Reducible[CTerm] with
@@ -380,15 +376,18 @@ given Reducible[CTerm] with
   /**
    * It's assumed that `t` is effect-free.
    */
-  override def reduce(t: CTerm, useCaseTree: Boolean)
+  override def reduce(t: CTerm)
     (using ctx: Context)
-    (using signature: Signature): Either[IrError, CTerm] = StackMachine(
+    (using signature: Signature)
+    (using TypingContext)
+  : Either[IrError, CTerm] = StackMachine(
     mutable.ArrayBuffer(),
-    signature,
-    useCaseTree
+    signature
   ).run(t)
 
 object Reducible:
-  def reduce(t: CTerm, useCaseTree: Boolean = false)
+  def reduce(t: CTerm)
     (using ctx: Context)
-    (using signature: Signature) = summon[Reducible[CTerm]].reduce(t, useCaseTree)
+    (using signature: Signature)
+    (using TypingContext)
+  = summon[Reducible[CTerm]].reduce(t)

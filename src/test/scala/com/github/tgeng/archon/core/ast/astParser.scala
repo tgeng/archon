@@ -3,12 +3,15 @@ package com.github.tgeng.archon.core.ast
 import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.Binding
 import com.github.tgeng.archon.core.ir.Builtins
 import com.github.tgeng.archon.core.ir.CellStatus
-import com.github.tgeng.archon.core.ir.Elimination
 import com.github.tgeng.archon.core.ir.Declaration
-import com.github.tgeng.archon.parser.combinators.{*, given}
+import com.github.tgeng.archon.core.ir.Elimination
+import com.github.tgeng.archon.core.ir.TTelescope
+import com.github.tgeng.archon.core.ir.Variance
 import com.github.tgeng.archon.parser.combinators.single.given
+import com.github.tgeng.archon.parser.combinators.{*, given}
 import AstTerm.*
 import Statement.*
 import AstPattern.*
@@ -20,7 +23,29 @@ class AstParser(
   private val moduleQn: QualifiedName,
 ):
 
-  def dataDecl: StrParser[Data] = ???
+  def dataDecl: StrParser[Data] = P {
+    for
+      _ <- P.from("data ") << P.whitespaces
+      name <- name
+    yield ???
+  }
+
+  private def tParamTys: StrParser[TTelescope] = P {
+    val variance = (P.from("+").as(Variance.COVARIANT) | P.from("-").as(Variance.CONTRAVARIANT))
+      .?.map(_.getOrElse(Variance.INVARIANT))
+    val unnamedBinding = atom
+    val namedBinding =
+      for
+        name <- P.from("(") >%> name <%< P.from(":") << P.whitespaces
+        ty <- rhs
+      yield Binding(ty)(name)
+    val bindingWithVariance =
+      for variance <- variance
+
+
+      yield ???
+    ???
+  }
 
   def copattern: StrParser[AstCoPattern] = P {
     pattern.map(AstCPattern(_)) | P.from("#") >> name.map(AstCProjection(_))
