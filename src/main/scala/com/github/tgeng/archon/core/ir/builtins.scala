@@ -8,12 +8,14 @@ import VTerm.*
 
 object Builtins:
   val BuiltinType = Builtin / "type"
-  val BuiltinCType = Builtin / "ctype"
 
   val TypeQn = BuiltinType / "Type"
   val SubtypeOfQn = BuiltinType / "SubtypeOf"
   val TopQn = BuiltinType / "Top"
   val PureQn = BuiltinType / "Pure"
+  val CTypeQn = BuiltinType / "CType"
+  val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
+  val CTopQn = BuiltinType / "CTop"
 
   val EqualityQn = BuiltinType / "Equality"
   val CellQn = BuiltinType / "Cell"
@@ -24,10 +26,6 @@ object Builtins:
 
   val UnitTypeQn = BuiltinType / "Unit"
   val UnitQn = UnitTypeQn / "MkUnit"
-
-  val CTypeQn = BuiltinCType / "Type"
-  val CSubtypeOfQn = BuiltinCType / "SubtypeOf"
-  val CTopQn = BuiltinCType / "Top"
 
   val BuiltinEffects = Builtin / "effects"
   val HeapEffQn = BuiltinEffects / "heap"
@@ -575,7 +573,7 @@ object Builtins:
         qn match
           case Node(BuiltinType, Normal(name)) if name.startsWith("TYPE") =>
             name.drop(4).toIntOption.map((false, _))
-          case Node(BuiltinCType, Normal(name)) if name.startsWith("TYPE") =>
+          case Node(BuiltinType, Normal(name)) if name.startsWith("CTYPE") =>
             name.drop(4).toIntOption.map((true, _))
           case _ => None
       if layer >= 0
