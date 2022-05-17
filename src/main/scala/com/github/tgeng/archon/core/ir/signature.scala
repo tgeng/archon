@@ -57,12 +57,6 @@ case class Constructor(
   tArgs: Arguments = Nil, /* + tParamTys + paramTys */
 )
 
-case class Operator(
-  name: Name,
-  paramTys: Telescope, /* + tParamTys */
-  resultTy: VTerm /* + tParamTys + paramTys */
-)
-
 case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
 
 case class Clause(
@@ -70,6 +64,12 @@ case class Clause(
   lhs: List[CoPattern], /* + bindings */
   rhs: CTerm, /* + bindings */
   ty: CTerm /* + bindings */
+)
+
+case class Operator(
+  name: Name,
+  paramTys: Telescope, /* + tParamTys */
+  resultTy: VTerm /* + tParamTys + paramTys */
 )
 
 trait Signature:
