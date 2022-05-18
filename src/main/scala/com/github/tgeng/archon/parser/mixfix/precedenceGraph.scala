@@ -107,16 +107,16 @@ object PrecedenceRule:
     val operatorName: StrParser[String] = "\\p{Graph}+".r.map(_.matched).withFilter(s => !s.contains("__"), "<no consecutive _>")
     val operatorNames: StrParser[List[String]] = P.indentedBlockFromHere((operatorName sepBy1 P.whitespacesWithIndent) <%%< P.eob)
     val precedence: StrParser[List[(PrecedenceKind, String)]] = P.indentedBlock {
-      "looser than " >%%> operatorNames.map(_.map((LooserThan, _))) |
-        "tighter than " >%%> operatorNames.map(_.map((TighterThan, _))) |
+      "looser than " >%%> operatorNames.map(_.map((LooserThan, _))) ||
+        "tighter than " >%%> operatorNames.map(_.map((TighterThan, _))) ||
         "same as " >%%> operatorNames.map(_.map((SameAs, _)))
     }
     import Fixity.*
     import Associativity.*
-    val fixity: StrParser[Fixity] = ("closed " as Closed) | ("infixl " as Infix(Left)) | ("infixr " as Infix(Right)) |
-      ("infix " as Infix(Non)) | ("prefix " as Prefix) | ("postfix " as Postfix)
+    val fixity: StrParser[Fixity] = ("closed " as Closed) || ("infixl " as Infix(Left)) || ("infixr " as Infix(Right)) ||
+      ("infix " as Infix(Non)) || ("prefix " as Prefix) || ("postfix " as Postfix)
     P.indentedBlock {
-      P.lift((fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.+ >> precedence.+.map(_.flatten))?))
+      P.lift((fixity << P.whitespacesWithIndent, operatorNames, (P.indent >> P.space.++ >> precedence.++.map(_.flatten))??))
         // Somehow type inference fails here and thinks the above yields `StrParser[Nothing, ...]`
         // instead of `StrParser[Char, ...]`
         .asInstanceOf[StrParser[(Fixity, List[String], Option[List[(PrecedenceKind, String)]])]]

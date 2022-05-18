@@ -57,12 +57,12 @@ class AstParser(
       for
         bindings <- telescope << P.whitespaces
         lhs <- (copattern sepBy P.whitespaces) << P.whitespaces
-        _rhs <- (P.from("->") >%> rhs).? << P.whitespaces
+        _rhs <- (P.from("=") >%> rhs).? << P.whitespaces
         ty <- P.from(":") >%> rhs <%< P.from(";") << P.whitespaces
       yield AstClause(bindings, lhs, _rhs, ty)
     }
     for
-      name <- name <%< P.from(":") << P.whitespaces
+      name <- P.from("def") >%> name <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       clauses <- clause sepBy P.whitespaces
     yield AstDefinition(name, ty, clauses)
@@ -84,7 +84,7 @@ class AstParser(
   }
 
   private def tParamTys: StrParser[AstTTelescope] = P {
-    val variance = (P.from("+").as(Variance.COVARIANT) | P.from("-").as(Variance.CONTRAVARIANT))
+    val variance = (P.from("+").as(Variance.COVARIANT) || P.from("-").as(Variance.CONTRAVARIANT))
       .?.map(_.getOrElse(Variance.INVARIANT))
     val unnamedBinding = atom.map(Binding(_)(n"_"))
     val namedBinding =
@@ -95,7 +95,7 @@ class AstParser(
     val bindingWithVariance =
       for
         variance <- variance
-        binding <- namedBinding | unnamedBinding
+        binding <- namedBinding || unnamedBinding
       yield (binding, variance)
     bindingWithVariance sepBy P.whitespaces
   }
@@ -111,7 +111,7 @@ class AstParser(
   }
 
   def copattern: StrParser[AstCoPattern] = P {
-    pattern.map(AstCPattern(_)) | P.from("#") >> name.map(AstCProjection(_))
+    pattern.map(AstCPattern(_)) || P.from("#") >> name.map(AstCProjection(_))
   }
 
   private def pattern: StrParser[AstPattern] = P {
@@ -133,7 +133,7 @@ class AstParser(
 
     val absurd = P.from("(") >%> P.from(")").as(AstPAbsurd)
 
-    pVar | dataType | forcedDataType | con | forcedCon | forced | absurd
+    pVar || dataType || forcedDataType || con || forcedCon || forced || absurd
   }
 
   def term: StrParser[AstTerm] = P {
@@ -145,7 +145,7 @@ class AstParser(
   }
 
   private def statement: StrParser[Statement] = P {
-    sBinding | sHandler | sHeapHandler | sTerm
+    sBinding || sHandler || sHeapHandler || sTerm
   }
 
   private enum Handler:
@@ -175,7 +175,7 @@ class AstParser(
       otherEffects <- atom << P.whitespaces
       outputType <- atom << P.whitespaces
       _ <- P.from("{") << P.whitespaces
-      allHandlers <- (transformHandler | opHandler) sepBy (P.whitespaces >> P.from(";") << P.whitespaces)
+      allHandlers <- (transformHandler || opHandler) sepBy (P.whitespaces >> P.from(";") << P.whitespaces)
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
@@ -213,7 +213,7 @@ class AstParser(
 
   private def sTerm: StrParser[STerm] = P(rhs.map(STerm(_)))
 
-  private def app: StrParser[AstTerm] = P(builtins | redux)
+  private def app: StrParser[AstTerm] = P(builtins || redux)
 
   private def rhs: StrParser[AstTerm] = P {
     val argBinding: StrParser[( /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm)] =
@@ -234,7 +234,7 @@ class AstParser(
 
   private def eff: StrParser[AstTerm] = P {
 
-    val effUnion: StrParser[AstTerm] = (app sepBy1 (P.whitespaces >> P.from("|") << P.whitespaces))
+    val effUnion: StrParser[AstTerm] = (app sepBy1 (P.whitespaces >> P.from("||") << P.whitespaces))
       .map {
         case Nil => throw IllegalStateException()
         case t :: rest => rest.foldLeft(t) { (a, b) =>
@@ -250,7 +250,7 @@ class AstParser(
 
   private def redux: StrParser[AstTerm] = P {
     val elim: StrParser[Elimination[AstTerm]] = P(
-      P.from("#") >> name.map(Elimination.EProj(_)) | atom.map(Elimination.ETerm(_))
+      P.from("#") >> name.map(Elimination.EProj(_)) || atom.map(Elimination.ETerm(_))
     )
 
     for
@@ -273,7 +273,7 @@ class AstParser(
         case ("thk", t :: Nil) => P.pure(AstThunk(t))
         case ("frc", t :: Nil) => P.pure(AstForce(t))
         case _ => P.fail(s"Unexpected number of args for $head")
-    yield r) |
+    yield r) ||
       (
         for
           eff <- eff
@@ -293,10 +293,10 @@ class AstParser(
 
     val astVar = P(name.map(AstVar(_)))
 
-    astTotal |
-      astLevelLiteral |
-      astVar |
-      astDef |
+    astTotal ||
+      astLevelLiteral ||
+      astVar ||
+      astDef ||
       P.from("(") >%> term <%< P.from(")")
   }
 
@@ -318,14 +318,14 @@ class AstParser(
   }
 
   private def name: StrParser[Name] = P {
-    val nameComponent: StrParser[String] = word | symbol
+    val nameComponent: StrParser[String] = word || symbol
 
     val underscore: StrParser[String] = P.stringFrom("_".r)
 
     (for headUnderscore <- underscore.orEmptyString
          components <- nameComponent sepBy1 underscore
          tailUnderscore <- underscore.orEmptyString
-    yield Name.Normal(components.mkString(headUnderscore, "_", tailUnderscore))) |
+    yield Name.Normal(components.mkString(headUnderscore, "_", tailUnderscore))) ||
       "`" >> P.stringFrom("[^`]+".r).map(Name.Normal(_)) << "`"
   }
 
@@ -350,7 +350,7 @@ class AstParser(
   private def word: StrParser[String] =
     P.stringFrom("(?U)\\p{Alpha}\\p{Alnum}*".r).withFilter(!keyWords(_))
 
-  private val reservedSymbols = Set("|", "#", "->", "<", ">", "<>", ":")
+  private val reservedSymbols = Set("|", "#", "->", "<", ">", "<>", ":", "=")
 
   private def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.,;(){}]]+".r).withFilter(!reservedSymbols(_))

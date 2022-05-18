@@ -27,6 +27,7 @@ class Parsers[M[+_] : Alternative : Monad : Applicative : Functor]
   (using Applicative[ParserT[Char, *, M]])
   (using Monad[ParserT[Char, *, M]])
   (using Alternative[ParserT[Char, *, M]])
+  (using Alternative[ParseResult[M, *]])
   :
   def any = P(P.any << P.eos)
 
@@ -127,7 +128,8 @@ class ParserCombinatorsTest extends AnyFreeSpec :
     (using Functor[ParserT[Char, *, M]])
     (using Applicative[ParserT[Char, *, M]])
     (using Monad[ParserT[Char, *, M]])
-    (using Alternative[ParserT[Char, *, M]]) =
+    (using Alternative[ParserT[Char, *, M]])
+    (using Alternative[ParseResult[M, *]]) =
     import scala.io.Source
     val obj = Parsers()
     val parsers = obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$")).map(

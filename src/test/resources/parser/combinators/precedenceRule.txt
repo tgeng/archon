@@ -6,40 +6,28 @@ infixl + -
   looser than (_)
 ----
 28 | PrecedenceRule(Infix(Left),List(+, -),List((LooserThan,(_))))
-----
-11 | PrecedenceRule(Infix(Left),List(+, -),List())
 
 infixl * /
   tighter than +
 ----
 27 | PrecedenceRule(Infix(Left),List(*, /),List((TighterThan,+)))
-----
-11 | PrecedenceRule(Infix(Left),List(*, /),List())
 
 prefix + -
   tighter than *
 ----
 27 | PrecedenceRule(Prefix,List(+, -),List((TighterThan,*)))
-----
-11 | PrecedenceRule(Prefix,List(+, -),List())
 
 infixl || &&
   looser than +
 ----
 28 | PrecedenceRule(Infix(Left),List(||, &&),List((LooserThan,+)))
-----
-13 | PrecedenceRule(Infix(Left),List(||, &&),List())
 
 infix == < > <= >= !=
   looser than +
 ----
 37 | PrecedenceRule(Infix(Non),List(==, <, >, <=, >=, !=),List((LooserThan,+)))
-----
-22 | PrecedenceRule(Infix(Non),List(==, <, >, <=, >=, !=),List())
 
 prefix !
   same as ||
 ----
 21 | PrecedenceRule(Prefix,List(!),List((SameAs,||)))
-----
-9 | PrecedenceRule(Prefix,List(!),List())

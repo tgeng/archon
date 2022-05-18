@@ -14,7 +14,7 @@ extension[I, T] (p: Parser[I, T])
     val ParseResult(results, errors, _) = (p << P.eos).doParse(index)(using input)
     results match
       case Nil => Left(errors)
-      case _ => Right(results.map(_._2))
+      case _ => Right(results.distinct.map(_._2))
 
 extension[I, T, S, M[+_]] (using ap: Applicative[ParserT[I, *, M]])(f: ParserT[I, T => S, M])
   infix def <*>(p: ParserT[I, T, M]) = ap.starApply(f, p)
@@ -43,6 +43,8 @@ extension[I, T, M[+_] : Alternative : Monad : Applicative]
       rest <- p.**
     yield
       first :: rest
+
+  def ?? = p.map(Some.apply) || P.pure(None)
 
 extension[I, T, M[+_] : Alternative : Monad : Applicative]
   (using atp: Alternative[ParserT[I, *, M]])
