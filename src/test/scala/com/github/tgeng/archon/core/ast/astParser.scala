@@ -6,7 +6,6 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Binding
 import com.github.tgeng.archon.core.ir.Builtins
 import com.github.tgeng.archon.core.ir.CellStatus
-import com.github.tgeng.archon.core.ir.Declaration
 import com.github.tgeng.archon.core.ir.Elimination
 import com.github.tgeng.archon.core.ir.TTelescope
 import com.github.tgeng.archon.core.ir.Variance
@@ -16,35 +15,100 @@ import AstTerm.*
 import Statement.*
 import AstPattern.*
 import AstCoPattern.*
-import Declaration.*
+import AstDeclaration.*
 
 class AstParser(
-  private val globalNameMap: Name => List[QualifiedName],
-  private val moduleQn: QualifiedName,
+  private val globalNameMap: Name => List[QualifiedName]
 ):
 
-  def dataDecl: StrParser[Data] = P {
+  def dataDecl: StrParser[AstData] = P {
+    val constructor: StrParser[AstConstructor] = P {
+      for
+        name <- name <%< P.from(":") << P.whitespaces
+        ty <- rhs <%< P.from(";") << P.whitespaces
+      yield AstConstructor(name, ty)
+    }
+
     for
-      _ <- P.from("data ") << P.whitespaces
-      name <- name
-    yield ???
+      isPure <- P.from("pure").?.map(_.nonEmpty) << P.whitespaces
+      name <- P.from("data") >%> name << P.whitespaces
+      tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
+      ty <- rhs <%< P.from(";") << P.whitespaces
+      constructors <- constructor sepBy P.whitespaces
+    yield AstData(name, tParamTys, ty, isPure, constructors)
   }
 
-  private def tParamTys: StrParser[TTelescope] = P {
+  def recordDecl: StrParser[AstRecord] = P {
+    val field: StrParser[AstField] = P {
+      for
+        name <- name <%< P.from(":") << P.whitespaces
+        ty <- rhs <%< P.from(";") << P.whitespaces
+      yield AstField(name, ty)
+    }
+    for
+      name <- P.from("record") >%> name << P.whitespaces
+      tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
+      ty <- rhs <%< P.from(";") << P.whitespaces
+      fields <- field sepBy P.whitespaces
+    yield AstRecord(name, tParamTys, ty, fields)
+  }
+
+  def defDecl: StrParser[AstDefinition] = P {
+    val clause: StrParser[AstClause] = P {
+      for
+        bindings <- telescope << P.whitespaces
+        lhs <- (copattern sepBy P.whitespaces) << P.whitespaces
+        _rhs <- (P.from("->") >%> rhs).? << P.whitespaces
+        ty <- P.from(":") >%> rhs <%< P.from(";") << P.whitespaces
+      yield AstClause(bindings, lhs, _rhs, ty)
+    }
+    for
+      name <- name <%< P.from(":") << P.whitespaces
+      ty <- rhs <%< P.from(";") << P.whitespaces
+      clauses <- clause sepBy P.whitespaces
+    yield AstDefinition(name, ty, clauses)
+  }
+
+  def effectDecl: StrParser[AstEffect] = P {
+    val operator: StrParser[AstOperator] = P {
+      for
+        name <- name <%< P.from(":") << P.whitespaces
+        ty <- rhs <%< P.from(";") << P.whitespaces
+      yield AstOperator(name, ty)
+    }
+    for
+      name <- P.from("effect") >%> name << P.whitespaces
+      tParamTys <- tParamTys <%< P.from(";") << P.whitespaces
+      operators <- operator sepBy P.whitespaces
+      // note: in production code, we should report error if variance is not "invariant"
+    yield AstEffect(name, tParamTys.map(_._1), operators)
+  }
+
+  private def tParamTys: StrParser[AstTTelescope] = P {
     val variance = (P.from("+").as(Variance.COVARIANT) | P.from("-").as(Variance.CONTRAVARIANT))
       .?.map(_.getOrElse(Variance.INVARIANT))
-    val unnamedBinding = atom
+    val unnamedBinding = atom.map(Binding(_)(n"_"))
     val namedBinding =
       for
         name <- P.from("(") >%> name <%< P.from(":") << P.whitespaces
-        ty <- rhs
+        ty <- rhs <%< P.from(")")
       yield Binding(ty)(name)
     val bindingWithVariance =
-      for variance <- variance
+      for
+        variance <- variance
+        binding <- namedBinding | unnamedBinding
+      yield (binding, variance)
+    bindingWithVariance sepBy P.whitespaces
+  }
 
-
-      yield ???
-    ???
+  private def telescope: StrParser[AstTelescope] = P {
+    val binding: StrParser[Binding[AstTerm]] = P {
+      for
+        name <- name <%< P.from(":") << P.whitespaces
+        ty <- rhs
+      yield Binding(ty)(name)
+    }
+    P.from("{") >%> (binding sepBy (P.whitespaces >> P.from(",") << P.whitespaces)) << P.from("}")
   }
 
   def copattern: StrParser[AstCoPattern] = P {
@@ -68,7 +132,9 @@ class AstParser(
 
     val forced = P.from(".(") >%> term.map(AstPForced(_)) <%< P.from(")")
 
-    pVar | dataType | forcedDataType | con | forcedCon | forced
+    val absurd = P.from("(") >%> P.from(")").as(AstPAbsurd)
+
+    pVar | dataType | forcedDataType | con | forcedCon | forced | absurd
   }
 
   def term: StrParser[AstTerm] = P {
@@ -274,6 +340,12 @@ class AstParser(
     "U",
     "thk",
     "frc",
+
+    "pure",
+    "data",
+    "record",
+    "effect",
+    "def",
   )
 
   private def word: StrParser[String] =
@@ -282,4 +354,4 @@ class AstParser(
   private val reservedSymbols = Set("|", "#", "->", "<", ">", "<>", ":")
 
   private def symbol: StrParser[String] =
-    P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.;(){}]]+".r).withFilter(!reservedSymbols(_))
+    P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.,;(){}]]+".r).withFilter(!reservedSymbols(_))
