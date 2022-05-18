@@ -14,7 +14,7 @@ case class ParseError(index: Int, description: String, targets: Seq[String] = Ni
  * the parser hierarchy.
  */
 // TODO: consider generalizing `Seq` to some traversable so that one can provide an implementation
-//  that simply drops any error message for fast passing. Then failure messages can be recovered
+//  that simply drops any error message for fast parsing. Then failure messages can be recovered
 //  by running the parser again, with possible a `Boolean` monad plus that drops parse result.
 abstract class ParseResult[M[+_], +T] :
   def result: M[T]
