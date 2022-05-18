@@ -9,7 +9,6 @@ import com.github.tgeng.archon.core.ir.CellStatus
 import com.github.tgeng.archon.core.ir.Elimination
 import com.github.tgeng.archon.core.ir.TTelescope
 import com.github.tgeng.archon.core.ir.Variance
-import com.github.tgeng.archon.parser.combinators.single.given
 import com.github.tgeng.archon.parser.combinators.{*, given}
 import AstTerm.*
 import Statement.*

@@ -5,8 +5,7 @@ import com.github.tgeng.archon.common.*
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 
-type StrParser[T] = ParserT[Char, T, Option]
-type MultiStrParser[T] = ParserT[Char, T, List]
+type StrParser[T] = ParserT[Char, T, List]
 
 extension[T, M[+_]]
   (using Functor[ParserT[Char, *, M]])
@@ -162,7 +161,9 @@ extension (failure: ParseResult[?, ?])
         val lineAndColumn = s"[${line + 1}:${column + 1}]"
         sb.append(s"when parsing ${targets.mkString("->")}:\n")
         sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
-        sb.append(" " * (lineAndColumn.length + column + 1) + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
+        val numberOfSpaces = lineAndColumn.length + column + 1
+        val spaces: String = (0 until numberOfSpaces).map(_ => " ").mkString
+        sb.append(spaces + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
     sb.toString.trim.!!
 
 extension [M[+_]]

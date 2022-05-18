@@ -23,87 +23,118 @@ enum JValue {
 import JValue.*
 
 class Parsers[M[+_] : Alternative : Monad : Applicative : Functor]
-  (using Functor[ParserT[Char, *, M]])
+(using Functor[ParserT[Char, *, M]])
   (using Applicative[ParserT[Char, *, M]])
   (using Monad[ParserT[Char, *, M]])
   (using Alternative[ParserT[Char, *, M]])
   :
   def any = P(P.any << P.eos)
+
   def doubleQuoted = P(P.quoted() << P.eos)
+
   def abc = P(P.anyOf("abc") << P.eos)
+
   def threeWords = P(
     for (first, _, second, _, third) <- P.lift((P.word, P.spaces, P.word, P.spaces, P.word))
-    yield (first, second, third)
+      yield (first, second, third)
   )
+
   def integer = P(P.integer)
+
   def decimal = P(P.decimal)
+
   def prefixCommit = P("a" << !"b" | "a")
+
   def prefixCommitHasLimitedEffects = P {
     def b = P(!"b")
+
     "a" << b | "a"
   }
 
   def postfixCommit = P("a".! << "b" | "a")
+
   def postfixCommitHasLimitedEffects = P {
     def b = P("b".!)
+
     "a" << b | "a"
   }
-  def expression : ParserT[Char, String, M] = P {
+
+  def backtrack = P {
+    val whitespaces = P(P.whitespaces)
+    val word = P(P.word)
+    val words = P(word sepBy whitespaces)
+    val end = P(whitespaces >> P.from("abc") <%< P.from(";"))
+    P.lift((words,  end))
+  }
+
+  def expression: ParserT[Char, String, M] = P {
     def atom = P(decimal.map(_.toString) | "(" >> expression << ")")
 
-    def factor = P(atom chainedLeftBy
-      P.spaces >> P.anyOf("*/").!.map {
-        op => (a: String, b: String) => s"($a $op $b)"
-      } << P.spaces)
+    def factor = P(
+      atom chainedLeftBy
+        P.spaces >> P.anyOf("*/").!.map {
+          op => (a: String, b: String) => s"($a $op $b)"
+        } << P.spaces
+    )
+
     factor chainedLeftBy
       P.spaces >> P.anyOf("+-").!.map {
         op => (a: String, b: String) => s"($a $op $b)"
       } << P.spaces
   }
+
   def expressionEos = P(expression << P.eos)
+
   def ambiguous = P("ab" | "a" << "b" | "a" >> "b" | "a" << "X")
 
-  def indentedBlock = P(P.indentedBlock {
-    (P.word sepBy1 P.newlineWithIndent) << P.eob
-  })
+  def indentedBlock = P(
+    P.indentedBlock {
+      (P.word sepBy1 P.newlineWithIndent) << P.eob
+    }
+  )
 
   def json = P {
     import JValue.*
-    def jValue : ParserT[Char, JValue, M] = jNull | jBoolean | jNumber | jString | jArray | jObject
+    def jValue: ParserT[Char, JValue, M] = jNull | jBoolean | jNumber | jString | jArray | jObject
+
     def jNull = P("null".! as JNull)
+
     def jBoolean = P(("true".! as JBoolean(true)) | ("false".! as JBoolean(false)))
+
     def jNumber = P(P.decimal map JNumber.apply)
+
     def jString = P(P.quoted() map JString.apply)
+
     def jArray = P("[".! >%> (jValue sepBy ",".!.% map (a => JArray(a.toIndexedSeq))) <%< "]")
+
     def jObject = P {
-      def jObjectEntry = P((P.quoted() << ":".% , jValue))
+      def jObjectEntry = P((P.quoted() << ":".%, jValue))
+
       "{".! >%> (jObjectEntry sepBy ",".!.% map (m => JObject(m.toMap))) <%< "}"
     }
+
     jValue << P.eos
   }
 
   import com.github.tgeng.archon.parser.mixfix.PrecedenceRule
+
   def precedenceRule = PrecedenceRule.precedenceRuleParser
 
-class ParserCombinatorsTest extends AnyFreeSpec:
-  "single" - {
-    import com.github.tgeng.archon.parser.combinators.single.given
-    testParsers(false)
-  }
-
-  "multi" - {
-    import com.github.tgeng.archon.parser.combinators.multi.given
-    testParsers(true)
-  }
+class ParserCombinatorsTest extends AnyFreeSpec :
+  testParsers(true)
 
   private def testParsers[M[+_] : Alternative : Monad : Applicative : Functor](updateTestData: Boolean)
-  (using Functor[ParserT[Char, *, M]])
-  (using Applicative[ParserT[Char, *, M]])
-  (using Monad[ParserT[Char, *, M]])
-  (using Alternative[ParserT[Char, *, M]]) =
+    (using Functor[ParserT[Char, *, M]])
+    (using Applicative[ParserT[Char, *, M]])
+    (using Monad[ParserT[Char, *, M]])
+    (using Alternative[ParserT[Char, *, M]]) =
     import scala.io.Source
     val obj = Parsers()
-    val parsers = obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$")).map(_.!!.invoke(obj).asInstanceOf[ParserT[Char, Any, M]])
+    val parsers = obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$")).map(
+      _.!!.invoke(
+        obj
+      ).asInstanceOf[ParserT[Char, Any, M]]
+    )
     for parser <- parsers
       do
         val parserName = parser.targetName.get
@@ -122,7 +153,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
         }
 
   @nowarn
-  private def testParser[M[+_]](p: ParserT[Char, Any, M], testDataFile: File) : (String, String) =
+  private def testParser[M[+_]](p: ParserT[Char, Any, M], testDataFile: File): (String, String) =
     val testDataString = Source.fromFile(testDataFile).use { source =>
       source.mkString.replace(System.lineSeparator(), "\n").!!
     }

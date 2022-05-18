@@ -116,7 +116,9 @@ object Alternative:
   given Alternative[List] with
     override def empty[S]: List[S] = List.empty
 
-    override def or[T](a: List[T], p: => List[T]): List[T] = a ++ p
+    // TODO: this is only for the parser combinators. Consider remove all these useless abstractions
+    //  and reimplement the parser combinators with a ListSet or LinkedHashSet instead.
+    override def or[T](a: List[T], p: => List[T]): List[T] = (a ++ p).distinct
 
   given Alternative[Option] with
     override def empty[S]: Option[S] = Option.empty

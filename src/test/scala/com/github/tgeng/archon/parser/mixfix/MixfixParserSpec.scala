@@ -15,7 +15,6 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
     import MixfixParserSpec.*
     import QualifiedName.*
     import PrecedenceGraphBuilder.*
-    import com.github.tgeng.archon.parser.combinators.multi.given
     val expected = file.read()
     val parts = expected.split2("\n====\n")
     assert(parts.size == 2)
@@ -85,7 +84,5 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
 
 
 object MixfixParserSpec:
-
-  import com.github.tgeng.archon.parser.combinators.single.given
 
   val rulesParser = PrecedenceRule.precedenceRuleParser.++

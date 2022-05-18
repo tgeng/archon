@@ -60,8 +60,7 @@ abstract class ParserT[-I, +T, M[+_]]:
 
 object P
 
-type Parser[-I, +T] = ParserT[I, T, Option]
-type MultiParser[-I, +T] = ParserT[I, T, List]
+type Parser[-I, +T] = ParserT[I, T, List]
 
 extension[I, T, M[+_]](e: P.type)
   inline def apply(inline parser: =>ParserT[I, T, M], name : String | Null = null, lazily: Boolean = false) : ParserT[I, T, M] =
@@ -136,19 +135,10 @@ extension[I, T, M[+_]]
         if pResult.result == am.empty && !pResult.committed then ap.or(pResult, q.doParse(index))
         else pResult
 
-package multi:
-  given Flattener[List] with
-    override def flatten[T](seqs: List[Seq[T]]): Seq[T] = seqs.flatten.toSeq
+given Flattener[List] with
+  override def flatten[T](seqs: List[Seq[T]]): Seq[T] = seqs.flatten.toSeq
 
-    override def or(m: List[Boolean], base: Boolean): Boolean = base || m.exists(b => b)
-
-package single:
-  given Flattener[Option] with
-    override def flatten[T](seqs: Option[Seq[T]]): Seq[T] = seqs match
-      case Some(seq) => seq
-      case None => Seq()
-
-    override def or(m: Option[Boolean], base: Boolean): Boolean = base || m.getOrElse(false)
+  override def or(m: List[Boolean], base: Boolean): Boolean = base || m.exists(b => b)
 
 given [I, M[+_]] (using Functor[ParseResult[M, *]]): Functor[ParserT[I, *, M]] with
   override def map[T, S](f: ParserT[I, T, M], g: T => S): ParserT[I, S, M] =

@@ -100,7 +100,6 @@ case class PrecedenceRule(fixity: Fixity, operatorNames: Seq[String], precedence
 object PrecedenceRule:
 
   import com.github.tgeng.archon.common.given
-  import com.github.tgeng.archon.parser.combinators.single.given
   import com.github.tgeng.archon.parser.combinators.{*, given}
   import Fixity.*
 
