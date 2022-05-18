@@ -29,7 +29,7 @@ class AstParser(
     }
 
     for
-      isPure <- P.from("pure").?.map(_.nonEmpty) << P.whitespaces
+      isPure <- P.from("pure").??.map(_.nonEmpty) << P.whitespaces
       name <- P.from("data") >%> name << P.whitespaces
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
@@ -85,7 +85,7 @@ class AstParser(
 
   private def tParamTys: StrParser[AstTTelescope] = P {
     val variance = (P.from("+").as(Variance.COVARIANT) || P.from("-").as(Variance.CONTRAVARIANT))
-      .?.map(_.getOrElse(Variance.INVARIANT))
+      .??.map(_.getOrElse(Variance.INVARIANT))
     val unnamedBinding = atom.map(Binding(_)(n"_"))
     val namedBinding =
       for
@@ -218,8 +218,8 @@ class AstParser(
   private def rhs: StrParser[AstTerm] = P {
     val argBinding: StrParser[( /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm)] =
       for
-        eff <- eff.?.map(_.getOrElse(AstDef(Builtins.TotalQn)))
-        argName <- (name <%< P.from(":") << P.whitespaces).?.map(_.getOrElse(gn"_"))
+        eff <- eff.??.map(_.getOrElse(AstDef(Builtins.TotalQn)))
+        argName <- (name <%< P.from(":") << P.whitespaces).??.map(_.getOrElse(gn"_"))
         argTy <- app
       yield (eff, argName, argTy)
 
@@ -245,7 +245,7 @@ class AstParser(
         }
       }
 
-    P.from("<") >%> effUnion.?.map(_.getOrElse(AstDef(Builtins.TotalQn))) <%< P.from(">") << P.whitespaces
+    P.from("<") >%> effUnion.??.map(_.getOrElse(AstDef(Builtins.TotalQn))) <%< P.from(">") << P.whitespaces
   }
 
   private def redux: StrParser[AstTerm] = P {
