@@ -33,3 +33,4 @@ enum IrError:
   case NormalizationError(ctm: CTerm)
   case CollapsingEffectfulTerm(ctm: CTerm)
   case NotCollapsable(ctm: CTerm)
+  case MissingDeclaration(qn: QualifiedName)

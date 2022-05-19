@@ -21,47 +21,50 @@ def checkDataType(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  val data = Σ.getData(qn)
-  val tParams = data.tParamTys.map(_._1)
-  checkParameterTypeDeclarations(tParams) >>
-    checkULevel(data.ul)(using tParams.toIndexedSeq)
+  Σ.getDataOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(data) =>
+      val tParams = data.tParamTys.map(_._1)
+      checkParameterTypeDeclarations(tParams) >>
+        checkULevel(data.ul)(using tParams.toIndexedSeq)
 
 def checkDataConstructor(qn: QualifiedName, con: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val data = Σ.getData(qn)
+  Σ.getDataOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(data) =>
+      given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
-  given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+      for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
+          _ <-
+            if data.isPure then
+              allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+            else
+              Right(())
+          _ <- {
+            given Γ2: Context = Γ ++ con.paramTys
 
-  for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-      _ <-
-        if data.isPure then
-          allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
-        else
-          Right(())
-      _ <- {
-        given Γ2: Context = Γ ++ con.paramTys
-
-        // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no free
-        // vars
-        checkTypes(con.tArgs, data.tParamTys.map(_._1))
-      }
-  yield
-    // binding of positiveVars must be either covariant or invariant
-    // binding of negativeVars must be either contravariant or invariant
-    val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
-    val tParamTysSize = data.tParamTys.size
-    val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
-      case ((_, variance), reverseIndex) =>
-        val index = tParamTysSize - reverseIndex - 1
-        variance match
-          case Variance.INVARIANT => false
-          case Variance.COVARIANT => negativeVars(index)
-          case Variance.CONTRAVARIANT => positiveVars(index)
-    }
-    if bindingWithIncorrectUsage.isEmpty then ()
-    else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
+            // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no free
+            // vars
+            checkTypes(con.tArgs, data.tParamTys.map(_._1))
+          }
+      yield
+        // binding of positiveVars must be either covariant or invariant
+        // binding of negativeVars must be either contravariant or invariant
+        val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
+        val tParamTysSize = data.tParamTys.size
+        val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
+          case ((_, variance), reverseIndex) =>
+            val index = tParamTysSize - reverseIndex - 1
+            variance match
+              case Variance.INVARIANT => false
+              case Variance.COVARIANT => negativeVars(index)
+              case Variance.CONTRAVARIANT => positiveVars(index)
+        }
+        if bindingWithIncorrectUsage.isEmpty then ()
+        else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
 
 def checkDataConstructors(qn: QualifiedName)
   (using Σ: Signature)
@@ -77,35 +80,38 @@ def checkRecordType(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  val record = Σ.getRecord(qn)
-  val tParams = record.tParamTys.map(_._1)
-  checkParameterTypeDeclarations(tParams) >>
-    checkULevel(record.ul)(using tParams.toIndexedSeq)
+  Σ.getRecordOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(record) =>
+      val tParams = record.tParamTys.map(_._1)
+      checkParameterTypeDeclarations(tParams) >>
+        checkULevel(record.ul)(using tParams.toIndexedSeq)
 
 def checkRecordField(qn: QualifiedName, field: Field)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val record = Σ.getRecord(qn)
+  Σ.getRecordOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(record) =>
+      given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
 
-  given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
-
-  for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
-    yield
-      // binding of positiveVars must be either covariant or invariant
-      // binding of negativeVars must be either contravariant or invariant
-      val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
-      val tParamTysSize = record.tParamTys.size
-      val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
-        case ((_, variance), reverseIndex) =>
-          val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
-          variance match
-            case Variance.INVARIANT => false
-            case Variance.COVARIANT => negativeVars(index)
-            case Variance.CONTRAVARIANT => positiveVars(index)
-      }
-      if bindingWithIncorrectUsage.isEmpty then ()
-      else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
+      for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
+        yield
+          // binding of positiveVars must be either covariant or invariant
+          // binding of negativeVars must be either contravariant or invariant
+          val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
+          val tParamTysSize = record.tParamTys.size
+          val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
+            case ((_, variance), reverseIndex) =>
+              val index = tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
+              variance match
+                case Variance.INVARIANT => false
+                case Variance.COVARIANT => negativeVars(index)
+                case Variance.CONTRAVARIANT => positiveVars(index)
+          }
+          if bindingWithIncorrectUsage.isEmpty then ()
+          else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
 
 def checkRecordFields(qn: QualifiedName)
   (using Σ: Signature)
@@ -131,8 +137,9 @@ def checkDef(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  val definition = Σ.getDefinition(qn)
-  checkIsCType(definition.ty)
+  Σ.getDefinitionOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(definition) => checkIsCType(definition.ty)
 
 def checkClause(qn: QualifiedName, clause: Clause)
   (using Σ: Signature)
@@ -235,11 +242,13 @@ def inferType(tm: VTerm)
     for cty <- inferType(c)
       yield U(cty)
   case DataType(qn, args) =>
-    val data = Σ.getData(qn)
-    checkTypes(
-      args,
-      data.tParamTys.map(_._1)
-    ) >> Right(Type(data.ul.map(_.substLowers(args: _*)), tm))
+    Σ.getDataOption(qn) match
+      case None => Left(MissingDeclaration(qn))
+      case Some(data) =>
+        checkTypes(
+          args,
+          data.tParamTys.map(_._1)
+        ) >> Right(Type(data.ul.map(_.substLowers(args: _*)), tm))
   case _: Con => throw IllegalArgumentException("cannot infer type")
   case EqualityType(ty, left, right) =>
     for tyTy <- inferType(ty)
@@ -318,7 +327,9 @@ def inferType(tm: CTerm)
     checkType(effects, EffectsType) >>
       checkULevel(ul) >>
       Right(CType(ul, tm, Total))
-  case Def(qn) => Right(Σ.getDefinition(qn).ty)
+  case Def(qn) => Σ.getDefinitionOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(d) => Right(d.ty)
   case Force(v) =>
     for vTy <- inferType(v)
         r <- vTy match
@@ -384,10 +395,12 @@ def inferType(tm: CTerm)
           case _ => Left(ExpectFunction(fun))
     yield r
   case RecordType(qn, args, effects) =>
-    val record = Σ.getRecord(qn)
-    checkType(effects, EffectsType) >>
-      checkTypes(args, record.tParamTys.map(_._1)) >>
-      Right(CType(record.ul.map(_.substLowers(args: _*)), tm, Total))
+    Σ.getRecordOption(qn) match
+      case None => Left(MissingDeclaration(qn))
+      case Some(record) =>
+        checkType(effects, EffectsType) >>
+          checkTypes(args, record.tParamTys.map(_._1)) >>
+          Right(CType(record.ul.map(_.substLowers(args: _*)), tm, Total))
   case Projection(rec, name) =>
     for recTy <- inferType(rec)
         r <- recTy match
@@ -570,28 +583,34 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
         case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
         case (Thunk(c1), Thunk(c2), Some(U(ty))) => checkSubsumption(c1, c2, Some(ty))
         case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
-          val data = Σ.getData(qn1)
-          var args = IndexedSeq[VTerm]()
-          allRight(
-            args1.zip(args2).zip(data.tParamTys).map {
-              case ((arg1, arg2), (binding, variance)) =>
-                variance match
-                  case Variance.INVARIANT =>
-                    val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))(
-                      using CONVERSION
-                    )
-                    args = args :+ arg1
-                    r
-                  case Variance.COVARIANT =>
-                    val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
-                    args = args :+ arg1
-                    r
-                  case Variance.CONTRAVARIANT =>
-                    val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
-                    args = args :+ arg2
-                    r
-            }
-          )
+          Σ.getDataOption(qn1) match
+            case None => Left(MissingDeclaration(qn1))
+            case Some(data) =>
+              var args = IndexedSeq[VTerm]()
+              allRight(
+                args1.zip(args2).zip(data.tParamTys).map {
+                  case ((arg1, arg2), (binding, variance)) =>
+                    variance match
+                      case Variance.INVARIANT =>
+                        val r = checkSubsumption(
+                          arg1,
+                          arg2,
+                          Some(binding.ty.substLowers(args: _*))
+                        )(
+                          using CONVERSION
+                        )
+                        args = args :+ arg1
+                        r
+                      case Variance.COVARIANT =>
+                        val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                        args = args :+ arg1
+                        r
+                      case Variance.CONTRAVARIANT =>
+                        val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
+                        args = args :+ arg2
+                        r
+                }
+              )
         case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
           val con = Σ.getConstructors(qn).getFirstOrDefault(
             _.name == name1,
@@ -700,31 +719,33 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                 case _ => Left(NotCSubsumption(sub, sup, ty, mode))
           yield r
         case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
-          val record = Σ.getRecord(qn1)
-          var args = IndexedSeq[VTerm]()
-          checkSubsumption(eff1, eff2, Some(EffectsType)) >>
-            allRight(
-              args1.zip(args2).zip(record.tParamTys).map {
-                case ((arg1, arg2), (binding, variance)) =>
-                  variance match
-                    case Variance.INVARIANT =>
-                      val r = checkSubsumption(
-                        arg1,
-                        arg2,
-                        Some(binding.ty.substLowers(args: _*))
-                      )(using CONVERSION)
-                      args = args :+ arg1
-                      r
-                    case Variance.COVARIANT =>
-                      val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
-                      args = args :+ arg1
-                      r
-                    case Variance.CONTRAVARIANT =>
-                      val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
-                      args = args :+ arg2
-                      r
-              }
-            )
+          Σ.getRecordOption(qn1) match
+            case None => Left(MissingDeclaration(qn1))
+            case Some(record) =>
+              var args = IndexedSeq[VTerm]()
+              checkSubsumption(eff1, eff2, Some(EffectsType)) >>
+                allRight(
+                  args1.zip(args2).zip(record.tParamTys).map {
+                    case ((arg1, arg2), (binding, variance)) =>
+                      variance match
+                        case Variance.INVARIANT =>
+                          val r = checkSubsumption(
+                            arg1,
+                            arg2,
+                            Some(binding.ty.substLowers(args: _*))
+                          )(using CONVERSION)
+                          args = args :+ arg1
+                          r
+                        case Variance.COVARIANT =>
+                          val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                          args = args :+ arg1
+                          r
+                        case Variance.CONTRAVARIANT =>
+                          val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
+                          args = args :+ arg2
+                          r
+                  }
+                )
         case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
           for rec1Ty <- inferType(rec1)
               rec2Ty <- inferType(rec2)
@@ -788,9 +809,13 @@ def checkIsPureType(ty: VTerm)
   // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
   // normalized representation.
   case Type(_, upperBound) => checkIsPureType(upperBound)
-  case DataType(qn, _) => Σ.getData(qn).isPure match
-    case true => Right(())
-    case false => Left(NotPureType(ty))
+  case DataType(qn, _) => Σ.getDataOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(data) =>
+      if data.isPure then
+        Right(())
+      else
+        Left(NotPureType(ty))
   case _: U => Left(NotPureType(ty))
   case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType =>
     Right(())
