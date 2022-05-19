@@ -33,7 +33,7 @@ class AstParser(
       name <- P.from("data") >%> name << P.whitespaces
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
-      constructors <- constructor sepBy P.whitespaces
+      constructors <- constructor sepByGreedy P.whitespaces
     yield AstData(name, tParamTys, ty, isPure, constructors)
   }
 
@@ -48,7 +48,7 @@ class AstParser(
       name <- P.from("record") >%> name << P.whitespaces
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
-      fields <- field sepBy P.whitespaces
+      fields <- field sepByGreedy P.whitespaces
     yield AstRecord(name, tParamTys, ty, fields)
   }
 
@@ -56,7 +56,7 @@ class AstParser(
     val clause: StrParser[AstClause] = P {
       for
         bindings <- telescope << P.whitespaces
-        lhs <- (copattern sepBy P.whitespaces) << P.whitespaces
+        lhs <- (copattern sepByGreedy P.whitespaces) << P.whitespaces
         _rhs <- (P.from("=") >%> rhs).? << P.whitespaces
         ty <- P.from(":") >%> rhs <%< P.from(";") << P.whitespaces
       yield AstClause(bindings, lhs, _rhs, ty)
@@ -64,7 +64,7 @@ class AstParser(
     for
       name <- P.from("def") >%> name <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
-      clauses <- clause sepBy P.whitespaces
+      clauses <- clause sepByGreedy P.whitespaces
     yield AstDefinition(name, ty, clauses)
   }
 
@@ -78,7 +78,7 @@ class AstParser(
     for
       name <- P.from("effect") >%> name << P.whitespaces
       tParamTys <- tParamTys <%< P.from(";") << P.whitespaces
-      operators <- operator sepBy P.whitespaces
+      operators <- operator sepByGreedy P.whitespaces
       // note: in production code, we should report error if variance is not "invariant"
     yield AstEffect(name, tParamTys.map(_._1), operators)
   }
@@ -97,7 +97,7 @@ class AstParser(
         variance <- variance
         binding <- namedBinding || unnamedBinding
       yield (binding, variance)
-    bindingWithVariance sepBy P.whitespaces
+    bindingWithVariance sepByGreedy P.whitespaces
   }
 
   private def telescope: StrParser[AstTelescope] = P {
@@ -107,7 +107,7 @@ class AstParser(
         ty <- rhs
       yield Binding(ty)(name)
     }
-    P.from("{") >%> (binding sepBy (P.whitespaces >> P.from(",") << P.whitespaces)) << P.from("}")
+    P.from("{") >%> (binding sepByGreedy (P.whitespaces >> P.from(",") << P.whitespaces)) << P.from("}")
   }
 
   def copattern: StrParser[AstCoPattern] = P {
@@ -119,13 +119,13 @@ class AstParser(
 
     val dataType =
       for qn <- qualifiedName << P.whitespaces
-          args <- P.from("{") >%> (pattern sepBy P.whitespaces) <%< P.from("}")
+          args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from("}")
       yield AstPDataType(qn, args)
     val forcedDataType = P.from(".") >> dataType
 
     val con =
       for name <- name << P.whitespaces
-          args <- P.from("{") >%> (pattern sepBy P.whitespaces) <%< P.from("}")
+          args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from("}")
       yield AstPConstructor(name, args)
     val forcedCon = P.from(".") >> con
 
@@ -137,7 +137,7 @@ class AstParser(
   }
 
   def term: StrParser[AstTerm] = P {
-    (statement sepBy (P.whitespaces >> P.from(";") << P.whitespaces)).map {
+    (statement sepByGreedy (P.whitespaces >> P.from(";") << P.whitespaces)).map {
       case STerm(t) :: Nil => t
       case SBinding(_, t) :: Nil => t
       case statements => AstBlock(statements)
@@ -175,7 +175,7 @@ class AstParser(
       otherEffects <- atom << P.whitespaces
       outputType <- atom << P.whitespaces
       _ <- P.from("{") << P.whitespaces
-      allHandlers <- (transformHandler || opHandler) sepBy (P.whitespaces >> P.from(";") << P.whitespaces)
+      allHandlers <- (transformHandler || opHandler) sepByGreedy (P.whitespaces >> P.from(";") << P.whitespaces)
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
@@ -256,7 +256,7 @@ class AstParser(
     for
       head <- atom
       _ <- P.whitespaces
-      elims <- elim sepBy P.whitespaces
+      elims <- elim sepByGreedy P.whitespaces
     yield elims match
       case Nil => head
       case elims => AstRedux(head, elims)
@@ -266,7 +266,7 @@ class AstParser(
     (for
       head <- P.stringFrom("clp|U|thk|Cell|UCell|Equality|frc".r)
       _ <- P.whitespaces
-      args <- atom sepBy P.whitespaces
+      args <- atom sepByGreedy P.whitespaces
       r <- (head, args) match
         case ("clp", t :: Nil) => P.pure(AstCollapse(t))
         case ("U", t :: Nil) => P.pure(AstU(t))
@@ -302,7 +302,7 @@ class AstParser(
 
   private def astEff: StrParser[AstEff] = P {
     for qn <- qualifiedName
-        args <- P.from("{") >%> (atom sepBy P.whitespaces) <%< P.from("}")
+        args <- P.from("{") >%> (atom sepByGreedy P.whitespaces) <%< P.from("}")
     yield (qn, args)
   }
 

@@ -46,6 +46,10 @@ extension[I, T, M[+_] : Alternative : Monad : Applicative]
 
   def ?? = p.map(Some.apply) || P.pure(None)
 
+  infix def sepBy1Greedy(delimiter: ParserT[I, ?, M]) = P.pure((a: T) => (b : List[T]) => a :: b) <*> p <*> (delimiter >> p).**
+
+  infix def sepByGreedy(delimiter: ParserT[I, ?, M]) = (p sepBy1 delimiter) || P.pure(Nil)
+
 extension[I, T, M[+_] : Alternative : Monad : Applicative]
   (using atp: Alternative[ParserT[I, *, M]])
   (using mp: Monad[ParserT[I, *, M]])
@@ -191,6 +195,50 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
       xs <- P.lift(parsers)
     yield
       runtime.Tuples.fromArray(xs.toArray.asInstanceOf[Array[Object]]).asInstanceOf[ExtractT[I, Ps, M]]
+
+extension[I, M[+_] : Alternative : Monad : Applicative]
+  (using fp: Functor[ParserT[I, *, M]])
+  (using app: Applicative[ParserT[I, *, M]])
+  (using mp: Monad[ParserT[I, *, M]])
+  (using atp: Alternative[ParserT[I, *, M]])
+  (using ap: Alternative[ParseResult[M, *]])
+  (e: P.type)
+
+  def foldLeftGreedy[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
+    for
+      (acc, opElems) <- P.lift((acc, (op, elem).**))
+    yield
+      opElems.foldLeft(acc) { (acc, opElem) =>
+        val (op, elem) = opElem
+        op(acc, elem)
+      }
+
+  def foldRightGreedy[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
+    for
+      (opElems, acc) <- P.lift(((elem, op).**, acc))
+    yield
+      opElems.foldRight(acc) { (elemOp, acc) =>
+        val (elem, op) = elemOp
+        op(elem, acc)
+      }
+
+  def foldLeft1Greedy[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
+    for
+      (acc, opElems) <- P.lift((acc, P.lift((op, elem)).++))
+    yield
+      opElems.foldLeft(acc) { (acc, opElem) =>
+        val (op, elem) = opElem
+        op(acc, elem)
+      }
+
+  def foldRight1Greedy[L, R](elem: ParserT[I, L, M], op: ParserT[I, (L, R) => R, M], acc: ParserT[I, R, M]) : ParserT[I, R, M] =
+    for
+      (opElems, acc) <- P.lift((P.lift((elem, op)).++, acc))
+    yield
+      opElems.foldRight(acc) { (elemOp, acc) =>
+        val (elem, op) = elemOp
+        op(elem, acc)
+      }
 
 given [I, Ps <: Tuple, M[+_]]
   (using Functor[ParserT[I, *, M]])
