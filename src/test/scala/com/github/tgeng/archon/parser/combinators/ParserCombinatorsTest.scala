@@ -60,6 +60,14 @@ class Parsers[M[+_] : Alternative : Monad : Applicative : Functor]
     "a" << b | "a"
   }
 
+  def noBacktrack = P {
+    val whitespaces = P(P.whitespaces)
+    val word = P(P.word)
+    val words = P(word sepByGreedy whitespaces)
+    val end = P(whitespaces >> P.from("abc") <%< P.from(";"))
+    P.lift((words,  end))
+  }
+
   def backtrack = P {
     val whitespaces = P(P.whitespaces)
     val word = P(P.word)

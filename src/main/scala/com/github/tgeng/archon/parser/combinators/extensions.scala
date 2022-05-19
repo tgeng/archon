@@ -48,7 +48,7 @@ extension[I, T, M[+_] : Alternative : Monad : Applicative]
 
   infix def sepBy1Greedy(delimiter: ParserT[I, ?, M]) = P.pure((a: T) => (b : List[T]) => a :: b) <*> p <*> (delimiter >> p).**
 
-  infix def sepByGreedy(delimiter: ParserT[I, ?, M]) = (p sepBy1 delimiter) || P.pure(Nil)
+  infix def sepByGreedy(delimiter: ParserT[I, ?, M]) = (p sepBy1Greedy delimiter) || P.pure(Nil)
 
 extension[I, T, M[+_] : Alternative : Monad : Applicative]
   (using atp: Alternative[ParserT[I, *, M]])
