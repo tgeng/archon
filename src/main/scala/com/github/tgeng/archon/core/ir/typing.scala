@@ -72,7 +72,9 @@ def checkDataConstructors(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  allRight(Σ.getConstructors(qn).map { con => checkDataConstructor(qn, con) })
+  Σ.getConstructorsOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(constructors) => allRight(constructors.map { con => checkDataConstructor(qn, con) })
 
 def checkRecordType(qn: QualifiedName)
   (using Σ: Signature)
@@ -119,7 +121,9 @@ def checkRecordFields(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  allRight(Σ.getFields(qn).map { field => checkRecordField(qn, field) })
+  Σ.getFieldsOption(qn) match
+    case None => Left(MissingDefinition(qn))
+    case Some(fields) => allRight(fields.map { field => checkRecordField(qn, field) })
 
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U(
@@ -163,8 +167,9 @@ def checkClauses(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val clauses = Σ.getClauses(qn)
-  allRight(clauses.map { clause => checkClause(qn, clause) })
+  Σ.getClausesOption(qn) match
+    case None => Left(MissingDefinition(qn))
+    case Some(clauses) => allRight(clauses.map { clause => checkClause(qn, clause) })
 
 def checkEffect(qn: QualifiedName)
   (using Σ: Signature)
@@ -172,27 +177,30 @@ def checkEffect(qn: QualifiedName)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  val effect = Σ.getEffect(qn)
-  checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
+  Σ.getEffectOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(effect) =>
+      checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
 
 def checkOperator(qn: QualifiedName, operator: Operator)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val effect = Σ.getEffect(qn)
+  Σ.getEffectOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(effect) =>
+      given Γ: Context = effect.tParamTys.toIndexedSeq
 
-  given Γ: Context = effect.tParamTys.toIndexedSeq
-
-  checkParameterTypeDeclarations(operator.paramTys) >>
-    checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
+      checkParameterTypeDeclarations(operator.paramTys) >>
+        checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
 
 def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  val operators = Σ.getOperators(qn)
-
-  allRight(operators.map { operator => checkOperator(qn, operator) })
+  Σ.getOperatorsOption(qn) match
+    case None => Left(MissingDeclaration(qn))
+    case Some(operators) => allRight(operators.map { operator => checkOperator(qn, operator) })
 
 private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
@@ -264,8 +272,9 @@ def inferType(tm: VTerm)
   case Effects(literal, unionOperands) =>
     allRight(
       literal.map { (qn, args) =>
-        val effect = Σ.getEffect(qn)
-        checkTypes(args, effect.tParamTys)
+        Σ.getEffectOption(qn) match
+          case None => Left(MissingDeclaration(qn))
+          case Some(effect) => checkTypes(args, effect.tParamTys)
       }
     ) >> allRight(
       unionOperands.map { ref => checkType(ref, EffectsType) }
@@ -292,7 +301,7 @@ def checkType(tm: VTerm, ty: VTerm)
   tm match
     case Con(name, args) => ty match
       case DataType(qn, tArgs) =>
-        Σ.getConstructors(qn).first { c => if c.name == name then Some(c) else None } match
+        Σ.getConstructorOption(qn, name) match
           case None => Left(MissingConstructor(name, qn))
           case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
       case _ => Left(ExpectDataType(ty))
@@ -405,8 +414,8 @@ def inferType(tm: CTerm)
     for recTy <- inferType(rec)
         r <- recTy match
           case RecordType(qn, args, effects) =>
-            Σ.getFields(qn).first { f => if f.name == name then Some(f) else None } match
-              case None => throw IllegalArgumentException(s"unexpected record field $name for $qn")
+            Σ.getFieldOption(qn, name) match
+              case None => Left(MissingField(name, qn))
               case Some(f) => Right(
                 augmentEffect(
                   effects,
@@ -416,12 +425,14 @@ def inferType(tm: CTerm)
           case _ => Left(ExpectRecord(rec))
     yield r
   case OperatorCall(eff@(qn, tArgs), name, args) =>
-    val effect = Σ.getEffect(qn)
-    Σ.getOperators(qn).first { o => if o.name == name then Some(o) else None } match
-      case None => throw IllegalArgumentException(s"unexpected operator $name for $qn")
-      case Some(op) => checkTypes(tArgs, effect.tParamTys) >>
-        checkTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
-        Right(F(EffectsLiteral(ListSet(eff)), op.resultTy.substLowers(tArgs ++ args: _*)))
+    Σ.getEffectOption(qn) match
+      case None => Left(MissingDeclaration(qn))
+      case Some(effect) =>
+        Σ.getOperatorOption(qn, name) match
+          case None => Left(MissingDefinition(qn))
+          case Some(op) => checkTypes(tArgs, effect.tParamTys) >>
+            checkTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
+            Right(F(EffectsLiteral(ListSet(eff)), op.resultTy.substLowers(tArgs ++ args: _*)))
   case _: Continuation => throw IllegalArgumentException(
     "continuation is only created in reduction and hence should not be type checked."
   )
@@ -433,47 +444,51 @@ def inferType(tm: CTerm)
   handlers,
   input
   ) =>
-    val effect = Σ.getEffect(qn)
-    val operators = Σ.getOperators(qn)
-    if handlers.size != operators.size ||
-      handlers.keySet != operators.map(_.name).toSet then
-      Left(UnmatchedHandlerImplementation(qn, handlers.keys))
-    else
-      val outputCType = F(otherEffects, outputType)
-      for _ <- checkTypes(args, effect.tParamTys)
-          inputCTy <- inferType(input)
-          r <- inputCTy match
-            case F(inputTy, inputEff) =>
-              for _ <- checkType(transform, outputCType.weakened)(using Γ :+ Binding(inputTy)(gn""))
-                  _ <- checkSubsumption(
-                    inputEff,
-                    EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))),
-                    Some(EffectsType)
-                  )
-                  _ <- allRight(
-                    operators.map { opDecl =>
-                      val handlerBody = handlers(opDecl.name)
-                      checkType(
-                        handlerBody,
-                        outputCType.weaken(opDecl.paramTys.size + 1, 0)
-                      )(
-                        using Γ ++
-                          opDecl.paramTys :+
-                          Binding(
-                            U(
-                              FunctionType(
-                                Binding(opDecl.resultTy)(gn"output"),
-                                F(opDecl.resultTy, otherEffects),
-                                otherEffects
+    Σ.getEffectOption(qn) match
+      case None => Left(MissingDeclaration(qn))
+      case Some(effect) =>
+        Σ.getOperatorsOption(qn) match
+          case None => Left(MissingDefinition(qn))
+          case Some(operators) =>
+            if handlers.size != operators.size ||
+              handlers.keySet != operators.map(_.name).toSet then
+              Left(UnmatchedHandlerImplementation(qn, handlers.keys))
+            else
+              val outputCType = F(otherEffects, outputType)
+              for _ <- checkTypes(args, effect.tParamTys)
+                  inputCTy <- inferType(input)
+                  r <- inputCTy match
+                    case F(inputTy, inputEff) =>
+                      for _ <- checkType(transform, outputCType.weakened)(using Γ :+ Binding(inputTy)(gn""))
+                          _ <- checkSubsumption(
+                            inputEff,
+                            EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))),
+                            Some(EffectsType)
+                          )
+                          _ <- allRight(
+                            operators.map { opDecl =>
+                              val handlerBody = handlers(opDecl.name)
+                              checkType(
+                                handlerBody,
+                                outputCType.weaken(opDecl.paramTys.size + 1, 0)
+                              )(
+                                using Γ ++
+                                  opDecl.paramTys :+
+                                  Binding(
+                                    U(
+                                      FunctionType(
+                                        Binding(opDecl.resultTy)(gn"output"),
+                                        F(opDecl.resultTy, otherEffects),
+                                        otherEffects
+                                      )
+                                    )
+                                  )(gn"resume")
                               )
-                            )
-                          )(gn"resume")
-                      )
-                    }
-                  )
-              yield outputCType
-            case _ => Left(ExpectFType(inputCTy))
-      yield r
+                            }
+                          )
+                      yield outputCType
+                    case _ => Left(ExpectFType(inputCTy))
+              yield r
   case AllocOp(heap, vTy) =>
     checkType(heap, HeapType) >>
       checkIsType(vTy) >>
@@ -612,19 +627,18 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
                 }
               )
         case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
-          val con = Σ.getConstructors(qn).getFirstOrDefault(
-            _.name == name1,
-            throw IllegalArgumentException(s"missing constructor $name1 in data $qn")
-          )
-          var args = IndexedSeq[VTerm]()
-          allRight(
-            args1.zip(args2).zip(con.paramTys).map {
-              case ((arg1, arg2), binding) =>
-                val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
-                args = args :+ arg1
-                r
-            }
-          )
+          Σ.getConstructorOption(qn, name1) match
+            case None => Left(MissingConstructor(name1, qn))
+            case Some(con) =>
+              var args = IndexedSeq[VTerm]()
+              allRight(
+                args1.zip(args2).zip(con.paramTys).map {
+                  case ((arg1, arg2), binding) =>
+                    val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                    args = args :+ arg1
+                    r
+                }
+              )
         case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
           checkSubsumption(ty1, ty2, None) >>
             checkSubsumption(a1, a2, Some(ty1)) >>
@@ -661,15 +675,18 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             Application(sup.weakened, Var(0)),
             Some(bodyTy),
           )(using mode)(using Γ :+ binding)
-        case (_, _, Some(RecordType(qn, _, _))) => allRight(
-          Σ.getFields(qn).map { field =>
-            checkSubsumption(
-              Projection(sub, field.name),
-              Projection(sup, field.name),
-              Some(field.ty)
+        case (_, _, Some(RecordType(qn, _, _))) =>
+          Σ.getFieldsOption(qn) match
+            case None => Left(MissingDefinition(qn))
+            case Some(fields) => allRight(
+              fields.map { field =>
+                checkSubsumption(
+                  Projection(sub, field.name),
+                  Projection(sup, field.name),
+                  Some(field.ty)
+                )
+              }
             )
-          }
-        )
         case (CType(ul1, upperBound1, eff1), CType(ul2, upperBound2, eff2), _) =>
           checkEffSubsumption(eff1, eff2) >>
             checkULevelSubsumption(ul1, ul2) >>
@@ -737,11 +754,19 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                           args = args :+ arg1
                           r
                         case Variance.COVARIANT =>
-                          val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                          val r = checkSubsumption(
+                            arg1,
+                            arg2,
+                            Some(binding.ty.substLowers(args: _*))
+                          )
                           args = args :+ arg1
                           r
                         case Variance.CONTRAVARIANT =>
-                          val r = checkSubsumption(arg2, arg1, Some(binding.ty.substLowers(args: _*)))
+                          val r = checkSubsumption(
+                            arg2,
+                            arg1,
+                            Some(binding.ty.substLowers(args: _*))
+                          )
                           args = args :+ arg2
                           r
                   }
@@ -753,27 +778,28 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
           yield r
         case (OperatorCall((qn1, tArgs1), name1, args1),
         OperatorCall((qn2, tArgs2), name2, args2), _) if qn1 == qn2 && name1 == name2 =>
-          val operator = Σ.getOperators(qn1).getFirstOrDefault(
-            _.name == name1,
-            throw IllegalArgumentException(s"expect effect $qn1 to have operation $name1")
-          )
-          var args = IndexedSeq[VTerm]()
-          val effect = Σ.getEffect(qn1)
-          allRight(
-            tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
-              case ((tArg1, tArg2), binding) =>
-                val r = checkSubsumption(tArg1, tArg2, Some(binding.ty))
-                args = args :+ tArg1
-                r
-            }
-          ) >> allRight(
-            args1.zip(args2).zip(operator.paramTys).map {
-              case ((arg1, arg2), binding) =>
-                val r = checkSubsumption(arg1, arg2, Some(binding.ty))
-                args = args :+ arg1
-                r
-            }
-          )
+          Σ.getOperatorOption(qn1, name1) match
+            case None => Left(MissingOperator(name1, qn1))
+            case Some(operator) =>
+              var args = IndexedSeq[VTerm]()
+              Σ.getEffectOption(qn1) match
+                case None => Left(MissingDeclaration(qn1))
+                case Some(effect) =>
+                  allRight(
+                    tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
+                      case ((tArg1, tArg2), binding) =>
+                        val r = checkSubsumption(tArg1, tArg2, Some(binding.ty))
+                        args = args :+ tArg1
+                        r
+                    }
+                  ) >> allRight(
+                    args1.zip(args2).zip(operator.paramTys).map {
+                      case ((arg1, arg2), binding) =>
+                        val r = checkSubsumption(arg1, arg2, Some(binding.ty))
+                        args = args :+ arg1
+                        r
+                    }
+                  )
         // For now, we skip the complex logic checking subsumption of handler and continuations. It
         // seems not all that useful to keep those. But we can always add them later if it's deemed
         // necessary.

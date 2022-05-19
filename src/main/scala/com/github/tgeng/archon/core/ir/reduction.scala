@@ -5,11 +5,11 @@ import com.github.tgeng.archon.common.*
 import scala.annotation.tailrec
 import scala.collection.immutable.ListSet
 import scala.collection.mutable
-
 import CTerm.*
 import VTerm.*
 import Pattern.*
 import CoPattern.*
+import com.github.tgeng.archon.core.ir.IrError.MissingDeclaration
 
 trait Reducible[T]:
   def reduce(t: T)
@@ -75,26 +75,29 @@ private final class StackMachine(
         else
           run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
-        Σ.getClauses(qn).first {
-          case Clause(bindings, lhs, rhs, ty) =>
-            val mapping = mutable.Map[Nat, VTerm]()
-            matchPattern(
-              lhs.zip(
-                stack.reverseIterator.map {
-                  case Application(_, arg) => Elimination.ETerm(arg)
-                  case Projection(_, name) => Elimination.EProj(name)
-                  case _ => throw IllegalArgumentException("type error")
-                }
-              ), mapping, MatchingStatus.Matched
-            ) match
-              case MatchingStatus.Matched =>
-                stack.dropRightInPlace(lhs.length)
-                Some(Right(rhs.subst(mapping.get)))
-              case MatchingStatus.Stuck => Some(Right(reconstructTermFromStack(pc)))
-              case MatchingStatus.Mismatch => None
-        } match
-          case Some(Right(t)) => run(t)
-          case None => throw IllegalArgumentException(s"leaky pattern in $qn")
+        Σ.getClausesOption(qn) match
+          // This is allowed because it could be that the body is not defined yet.
+          case None => Right(reconstructTermFromStack(pc))
+          case Some(clauses) => clauses.first {
+            case Clause(bindings, lhs, rhs, ty) =>
+              val mapping = mutable.Map[Nat, VTerm]()
+              matchPattern(
+                lhs.zip(
+                  stack.reverseIterator.map {
+                    case Application(_, arg) => Elimination.ETerm(arg)
+                    case Projection(_, name) => Elimination.EProj(name)
+                    case _ => throw IllegalArgumentException("type error")
+                  }
+                ), mapping, MatchingStatus.Matched
+              ) match
+                case MatchingStatus.Matched =>
+                  stack.dropRightInPlace(lhs.length)
+                  Some(Right(rhs.subst(mapping.get)))
+                case MatchingStatus.Stuck => Some(Right(reconstructTermFromStack(pc)))
+                case MatchingStatus.Mismatch => None
+          } match
+            case Some(Right(t)) => run(t)
+            case None => throw IllegalArgumentException(s"leaky pattern in $qn")
       case Force(v) => v.normalized match
         case Left(e) => Left(e)
         case Right(Thunk(c)) => run(c)
@@ -122,69 +125,72 @@ private final class StackMachine(
             stack.push(pc)
             run(rec)
       case OperatorCall((effQn, effArgs), name, args) =>
-        effArgs.normalized match
-          case Left(e) => Left(e)
-          case Right(effArgs) =>
-            args.normalized match
+        Σ.getEffectOption(effQn) match
+          case None => Left(MissingDeclaration(effQn))
+          case Some(eff) =>
+            effArgs.normalized match
               case Left(e) => Left(e)
-              case Right(args) =>
-                def areEffArgsConvertible(
-                  ts1: List[VTerm],
-                  ts2: List[VTerm],
-                  tys: Telescope
-                ): Boolean =
-                  (ts1, ts2, tys) match
-                    case (Nil, Nil, Nil) => true
-                    case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
-                      checkSubsumption(
-                        t1,
-                        t2,
-                        Some(ty.ty)
-                      )(using CheckSubsumptionMode.CONVERSION) match
-                        case Right(_) => areEffArgsConvertible(ts1, ts2, tys.substLowers(t1))
-                        case _ => false
-                    case _ => throw IllegalArgumentException()
+              case Right(effArgs) =>
+                args.normalized match
+                  case Left(e) => Left(e)
+                  case Right(args) =>
+                    def areEffArgsConvertible(
+                      ts1: List[VTerm],
+                      ts2: List[VTerm],
+                      tys: Telescope
+                    ): Boolean =
+                      (ts1, ts2, tys) match
+                        case (Nil, Nil, Nil) => true
+                        case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
+                          checkSubsumption(
+                            t1,
+                            t2,
+                            Some(ty.ty)
+                          )(using CheckSubsumptionMode.CONVERSION) match
+                            case Right(_) => areEffArgsConvertible(ts1, ts2, tys.substLowers(t1))
+                            case _ => false
+                        case _ => throw IllegalArgumentException()
 
-                val cterms = mutable.ArrayBuffer[CTerm]()
-                var nextHole: CTerm | Null = null
-                while (nextHole == null) {
-                  val c = stack.pop()
-                  c match
-                    case Handler(
-                    hEff@(hEffQn, hEffArgs),
-                    otherEffects,
-                    outputType,
-                    transform,
-                    handlers,
-                    input
-                    ) if {
-                      val tys = Σ.getEffect(effQn).tParamTys
-                      effQn == hEffQn &&
-                        effArgs.size == hEffArgs.size &&
-                        effArgs.size == tys.size &&
-                        areEffArgsConvertible(effArgs, hEffArgs, tys)
-                    } =>
-                      val handlerBody = handlers(name)
-                      val capturedStack = Handler(
-                        hEff,
+                    val cterms = mutable.ArrayBuffer[CTerm]()
+                    var nextHole: CTerm | Null = null
+                    while (nextHole == null) {
+                      val c = stack.pop()
+                      c match
+                        case Handler(
+                        hEff@(hEffQn, hEffArgs),
                         otherEffects,
                         outputType,
                         transform,
                         handlers,
-                        Hole
-                      ) +: cterms.reverseIterator.toSeq
+                        input
+                        ) if {
+                          val tys = eff.tParamTys
+                          effQn == hEffQn &&
+                            effArgs.size == hEffArgs.size &&
+                            effArgs.size == tys.size &&
+                            areEffArgsConvertible(effArgs, hEffArgs, tys)
+                        } =>
+                          val handlerBody = handlers(name)
+                          val capturedStack = Handler(
+                            hEff,
+                            otherEffects,
+                            outputType,
+                            transform,
+                            handlers,
+                            Hole
+                          ) +: cterms.reverseIterator.toSeq
 
-                      val resume = Thunk(Continuation(capturedStack))
-                      nextHole = handlerBody.substLowers(args :+ resume: _*)
-                    case _ if stack.isEmpty => throw IllegalArgumentException("type error")
-                    // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
-                    case HeapHandler(_, Some(heapKey), _, _) =>
-                      heapKeyIndex(heapKey).pop()
-                      cterms.addOne(substHole(c, Hole))
-                    case _ =>
-                      cterms.addOne(substHole(c, Hole))
-                }
-                run(nextHole.!!)
+                          val resume = Thunk(Continuation(capturedStack))
+                          nextHole = handlerBody.substLowers(args :+ resume: _*)
+                        case _ if stack.isEmpty => throw IllegalArgumentException("type error")
+                        // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
+                        case HeapHandler(_, Some(heapKey), _, _) =>
+                          heapKeyIndex(heapKey).pop()
+                          cterms.addOne(substHole(c, Hole))
+                        case _ =>
+                          cterms.addOne(substHole(c, Hole))
+                    }
+                    run(nextHole.!!)
       case Continuation(capturedStack) =>
         stack.pop() match
           case Application(_, arg) =>
