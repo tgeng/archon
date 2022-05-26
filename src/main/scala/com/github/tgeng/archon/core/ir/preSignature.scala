@@ -48,3 +48,12 @@ case class PreOperator(
   name: Name,
   ty: CTerm,
 )
+
+enum DeclarationPart:
+  case SIGNATURE, BODY
+
+def sortPreDeclarations(decls: Seq[PreDeclaration]): Seq[(Signature, PreDeclaration)] =
+  // rule:
+  //   1. any reference of A needs the signature of A, regardless whether it's in the signature or body of some declarations
+  //   2. any reference of A in a signature means the accompanied body needs full definition of A
+  ???
