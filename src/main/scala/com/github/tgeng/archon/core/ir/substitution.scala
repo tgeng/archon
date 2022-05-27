@@ -1,8 +1,9 @@
 package com.github.tgeng.archon.core.ir
 
 import scala.collection.mutable
-import com.github.tgeng.archon.core.ir.VTerm.Type
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.VTerm.Type
 
 import scala.collection.immutable.{ListMap, ListSet}
 
@@ -177,14 +178,32 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       val operands = unionOperands.map(substitute(_, substitution, offset))
       val newLiteral = literal.to(mutable.ArrayBuffer)
       val newOperands = mutable.ArrayBuffer[Var]()
+      val nonVarOperands = mutable.ArrayBuffer[CTerm]()
       for operand <- operands do
         operand match
           case r: Var => newOperands.append(r)
           case Effects(literal, operands) =>
             newLiteral.appendAll(literal)
             newOperands.appendAll(operands)
+          case Collapse(c) => nonVarOperands.addOne(c)
           case _ => throw IllegalArgumentException("type error")
-      Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
+      if nonVarOperands.isEmpty then
+        Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
+      else
+        Collapse(
+          nonVarOperands.foldLeft(
+            Return(
+              Effects(
+                newLiteral.to(ListSet),
+                (newOperands.map(_.weaken(nonVarOperands.size, 0).asInstanceOf[Var]) ++
+                  vars(nonVarOperands.size - 1))
+                  .to(ListSet)
+              )
+            )
+          ) { (ctx, t) =>
+            Let(t, ctx)(gn"unionOperand")
+          }
+        )
     case Level(literal, maxOperands) =>
       val operands = maxOperands.map { (ref, lOffset) =>
         (substitute(
@@ -195,6 +214,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
       }
       var newLiteral = literal
       val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
+      val nonVarOperands = mutable.ArrayBuffer[CTerm]()
       for (t, lOffset) <- operands do
         t match
           case r: Var => newOperands.append((r, lOffset))
@@ -207,8 +227,27 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
                 newLiteral
               )
             ) ++ offsetOperands.map { (_, o) => o }).max
+          case Collapse(c) => nonVarOperands.addOne(c)
           case _ => throw IllegalArgumentException("type error")
-      Level(newLiteral, ListMap.from(newOperands))
+      if nonVarOperands.isEmpty then
+        Level(newLiteral, ListMap.from(newOperands))
+      else
+        Collapse(
+          nonVarOperands.foldLeft(
+            Return(
+              Level(
+                newLiteral, ListMap.from(
+                  newOperands.map {
+                    case (v, offset) => (v.weaken(nonVarOperands.size, 0).asInstanceOf[Var], offset)
+                  } ++
+                    vars(nonVarOperands.size - 1).map((_, 0))
+                )
+              )
+            )
+          ) { (ctx, t) =>
+            Let(t, ctx)(gn"maxOperand")
+          }
+        )
     case CellType(heap, ty, status) => CellType(
       substitute(heap, substitution, offset),
       substitute(ty, substitution, offset),

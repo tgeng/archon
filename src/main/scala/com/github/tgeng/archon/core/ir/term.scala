@@ -164,7 +164,10 @@ object VTerm:
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
-  def vars(firstIndex: Nat, lastIndex: Nat = 0) : List[VTerm] = firstIndex.to(lastIndex, -1).map(Var(_)).toList
+  def vars(firstIndex: Nat, lastIndex: Nat = 0): List[Var] = firstIndex
+    .to(lastIndex, -1)
+    .map(new Var(_))
+    .toList
 
 
 sealed trait IType:
@@ -210,7 +213,7 @@ enum CTerm:
     args: Arguments = Nil,
     effects: VTerm = VTerm.Total
   ) extends CTerm, IType, QualifiedNameOwner(qn)
-  
+
   case Projection(rec: CTerm, name: Name)
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
@@ -287,6 +290,13 @@ def getFreeVars(tele: Telescope)
   (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
   case Nil => (Set(), Set())
   case binding :: rest => getFreeVars(binding.ty) | getFreeVars(rest)(using bar + 1) - 1
+
+class FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
+  override def offsetContext(bar: Nat, bindingNames: List[Name]): Nat = bar + bindingNames.size
+
+  override def combine(freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
+    (using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+    freeVars.fold((Set(), Set())) { (a, b) => a | b }
 
 def getFreeVars(tm: VTerm)
   (using bar: Nat)
