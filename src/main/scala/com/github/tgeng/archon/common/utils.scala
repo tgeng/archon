@@ -114,6 +114,12 @@ extension[T] (elems: IterableOnce[T])
       if predicate(elem) then return elem
     default
 
+  def associatedBy[K](keyExtractor: T => K): Map[K, T] =
+    val result = mutable.Map[K, T]()
+    for elem <- elems do
+      result(keyExtractor(elem)) = elem
+    result.toMap
+
 def swap[A, B](t: (A, B)) : (B, A) = t match
   case (a, b) => (b, a)
 
@@ -144,4 +150,3 @@ def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.
  */
 type Nat = Int
-

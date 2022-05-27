@@ -9,7 +9,7 @@ import QualifiedName.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[+T](ty: T)(name: Name):
+case class Binding[+T](ty: T)(val name: Name):
   def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
 
 /**
@@ -78,7 +78,7 @@ enum VTerm:
    */
   case Collapse(cTm: CTerm)
 
-  case U(cty: CTerm)
+  case U(cTy: CTerm)
   case Thunk(c: CTerm)
 
   case DataType(qn: QualifiedName, args: Arguments = Nil) extends VTerm, QualifiedNameOwner(qn)
@@ -209,7 +209,8 @@ enum CTerm:
     qn: QualifiedName,
     args: Arguments = Nil,
     effects: VTerm = VTerm.Total
-  ) extends CTerm, IType
+  ) extends CTerm, IType, QualifiedNameOwner(qn)
+  
   case Projection(rec: CTerm, name: Name)
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
@@ -243,7 +244,7 @@ enum CTerm:
      * for cases where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value
      * is simply `return (var 0)`
      */
-    /* binding + 1 */ transform: CTerm,
+    /* binding offset + 1 */ transform: CTerm,
 
     /**
      * All handler implementations declared by the effect. Each handler is essentially a function
@@ -274,7 +275,7 @@ enum CTerm:
      * `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases where such
      * flexibility is needed, one should use `GlobalHeapKey` instead.
      */
-    /* binding + 1 */ input: CTerm,
+    /* binding offset + 1 */ input: CTerm,
   )
 
 // TODO: support array operations on heap
