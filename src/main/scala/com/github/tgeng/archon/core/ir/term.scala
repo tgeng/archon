@@ -291,94 +291,56 @@ def getFreeVars(tele: Telescope)
   case Nil => (Set(), Set())
   case binding :: rest => getFreeVars(binding.ty) | getFreeVars(rest)(using bar + 1) - 1
 
-class FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
+object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
+
+  import VTerm.*
+  import CTerm.*
+
   override def offsetContext(bar: Nat, bindingNames: List[Name]): Nat = bar + bindingNames.size
 
   override def combine(freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
     (using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
     freeVars.fold((Set(), Set())) { (a, b) => a | b }
 
-def getFreeVars(tm: VTerm)
-  (using bar: Nat)
-  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-  import VTerm.*
-  tm match
-    case Type(ul, upperBound) => getFreeVars(ul) | getFreeVars(upperBound)
-    case Top(ul) => getFreeVars(ul)
-    case Pure(ul) => getFreeVars(ul)
-    case Var(index) => (if index < bar then Set() else Set(index), Set())
-    case Collapse(cTm) => getFreeVars(cTm)
-    case U(cty) => getFreeVars(cty)
-    case Thunk(c) => getFreeVars(c)
-    case DataType(qn, args) =>
-      val data = Σ.getData(qn)
-      data.tParamTys.zip(args).map { case ((_, variance), arg) => variance match
+  override def visitVar(v: Var)
+    (using bar: Nat)
+    (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+    if v.index < bar then (Set(), Set()) else (Set(v.index - bar), Set())
+
+  override def visitDataType(dataType: DataType)
+    (using bar: Nat)
+    (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+    val data = Σ.getData(dataType.qn)
+
+    combine(
+      data.tParamTys.zip(dataType.args).map { case ((_, variance), arg) => variance match
         case Variance.COVARIANT => getFreeVars(arg)
         case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
         case Variance.INVARIANT => mix(getFreeVars(arg))
-      }.reduceOption(_ | _).getOrElse((Set.empty, Set.empty))
-    case Con(_, args) => getFreeVars(args)
-    case EqualityType(ty, left, right) => getFreeVars(ty) | getFreeVars(left) | getFreeVars(right)
-    case Effects(literal, unionOperands) =>
-      getFreeVars(literal.flatMap { (_, args) => args }) |
-        getFreeVars(unionOperands)
-    case Level(_, maxOperands) =>
-      maxOperands
-        .map { (v, _) => getFreeVars(v) }
-        .reduceOption(_ | _)
-        .getOrElse((Set.empty, Set.empty))
-    case CellType(heap, ty, status) => getFreeVars(heap) | mix(getFreeVars(ty))
-    case Refl | EffectsType | LevelType | HeapType | _: Heap | _: Cell => (Set(), Set())
+      }: _*
+    )
+
+  override def visitRecordType(recordType: RecordType)
+    (using bar: Nat)
+    (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+    val record = Σ.getRecord(recordType.qn)
+    combine(
+      getFreeVars(recordType.effects) +:
+        record.tParamTys.zip(recordType.args).map { case ((_, variance), arg) => variance match
+          case Variance.COVARIANT => getFreeVars(arg)
+          case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
+          case Variance.INVARIANT => mix(getFreeVars(arg))
+        }: _*
+    )
+
+def getFreeVars(tm: VTerm)
+  (using bar: Nat)
+  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitor.visitVTerm(tm)
 
 def getFreeVars(tm: CTerm)
   (using bar: Nat)
   (using Σ: Signature)
-: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-  import CTerm.*
-  tm match
-    case Hole => (Set(), Set())
-    case CType(ul, upperBound, eff) =>
-      getFreeVars(eff) | getFreeVars(ul) | getFreeVars(upperBound)
-    case CTop(ul, eff) => getFreeVars(eff) | getFreeVars(ul)
-    case Force(v) => getFreeVars(v)
-    case F(vTy, eff) => getFreeVars(eff) | getFreeVars(vTy)
-    case Return(v) => getFreeVars(v)
-    case Let(t, ctx) => getFreeVars(t) |
-      getFreeVars(ctx)(using bar + 1) - 1
-    case FunctionType(binding, bodyTy, effects) =>
-      getFreeVars(effects) |
-        swap(getFreeVars(binding.ty)) |
-        getFreeVars(bodyTy)(using bar + 1) - 1
-    case Application(fun, arg) => getFreeVars(fun) | getFreeVars(arg)
-    case RecordType(qn, args, effects) =>
-      val record = Σ.getRecord(qn)
-      getFreeVars(effects) |
-        record.tParamTys.zip(args).map { case ((_, variance), arg) => variance match
-          case Variance.COVARIANT => getFreeVars(arg)
-          case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
-          case Variance.INVARIANT => mix(getFreeVars(arg))
-        }.reduceOption(_ | _)
-          .getOrElse((Set.empty, Set.empty))
-    case Projection(rec, _) => getFreeVars(rec)
-    case OperatorCall(eff, _, args) => getFreeVars(eff) | getFreeVars(args)
-    case Handler(eff@(qn, _), otherEffects, outputType, transform, handlers, input) =>
-      getFreeVars(eff) |
-        getFreeVars(otherEffects) |
-        getFreeVars(outputType) |
-        getFreeVars(transform)(using bar + 1) - 1 |
-        handlers.map { (name, t) =>
-          val offset = Σ.getOperator(qn, name).paramTys.size + 1
-          getFreeVars(t)(using bar + offset) - offset
-        }.reduceOption(_ | _)
-          .getOrElse((Set.empty, Set.empty)) |
-        getFreeVars(input)
-    case AllocOp(heap, ty) => getFreeVars(heap) | getFreeVars(ty)
-    case SetOp(cell, value) => getFreeVars(cell) | getFreeVars(value)
-    case GetOp(cell) => getFreeVars(cell)
-    case HeapHandler(otherEffects, _, _, input) =>
-      getFreeVars(otherEffects) |
-        getFreeVars(input)(using bar + 1) - 1
-    case _: Def | _: Continuation => (Set(), Set())
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitor.visitCTerm(tm)
 
 def getFreeVars(ul: ULevel)
   (using bar: Nat)
