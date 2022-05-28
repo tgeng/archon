@@ -44,7 +44,7 @@ extension (p: Pattern)
     case PAbsurd => None
 
 enum CoPattern:
-  case CPattern(p: Pattern)
+  case CPattern(pattern: Pattern)
   case CProjection(name: Name)
 
 object CoPattern:

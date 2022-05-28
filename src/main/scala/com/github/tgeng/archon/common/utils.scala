@@ -120,6 +120,12 @@ extension[T] (elems: IterableOnce[T])
       result(keyExtractor(elem)) = elem
     result.toMap
 
+  def associatedBy[K, V](keyExtractor: T => K, valueExtractor: T => V): Map[K, V] =
+    val result = mutable.Map[K, V]()
+    for elem <- elems do
+      result(keyExtractor(elem)) = valueExtractor(elem)
+    result.toMap
+
 def swap[A, B](t: (A, B)) : (B, A) = t match
   case (a, b) => (b, a)
 
@@ -145,6 +151,33 @@ def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
     case Right(r) => Right((k, r))
     case Left(l) => Left(l)
   }).map(Map.from)
+
+def topologicalSort[T](ts: Seq[T])(getDeps: T => Seq[T]): Either[/* cycle */Seq[T], /* sorted */ Seq[T]] =
+  object CycleException extends Exception
+  val visited = mutable.ArrayBuffer[T]()
+  val visitedSet = mutable.Set[T]()
+  val visiting = mutable.ArrayBuffer[T]()
+  val visitingSet = mutable.Set[T]()
+
+  def dfs(t: T): Unit =
+    if visitedSet(t) then return
+    if visitingSet(t) then throw CycleException
+    visiting.addOne(t)
+    visitedSet.add(t)
+    val deps = getDeps(t)
+    for dep <- deps do
+      dfs(dep)
+    visiting.dropRightInPlace(1)
+    visitingSet.remove(t)
+    visited.addOne(t)
+    visitedSet.add(t)
+
+  try {
+    for t <- ts do dfs(t)
+    Right(visited.toSeq)
+  } catch {
+    case _: CycleException.type => Left(visiting.toSeq)
+  }
 
 /**
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.

@@ -5,13 +5,19 @@ import com.github.tgeng.archon.core.common.*
 import CTerm.*
 import VTerm.*
 import ULevel.*
+import Pattern.*
+import CoPattern.*
 
 trait Visitor[C, R]:
 
-  def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+  def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
+    (using ctx: C)
+    (using Σ: Signature): R =
     combine(tTelescope.map(e => visitCTerm(e._1.ty)): _*)
 
-  def visitTTelescope(tTelescope: Seq[(Binding[VTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+  def visitTTelescope(tTelescope: Seq[(Binding[VTerm], Variance)])
+    (using ctx: C)
+    (using Σ: Signature): R =
     combine(tTelescope.map(e => visitBinding(e._1)): _*)
 
   def visitPreTelescope(telescope: Seq[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
@@ -31,7 +37,60 @@ trait Visitor[C, R]:
 
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def offsetContext(ctx: C, bindingNames: =>List[Name]): C = ctx
+  def offsetContext(ctx: C, bindingNames: => List[Name]): C = ctx
+
+  def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R = pattern match
+    case pVar: PVar => visitPVar(pVar)
+    case PRefl => visitPRefl
+    case pDataType: PDataType => visitPDataType(pDataType)
+    case pForcedDataType: PForcedDataType => visitPForcedDataType(pForcedDataType)
+    case pConstructor: PConstructor => visitPConstructor(pConstructor)
+    case pForcedConstructor: PForcedConstructor => visitPForcedConstructor(pForcedConstructor)
+    case pForced: PForced => visitPForced(pForced)
+    case PAbsurd => visitPAbsurd
+
+  def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature): R = combine()
+
+  def visitPRefl(using ctx: C)(using Σ: Signature): R = combine()
+
+  def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitQualifiedName(pDataType.qn) +:
+        pDataType.args.map(visitPattern): _*
+    )
+
+  def visitPForcedDataType(pForcedDataType: PForcedDataType)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitQualifiedName(pForcedDataType.qn) +:
+        pForcedDataType.args.map(visitPattern): _*
+    )
+
+  def visitPConstructor(pConstructor: PConstructor)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitName(pConstructor.name) +:
+        pConstructor.args.map(visitPattern): _*
+    )
+
+  def visitPForcedConstructor(pForcedConstructor: PForcedConstructor)
+    (using ctx: C)
+    (using Σ: Signature): R =
+    combine(
+      visitName(pForcedConstructor.name) +:
+        pForcedConstructor.args.map(visitPattern): _*
+    )
+
+  def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature): R =
+    visitVTerm(pForced.term)
+
+  def visitPAbsurd(using ctx: C)(using Σ: Signature): R = combine()
+
+  def visitCoPattern(coPattern: CoPattern)(using ctx: C)(using Σ: Signature): R = coPattern match
+    case p: CPattern => ???
+    case p: CProjection => ???
+
+  def visitCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): R = visitPattern(p.pattern)
+
+  def visitCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): R = visitName(p.name)
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type => visitType(ty)
