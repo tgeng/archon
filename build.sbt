@@ -19,4 +19,5 @@ lazy val root = (project in file("."))
     ),
     Test / testOptions += Tests.Argument("-oF"),
     Test / fork := true,
+    maxErrors := 1,
   )

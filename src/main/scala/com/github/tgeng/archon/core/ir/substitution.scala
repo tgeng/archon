@@ -18,7 +18,7 @@ trait Substitutable[S: Raisable, T]:
 import VTerm.*
 import CTerm.*
 
-object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)] :
+private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)] :
   override def offsetContext(
     ctx: (Int, Int),
     bindingNames: List[Name]
@@ -58,7 +58,7 @@ given RaisableTelescope: Raisable[Telescope] with
     case binding :: telescope =>
       binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(telescope, amount, bar + 1)
 
-object SubstituteTransformer extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)] :
+private object SubstituteTransformer extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)] :
   override def offsetContext(
     ctx: (PartialSubstitution[VTerm], Int),
     bindingNames: List[Name]
