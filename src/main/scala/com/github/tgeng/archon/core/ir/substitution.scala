@@ -18,128 +18,38 @@ trait Substitutable[S: Raisable, T]:
 import VTerm.*
 import CTerm.*
 
-given RaisableVTerm: Raisable[VTerm] with
-  override def raise(v: VTerm, amount: Int, bar: Int)(using Σ: Signature): VTerm = v match
-    case Refl | EffectsType | LevelType | HeapType | _: Heap => v
-    case Type(level, upperBound) => Type(
-      level.map(raise(_, amount, bar)),
-      raise(upperBound, amount, bar)
-    )
-    case Top(ul) => Top(ul.map(raise(_, amount, bar)))
-    case Pure(ul) => Pure(ul.map(raise(_, amount, bar)))
-    case Var(idx) => if idx >= bar then Var(idx + amount) else v
-    case Collapse(cTm) => Collapse(RaisableCTerm.raise(cTm, amount, bar))
-    case U(cty) => U(RaisableCTerm.raise(cty, amount, bar))
-    case Thunk(c) => Thunk(RaisableCTerm.raise(c, amount, bar))
-    case DataType(qn, args) => DataType(qn, args.map((v: VTerm) => raise(v, amount, bar)))
-    case Con(name, args) => Con(name, args.map((v: VTerm) => raise(v, amount, bar)))
-    case EqualityType(ty, left, right) => EqualityType(
-      raise(ty, amount, bar),
-      raise(left, amount, bar),
-      raise(right, amount, bar)
-    )
-    case Level(literal, maxOperands) => Level(
-      literal,
-      maxOperands.map { (k, v) => (raise(k, amount, bar).asInstanceOf[VTerm.Var], v) }
-    )
-    case Effects(literal, unionOperands) => Effects(
-      literal, unionOperands.map(
-        raise(_, amount, bar)
-          .asInstanceOf[VTerm.Var]
+object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)] :
+  override def offsetContext(
+    ctx: (Int, Int),
+    bindingNames: List[Name]
+  ): (Int, Int) =
+    (ctx._1, ctx._2 + bindingNames.size)
+
+  override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
+    if v.index >= ctx._2 then Var(v.index + ctx._1) else v
+
+  override def transformEffects(effects: Effects)(using ctx: (Int, Int))(using Σ: Signature) =
+    Effects(
+      effects.literal, effects.unionOperands.map(
+        transformVar(_).asInstanceOf[VTerm.Var]
       )
     )
-    case CellType(heap, ty, status) => CellType(
-      raise(heap, amount, bar),
-      raise(ty, amount, bar),
-      status
+
+  override def transformLevel(level: Level)(using ctx: (Int, Int))(using Σ: Signature) =
+    Level(
+      level.literal,
+      level.maxOperands.map { (k, v) => (transformVar(k).asInstanceOf[VTerm.Var], v) }
     )
-    case Cell(heapKey, index) => Cell(heapKey, index)
+
+end RaiseTransformer
+
+given RaisableVTerm: Raisable[VTerm] with
+  override def raise(v: VTerm, amount: Int, bar: Int)(using Σ: Signature): VTerm =
+    RaiseTransformer.transformVTerm(v)(using (amount, bar))
 
 given RaisableCTerm: Raisable[CTerm] with
-  override def raise(c: CTerm, amount: Int, bar: Int)(using Σ: Signature): CTerm = c match
-    case Hole | _: Def => c
-    case CType(level, upperBound, effects) => CType(
-      level.map(RaisableVTerm.raise(_, amount, bar)),
-      raise(upperBound, amount, bar),
-      RaisableVTerm.raise(effects, amount, bar),
-    )
-    case CTop(level, effects) => CTop(
-      level.map(RaisableVTerm.raise(_, amount, bar)),
-      RaisableVTerm.raise(effects, amount, bar),
-    )
-    case Force(v) => Force(RaisableVTerm.raise(v, amount, bar))
-    case F(vTerm, effects) => F(
-      RaisableVTerm.raise(vTerm, amount, bar),
-      RaisableVTerm.raise(effects, amount, bar)
-    )
-    case Return(v) => Return(RaisableVTerm.raise(v, amount, bar))
-    case l@Let(t, ctx) => Let(
-      raise(t, amount, bar),
-      raise(ctx, amount, bar + 1)
-    )(l.boundName)
-    case FunctionType(binding, bodyTy, effects) => FunctionType(
-      binding.map(RaisableVTerm.raise(_, amount, bar)),
-      raise(bodyTy, amount, bar + 1),
-      RaisableVTerm.raise(effects, amount, bar)
-    )
-    //    case Lambda(body) => Lambda(raise(body, amount, bar + 1))
-    case Application(fun, arg) => Application(
-      raise(fun, amount, bar),
-      RaisableVTerm.raise(arg, amount, bar)
-    )
-    case RecordType(qn, args, effects) => RecordType(
-      qn,
-      args.map(RaisableVTerm.raise(_, amount, bar)),
-      RaisableVTerm.raise(effects, amount, bar)
-    )
-    //    case Record(fields) => Record(fields.view.mapValues(raise(_, amount, bar)).toMap)
-    case Projection(rec, name) => Projection(raise(rec, amount, bar), name)
-    //    case TypeCase(arg, cases, default) => TypeCase(
-    //      RaisableVTerm.raise(arg, amount, bar),
-    //      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap,
-    //      raise(default, amount, bar + 1)
-    //    )
-    //    case DataCase(arg, cases) => DataCase(
-    //      RaisableVTerm.raise(arg, amount, bar),
-    //      cases.view.mapValues { case (n, c) => (n, raise(c, amount, bar + n + 1)) }.toMap
-    //    )
-    //    case EqualityCase(arg, body) => EqualityCase(
-    //      RaisableVTerm.raise(arg, amount, bar),
-    //      raise(body, amount, bar + 1)
-    //    )
-    case Continuation(capturedStack) => Continuation(
-      capturedStack.map(raise(_, amount, bar)),
-    )
-    case OperatorCall(eff, name, args) => OperatorCall(
-      eff.map(RaisableVTerm.raise(_, amount, bar)),
-      name,
-      args.map(RaisableVTerm.raise(_, amount, bar))
-    )
-    case Handler(eff@(qn, _), otherEffects, outputType, transform, handlers, input) => Handler(
-      eff.map(RaisableVTerm.raise(_, amount, bar)),
-      RaisableVTerm.raise(otherEffects, amount, bar),
-      RaisableVTerm.raise(outputType, amount, bar),
-      raise(transform, amount, bar + 1),
-      handlers.map { (name, c) =>
-        (name, raise(c, amount, bar + Σ.getOperator(qn, name).paramTys.size + 1))
-      },
-      raise(input, amount, bar),
-    )
-    case AllocOp(heap, ty) => AllocOp(
-      RaisableVTerm.raise(heap, amount, bar),
-      RaisableVTerm.raise(ty, amount, bar)
-    )
-    case SetOp(call, value) => SetOp(
-      RaisableVTerm.raise(call, amount, bar),
-      RaisableVTerm.raise(value, amount, bar)
-    )
-    case GetOp(cell) => GetOp(RaisableVTerm.raise(cell, amount, bar))
-    case HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(
-      RaisableVTerm.raise(otherEffects, amount, bar + 1),
-      key,
-      heapContent.map(_.map(RaisableVTerm.raise(_, amount, bar))),
-      raise(input, amount, bar + 1)
-    )
+  override def raise(c: CTerm, amount: Int, bar: Int)(using Σ: Signature): CTerm =
+    RaiseTransformer.transformCTerm(c)(using (amount, bar))
 
 given RaisableTelescope: Raisable[Telescope] with
   override def raise(telescope: Telescope, amount: Int, bar: Int)
@@ -148,207 +58,102 @@ given RaisableTelescope: Raisable[Telescope] with
     case binding :: telescope =>
       binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(telescope, amount, bar + 1)
 
-given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
-  override def substitute(
-    v: VTerm,
-    substitution: PartialSubstitution[VTerm],
-    offset: Int
-  )(using Σ: Signature): VTerm = v match
-    case Refl | LevelType | EffectsType | HeapType | _: Heap => v
-    case Type(level, upperBound) => Type(
-      level.map(l => substitute(l, substitution, offset)),
-      substitute(upperBound, substitution, offset),
-    )
-    case Top(ul) => Top(ul.map(substitute(_, substitution, offset)))
-    case Pure(ul) => Pure(ul.map(substitute(_, substitution, offset)))
-    case Var(idx) => substitution(idx - offset) match
-      case Some(t) => RaisableVTerm.raise(t, offset)
+object SubstituteTransformer extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)] :
+  override def offsetContext(
+    ctx: (PartialSubstitution[VTerm], Int),
+    bindingNames: List[Name]
+  ): (PartialSubstitution[VTerm], Int) = (ctx._1, ctx._2 + bindingNames.size)
+
+  override def transformVar(v: Var)
+    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using Σ: Signature) =
+    ctx._1(v.index - ctx._2) match
+      case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _ => v
-    case Collapse(cTm) => Collapse(SubstitutableCTerm.substitute(cTm, substitution, offset))
-    case U(cty) => U(SubstitutableCTerm.substitute(cty, substitution, offset))
-    case Thunk(cty) => Thunk(SubstitutableCTerm.substitute(cty, substitution, offset))
-    case DataType(qn, args) => DataType(qn, args.map(substitute(_, substitution, offset)))
-    case Con(name, args) => Con(name, args.map(substitute(_, substitution, offset)))
-    case EqualityType(ty, left, right) => EqualityType(
-      substitute(ty, substitution, offset),
-      substitute(left, substitution, offset),
-      substitute(right, substitution, offset),
-    )
-    case Effects(literal, unionOperands) =>
-      val operands = unionOperands.map(substitute(_, substitution, offset))
-      val newLiteral = literal.to(mutable.ArrayBuffer)
-      val newOperands = mutable.ArrayBuffer[Var]()
-      val nonVarOperands = mutable.ArrayBuffer[CTerm]()
-      for operand <- operands do
-        operand match
-          case r: Var => newOperands.append(r)
-          case Effects(literal, operands) =>
-            newLiteral.appendAll(literal)
-            newOperands.appendAll(operands)
-          case Collapse(c) => nonVarOperands.addOne(c)
-          case _ => throw IllegalArgumentException("type error")
-      if nonVarOperands.isEmpty then
-        Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
-      else
-        Collapse(
-          nonVarOperands.foldLeft(
-            Return(
-              Effects(
-                newLiteral.to(ListSet),
-                (newOperands.map(_.weaken(nonVarOperands.size, 0).asInstanceOf[Var]) ++
-                  vars(nonVarOperands.size - 1))
-                  .to(ListSet)
+
+  override def transformEffects(effects: Effects)
+    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using Σ: Signature) =
+    val operands = effects.unionOperands.map(transformVar(_))
+    val newLiteral = effects.literal.to(mutable.ArrayBuffer)
+    val newOperands = mutable.ArrayBuffer[Var]()
+    val nonVarOperands = mutable.ArrayBuffer[CTerm]()
+    for operand <- operands do
+      operand match
+        case r: Var => newOperands.append(r)
+        case Effects(literal, operands) =>
+          newLiteral.appendAll(literal)
+          newOperands.appendAll(operands)
+        case Collapse(c) => nonVarOperands.addOne(c)
+        case _ => throw IllegalArgumentException("type error")
+    if nonVarOperands.isEmpty then
+      Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
+    else
+      Collapse(
+        nonVarOperands.foldLeft(
+          Return(
+            Effects(
+              newLiteral.to(ListSet),
+              (newOperands.map(_.weaken(nonVarOperands.size, 0).asInstanceOf[Var]) ++
+                vars(nonVarOperands.size - 1))
+                .to(ListSet)
+            )
+          )
+        ) { (ctx, t) =>
+          Let(t, ctx)(gn"unionOperand")
+        }
+      )
+
+  override def transformLevel(level: Level)
+    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using Σ: Signature) =
+    val operands = level.maxOperands.map { (ref, lOffset) => (transformVar(ref), lOffset) }
+    var newLiteral = level.literal
+    val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
+    val nonVarOperands = mutable.ArrayBuffer[CTerm]()
+    for (t, lOffset) <- operands do
+      t match
+        case r: Var => newOperands.append((r, lOffset))
+        case Level(literal, operands) =>
+          val offsetOperands = operands.map { (r, o) => (r, o + lOffset) }
+          newOperands.addAll(offsetOperands)
+          newLiteral = (Seq(
+            math.max(
+              literal,
+              newLiteral
+            )
+          ) ++ offsetOperands.map { (_, o) => o }).max
+        case Collapse(c) => nonVarOperands.addOne(c)
+        case _ => throw IllegalArgumentException("type error")
+    if nonVarOperands.isEmpty then
+      Level(newLiteral, ListMap.from(newOperands))
+    else
+      Collapse(
+        nonVarOperands.foldLeft(
+          Return(
+            Level(
+              newLiteral, ListMap.from(
+                newOperands.map {
+                  case (v, offset) => (v.weaken(nonVarOperands.size, 0).asInstanceOf[Var], offset)
+                } ++
+                  vars(nonVarOperands.size - 1).map((_, 0))
               )
             )
-          ) { (ctx, t) =>
-            Let(t, ctx)(gn"unionOperand")
-          }
-        )
-    case Level(literal, maxOperands) =>
-      val operands = maxOperands.map { (ref, lOffset) =>
-        (substitute(
-          ref,
-          substitution,
-          offset
-        ), lOffset)
-      }
-      var newLiteral = literal
-      val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
-      val nonVarOperands = mutable.ArrayBuffer[CTerm]()
-      for (t, lOffset) <- operands do
-        t match
-          case r: Var => newOperands.append((r, lOffset))
-          case Level(literal, operands) =>
-            val offsetOperands = operands.map { (r, o) => (r, o + lOffset) }
-            newOperands.addAll(offsetOperands)
-            newLiteral = (Seq(
-              math.max(
-                literal,
-                newLiteral
-              )
-            ) ++ offsetOperands.map { (_, o) => o }).max
-          case Collapse(c) => nonVarOperands.addOne(c)
-          case _ => throw IllegalArgumentException("type error")
-      if nonVarOperands.isEmpty then
-        Level(newLiteral, ListMap.from(newOperands))
-      else
-        Collapse(
-          nonVarOperands.foldLeft(
-            Return(
-              Level(
-                newLiteral, ListMap.from(
-                  newOperands.map {
-                    case (v, offset) => (v.weaken(nonVarOperands.size, 0).asInstanceOf[Var], offset)
-                  } ++
-                    vars(nonVarOperands.size - 1).map((_, 0))
-                )
-              )
-            )
-          ) { (ctx, t) =>
-            Let(t, ctx)(gn"maxOperand")
-          }
-        )
-    case CellType(heap, ty, status) => CellType(
-      substitute(heap, substitution, offset),
-      substitute(ty, substitution, offset),
-      status,
-    )
-    case Cell(heapKey, index) => Cell(heapKey, index)
+          )
+        ) { (ctx, t) =>
+          Let(t, ctx)(gn"maxOperand")
+        }
+      )
+
+end SubstituteTransformer
+
+given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
+  override def substitute(v: VTerm, substitution: PartialSubstitution[VTerm], offset: Int)
+    (using Σ: Signature): VTerm = SubstituteTransformer.transformVTerm(v)(using (substitution, offset))
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
-  override def substitute(
-    c: CTerm,
-    substitution: PartialSubstitution[VTerm],
-    offset: Int
-  )(using Σ: Signature): CTerm = c match
-    case Hole | _: Def => c
-    case CType(level, upperBound, effects) => CType(
-      level.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      substitute(upperBound, substitution, offset),
-      SubstitutableVTerm.substitute(effects, substitution, offset),
-    )
-    case CTop(level, effects) => CTop(
-      level.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      SubstitutableVTerm.substitute(effects, substitution, offset)
-    )
-    case Force(v) => Force(SubstitutableVTerm.substitute(v, substitution, offset))
-    case F(vTerm, effects) => F(
-      SubstitutableVTerm.substitute(vTerm, substitution, offset),
-      SubstitutableVTerm.substitute(effects, substitution, offset)
-    )
-    case Return(v) => Return(SubstitutableVTerm.substitute(v, substitution, offset))
-    case l@Let(t, ctx) => Let(
-      substitute(t, substitution, offset),
-      substitute(ctx, substitution, offset + 1)
-    )(l.boundName)
-    case FunctionType(binding, bodyTy, effects) => FunctionType(
-      binding.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      substitute(bodyTy, substitution, offset + 1),
-      SubstitutableVTerm.substitute(effects, substitution, offset)
-    )
-    //    case Lambda(body) => Lambda(substitute(body, substitution, offset + 1))
-    case Application(fun, arg) => Application(
-      substitute(fun, substitution, offset),
-      SubstitutableVTerm.substitute(arg, substitution, offset)
-    )
-    case RecordType(qn, args, effects) => RecordType(
-      qn,
-      args.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      SubstitutableVTerm.substitute(effects, substitution, offset)
-    )
-    //    case Record(fields) => Record(fields.view.mapValues(substitute(_, substitution, offset)).toMap)
-    case Projection(rec, name) => Projection(substitute(rec, substitution, offset), name)
-    //    case TypeCase(arg, cases, default) => TypeCase(
-    //      SubstitutableVTerm.substitute(arg, substitution, offset),
-    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitution, offset + n + 1)) }.toMap,
-    //      substitute(default, substitution, offset + 1)
-    //    )
-    //    case DataCase(arg, cases) => DataCase(
-    //      SubstitutableVTerm.substitute(arg, substitution, offset),
-    //      cases.view.mapValues { case (n, c) => (n, substitute(c, substitution, offset + n + 1)) }.toMap
-    //    )
-    //    case EqualityCase(arg, body) => EqualityCase(
-    //      SubstitutableVTerm.substitute(arg, substitution, offset),
-    //      substitute(body, substitution, offset + 1)
-    //    )
-    case Continuation(capturedStack) =>
-      Continuation(
-        capturedStack.map(substitute(_, substitution, offset)),
-      )
-    case OperatorCall(eff, name, args) => OperatorCall(
-      eff.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      name,
-      args.map(SubstitutableVTerm.substitute(_, substitution, offset))
-    )
-    case Handler(eff@(qn, _), otherEffects, outputType, transform, handlers, input) => Handler(
-      eff.map(SubstitutableVTerm.substitute(_, substitution, offset)),
-      SubstitutableVTerm.substitute(otherEffects, substitution, offset),
-      SubstitutableVTerm.substitute(outputType, substitution, offset),
-      substitute(transform, substitution, offset + 1),
-      handlers.map { (name, c) =>
-        (name, substitute(
-          c,
-          substitution,
-          offset + Σ.getOperator(qn, name).paramTys.size + 1
-        ))
-      },
-      substitute(input, substitution, offset),
-    )
-    case AllocOp(heap, ty) => AllocOp(
-      SubstitutableVTerm.substitute(heap, substitution, offset),
-      SubstitutableVTerm.substitute(ty, substitution, offset)
-    )
-    case SetOp(call, value) => SetOp(
-      SubstitutableVTerm.substitute(call, substitution, offset),
-      SubstitutableVTerm.substitute(value, substitution, offset)
-    )
-    case GetOp(cell) => GetOp(SubstitutableVTerm.substitute(cell, substitution, offset))
-    case HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(
-      SubstitutableVTerm.substitute(otherEffects, substitution, offset + 1),
-      key,
-      heapContent.map(_.map(SubstitutableVTerm.substitute(_, substitution, offset))),
-      substitute(input, substitution, offset + 1)
-    )
+  override def substitute(c: CTerm, substitution: PartialSubstitution[VTerm], offset: Int)
+    (using Σ: Signature): CTerm = SubstituteTransformer.transformCTerm(c)(using (substitution, offset))
 
 given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
   override def substitute(
