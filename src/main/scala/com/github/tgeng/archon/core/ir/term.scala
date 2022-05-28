@@ -291,7 +291,7 @@ def getFreeVars(tele: Telescope)
   case Nil => (Set(), Set())
   case binding :: rest => getFreeVars(binding.ty) | getFreeVars(rest)(using bar + 1) - 1
 
-object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
+private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
 
   import VTerm.*
   import CTerm.*
@@ -314,28 +314,46 @@ object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negati
 
     combine(
       data.tParamTys.zip(dataType.args).map { case ((_, variance), arg) => variance match
-        case Variance.COVARIANT => getFreeVars(arg)
-        case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
-        case Variance.INVARIANT => mix(getFreeVars(arg))
+        case Variance.COVARIANT => visitVTerm(arg)
+        case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
+        case Variance.INVARIANT => mix(visitVTerm(arg))
       }: _*
     )
+
+  override def visitCellType(cellType: CellType)
+    (using ctx: Nat)
+    (using Σ: Signature): (Set[Nat], Set[Nat]) = combine(
+    visitVTerm(cellType.heap),
+    mix(visitVTerm(cellType.ty))
+  )
 
   override def visitRecordType(recordType: RecordType)
     (using bar: Nat)
     (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
     val record = Σ.getRecord(recordType.qn)
     combine(
-      getFreeVars(recordType.effects) +:
+      visitVTerm(recordType.effects) +:
         record.tParamTys.zip(recordType.args).map { case ((_, variance), arg) => variance match
-          case Variance.COVARIANT => getFreeVars(arg)
-          case Variance.CONTRAVARIANT => swap(getFreeVars(arg))
-          case Variance.INVARIANT => mix(getFreeVars(arg))
+          case Variance.COVARIANT => visitVTerm(arg)
+          case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
+          case Variance.INVARIANT => mix(visitVTerm(arg))
         }: _*
+    )
+
+  override def visitFunctionType(functionType: CTerm.FunctionType)
+    (using bar: Nat)
+    (using Σ: Signature): (Set[Nat], Set[Nat]) =
+    combine(
+      visitVTerm(functionType.effects),
+      swap(visitVTerm(functionType.binding.ty)),
+      visitCTerm(functionType.bodyTy)(using bar + 1)
     )
 
 def getFreeVars(tm: VTerm)
   (using bar: Nat)
-  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitor.visitVTerm(tm)
+  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitor.visitVTerm(
+  tm
+)
 
 def getFreeVars(tm: CTerm)
   (using bar: Nat)
