@@ -8,9 +8,30 @@ import ULevel.*
 
 trait Visitor[C, R]:
 
+  def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+    combine(tTelescope.map(e => visitCTerm(e._1.ty)): _*)
+
+  def visitTTelescope(tTelescope: Seq[(Binding[VTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+    combine(tTelescope.map(e => visitBinding(e._1)): _*)
+
+  def visitPreTelescope(telescope: Seq[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
+    combine(telescope.map(b => visitCTerm(b.ty)): _*)
+
+  def visitTelescope(telescope: Seq[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
+    combine(telescope.map(visitBinding): _*)
+
+  def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
+    visitVTerm(binding.ty)
+
+  def visitVTerms(tms: Seq[VTerm])(using ctx: C)(using Σ: Signature): R =
+    combine(tms.map(visitVTerm): _*)
+
+  def visitCTerms(tms: Seq[CTerm])(using ctx: C)(using Σ: Signature): R =
+    combine(tms.map(visitCTerm): _*)
+
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def offsetContext(ctx: C, bindingNames: List[Name]): C = ctx
+  def offsetContext(ctx: C, bindingNames: =>List[Name]): C = ctx
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type => visitType(ty)
@@ -172,7 +193,7 @@ trait Visitor[C, R]:
     combine(continuation.capturedStack.map(visitCTerm): _*)
 
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
-    val operatorsByName = Σ.getOperators(handler.eff._1).associatedBy(_.name)
+    lazy val operatorsByName = Σ.getOperators(handler.eff._1).associatedBy(_.name)
     combine(
       visitEff(handler.eff) +:
         visitVTerm(handler.otherEffects) +:

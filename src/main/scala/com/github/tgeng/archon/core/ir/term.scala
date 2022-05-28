@@ -117,6 +117,9 @@ enum VTerm:
    */
   case Cell(heapKey: HeapKey, index: Nat)
 
+  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R = visitor.visitVTerm(this)
+  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): VTerm = transformer.transformVTerm(this)
+
 object VTerm:
   def LevelLiteral(n: Nat): Level = Level(n, ListMap())
 
@@ -285,6 +288,9 @@ enum CTerm:
 // TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
 //  support quotient type and set semantic is very common in software engineering.
 
+  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R = visitor.visitCTerm(this)
+  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): CTerm = transformer.transformCTerm(this)
+
 def getFreeVars(tele: Telescope)
   (using bar: Nat)
   (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
@@ -296,7 +302,7 @@ private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /
   import VTerm.*
   import CTerm.*
 
-  override def offsetContext(bar: Nat, bindingNames: List[Name]): Nat = bar + bindingNames.size
+  override def offsetContext(bar: Nat, bindingNames: =>List[Name]): Nat = bar + bindingNames.size
 
   override def combine(freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
     (using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
