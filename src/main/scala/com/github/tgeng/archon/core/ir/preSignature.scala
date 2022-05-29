@@ -11,6 +11,10 @@ enum PreDeclaration:
   case PreData(val qn: QualifiedName)
     (
       val tParamTys: PreTTelescope,
+      // This could be a pure function type that ends with `F Type` for indexed families. In this
+      // case, during elaboration, all constructors are weakened by the number of args in the
+      // declared function type. That is, indexed families are converted to parameterized inductive
+      // types with equality types representing the constraints.
       val ty: CTerm,
       val isPure: Boolean,
       val constructors: List[PreConstructor]
@@ -18,6 +22,7 @@ enum PreDeclaration:
   case PreRecord(val qn: QualifiedName)
     (
       val tParamTys: PreTTelescope,
+      // Unlike data, for record, this `ty` is expected to be a simple computation type.
       val ty: CTerm,
       val fields: List[PreField]
     )
@@ -140,7 +145,8 @@ def elaborateRecord(record: PreRecord)(using Signature): Either[IrError, Record]
 
 def elaborateFields(record: PreRecord)(using Signature): Either[IrError, List[Field]] = ???
 
-def elaborateDefinition(definition: PreDefinition)(using Signature): Either[IrError, Definition] = ???
+def elaborateDefinition(definition: PreDefinition)
+  (using Signature): Either[IrError, Definition] = ???
 
 def elaborateClauses(record: PreDefinition)(using Signature): Either[IrError, List[Clause]] = ???
 
