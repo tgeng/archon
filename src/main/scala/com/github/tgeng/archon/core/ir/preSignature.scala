@@ -129,3 +129,21 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]] :
     (using Σ: Signature): Set[QualifiedName] = Set(qn)
 
 end QualifiedNameVisitor
+
+import Declaration.*
+
+def elaborateData(data: PreData)(using Signature): Either[IrError, Data] = ???
+
+def elaborateConstructors(data: PreData)(using Signature): Either[IrError, List[Constructor]] = ???
+
+def elaborateRecord(record: PreRecord)(using Signature): Either[IrError, Record] = ???
+
+def elaborateFields(record: PreRecord)(using Signature): Either[IrError, List[Field]] = ???
+
+def elaborateDefinition(definition: PreDefinition)(using Signature): Either[IrError, Definition] = ???
+
+def elaborateClauses(record: PreDefinition)(using Signature): Either[IrError, List[Clause]] = ???
+
+def elaborateEffect(effect: PreEffect)(using Signature): Either[IrError, Effect] = ???
+
+def elaborateOperators(effect: PreEffect)(using Signature): Either[IrError, List[Operator]] = ???

@@ -46,6 +46,10 @@ extension (ctx: NameContext)
       case (name, offset) => map.updated(name, ctx._1 + offset)
   })
 
+def astToIr(data: AstDeclaration)
+  (using ctx: NameContext)
+  (using Σ: Signature): PreDeclaration = ???
+
 def astToIr(ast: AstCoPattern)
   (using ctx: NameContext)
   (using Σ: Signature): Either[AstError, CoPattern] = ast match
