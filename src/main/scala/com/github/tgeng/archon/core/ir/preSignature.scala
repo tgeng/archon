@@ -235,19 +235,54 @@ def elaborateBody(preRecord: PreRecord)
   )
 
 def elaborateSignature(definition: PreDefinition)
-  (using Signature)(using ctx: TypingContext): Either[IrError, Definition] = ???
+  (using Signature)(using ctx: TypingContext): Either[IrError, Definition] =
+  reduceCType(definition.ty).map(Definition(definition.qn)(_))
 
-def elaborateBody(record: PreDefinition)
+def elaborateBody(definition: PreDefinition)
   (using Signature)
-  (using ctx: TypingContext): Either[IrError, List[Clause]] = ???
+  (using ctx: TypingContext): Either[IrError, List[Clause]] =
+  transpose(
+    definition.clauses.flatMap { clause =>
+      clause.rhs match
+        case None => List()
+        case Some(rhs) => List(
+          for
+            bindings <- elaborateTelescope(clause.bindings)
+            ty <- reduceCType(clause.ty)
+          yield Clause(bindings, clause.lhs, rhs, ty)
+        )
+    }
+  )
 
 def elaborateSignature(effect: PreEffect)
   (using Signature)
-  (using ctx: TypingContext): Either[IrError, Effect] = ???
+  (using ctx: TypingContext): Either[IrError, Effect] =
+  elaborateTelescope(effect.tParamTys).map(Effect(effect.qn)(_))
 
 def elaborateBody(effect: PreEffect)
   (using Signature)
-  (using ctx: TypingContext): Either[IrError, List[Operator]] = ???
+  (using ctx: TypingContext): Either[IrError, List[Operator]] =
+
+  def elaborateTy(ty: CTerm)
+    (using Γ: Context)
+    (using Signature)
+    (using ctx: TypingContext): Either[IrError, (Telescope, /* operator return type */ VTerm)] =
+    for ty <- reduceCType(ty)
+        r <- ty match
+          // Here and below we do not care the declared effect types because data type constructors
+          // are always total. Declaring non-total signature is not necessary (nor desirable) but
+          // acceptable.
+          case F(ty, _) => Right((Nil, ty))
+          case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
+            case (telescope, ul) => (binding :: telescope, ul)
+          }
+          case _ => Left(ExpectFType(ty))
+    yield r
+  transpose(effect.operators.map { operator =>
+    elaborateTy(operator.ty).map {
+      case (paramTys, resultTy) => Operator(operator.name, paramTys, resultTy)
+    }
+  })
 
 private def elaborateTTelescope(tTelescope: PreTTelescope)
   (using Γ: Context)
