@@ -24,7 +24,7 @@ import PreDeclaration.*
 
 type NameContext = (Int, Map[Name, Int])
 
-given emptyNameContext: NameContext = (1, Map.empty)
+given emptyNameContext: NameContext = (0, Map.empty)
 
 private def resolve(astVar: AstVar)(using ctx: NameContext): Either[AstError, Var] =
   ctx._2.get(astVar.name) match
@@ -48,6 +48,9 @@ extension (ctx: NameContext)
     tuple match
       case (name, offset) => map.updated(name, ctx._1 + offset)
   })
+
+object NameContext:
+  def fromContext(ctx: Context): NameContext = emptyNameContext ++ ctx.map(_.name)
 
 def astToIr(decl: AstDeclaration)
   (using Σ: Signature): Either[AstError, PreDeclaration] =
