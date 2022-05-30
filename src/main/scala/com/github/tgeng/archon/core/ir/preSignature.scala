@@ -224,7 +224,15 @@ def elaborateBody(preRecord: PreRecord)
   (using ctx: TypingContext): Either[IrError, List[Field]] =
   val record = Σ.getRecord(preRecord.qn)
 
-  ???
+  given Context = record.tParamTys.map(_._1).toIndexedSeq :+
+    Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))))(n"self")
+
+  transpose(
+    preRecord.fields.map { field =>
+      for ty <- reduceCType(field.ty)
+        yield Field(field.name, ty)
+    }
+  )
 
 def elaborateSignature(definition: PreDefinition)
   (using Signature)(using ctx: TypingContext): Either[IrError, Definition] = ???
