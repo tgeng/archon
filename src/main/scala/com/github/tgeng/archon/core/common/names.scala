@@ -8,8 +8,7 @@ enum Name extends Comparable[Name] :
     case _  if this == that => 0
     case (Generated(thisValue), Generated(thatValue)) => thisValue.compareTo(thatValue)
     case (Normal(thisValue), Normal(thatValue)) => thisValue.compareTo(thatValue)
-    case (_: Generated, _) => -1
-    case (_, _: Generated) => 1
+    case _ => this.ordinal.compareTo(that.ordinal)
 
   override def toString: String = this match
     case Normal(v) => v
