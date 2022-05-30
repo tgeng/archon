@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ast
 
+import scala.annotation.targetName
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
@@ -17,7 +18,9 @@ import AstPattern.*
 import AstCoPattern.*
 import Pattern.*
 import CoPattern.*
-import com.github.tgeng.archon.core.ir.Elimination.EProj
+import AstDeclaration.*
+import Elimination.*
+import PreDeclaration.*
 
 type NameContext = (Int, Map[Name, Int])
 
@@ -46,9 +49,78 @@ extension (ctx: NameContext)
       case (name, offset) => map.updated(name, ctx._1 + offset)
   })
 
-def astToIr(data: AstDeclaration)
+def astToIr(decl: AstDeclaration)
+  (using Σ: Signature): Either[AstError, PreDeclaration] =
+  given NameContext = emptyNameContext
+
+  decl match
+    case AstData(qn, tParamTys, ty, isPure, constructors) => astToIr(tParamTys) {
+      for ty <- astToIr(ty)
+          constructors <- transpose(
+            constructors.map { constructor =>
+              astToIr(constructor.ty)
+                .map(PreConstructor(constructor.name, _))
+            }
+          )
+      yield (ty, constructors)
+    }.map {
+      case (tParamTys, (ty, constructors)) => PreData(qn)(tParamTys, ty, isPure, constructors)
+    }
+    case AstRecord(qn, tParamTys, ty, fields) => astToIr(tParamTys) {
+      for ty <- astToIr(ty)
+          fields <- transpose(fields.map { field =>
+            astToIr(field.ty)
+              .map(Field(field.name, _))
+          })
+      yield (ty, fields)
+    }.map {
+      case (tParamTys, (ty, fields)) => PreRecord(qn)(tParamTys, ty, fields)
+    }
+    case AstDefinition(qn, ty, clauses) =>
+      for ty <- astToIr(ty)
+          clauses <- transpose(clauses.map { clause =>
+            astToIr(clause.bindings) {
+              for lhs <- transpose(clause.lhs.map(astToIr))
+                  rhs <- clause.rhs match
+                    case None => Right(None)
+                    case Some(t) => astToIr(t).map(Some(_))
+                  ty <- astToIr(clause.ty)
+              yield (lhs, rhs, ty)
+            }.map {
+              case (bindings, (lhs, rhs, ty)) => PreClause(bindings, lhs, rhs, ty)
+            }
+          })
+      yield PreDefinition(qn)(ty, clauses)
+    case AstEffect(qn, tParamTys, operators) => astToIr(tParamTys) {
+      transpose(operators.map { operator =>
+        for ty <- astToIr(operator.ty)
+        yield PreOperator(operator.name, ty)
+      })
+    }.map {
+      case (tParamTys, operators) => PreEffect(qn)(tParamTys, operators)
+    }
+
+@targetName("astToIrTTelescope")
+private def astToIr[T](tTelescope: AstTTelescope)
+  (action: NameContext ?=> Either[AstError, T])
   (using ctx: NameContext)
-  (using Σ: Signature): PreDeclaration = ???
+  (using Σ: Signature): Either[AstError, (PreTTelescope, T)] = astToIr(tTelescope.map(_._1))(action)
+  .map {
+    case (telescope, t) => (telescope.zip(tTelescope.map(_._2)), t)
+  }
+
+@targetName("astToIrTelescope")
+private def astToIr[T](telescope: AstTelescope)
+  (action: NameContext ?=> Either[AstError, T])
+  (using ctx: NameContext)
+  (using Σ: Signature): Either[AstError, (PreTelescope, T)] = telescope match
+  case Nil => action.map((Nil, _))
+  case binding :: telescope => bind(binding.name) {
+    for ty <- astToIr(binding.ty)
+        r <- astToIr(telescope)(action)
+    yield r match
+      case (tys, t) => (Binding(ty)(binding.name) :: tys, t)
+  }
 
 def astToIr(ast: AstCoPattern)
   (using ctx: NameContext)
@@ -184,8 +256,8 @@ def astToIr(ast: AstTerm)
               }
           yield r
         case SHeapHandler(
-          otherEffects,
-          heapVarName,
+        otherEffects,
+        heapVarName,
         ) :: rest =>
           for otherEffects <- astToIr(otherEffects)
               input <- bind(heapVarName) {

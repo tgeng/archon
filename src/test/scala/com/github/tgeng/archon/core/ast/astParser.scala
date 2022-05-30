@@ -17,6 +17,7 @@ import AstCoPattern.*
 import AstDeclaration.*
 
 class AstParser(
+  private val moduleQn: QualifiedName,
   private val globalNameMap: Name => List[QualifiedName]
 ):
 
@@ -34,7 +35,7 @@ class AstParser(
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       constructors <- constructor sepByGreedy P.whitespaces
-    yield AstData(name, tParamTys, ty, isPure, constructors)
+    yield AstData(moduleQn / name, tParamTys, ty, isPure, constructors)
   }
 
   def recordDecl: StrParser[AstRecord] = P {
@@ -49,7 +50,7 @@ class AstParser(
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       fields <- field sepByGreedy P.whitespaces
-    yield AstRecord(name, tParamTys, ty, fields)
+    yield AstRecord(moduleQn / name, tParamTys, ty, fields)
   }
 
   def defDecl: StrParser[AstDefinition] = P {
@@ -65,7 +66,7 @@ class AstParser(
       name <- P.from("def") >%> name <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       clauses <- clause sepByGreedy P.whitespaces
-    yield AstDefinition(name, ty, clauses)
+    yield AstDefinition(moduleQn / name, ty, clauses)
   }
 
   def effectDecl: StrParser[AstEffect] = P {
@@ -80,7 +81,7 @@ class AstParser(
       tParamTys <- tParamTys <%< P.from(";") << P.whitespaces
       operators <- operator sepByGreedy P.whitespaces
       // note: in production code, we should report error if variance is not "invariant"
-    yield AstEffect(name, tParamTys.map(_._1), operators)
+    yield AstEffect(moduleQn / name, tParamTys.map(_._1), operators)
   }
 
   private def tParamTys: StrParser[AstTTelescope] = P {

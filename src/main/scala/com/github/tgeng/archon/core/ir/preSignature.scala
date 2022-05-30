@@ -51,7 +51,7 @@ type PreField = Field // There is no difference for field
 case class PreClause(
   bindings: PreTelescope, // TODO: remove `binding` after elaboration is implemented
   lhs: List[CoPattern],
-  rhs: Some[CTerm], // `None` for absurd pattern
+  rhs: Option[CTerm], // `None` for absurd pattern
   ty: CTerm, // TODO: remove `ty` after elaboration is implemented
 )
 
