@@ -142,10 +142,11 @@ import VTerm.*
 import IrError.*
 import Variance.*
 
+private given Γ0: Context = IndexedSeq()
+
 def elaborateSignature(data: PreData)
   (using Signature)
   (using ctx: TypingContext): Either[IrError, Data] =
-  given Γ0: Context = IndexedSeq()
 
   def elaborateTy(ty: CTerm)
     (using Γ: Context)
@@ -157,7 +158,7 @@ def elaborateSignature(data: PreData)
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
           // acceptable.
           case F(Type(ul, _), _) => Right((Nil, ul))
-          case F(t, _) => Left(ExpectType(t))
+          case F(t, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
             case (telescope, ul) => ((binding, INVARIANT) :: telescope, ul)
           }
@@ -209,11 +210,21 @@ def elaborateBody(preData: PreData)
 
 def elaborateSignature(record: PreRecord)
   (using Signature)
-  (using ctx: TypingContext): Either[IrError, Record] = ???
+  (using ctx: TypingContext): Either[IrError, Record] =
+  for
+    tParamTys <- elaborateTTelescope(record.tParamTys)
+    ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
+    r <- ty match
+      case CType(ul, _, _) => Right(new Record(record.qn)(tParamTys, ul))
+      case t => Left(ExpectCType(t))
+  yield r
 
-def elaborateBody(record: PreRecord)
-  (using Signature)
-  (using ctx: TypingContext): Either[IrError, List[Field]] = ???
+def elaborateBody(preRecord: PreRecord)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, List[Field]] =
+  val record = Σ.getRecord(preRecord.qn)
+
+  ???
 
 def elaborateSignature(definition: PreDefinition)
   (using Signature)(using ctx: TypingContext): Either[IrError, Definition] = ???
