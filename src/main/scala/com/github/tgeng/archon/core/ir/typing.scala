@@ -551,7 +551,7 @@ def checkType(tm: CTerm, ty: CTerm)
 : Either[IrError, Unit] = tm match
   case _ =>
     for tmTy <- inferType(tm)
-        ty <- reduceForTyping(ty)
+        ty <- reduceCType(ty)
         r <- checkSubsumption(tmTy, ty, None)
     yield r
 
@@ -940,7 +940,26 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
         case _ => Left(NotCTypeError(cTy))
   yield r
 
-private def reduceForTyping(cTy: CTerm)
+def reduceVType(vTy: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[IrError, VTerm] =
+  for tyTy <- inferType(vTy)
+      r <- tyTy match
+        case F(Type(_, _), effect) if effect == Total =>
+          for reducedTy <- reduce(vTy)
+              r <- reducedTy match
+                case Return(vTy) => Right(vTy)
+                case _ => throw IllegalStateException(
+                  "type checking has bugs: reduced value of type `F ...` must be `Return ...`."
+                )
+          yield r
+        case F(_, _) => Left(EffectfulCType(vTy))
+        case _ => Left(ExpectFType(vTy))
+  yield r
+
+def reduceCType(cTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)

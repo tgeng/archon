@@ -62,7 +62,7 @@ extension[I, T, M[+_] : Alternative : Monad : Applicative]
 
   infix def |(q: => ParserT[I, T, M]) = atp.or(p, q)
 
-  inline def withFilter(inline predicate: T => Boolean, description: String | Null = null) =
+  inline def withFilter(inline predicate: T => Boolean, description: String | Null = null): ParserT[I, T, M] =
     for
       t <- p
       filtered <-

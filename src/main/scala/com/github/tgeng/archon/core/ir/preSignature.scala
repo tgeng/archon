@@ -3,6 +3,7 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
+import Reducible.reduce
 
 type PreTTelescope = List[(Binding[CTerm], Variance)]
 type PreTelescope = List[Binding[CTerm]]
@@ -136,20 +137,112 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]] :
 end QualifiedNameVisitor
 
 import Declaration.*
+import CTerm.*
+import VTerm.*
+import IrError.*
+import Variance.*
 
-def elaborateData(data: PreData)(using Signature): Either[IrError, Data] = ???
+def elaborateSignature(data: PreData)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, Data] =
+  given Γ0: Context = IndexedSeq()
 
-def elaborateConstructors(data: PreData)(using Signature): Either[IrError, List[Constructor]] = ???
+  def elaborateTy(ty: CTerm)
+    (using Γ: Context)
+    (using Signature)
+    (using ctx: TypingContext): Either[IrError, (TTelescope, ULevel)] =
+    for ty <- reduceCType(ty)
+        r <- ty match
+          // Here and below we do not care the declared effect types because data type constructors
+          // are always total. Declaring non-total signature is not necessary (nor desirable) but
+          // acceptable.
+          case F(Type(ul, _), _) => Right((Nil, ul))
+          case F(t, _) => Left(ExpectType(t))
+          case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
+            case (telescope, ul) => ((binding, INVARIANT) :: telescope, ul)
+          }
+          case _ => Left(NotDataTypeType(ty))
+    yield r
 
-def elaborateRecord(record: PreRecord)(using Signature): Either[IrError, Record] = ???
+  for
+    tParamTys <- elaborateTTelescope(data.tParamTys)
+    elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
+  yield elaboratedTy match
+    case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, data.isPure)
 
-def elaborateFields(record: PreRecord)(using Signature): Either[IrError, List[Field]] = ???
+def elaborateBody(preData: PreData)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, List[Constructor]] =
+  val data = Σ.getData(preData.qn)
 
-def elaborateDefinition(definition: PreDefinition)
-  (using Signature): Either[IrError, Definition] = ???
+  def elaborateTy(ty: CTerm)
+    (using Γ: Context)
+    (using Signature)
+    (using ctx: TypingContext): Either[IrError, (Telescope, /* args */ List[VTerm])] =
+    for ty <- reduceCType(ty)
+        r <- ty match
+          // Here and below we do not care the declared effect types because data type constructors
+          // are always total. Declaring non-total signature is not necessary (nor desirable) but
+          // acceptable.
+          case F(DataType(qn, args), _) if qn == data.qn && args.size == data.tParamTys.size =>
+            Right((Nil, args))
+          case F(t, _) => Left(ExpectDataType(t, Some(data.qn)))
+          case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
+            case (telescope, ul) => (binding :: telescope, ul)
+          }
+          case _ => Left(NotDataTypeType(ty))
+    yield r
 
-def elaborateClauses(record: PreDefinition)(using Signature): Either[IrError, List[Clause]] = ???
+  // number of index arguments
+  given Context = data.tParamTys.map(_._1).toIndexedSeq
 
-def elaborateEffect(effect: PreEffect)(using Signature): Either[IrError, Effect] = ???
+  val indexCount = data.tParamTys.size - data.tParamTys.size
+  transpose(
+    preData.constructors.map { constructor =>
+      // weaken to accommodate data type indices
+      val ty = constructor.ty.weaken(indexCount, 0)
+      elaborateTy(ty).map {
+        case (paramTys, args) => Constructor(constructor.name, paramTys, args)
+      }
+    }
+  )
 
-def elaborateOperators(effect: PreEffect)(using Signature): Either[IrError, List[Operator]] = ???
+def elaborateSignature(record: PreRecord)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, Record] = ???
+
+def elaborateBody(record: PreRecord)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, List[Field]] = ???
+
+def elaborateSignature(definition: PreDefinition)
+  (using Signature)(using ctx: TypingContext): Either[IrError, Definition] = ???
+
+def elaborateBody(record: PreDefinition)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, List[Clause]] = ???
+
+def elaborateSignature(effect: PreEffect)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, Effect] = ???
+
+def elaborateBody(effect: PreEffect)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, List[Operator]] = ???
+
+private def elaborateTTelescope(tTelescope: PreTTelescope)
+  (using Γ: Context)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, TTelescope] =
+  elaborateTelescope(tTelescope.map(_._1)).map(_.zip(tTelescope.map(_._2)))
+
+private def elaborateTelescope(telescope: PreTelescope)
+  (using Γ: Context)
+  (using Signature)
+  (using ctx: TypingContext): Either[IrError, Telescope] = telescope match
+  case Nil => Right(Nil)
+  case binding :: telescope =>
+    for ty <- reduceVType(binding.ty)
+        newBinding = Binding(ty)(binding.name)
+        telescope <- elaborateTelescope(telescope)(using Γ :+ newBinding)
+    yield newBinding :: telescope

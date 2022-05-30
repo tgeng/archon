@@ -8,7 +8,8 @@ lazy val root = (project in file("."))
     scalacOptions ++= Seq(
       "-Yexplicit-nulls",
       "-Ykind-projector",
-      "-language:postfixOps"
+      "-language:postfixOps",
+      "-Xfatal-warnings",
     ),
 
     libraryDependencies ++= Seq(
