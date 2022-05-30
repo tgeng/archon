@@ -68,34 +68,42 @@ def astToIr(decl: AstDeclaration)
     }
     case AstRecord(qn, tParamTys, ty, fields) => astToIr(tParamTys) {
       for ty <- astToIr(ty)
-          fields <- transpose(fields.map { field =>
-            astToIr(field.ty)
-              .map(Field(field.name, _))
-          })
+          fields <- bind(n"self") {
+            transpose(
+              fields.map { field =>
+                astToIr(field.ty)
+                  .map(Field(field.name, _))
+              }
+            )
+          }
       yield (ty, fields)
     }.map {
       case (tParamTys, (ty, fields)) => PreRecord(qn)(tParamTys, ty, fields)
     }
     case AstDefinition(qn, ty, clauses) =>
       for ty <- astToIr(ty)
-          clauses <- transpose(clauses.map { clause =>
-            astToIr(clause.bindings) {
-              for lhs <- transpose(clause.lhs.map(astToIr))
-                  rhs <- clause.rhs match
-                    case None => Right(None)
-                    case Some(t) => astToIr(t).map(Some(_))
-                  ty <- astToIr(clause.ty)
-              yield (lhs, rhs, ty)
-            }.map {
-              case (bindings, (lhs, rhs, ty)) => PreClause(bindings, lhs, rhs, ty)
+          clauses <- transpose(
+            clauses.map { clause =>
+              astToIr(clause.bindings) {
+                for lhs <- transpose(clause.lhs.map(astToIr))
+                    rhs <- clause.rhs match
+                      case None => Right(None)
+                      case Some(t) => astToIr(t).map(Some(_))
+                    ty <- astToIr(clause.ty)
+                yield (lhs, rhs, ty)
+              }.map {
+                case (bindings, (lhs, rhs, ty)) => PreClause(bindings, lhs, rhs, ty)
+              }
             }
-          })
+          )
       yield PreDefinition(qn)(ty, clauses)
     case AstEffect(qn, tParamTys, operators) => astToIr(tParamTys) {
-      transpose(operators.map { operator =>
-        for ty <- astToIr(operator.ty)
-        yield PreOperator(operator.name, ty)
-      })
+      transpose(
+        operators.map { operator =>
+          for ty <- astToIr(operator.ty)
+            yield PreOperator(operator.name, ty)
+        }
+      )
     }.map {
       case (tParamTys, operators) => PreEffect(qn)(tParamTys, operators)
     }
