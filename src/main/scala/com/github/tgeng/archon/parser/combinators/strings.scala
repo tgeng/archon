@@ -168,20 +168,29 @@ given[M[+_] : Alternative : Monad : Applicative]
   (using Alternative[ParseResult[M, *]])
 : Conversion[Regex, ParserT[Char, Match, M]] = P.from(_)
 
+extension[T] (p: StrParser[T])
+  def parseOrThrow(input: IndexedSeq[Char], index: Int = 0, targets: List[String] = Nil): T =
+    p.parse(input, index, targets) match
+      case Right(t) => t
+      case Left(parseErrors) => throw IllegalArgumentException(parseErrors.mkErrorString(input.mkString))
+
 extension (failure: ParseResult[?, ?])
+  def mkErrorString(input: String): String = failure.errors.mkErrorString(input)
+
+extension (errors: collection.Seq[ParseError])
   def mkErrorString(input: String): String =
     val lines = input.linesIterator.toIndexedSeq
     val sb = StringBuilder()
-    for ((targets, index), es) <- failure.errors.groupBy(e => (e.targets, e.index))
-      do
-        val (line, column) = indexToLineColumn(input, index)
-        val lineAndColumn = s"[${line + 1}:${column + 1}]"
-        sb.append(s"when parsing ${targets.mkString("->")}:\n")
-        sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
-        val numberOfSpaces = lineAndColumn.length + column + 1
-        val spaces: String = (0 until numberOfSpaces).map(_ => " ").mkString
-        sb.append(spaces + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
+    for ((targets, index), es) <- errors.groupBy(e => (e.targets, e.index)) do
+      val (line, column) = indexToLineColumn(input, index)
+      val lineAndColumn = s"[${line + 1}:${column + 1}]"
+      sb.append(s"when parsing ${targets.mkString("->")}:\n")
+      sb.append(s"$lineAndColumn ${lines.lift(line).getOrElse("")}\n")
+      val numberOfSpaces = lineAndColumn.length + column + 1
+      val spaces: String = (0 until numberOfSpaces).map(_ => " ").mkString
+      sb.append(spaces + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
     sb.toString.trim.!!
+
 
 extension[M[+_]]
   (using Functor[ParserT[Char, *, M]])

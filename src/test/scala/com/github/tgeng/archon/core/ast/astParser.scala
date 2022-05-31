@@ -18,6 +18,14 @@ import AstDeclaration.*
 
 object AstParser:
 
+  def declarations: StrParser[List[AstDeclaration]] = (dataDecl | recordDecl | defDecl | effectDecl) sepBy P.whitespaces
+
+  def binding: StrParser[Binding[AstTerm]] =
+    for
+      name <- name <%< P.from(":") << P.whitespaces
+      ty <- rhs
+    yield Binding(ty)(name)
+
   def dataDecl: StrParser[AstData] = P {
     val constructor: StrParser[AstConstructor] = P {
       for
@@ -338,3 +346,8 @@ object AstParser:
 
   private def symbol: StrParser[String] =
     P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.,;(){}]]+".r).withFilter(!reservedSymbols(_))
+
+extension (ctx: StringContext)
+  def t(args: String*): AstTerm = (P.whitespaces >> AstParser.term << P.whitespaces).parseOrThrow(ctx.s(args: _*))
+  def d(args: String*): List[AstDeclaration] = (P.whitespaces >> AstParser.declarations << P.whitespaces).parseOrThrow(ctx.s(args: _*))
+  def b(args: String*): Binding[AstTerm] = (P.whitespaces >> AstParser.binding << P.whitespaces).parseOrThrow(ctx.s(args: _*))
