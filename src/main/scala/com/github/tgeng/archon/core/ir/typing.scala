@@ -15,7 +15,7 @@ import scala.annotation.tailrec
 
 trait TypingContext
 
-def checkDataType(qn: QualifiedName)
+def checkData(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
@@ -76,7 +76,7 @@ def checkDataConstructors(qn: QualifiedName)
     case None => Left(MissingDeclaration(qn))
     case Some(constructors) => allRight(constructors.map { con => checkDataConstructor(qn, con) })
 
-def checkRecordType(qn: QualifiedName)
+def checkRecord(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =

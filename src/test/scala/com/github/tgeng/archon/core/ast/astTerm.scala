@@ -4,7 +4,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
-type AstEff = (QualifiedName, List[AstTerm])
+type AstEff = (Name, List[AstTerm])
 
 enum AstULevel:
   case AstUSimpleLevel(level: AstTerm)
@@ -12,7 +12,7 @@ enum AstULevel:
 
 enum AstTerm:
   case AstDef(qn: QualifiedName)
-  case AstVar(name: Name)
+  case AstIdentifier(name: Name)
   case AstCollapse(c: AstTerm)
   case AstU(cty: AstTerm)
   case AstThunk(c: AstTerm)

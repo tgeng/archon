@@ -16,10 +16,7 @@ import AstPattern.*
 import AstCoPattern.*
 import AstDeclaration.*
 
-class AstParser(
-  private val moduleQn: QualifiedName,
-  private val globalNameMap: Name => List[QualifiedName]
-):
+object AstParser:
 
   def dataDecl: StrParser[AstData] = P {
     val constructor: StrParser[AstConstructor] = P {
@@ -35,7 +32,7 @@ class AstParser(
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       constructors <- constructor sepByGreedy P.whitespaces
-    yield AstData(moduleQn / name, tParamTys, ty, isPure, constructors)
+    yield AstData(name, tParamTys, ty, isPure, constructors)
   }
 
   def recordDecl: StrParser[AstRecord] = P {
@@ -50,7 +47,7 @@ class AstParser(
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       fields <- field sepByGreedy P.whitespaces
-    yield AstRecord(moduleQn / name, tParamTys, ty, fields)
+    yield AstRecord(name, tParamTys, ty, fields)
   }
 
   def defDecl: StrParser[AstDefinition] = P {
@@ -66,7 +63,7 @@ class AstParser(
       name <- P.from("def") >%> name <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       clauses <- clause sepByGreedy P.whitespaces
-    yield AstDefinition(moduleQn / name, ty, clauses)
+    yield AstDefinition(name, ty, clauses)
   }
 
   def effectDecl: StrParser[AstEffect] = P {
@@ -81,7 +78,7 @@ class AstParser(
       tParamTys <- tParamTys <%< P.from(";") << P.whitespaces
       operators <- operator sepByGreedy P.whitespaces
       // note: in production code, we should report error if variance is not "invariant"
-    yield AstEffect(moduleQn / name, tParamTys.map(_._1), operators)
+    yield AstEffect(name, tParamTys.map(_._1), operators)
   }
 
   private def tParamTys: StrParser[AstTTelescope] = P {
@@ -119,9 +116,9 @@ class AstParser(
     val pVar = name.map(AstPVar(_))
 
     val dataType =
-      for qn <- qualifiedName << P.whitespaces
+      for name <- name << P.whitespaces
           args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from("}")
-      yield AstPDataType(qn, args)
+      yield AstPDataType(name, args)
     val forcedDataType = P.from(".") >> dataType
 
     val con =
@@ -180,7 +177,7 @@ class AstParser(
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
-      var transformHandler = (n"x", AstVar(n"x"))
+      var transformHandler = (n"x", AstIdentifier(n"x"))
 
       for (h <- allHandlers) { // Use old syntax here because IntelliJ's formatter keeps messing up indentations
         h match
@@ -290,32 +287,18 @@ class AstParser(
 
     val astTotal = P(P.from("<>").map(_ => AstDef(Builtins.TotalQn)))
 
-    val astDef = P(qualifiedName.map(AstDef(_)))
-
-    val astVar = P(name.map(AstVar(_)))
+    val astIdentifier = P(name.map(AstIdentifier(_)))
 
     astTotal ||
       astLevelLiteral ||
-      astVar ||
-      astDef ||
+      astIdentifier ||
       P.from("(") >%> term <%< P.from(")")
   }
 
   private def astEff: StrParser[AstEff] = P {
-    for qn <- qualifiedName
+    for name <- name
         args <- P.from("{") >%> (atom sepByGreedy P.whitespaces) <%< P.from("}")
-    yield (qn, args)
-  }
-
-
-  private def qualifiedName: StrParser[QualifiedName] = P {
-    for
-      name <- name
-      r <- globalNameMap(name) match
-        case qn :: Nil => P.pure(qn)
-        case Nil => P.fail(s"'$name' not found")
-        case allNames => P.fail(s"'$name' can be any of $allNames")
-    yield r
+    yield (name, args)
   }
 
   private def name: StrParser[Name] = P {

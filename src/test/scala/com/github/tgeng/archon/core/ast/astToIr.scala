@@ -26,15 +26,15 @@ type NameContext = (Int, Map[Name, Int])
 
 given emptyNameContext: NameContext = (0, Map.empty)
 
-private def resolve(astVar: AstVar)(using ctx: NameContext): Either[AstError, Var] =
+private def resolve(astVar: AstIdentifier)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, Either[CTerm, VTerm]] =
   ctx._2.get(astVar.name) match
-    case None => Left(UnresolvedVar(astVar))
-    case Some(dbNumber) => Right(Var(ctx._1 - dbNumber))
+    case Some(dbNumber) => Right(Right(Var(ctx._1 - dbNumber)))
+    case None => Left(UnresolvedIdentifier(astVar)) // TODO: resolve using signature
 
-private def resolve(astPVar: AstPVar)(using ctx: NameContext): Either[AstError, PVar] =
+private def resolve(astPVar: AstPVar)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, PVar] =
   ctx._2.get(astPVar.name) match
     case None => Left(UnresolvedPVar(astPVar))
-    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber))
+    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber)) // TODO: resolve using signature
 
 private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx :+ name)
@@ -44,7 +44,7 @@ private def bind[T](names: List[Name])(block: NameContext ?=> T)(using ctx: Name
 
 extension (ctx: NameContext)
   private def :+(name: Name) = (ctx._1 + 1, ctx._2.updated(name, ctx._1))
-  private def ++(names: Seq[Name]) = (ctx._1 + names.size, names.zipWithIndex.foldLeft(ctx._2) { (map, tuple) =>
+  private def ++(names: collection.Seq[Name]) = (ctx._1 + names.size, names.zipWithIndex.foldLeft(ctx._2) { (map, tuple) =>
     tuple match
       case (name, offset) => map.updated(name, ctx._1 + offset)
   })
@@ -52,12 +52,12 @@ extension (ctx: NameContext)
 object NameContext:
   def fromContext(ctx: Context): NameContext = emptyNameContext ++ ctx.map(_.name)
 
-def astToIr(decl: AstDeclaration)
-  (using Σ: Signature): Either[AstError, PreDeclaration] =
+def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
+  (using Σ: TestSignature): Either[AstError, PreDeclaration] =
   given NameContext = emptyNameContext
 
   decl match
-    case AstData(qn, tParamTys, ty, isPure, constructors) => astToIr(tParamTys) {
+    case AstData(name, tParamTys, ty, isPure, constructors) => astToIr(tParamTys) {
       for ty <- astToIr(ty)
           constructors <- transpose(
             constructors.map { constructor =>
@@ -67,9 +67,9 @@ def astToIr(decl: AstDeclaration)
           )
       yield (ty, constructors)
     }.map {
-      case (tParamTys, (ty, constructors)) => PreData(qn)(tParamTys, ty, isPure, constructors)
+      case (tParamTys, (ty, constructors)) => PreData(moduleQn / name)(tParamTys, ty, isPure, constructors)
     }
-    case AstRecord(qn, tParamTys, ty, fields) => astToIr(tParamTys) {
+    case AstRecord(name, tParamTys, ty, fields) => astToIr(tParamTys) {
       for ty <- astToIr(ty)
           fields <- bind(n"self") {
             transpose(
@@ -81,9 +81,9 @@ def astToIr(decl: AstDeclaration)
           }
       yield (ty, fields)
     }.map {
-      case (tParamTys, (ty, fields)) => PreRecord(qn)(tParamTys, ty, fields)
+      case (tParamTys, (ty, fields)) => PreRecord(moduleQn / name)(tParamTys, ty, fields)
     }
-    case AstDefinition(qn, ty, clauses) =>
+    case AstDefinition(name, ty, clauses) =>
       for ty <- astToIr(ty)
           clauses <- transpose(
             clauses.map { clause =>
@@ -99,8 +99,8 @@ def astToIr(decl: AstDeclaration)
               }
             }
           )
-      yield PreDefinition(qn)(ty, clauses)
-    case AstEffect(qn, tParamTys, operators) => astToIr(tParamTys) {
+      yield PreDefinition(moduleQn / name)(ty, clauses)
+    case AstEffect(name, tParamTys, operators) => astToIr(tParamTys) {
       transpose(
         operators.map { operator =>
           for ty <- astToIr(operator.ty)
@@ -108,14 +108,14 @@ def astToIr(decl: AstDeclaration)
         }
       )
     }.map {
-      case (tParamTys, operators) => PreEffect(qn)(tParamTys, operators)
+      case (tParamTys, operators) => PreEffect(moduleQn / name)(tParamTys, operators)
     }
 
 @targetName("astToIrTTelescope")
 private def astToIr[T](tTelescope: AstTTelescope)
   (action: NameContext ?=> Either[AstError, T])
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, (PreTTelescope, T)] = astToIr(tTelescope.map(_._1))(action)
+  (using Σ: TestSignature): Either[AstError, (PreTTelescope, T)] = astToIr(tTelescope.map(_._1))(action)
   .map {
     case (telescope, t) => (telescope.zip(tTelescope.map(_._2)), t)
   }
@@ -124,7 +124,7 @@ private def astToIr[T](tTelescope: AstTTelescope)
 private def astToIr[T](telescope: AstTelescope)
   (action: NameContext ?=> Either[AstError, T])
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, (PreTelescope, T)] = telescope match
+  (using Σ: TestSignature): Either[AstError, (PreTelescope, T)] = telescope match
   case Nil => action.map((Nil, _))
   case binding :: telescope => bind(binding.name) {
     for ty <- astToIr(binding.ty)
@@ -135,7 +135,7 @@ private def astToIr[T](telescope: AstTelescope)
 
 def astToIr(ast: AstCoPattern)
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, CoPattern] = ast match
+  (using Σ: TestSignature): Either[AstError, CoPattern] = ast match
   case AstCPattern(p) =>
     for
       p <- astToIr(p)
@@ -144,10 +144,15 @@ def astToIr(ast: AstCoPattern)
 
 def astToIr(ast: AstPattern)
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, Pattern] = ast match
+  (using Σ: TestSignature): Either[AstError, Pattern] = ast match
   case v: AstPVar => resolve(v)
-  case AstPDataType(qn, args) => transpose(args.map(astToIr)).map(PDataType(qn, _))
-  case AstPForcedDataType(qn, args) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
+  case AstPDataType(name, args) =>
+    Σ.resolveOption(name) match
+      case Some(qn) => transpose(args.map(astToIr)).map(PDataType(qn, _))
+      case None => Left(UnresolvedNameInPattern(name))
+  case AstPForcedDataType(name, args) => Σ.resolveOption(name) match
+    case Some(qn) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
+    case None => Left(UnresolvedNameInPattern(name))
   case AstPConstructor(name, args) => transpose(args.map(astToIr)).map(PConstructor(name, _))
   case AstPForcedConstructor(name, args) =>
     transpose(args.map(astToIr)).map(PForcedConstructor(name, _))
@@ -159,11 +164,14 @@ def astToIr(ast: AstPattern)
 
 def astToIr(ast: AstTerm)
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, CTerm] = ast match
+  (using Σ: TestSignature): Either[AstError, CTerm] = ast match
   case AstDef(qn) => Right(Def(qn))
-  case v: AstVar =>
-    for v <- resolve(v)
-      yield Return(v)
+  case v: AstIdentifier =>
+    for
+      v <- resolve(v)
+    yield v match
+      case Right(v) => Return(v)
+      case Left(c) => c
   case AstCollapse(c) =>
     for c <- astToIr(c)
       yield Return(Collapse(c))
@@ -230,7 +238,7 @@ def astToIr(ast: AstTerm)
             }
           yield Let(t, ctx)(name)
         case SHandler(
-        (effQn, effArgs),
+        (effName, effArgs),
         otherEffects,
         outputType,
         transformInputName,
@@ -256,7 +264,7 @@ def astToIr(ast: AstTerm)
               ) {
                 case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
                   Handler(
-                    (effQn, effArgs),
+                    (Σ.resolve(effName), effArgs),
                     otherEffects,
                     outputType,
                     transform.weaken(n, 1),
@@ -288,58 +296,58 @@ def astToIr(ast: AstTerm)
 
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)
-  (using Σ: Signature): Either[AstError, Elimination[CTerm]] = elim match
+  (using Σ: TestSignature): Either[AstError, Elimination[CTerm]] = elim match
   case ETerm(astTerm) => astToIr(astTerm).map(ETerm(_))
   case EProj(name) => Right(EProj(name))
 
 private def chainAst(name: Name, t: AstTerm)
-  (block: Signature ?=> VTerm => CTerm)
+  (block: TestSignature ?=> VTerm => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] = chainAst(List((name, t))) {
+  (using TestSignature): Either[AstError, CTerm] = chainAst(List((name, t))) {
   case v :: Nil => block(v)
   case _ => throw IllegalStateException()
 }
 
 private def chainAst(ts: (Name, AstTerm)*)
-  (block: Signature ?=> List[VTerm] => CTerm)
+  (block: TestSignature ?=> List[VTerm] => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] = chainAst(ts.toList)(block)
+  (using TestSignature): Either[AstError, CTerm] = chainAst(ts.toList)(block)
 
 private def chainAst[T[_] : EitherFunctor](ts: T[(Name, AstTerm)])
-  (block: Signature ?=> T[VTerm] => CTerm)
+  (block: TestSignature ?=> T[VTerm] => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] =
+  (using TestSignature): Either[AstError, CTerm] =
   val f = summon[EitherFunctor[T]]
   for ts <- f.map(ts) { case (n, t) => astToIr(t).map((n, _)) }
       r <- chain(ts) { (t, _) => block(t) }
   yield r
 
 private def chainAstWithDefaultName[T[_] : EitherFunctor](defaultName: Name, ts: T[AstTerm])
-  (block: Signature ?=> T[VTerm] => CTerm)
+  (block: TestSignature ?=> T[VTerm] => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] =
+  (using TestSignature): Either[AstError, CTerm] =
   val f = summon[EitherFunctor[T]]
   for ts <- f.map(ts) { t => astToIr(t).map((defaultName, _)) }
       r <- chain(ts) { (t, _) => block(t) }
   yield r
 
 private def chain(name: Name, t: CTerm)
-  (block: Signature ?=> (VTerm, Int) => CTerm)
+  (block: TestSignature ?=> (VTerm, Int) => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] = chain(List((name, t))) {
+  (using TestSignature): Either[AstError, CTerm] = chain(List((name, t))) {
   case (v :: Nil, n) => block(v, n)
   case _ => throw IllegalStateException()
 }
 
 private def chain(ts: (Name, CTerm)*)
-  (block: Signature ?=> (List[VTerm], Int) => CTerm)
+  (block: TestSignature ?=> (List[VTerm], Int) => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] = chain(ts.toList)(block)
+  (using TestSignature): Either[AstError, CTerm] = chain(ts.toList)(block)
 
 private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
-  (block: Signature ?=> (T[VTerm], /* number of non-trivial computations bound */ Int) => CTerm)
+  (block: TestSignature ?=> (T[VTerm], /* number of non-trivial computations bound */ Int) => CTerm)
   (using NameContext)
-  (using Signature): Either[AstError, CTerm] =
+  (using TestSignature): Either[AstError, CTerm] =
   for r <- {
     // Step 1. Count the number of non-trivial computations present in the computation args.
     // This is used to populate DeBruijn index of let bound variables for these non-trivial
