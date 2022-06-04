@@ -24,11 +24,11 @@ import PreDeclaration.*
 
 type NameContext = (Int, Map[Name, Int])
 
-given emptyNameContext: NameContext = (0, Map.empty)
+val emptyNameContext: NameContext = (0, Map.empty)
 
 private def resolve(astVar: AstIdentifier)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, Either[CTerm, VTerm]] =
   ctx._2.get(astVar.name) match
-    case Some(dbNumber) => Right(Right(Var(ctx._1 - dbNumber)))
+    case Some(dbNumber) => Right(Right(Var(ctx._1 - dbNumber - 1)))
     case None => Σ.resolveOption(astVar.name) match
       case Some(qn) => Right(Left(Def(qn)))
       case None => Left(UnresolvedIdentifier(astVar))

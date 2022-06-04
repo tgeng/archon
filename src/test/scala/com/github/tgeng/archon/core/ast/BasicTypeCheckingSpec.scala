@@ -5,6 +5,9 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
   "built-ins" in ~ {
     +b"l: Level"
+
     t"L0" hasType t"<> Level"
+    t"h" hasType t"<> Heap"
+    t"l" hasType t"<> Level"
   }
 }

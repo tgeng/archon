@@ -38,7 +38,8 @@ class SignatureSpec extends AnyFreeSpec :
   )
 
   extension (tm: AstTerm)
-    infix def hasType(ty: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+    infix def hasType(ty: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
+      given NameContext = Γ
       val cTm = astToIr(tm).asRight
       val cTy = astToIr(ty).asRight
       checkType(cTm, cTy) match
@@ -49,6 +50,7 @@ class SignatureSpec extends AnyFreeSpec :
       (using Context)
       (using TestSignature)
       (using TypingContext) =
+      given NameContext = Γ
       val cTm = astToIr(tm).asRight
       val cTy = astToIr(ty).asRight
       checkType(cTm, cTy) match
@@ -56,6 +58,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Left(e) =>
 
     infix def ⪯(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+      given NameContext = Γ
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
@@ -63,6 +66,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Left(e) => fail(e.toString, e.exception)
 
     infix def ⋠(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+      given NameContext = Γ
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
@@ -70,6 +74,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Left(e) =>
 
     infix def ≡(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+      given NameContext = Γ
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
@@ -77,6 +82,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Left(e) => fail(e.toString, e.exception)
 
     infix def ≢(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+      given NameContext = Γ
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
@@ -250,6 +256,7 @@ given Conversion[Context, NameContext] = NameContext.fromContext
 
 extension (binding: Binding[AstTerm])
   def unary_+(using Γ: MutableContext)(using Context)(using TestSignature)(using TypingContext) =
+    given NameContext = Γ
     val ty = astToIr(binding.ty).asRight
     val vTy = reduceVType(ty).asRight
     Γ.addOne(Binding(vTy)(binding.name))
