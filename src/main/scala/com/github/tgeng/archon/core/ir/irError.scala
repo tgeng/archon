@@ -4,7 +4,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
-enum IrError:
+enum IrError extends HasException:
   case Unknown
   case EffectfulCType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
   case ExpectCell(tm: VTerm)

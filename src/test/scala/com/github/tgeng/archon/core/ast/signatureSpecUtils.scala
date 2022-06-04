@@ -43,7 +43,7 @@ class SignatureSpec extends AnyFreeSpec :
       val cTy = astToIr(ty).asRight
       checkType(cTm, cTy) match
         case Right(_) =>
-        case Left(e) => fail(e.toString)
+        case Left(e) => fail(e.toString, e.exception)
 
     infix def doesNotHaveType(ty: AstTerm)
       (using Context)
@@ -60,7 +60,7 @@ class SignatureSpec extends AnyFreeSpec :
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
         case Right(_) =>
-        case Left(e) => fail(e.toString)
+        case Left(e) => fail(e.toString, e.exception)
 
     infix def ⋠(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
       val cTm = astToIr(tm).asRight
@@ -74,7 +74,7 @@ class SignatureSpec extends AnyFreeSpec :
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
         case Right(_) =>
-        case Left(e) => fail(e.toString)
+        case Left(e) => fail(e.toString, e.exception)
 
     infix def ≢(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
       val cTm = astToIr(tm).asRight
@@ -100,7 +100,7 @@ class TestSignature(
   private def updateQnByName(qn: QualifiedName) = qn match
     case QualifiedName.Root => throw IllegalArgumentException()
     case QualifiedName.Node(_, name) =>
-      assert(!qnByName.contains(name))
+      assert(!qnByName.contains(name), s"$qnByName already contains $name")
       qnByName(name) = qn
 
   Builtins.builtinData.values.foreach {

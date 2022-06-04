@@ -2,18 +2,23 @@ package com.github.tgeng.archon.common
 
 import scala.concurrent.duration.Duration
 import com.github.tgeng.archon.common.{*, given}
+import com.github.tgeng.archon.core.common.HasException
 import com.github.tgeng.archon.parser.combinators.{*, given}
 
 extension[L, R] (e: Either[L, R])
-  def asRight : R = e match
-    case Left(l) => throw IllegalArgumentException(l.toString)
+  def asRight: R = e match
+    case Left(l) =>
+      if l.isInstanceOf[HasException] then
+        throw IllegalStateException(l.toString, l.asInstanceOf[HasException].exception)
+      else
+        throw IllegalStateException(l.toString)
     case Right(r) => r
 
-  def asLeft : L = e match
+  def asLeft: L = e match
     case Right(r) => throw IllegalArgumentException(r.toString)
     case Left(l) => l
 
-def timed[T](description: String)(action: =>T): T =
+def timed[T](description: String)(action: => T): T =
   val start = System.currentTimeMillis()
   val result = action
   val end = System.currentTimeMillis()

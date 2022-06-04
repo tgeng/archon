@@ -6,6 +6,7 @@
       <parameters>
         <parameter value="-Yexplicit-nulls" />
         <parameter value="-Ykind-projector" />
+        <parameter value="-Xfatal-warnings" />
       </parameters>
     </profile>
   </component>

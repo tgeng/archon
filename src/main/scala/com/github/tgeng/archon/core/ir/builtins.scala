@@ -47,7 +47,7 @@ object Builtins:
   import Pattern.*
 
   val builtinData: Map[QualifiedName, (Data, IndexedSeq[Constructor])] = Seq(
-    (Builtins.UnitQn,
+    (Builtins.UnitTypeQn,
       /* tParamTys*/ Nil,
       /* ul */ USimpleLevel(LevelLiteral(0)),
       /* isPure */ true,

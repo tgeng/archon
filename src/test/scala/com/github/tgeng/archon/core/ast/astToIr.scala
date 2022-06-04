@@ -29,12 +29,14 @@ given emptyNameContext: NameContext = (0, Map.empty)
 private def resolve(astVar: AstIdentifier)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, Either[CTerm, VTerm]] =
   ctx._2.get(astVar.name) match
     case Some(dbNumber) => Right(Right(Var(ctx._1 - dbNumber)))
-    case None => Left(UnresolvedIdentifier(astVar)) // TODO: resolve using signature
+    case None => Σ.resolveOption(astVar.name) match
+      case Some(qn) => Right(Left(Def(qn)))
+      case None => Left(UnresolvedIdentifier(astVar))
 
-private def resolve(astPVar: AstPVar)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, PVar] =
+private def resolve(astPVar: AstPVar)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, Pattern] =
   ctx._2.get(astPVar.name) match
     case None => Left(UnresolvedPVar(astPVar))
-    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber)) // TODO: resolve using signature
+    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber))
 
 private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx :+ name)

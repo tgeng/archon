@@ -298,6 +298,7 @@ def checkType(tm: VTerm, ty: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
+//  println("checking " + tm + " : " + ty)
   tm match
     case Con(name, args) => ty match
       case DataType(qn, tArgs) =>
@@ -358,7 +359,7 @@ def inferType(tm: CTerm)
   case Let(t, ctx) =>
     for tTy <- inferType(t)
         r <- tTy match
-          case F(effects, ty) =>
+          case F(ty, effects) =>
             for ctxTy <-
                   if effects == Total then
                   // Do the reduction onsite so that type checking in sub terms can leverage the more specific
@@ -548,12 +549,14 @@ def checkType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = tm match
-  case _ =>
-    for tmTy <- inferType(tm)
-        ty <- reduceCType(ty)
-        r <- checkSubsumption(tmTy, ty, None)
-    yield r
+: Either[IrError, Unit] =
+//  println("checking " + tm + " : " + ty)
+  tm match
+    case _ =>
+      for tmTy <- inferType(tm)
+          ty <- reduceCType(ty)
+          r <- checkSubsumption(tmTy, ty, None)
+      yield r
 
 enum CheckSubsumptionMode:
   case SUBSUMPTION, CONVERSION
@@ -571,6 +574,7 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
+//  println("checking " + rawSub + " ⪯ " + rawSup + " : " + rawTy)
   if rawSub == rawSup then return Right(())
   val ty = rawTy.map(_.normalized) match
     case None => None
@@ -662,6 +666,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
+//  println("checking " + sub + " ⪯ " + sup + " : " + ty)
   val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
   for sub <- if isTotal then reduce(sub) else Right(sub)
       sub <- simplifyLet(sub)
@@ -968,7 +973,7 @@ def reduceCType(cTy: CTerm)
   case _ =>
     for cTyTy <- inferType(cTy)
         r <- cTyTy match
-          case CType(eff, _, _) if eff == Total => reduce(cTy)
+          case CType(_, _, eff) if eff == Total => reduce(cTy)
           case _: CType => Left(EffectfulCType(cTy))
           case _ => Left(NotCTypeError(cTy))
     yield r
