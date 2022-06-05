@@ -13,8 +13,24 @@ import Elimination.*
 
 import scala.annotation.tailrec
 
-trait TypingContext:
-  def enableDebug: Boolean = false
+trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
+  def trace[L, R](
+    startMessage: String,
+    successMsg: R => String,
+    failureMsg: L => String,
+    action: => Either[L, R]
+  ): Either[L, R] =
+    lazy val result: Either[L, R] = action
+    if enableDebugging then
+      val indent = "│ " * (traceLevel)
+      println(indent + "┌─" + startMessage)
+      traceLevel += 1
+      val endMessage = result match
+        case Right(r) => successMsg(r)
+        case Left(l) => failureMsg(l)
+      traceLevel -= 1
+      println(indent + "└─" + endMessage)
+    result
 
 def checkData(qn: QualifiedName)
   (using Σ: Signature)
@@ -584,95 +600,97 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
   (using ctx: TypingContext)
 : Either[IrError, Unit] = debugSubsumption(
   rawSub, rawSup, rawTy, {
-    if rawSub == rawSup then return Right(())
-    val ty = rawTy.map(_.normalized) match
-      case None => None
-      case Some(Right(v)) => Some(v)
-      case Some(Left(e)) => return Left(e)
-    (rawSub.normalized, rawSup.normalized) match
-      case (Left(e), _) => Left(e)
-      case (_, Left(e)) => Left(e)
-      case (Right(sub), Right(sup)) =>
-        (sub, sup, ty) match
-          case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
-            checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
-          case (ty, Top(ul2), _) =>
-            for tyTy <- inferType(ty)
-                r <- tyTy match
-                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
-                  case _ => Left(NotTypeError(sub))
-            yield r
-          case (ty, Pure(ul2), _) =>
-            for tyTy <- inferType(ty)
-                r <- tyTy match
-                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
-                  case _ => Left(NotTypeError(sub))
-            yield r
-          case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
-          case (Thunk(c1), Thunk(c2), Some(U(ty))) => checkSubsumption(c1, c2, Some(ty))
-          case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
-            Σ.getDataOption(qn1) match
-              case None => Left(MissingDeclaration(qn1))
-              case Some(data) =>
-                var args = IndexedSeq[VTerm]()
-                allRight(
-                  args1.zip(args2).zip(data.tParamTys).map {
-                    case ((arg1, arg2), (binding, variance)) =>
-                      variance match
-                        case Variance.INVARIANT =>
-                          val r = checkSubsumption(
-                            arg1,
-                            arg2,
-                            Some(binding.ty.substLowers(args: _*))
-                          )(
-                            using CONVERSION
-                          )
-                          args = args :+ arg1
-                          r
-                        case Variance.COVARIANT =>
-                          val r = checkSubsumption(
-                            arg1,
-                            arg2,
-                            Some(binding.ty.substLowers(args: _*))
-                          )
-                          args = args :+ arg1
-                          r
-                        case Variance.CONTRAVARIANT =>
-                          val r = checkSubsumption(
-                            arg2,
-                            arg1,
-                            Some(binding.ty.substLowers(args: _*))
-                          )
-                          args = args :+ arg2
-                          r
-                  }
-                )
-          case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
-            Σ.getConstructorOption(qn, name1) match
-              case None => Left(MissingConstructor(name1, qn))
-              case Some(con) =>
-                var args = IndexedSeq[VTerm]()
-                allRight(
-                  args1.zip(args2).zip(con.paramTys).map {
-                    case ((arg1, arg2), binding) =>
-                      val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
-                      args = args :+ arg1
-                      r
-                  }
-                )
-          case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
-            checkSubsumption(ty1, ty2, None) >>
-              checkSubsumption(a1, a2, Some(ty1)) >>
-              checkSubsumption(b1, b2, Some(ty1))
-          case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _) =>
-            for r <- checkSubsumption(heap1, heap2, Some(HeapType)) >>
-              checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
-              (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
-                NotVSubsumption(sub, sup, ty, mode)
-              ))
-            yield r
-          case (_, Heap(GlobalHeapKey), Some(HeapType)) if mode == SUBSUMPTION => Right(())
-          case _ => Left(NotVSubsumption(sub, sup, ty, mode))
+    if rawSub == rawSup then
+      Right(())
+    else
+      val ty = rawTy.map(_.normalized) match
+        case None => None
+        case Some(Right(v)) => Some(v)
+        case Some(Left(e)) => return Left(e)
+      (rawSub.normalized, rawSup.normalized) match
+        case (Left(e), _) => Left(e)
+        case (_, Left(e)) => Left(e)
+        case (Right(sub), Right(sup)) =>
+          (sub, sup, ty) match
+            case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
+              checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
+            case (ty, Top(ul2), _) =>
+              for tyTy <- inferType(ty)
+                  r <- tyTy match
+                    case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
+                    case _ => Left(NotTypeError(sub))
+              yield r
+            case (ty, Pure(ul2), _) =>
+              for tyTy <- inferType(ty)
+                  r <- tyTy match
+                    case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
+                    case _ => Left(NotTypeError(sub))
+              yield r
+            case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
+            case (Thunk(c1), Thunk(c2), Some(U(ty))) => checkSubsumption(c1, c2, Some(ty))
+            case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
+              Σ.getDataOption(qn1) match
+                case None => Left(MissingDeclaration(qn1))
+                case Some(data) =>
+                  var args = IndexedSeq[VTerm]()
+                  allRight(
+                    args1.zip(args2).zip(data.tParamTys).map {
+                      case ((arg1, arg2), (binding, variance)) =>
+                        variance match
+                          case Variance.INVARIANT =>
+                            val r = checkSubsumption(
+                              arg1,
+                              arg2,
+                              Some(binding.ty.substLowers(args: _*))
+                            )(
+                              using CONVERSION
+                            )
+                            args = args :+ arg1
+                            r
+                          case Variance.COVARIANT =>
+                            val r = checkSubsumption(
+                              arg1,
+                              arg2,
+                              Some(binding.ty.substLowers(args: _*))
+                            )
+                            args = args :+ arg1
+                            r
+                          case Variance.CONTRAVARIANT =>
+                            val r = checkSubsumption(
+                              arg2,
+                              arg1,
+                              Some(binding.ty.substLowers(args: _*))
+                            )
+                            args = args :+ arg2
+                            r
+                    }
+                  )
+            case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
+              Σ.getConstructorOption(qn, name1) match
+                case None => Left(MissingConstructor(name1, qn))
+                case Some(con) =>
+                  var args = IndexedSeq[VTerm]()
+                  allRight(
+                    args1.zip(args2).zip(con.paramTys).map {
+                      case ((arg1, arg2), binding) =>
+                        val r = checkSubsumption(arg1, arg2, Some(binding.ty.substLowers(args: _*)))
+                        args = args :+ arg1
+                        r
+                    }
+                  )
+            case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
+              checkSubsumption(ty1, ty2, None) >>
+                checkSubsumption(a1, a2, Some(ty1)) >>
+                checkSubsumption(b1, b2, Some(ty1))
+            case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _) =>
+              for r <- checkSubsumption(heap1, heap2, Some(HeapType)) >>
+                checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
+                (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
+                  NotVSubsumption(sub, sup, ty, mode)
+                ))
+              yield r
+            case (_, Heap(GlobalHeapKey), Some(HeapType)) if mode == SUBSUMPTION => Right(())
+            case _ => Left(NotVSubsumption(sub, sup, ty, mode))
   }
 )
 
@@ -1022,36 +1040,37 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
 extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
-private def debugCheck[L, R](tm: Any, ty: Any, result: Either[L, R])
-  (using ctx: TypingContext): Either[L, R] =
-  if ctx.enableDebug then
-    result match
-      case Right(_) => println("checked  " + tm + " : " + ty)
-      case Left(_) => println("[FAIL] check " + tm + " : " + ty)
+private def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
+  (using ctx: TypingContext): Either[L, R] = ctx.trace(
+  s"checking $tm : $ty",
+  _ => "✅",
+  e => s"❌$e",
   result
+)
 
-private def debugInfer[L, R](tm: Any, result: Either[L, R])
-  (using ctx: TypingContext): Either[L, R] =
-  if ctx.enableDebug then
-    result match
-      case Right(ty) => println("inferred " + tm + " : " + ty)
-      case Left(_) => println("[FAIL] infer " + tm)
+private def debugInfer[L, R](tm: Any, result: => Either[L, R])
+  (using ctx: TypingContext): Either[L, R] = ctx.trace(
+  s"inferring type $tm",
+  r => s"✅ $r",
+  e => s"❌$e",
   result
+)
 
 private def debugSubsumption[L, R](
   rawSub: Any,
   rawSup: Any,
   rawTy: Option[Any],
-  result: Either[L, R]
+  result: => Either[L, R]
 )
   (using mode: CheckSubsumptionMode)
   (using ctx: TypingContext)
 : Either[L, R] =
-  if ctx.enableDebug then
-    val modeString = mode match
-      case CheckSubsumptionMode.SUBSUMPTION => " ⪯ "
-      case CheckSubsumptionMode.CONVERSION => " ≡ "
-    result match
-      case Right(_) => println("decided  " + rawSub + modeString + rawSup + " : " + rawTy)
-      case Left(_) => println("[FAIL] decide " + rawSub + modeString + rawSup + " : " + rawTy)
-  result
+  val modeString = mode match
+    case CheckSubsumptionMode.SUBSUMPTION => "⪯"
+    case CheckSubsumptionMode.CONVERSION => "≡"
+  ctx.trace(
+    s"deciding $rawSub $modeString $rawSup : $rawTy",
+    _ => s"✅",
+    e => s"❌$e",
+    result
+)

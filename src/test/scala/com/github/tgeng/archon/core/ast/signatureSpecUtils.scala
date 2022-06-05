@@ -17,13 +17,13 @@ trait TestContext:
   def fail(message: String): Nothing
 
 class SignatureSpec extends AnyFreeSpec :
-  given TypingContext = new TypingContext {}
+  given TypingContext = new TypingContext(0, false) {}
 
   def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
-    val newCtx = new TypingContext:
-      export ctx._
-      override def enableDebug: Boolean = true
-    block(using newCtx)
+    ctx.enableDebugging = true
+    val result = block
+    ctx.enableDebugging = false
+    result
 
   given TestContext = new TestContext :
     override def testName: String = SignatureSpec.this.getClass.getSimpleName.!!
