@@ -17,6 +17,8 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"Effects" hasType t"<> Type L0"
     t"Level" hasType t"<> TYPE0"
 
-//    t"Refl" hasType t"<> (Equality L0 Effects total total)"
+    debug {
+      t"Refl" hasType t"<> (Equality L0 Effects total total)"
+    }
   }
 }
