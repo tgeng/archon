@@ -13,8 +13,10 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"l" hasType t"<> Level"
     t"l" doesNotHaveType  t"<> Effects"
 
-    t"Heap" hasType t"<> (Type L0)"
-    t"Effects" hasType t"<> (Type L0)"
+    t"Heap" hasType t"<> Type L0"
+    t"Effects" hasType t"<> Type L0"
     t"Level" hasType t"<> TYPE0"
+
+//    t"Refl" hasType t"<> (Equality L0 Effects total total)"
   }
 }

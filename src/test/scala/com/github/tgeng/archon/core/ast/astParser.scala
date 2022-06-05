@@ -283,7 +283,7 @@ object AstParser:
       (
         for
           eff <- eff
-          t <- atom
+          t <- rhs
         yield AstF(t, eff)
         )
   }
