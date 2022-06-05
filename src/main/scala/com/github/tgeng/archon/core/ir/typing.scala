@@ -433,7 +433,7 @@ def inferType(tm: CTerm)
           case None => Left(MissingDefinition(qn))
           case Some(op) => checkTypes(tArgs, effect.tParamTys) >>
             checkTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
-            Right(F(EffectsLiteral(ListSet(eff)), op.resultTy.substLowers(tArgs ++ args: _*)))
+            Right(F(op.resultTy.substLowers(tArgs ++ args: _*), EffectsLiteral(ListSet(eff))))
   case _: Continuation => throw IllegalArgumentException(
     "continuation is only created in reduction and hence should not be type checked."
   )
@@ -703,7 +703,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                   checkULevelSubsumption(ul1, ul2)
                 case _ => Left(NotCTypeError(sub))
           yield r
-        case (F(eff1, vTy1), F(eff2, vTy2), _) =>
+        case (F(vTy1, eff1), F(vTy2, eff2), _) =>
           for _ <- checkEffSubsumption(eff1, eff2)
               r <- checkSubsumption(vTy1, vTy2, None)
           yield r

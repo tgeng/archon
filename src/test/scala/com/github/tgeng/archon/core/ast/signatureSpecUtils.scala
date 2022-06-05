@@ -40,6 +40,7 @@ class SignatureSpec extends AnyFreeSpec :
   extension (tm: AstTerm)
     infix def hasType(ty: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
+
       val cTm = astToIr(tm).asRight
       val cTy = astToIr(ty).asRight
       checkType(cTm, cTy) match
@@ -51,6 +52,7 @@ class SignatureSpec extends AnyFreeSpec :
       (using TestSignature)
       (using TypingContext) =
       given NameContext = Γ
+
       val cTm = astToIr(tm).asRight
       val cTy = astToIr(ty).asRight
       checkType(cTm, cTy) match
@@ -59,6 +61,7 @@ class SignatureSpec extends AnyFreeSpec :
 
     infix def ⪯(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
+
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
@@ -67,6 +70,7 @@ class SignatureSpec extends AnyFreeSpec :
 
     infix def ⋠(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
+
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
@@ -75,6 +79,7 @@ class SignatureSpec extends AnyFreeSpec :
 
     infix def ≡(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
+
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
@@ -83,6 +88,7 @@ class SignatureSpec extends AnyFreeSpec :
 
     infix def ≢(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
+
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
       checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
@@ -155,7 +161,9 @@ class TestSignature(
 
   def resolve(name: Name): QualifiedName = qnByName(name)
 
-  def resolveOption(name: Name): Option[QualifiedName] = qnByName.get(name)
+  def resolveOption(name: Name): Option[QualifiedName] = name match
+    case Name.Normal(n) if n.stripPrefix("TYPE").toIntOption.nonEmpty => Some(Builtins.BuiltinType / n)
+    case _ => qnByName.get(name)
 
   def copy: TestSignature = TestSignature(
     allData,
@@ -212,8 +220,8 @@ class TestSignature(
             yield r
           case (BODY, data: PreData) =>
             for constructors <- elaborateBody(data)
-               _ = allConstructors(data.qn) = constructors.toIndexedSeq
-               r <- checkDataConstructors(data.qn)
+                _ = allConstructors(data.qn) = constructors.toIndexedSeq
+                r <- checkDataConstructors(data.qn)
             yield r
           case (SIGNATURE, record: PreRecord) =>
             for record <- elaborateSignature(record)
@@ -257,6 +265,7 @@ given Conversion[Context, NameContext] = NameContext.fromContext
 extension (binding: Binding[AstTerm])
   def unary_+(using Γ: MutableContext)(using Context)(using TestSignature)(using TypingContext) =
     given NameContext = Γ
+
     val ty = astToIr(binding.ty).asRight
     val vTy = reduceVType(ty).asRight
     Γ.addOne(Binding(vTy)(binding.name))

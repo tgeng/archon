@@ -363,6 +363,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getRecordFieldDerivedDefinitionOption(qn))
       .orElse(getEffectDerivedDefinitionOption(qn))
       .orElse(getUserDefinitionOption(qn))
+      .orElse(Builtins.getBigType(qn).map(_._1))
 
   def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
 
@@ -374,6 +375,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getRecordFieldDerivedClausesOption(qn))
       .orElse(getEffectDerivedClausesOption(qn))
       .orElse(getUserClausesOption(qn))
+      .orElse(Builtins.getBigType(qn).map(_._2))
 
   def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
