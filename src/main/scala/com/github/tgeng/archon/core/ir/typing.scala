@@ -19,17 +19,20 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     successMsg: R => String,
     failureMsg: L => String,
     action: => Either[L, R]
-  ): Either[L, R] =
+  )(using Γ: Context): Either[L, R] =
     lazy val result: Either[L, R] = action
     if enableDebugging then
       val indent = "│ " * (traceLevel)
-      println(indent + "┌─" + startMessage)
+      println(indent + "┌─ " + Γ.zipWithIndex.map{(binding, i) =>
+        s"${Γ.size - 1 - i}: ${binding.ty}"
+      }.mkString("{", ", ", "}"))
+      println(indent + "│  " + startMessage)
       traceLevel += 1
       val endMessage = result match
-        case Right(r) => successMsg(r)
-        case Left(l) => failureMsg(l)
+        case Right(r) => "✅ " + successMsg(r)
+        case Left(l) => "❌ " + failureMsg(l)
       traceLevel -= 1
-      println(indent + "└─" + endMessage)
+      println(indent + "└─ " + endMessage)
     result
 
 def checkData(qn: QualifiedName)
@@ -1041,18 +1044,18 @@ extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
 private def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
-  (using ctx: TypingContext): Either[L, R] = ctx.trace(
+  (using Context)(using ctx: TypingContext): Either[L, R] = ctx.trace(
   s"checking $tm : $ty",
-  _ => "✅",
-  e => s"❌$e",
+  _ => "",
+  e => e.toString,
   result
 )
 
 private def debugInfer[L, R](tm: Any, result: => Either[L, R])
-  (using ctx: TypingContext): Either[L, R] = ctx.trace(
+  (using Context)(using ctx: TypingContext): Either[L, R] = ctx.trace(
   s"inferring type $tm",
-  r => s"✅ $r",
-  e => s"❌$e",
+  r => r.toString,
+  e => e.toString,
   result
 )
 
@@ -1063,6 +1066,7 @@ private def debugSubsumption[L, R](
   result: => Either[L, R]
 )
   (using mode: CheckSubsumptionMode)
+  (using Context)
   (using ctx: TypingContext)
 : Either[L, R] =
   val modeString = mode match
@@ -1070,7 +1074,7 @@ private def debugSubsumption[L, R](
     case CheckSubsumptionMode.CONVERSION => "≡"
   ctx.trace(
     s"deciding $rawSub $modeString $rawSup : $rawTy",
-    _ => s"✅",
-    e => s"❌$e",
+    _ => "",
+    e => e.toString,
     result
 )
