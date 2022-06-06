@@ -70,7 +70,8 @@ class SignatureSpec extends AnyFreeSpec :
 
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
-      checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
+      val cTy = inferType(cTm).asRight
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION) match
         case Right(_) =>
         case Left(e) => fail(e.toString, e.exception)
 
@@ -79,7 +80,8 @@ class SignatureSpec extends AnyFreeSpec :
 
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
-      checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.SUBSUMPTION) match
+      val cTy = inferType(cTm).asRight
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION) match
         case Right(_) => fail(s"expect $tm ⋠ $tm2")
         case Left(e) =>
 
@@ -88,7 +90,8 @@ class SignatureSpec extends AnyFreeSpec :
 
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
-      checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
+      val cTy = inferType(cTm).asRight
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION) match
         case Right(_) =>
         case Left(e) => fail(e.toString, e.exception)
 
@@ -97,7 +100,8 @@ class SignatureSpec extends AnyFreeSpec :
 
       val cTm = astToIr(tm).asRight
       val cTm2 = astToIr(tm2).asRight
-      checkSubsumption(cTm, cTm2, None)(using CheckSubsumptionMode.CONVERSION) match
+      val cTy = inferType(cTm).asRight
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION) match
         case Right(_) => fail(s"expect $tm ≢ $tm2")
         case Left(e) =>
 

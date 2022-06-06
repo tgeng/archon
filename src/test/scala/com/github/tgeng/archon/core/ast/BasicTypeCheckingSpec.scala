@@ -10,14 +10,34 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"L0" doesNotHaveType  t"<> Effects"
     t"h" hasType t"<> Heap"
     t"h" doesNotHaveType  t"<> Level"
+    t"global" hasType t"<> Heap"
     t"l" hasType t"<> Level"
     t"l" doesNotHaveType  t"<> Effects"
+
+    t"Type L0" hasType t"<> Type L1"
+    t"Type L1" hasType t"<> Type L2"
+    t"Type L0" hasType t"<> Type L2"
+    t"Type L0" doesNotHaveType  t"<> Type L0"
+    t"Type L0" ⪯ t"Type L1"
+
+    t"L0" ⋠ t"L1"
+
+    t"CType L0 <>" hasType t"CType L1 <>"
+    t"CType L1 <>" hasType t"CType L2 <>"
+    t"CType L0 <>" hasType t"CType L2 <>"
+    t"CType L0 <>" doesNotHaveType  t"CType L0 <>"
+    t"CType L0 <>" ⪯ t"CType L1 <>"
 
     t"Heap" hasType t"<> Type L0"
     t"Effects" hasType t"<> Type L0"
     t"Level" hasType t"<> TYPE0"
 
     t"Cell L0 h Effects" hasType t"<> Type L0"
-    t"Refl L0 Effects total total" hasType t"<> Equality L0 Effects total total"
+    t"UCell L0 h Effects" hasType t"<> Type L0"
+
+    t"Equality L0 Effects <> <>" hasType t"<> Type L0"
+    t"Equality L0 Heap h global" hasType  t"<> Type L0"
+    t"Refl L0 Effects <> <>" hasType t"<> Equality L0 Effects <> <>"
+    t"Refl L0 Heap h h" doesNotHaveType t"<> Equality L0 Effects h global"
   }
 }

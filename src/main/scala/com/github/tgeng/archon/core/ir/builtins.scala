@@ -32,6 +32,7 @@ object Builtins:
   val AllocOpQn = HeapEffQn / "alloc"
   val GetOpQn = HeapEffQn / "get"
   val SetOpQn = HeapEffQn / "set"
+  val GlobalHeapKeyQn = HeapEffQn / "global"
   val EffectsUnionQn = BuiltinEffects / "union"
   val TotalQn = BuiltinEffects / "total"
 
@@ -559,6 +560,18 @@ object Builtins:
             DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
             EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
           )
+        )
+      )
+    ),
+    (
+      Builtins.GlobalHeapKeyQn,
+      F(HeapType),
+      IndexedSeq(
+        Clause(
+          Nil,
+          Nil,
+          Return(Heap(GlobalHeapKey)),
+          F(HeapType)
         )
       )
     ),
