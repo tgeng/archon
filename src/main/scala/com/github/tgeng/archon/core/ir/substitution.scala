@@ -65,16 +65,16 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
   ): (PartialSubstitution[VTerm], Int) = (ctx._1, ctx._2 + bindingNames.size)
 
   override def transformVar(v: Var)
-    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
     ctx._1(v.index - ctx._2) match
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _ => v
 
   override def transformEffects(effects: Effects)
-    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
-    val operands = effects.unionOperands.map(transformVar(_))
+    val operands = effects.unionOperands.map(transformVar)
     val newLiteral = effects.literal.to(mutable.ArrayBuffer)
     val newOperands = mutable.ArrayBuffer[Var]()
     val nonVarOperands = mutable.ArrayBuffer[CTerm]()
@@ -105,7 +105,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
       )
 
   override def transformLevel(level: Level)
-    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
     val operands = level.maxOperands.map { (ref, lOffset) => (transformVar(ref), lOffset) }
     var newLiteral = level.literal
@@ -188,7 +188,7 @@ extension (c: CTerm)
       // for example, consider substitution happened when applying (4, 5) to the body of function \a,
       // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
       // first argument `4` at index `0` should replace `$1`.
-      .subst(i => vTerms.lift(count - 1 - i))
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
