@@ -391,7 +391,12 @@ given Reducible[CTerm] with
 
 object Reducible:
   def reduce(t: CTerm)
-    (using ctx: Context)
-    (using signature: Signature)
-    (using TypingContext)
-  = summon[Reducible[CTerm]].reduce(t)
+    (using Context)
+    (using Signature)
+    (using ctx: TypingContext)
+  : Either[IrError, CTerm] = ctx.trace(
+    s"reducing $t",
+    r => r.toString,
+    e => e.toString,
+    summon[Reducible[CTerm]].reduce(t),
+  )
