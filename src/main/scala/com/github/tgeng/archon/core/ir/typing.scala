@@ -23,10 +23,11 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     lazy val result: Either[L, R] = action
     if enableDebugging then
       val indent = "│ " * (traceLevel)
-      println(indent + "┌─ " + Γ.zipWithIndex.map{(binding, i) =>
+      println(indent)
+      println(indent + "   " + Γ.zipWithIndex.map{(binding, i) =>
         s"${Γ.size - 1 - i}: ${binding.ty}"
       }.mkString("{", ", ", "}"))
-      println(indent + "│  " + startMessage)
+      println(indent + "┌─ " + startMessage)
       traceLevel += 1
       val endMessage = result match
         case Right(r) => "✅ " + successMsg(r)
@@ -601,8 +602,8 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = debugSubsumption(
-  rawSub, rawSup, rawTy, {
+: Either[IrError, Unit] =
+  def impl: Either[IrError, Unit] =
     if rawSub == rawSup then return Right(())
     val ty = rawTy.map(_.normalized) match
       case None => None
@@ -692,8 +693,7 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
             yield r
           case (_, Heap(GlobalHeapKey), Some(HeapType)) if mode == SUBSUMPTION => Right(())
           case _ => Left(NotVSubsumption(sub, sup, ty, mode))
-  }
-)
+  debugSubsumption(rawSub, rawSup, rawTy, impl)
 
 /**
  * @param ty can be [[None]] if `a` and `b` are types
@@ -1044,7 +1044,7 @@ extension[L, R1] (e1: Either[L, R1])
 private def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] = ctx.trace(
   s"checking $tm : $ty",
-  _ => "",
+  _ => "checked",
   e => e.toString,
   result
 )
@@ -1072,7 +1072,7 @@ private def debugSubsumption[L, R](
     case CheckSubsumptionMode.CONVERSION => "≡"
   ctx.trace(
     s"deciding $rawSub $modeString $rawSup : $rawTy",
-    _ => "",
+    _ => "decided",
     e => e.toString,
     result
 )
