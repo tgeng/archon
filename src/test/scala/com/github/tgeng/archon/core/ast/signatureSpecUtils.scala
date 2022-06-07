@@ -173,6 +173,7 @@ class TestSignature(
 
   def resolveOption(name: Name): Option[QualifiedName] = name match
     case Name.Normal(n) if n.stripPrefix("TYPE").toIntOption.nonEmpty => Some(Builtins.BuiltinType / n)
+    case Name.Normal(n) if n.stripPrefix("CTYPE").toIntOption.nonEmpty => Some(Builtins.BuiltinType / n)
     case _ => qnByName.get(name)
 
   def copy: TestSignature = TestSignature(

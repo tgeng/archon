@@ -587,7 +587,7 @@ object Builtins:
           case Node(BuiltinType, Normal(name)) if name.startsWith("TYPE") =>
             name.drop(4).toIntOption.map((false, _))
           case Node(BuiltinType, Normal(name)) if name.startsWith("CTYPE") =>
-            name.drop(4).toIntOption.map((true, _))
+            name.drop(5).toIntOption.map((true, _))
           case _ => None
       if layer >= 0
     yield (
