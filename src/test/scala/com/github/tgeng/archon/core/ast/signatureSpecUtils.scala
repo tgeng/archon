@@ -222,50 +222,40 @@ class TestSignature(
 
     sortPreDeclarations(declarations) match
       case Left(cycle) => tCtx.fail(s"detected cycles in declarations: $cycle")
-      case Right(sortedDeclarations) => transpose(
-        sortedDeclarations.map {
-          case (SIGNATURE, data: PreData) =>
-            for data <- elaborateSignature(data)
-                _ = allData(data.qn) = data
-                r <- checkData(data.qn)
-            yield r
-          case (BODY, data: PreData) =>
-            for constructors <- elaborateBody(data)
-                _ = allConstructors(data.qn) = constructors.toIndexedSeq
-                r <- checkDataConstructors(data.qn)
-            yield r
-          case (SIGNATURE, record: PreRecord) =>
-            for record <- elaborateSignature(record)
-                _ = allRecords(record.qn) = record
-                r <- checkRecord(record.qn)
-            yield r
-          case (BODY, record: PreRecord) =>
-            for fields <- elaborateBody(record)
-                _ = allFields(record.qn) = fields.toIndexedSeq
-                r <- checkRecordFields(record.qn)
-            yield r
-          case (SIGNATURE, definition: PreDefinition) =>
-            for definition <- elaborateSignature(definition)
-                _ = allDefinitions(definition.qn) = definition
-                r <- checkRecord(definition.qn)
-            yield r
-          case (BODY, definition: PreDefinition) =>
-            for clauses <- elaborateBody(definition)
-                _ = allClauses(definition.qn) = clauses.toIndexedSeq
-                r <- checkClauses(definition.qn)
-            yield r
-          case (SIGNATURE, effect: PreEffect) =>
-            for effect <- elaborateSignature(effect)
-                _ = allEffects(effect.qn) = effect
-                r <- checkRecord(effect.qn)
-            yield r
-          case (BODY, effect: PreEffect) =>
-            for operators <- elaborateBody(effect)
-                _ = allOperators(effect.qn) = operators.toIndexedSeq
-                r <- checkOperators(effect.qn)
-            yield r
-        }.toList
-      )
+      case Right(sortedDeclarations) => sortedDeclarations.foreach {
+        case (SIGNATURE, preData: PreData) =>
+          val data = elaborateSignature(preData).asRight
+          allData(data.qn) = data
+          checkData(data.qn).asRight
+        case (BODY, preData: PreData) =>
+          val constructors = elaborateBody(preData).asRight
+          allConstructors(preData.qn) = constructors.toIndexedSeq
+          checkDataConstructors(preData.qn).asRight
+        case (SIGNATURE, preRecord: PreRecord) =>
+          val record = elaborateSignature(preRecord).asRight
+          allRecords(record.qn) = record
+          checkRecord(record.qn).asRight
+        case (BODY, preRecord: PreRecord) =>
+          val fields = elaborateBody(preRecord).asRight
+          allFields(preRecord.qn) = fields.toIndexedSeq
+          checkRecordFields(preRecord.qn).asRight
+        case (SIGNATURE, preDefinition: PreDefinition) =>
+          val definition = elaborateSignature(preDefinition).asRight
+          allDefinitions(definition.qn) = definition
+          checkRecord(definition.qn).asRight
+        case (BODY, preDefinition: PreDefinition) =>
+          val clauses = elaborateBody(preDefinition).asRight
+          allClauses(preDefinition.qn) = clauses.toIndexedSeq
+          checkClauses(preDefinition.qn).asRight
+        case (SIGNATURE, preEffect: PreEffect) =>
+          val effect = elaborateSignature(preEffect).asRight
+          allEffects(effect.qn) = effect
+          checkRecord(effect.qn).asRight
+        case (BODY, preEffect: PreEffect) =>
+          val operators = elaborateBody(preEffect).asRight
+          allOperators(preEffect.qn) = operators.toIndexedSeq
+          checkOperators(preEffect.qn).asRight
+      }
 
 extension (b: MutableContext ?=> TestSignature ?=> Unit)
   def unary_~(using Γ: MutableContext)
