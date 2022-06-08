@@ -872,6 +872,7 @@ def checkArePureTypes(telescope: Telescope)
   case Nil => Right(())
   case binding :: telescope => checkIsPureType(binding.ty) >> checkArePureTypes(telescope)(using Γ :+ binding)
 
+// TODO: need to handle parametereized types more carefully
 @tailrec
 def checkIsPureType(ty: VTerm)
   (using Γ: Context)

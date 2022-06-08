@@ -172,6 +172,7 @@ trait Signature:
       )
     }
 
+  // TODO: remove type index from args of derived constructor function
   def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
     case Node(dataQn, conName) =>
       for
