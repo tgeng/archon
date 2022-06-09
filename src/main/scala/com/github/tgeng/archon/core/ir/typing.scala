@@ -24,9 +24,11 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     if enableDebugging then
       val indent = "│ " * (traceLevel)
       println(indent)
-      println(indent + "   " + Γ.zipWithIndex.map{(binding, i) =>
-        s"${Γ.size - 1 - i}: ${binding.ty}"
-      }.mkString("{", ", ", "}"))
+      println(
+        indent + "   " + Γ.zipWithIndex.map { (binding, i) =>
+          s"${Γ.size - 1 - i}: ${binding.ty}"
+        }.mkString("{", ", ", "}")
+      )
       println(indent + "┌─ " + startMessage)
       traceLevel += 1
       val endMessage = result match
@@ -61,7 +63,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
           _ <-
             if data.isPure then
-              allRight(con.paramTys.map(binding => checkIsPureType(binding.ty)))
+              allRight(con.paramTys.map(binding => checkIsPure(binding.ty)(using Γ.size)))
             else
               Right(())
           _ <- {
@@ -625,7 +627,7 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
           case (ty, Pure(ul2), _) =>
             for tyTy <- inferType(ty)
                 r <- tyTy match
-                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPureType(ty)
+                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPure(ty)(using 0)
                   case _ => Left(NotTypeError(sub))
             yield r
           case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
@@ -693,6 +695,7 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
             yield r
           case (_, Heap(GlobalHeapKey), Some(HeapType)) if mode == SUBSUMPTION => Right(())
           case _ => Left(NotVSubsumption(sub, sup, ty, mode))
+
   debugSubsumption(rawSub, rawSup, rawTy, impl)
 
 /**
@@ -865,40 +868,45 @@ private def simplifyLet(t: CTerm)
     yield r
   case _ => Right(t)
 
-def checkArePureTypes(telescope: Telescope)
+private def checkArePureTypes(telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
-  case binding :: telescope => checkIsPureType(binding.ty) >> checkArePureTypes(telescope)(using Γ :+ binding)
+  case binding :: telescope => checkIsPure(binding.ty)(using 0) >> checkArePureTypes(telescope)(using Γ :+ binding)
 
-// TODO: need to handle parametereized types more carefully
-@tailrec
-def checkIsPureType(ty: VTerm)
+private def checkIsPure(tm: VTerm)
+  (using numDataTParams: Nat)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = ty match
+  (using ctx: TypingContext): Either[IrError, Unit] = tm match
   // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
   // normalized representation.
-  case Type(_, upperBound) => checkIsPureType(upperBound)
-  case DataType(qn, _) => Σ.getDataOption(qn) match
+  case Type(_, upperBound) => checkIsPure(upperBound)
+  case DataType(qn, tArgs) => Σ.getDataOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(data) =>
       if data.isPure then
-        Right(())
+        allRight(tArgs.map(checkIsPure))
       else
-        Left(NotPureType(ty))
-  case _: U => Left(NotPureType(ty))
+        Left(NotPureType(tm))
+  case _: U => Left(NotPureType(tm))
   case _: Top | _: Pure | _: EqualityType | EffectsType | LevelType | HeapType | _: CellType =>
     Right(())
+  // Treat data type tParams as pure automatically when checking purity of a data type declaration.
+  // This along with the above `DataType` branch works together to delay rejecting something as
+  // impure at data type instantiation time.
+  case Var(idx) if Γ.size - idx <= numDataTParams => Right(())
   case _: Var | _: Collapse =>
-    for ty <- inferType(ty)
+    for ty <- inferType(tm)
         r <- ty match
           case Type(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
-          case _ => throw IllegalArgumentException(s"$ty not a type")
+          case _ => Right(())
     yield r
-  case _: Thunk | _: Con | Refl | _: Effects | _: Level | _: Heap | _: Cell =>
-    throw IllegalArgumentException(s"$ty not a type")
+  // Any non-type values are considered pure because the only place that we would invoke this
+  // function with non-type value is when checking data type args, where any non-type values would
+  // not affect the normalized forms of values created by constructors of this data type.
+  case _: Thunk | _: Con | Refl | _: Effects | _: Level | _: Heap | _: Cell => Right(())
 
 private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode)
@@ -1076,4 +1084,4 @@ private def debugSubsumption[L, R](
     _ => "decided",
     e => e.toString,
     result
-)
+  )
