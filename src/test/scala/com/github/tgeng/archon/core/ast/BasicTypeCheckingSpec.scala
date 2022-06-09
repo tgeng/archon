@@ -37,8 +37,8 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
     t"Equality L0 Effects <> <>" hasType t"<> Type L0"
     t"Equality L0 Heap h global" hasType t"<> Type L0"
-    t"Refl L0 Effects <> <>" hasType t"<> Equality L0 Effects <> <>"
-    t"Refl L0 Heap h h" doesNotHaveType t"<> Equality L0 Effects h global"
+    t"Refl L0 Effects <>" hasType t"<> Equality L0 Effects <> <>"
+    t"Refl L0 Heap h" doesNotHaveType t"<> Equality L0 Effects h global"
 
     t"Effects -> <> Effects" hasType t"CType L0 <>"
     t"Effects -> Effects -> <> Effects" hasType t"CType L0 <>"

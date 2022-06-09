@@ -15,6 +15,12 @@ enum Declaration:
     (
       val tParamTys: TTelescope = Nil,
       /* binding + tParamTys */ val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+
+      /**
+       * Number of parameters among `tParamTys`, the rest are index arguments. This parameter also
+       * affects how many arguments should be present in the derived constructor function.
+       */
+      val numParams: Nat,
       val isPure: Boolean = true,
     )
   case Record(val qn: QualifiedName)
@@ -73,6 +79,8 @@ case class Operator(
 )
 
 trait Signature:
+  given Signature = this
+
   def getDataOption(qn: QualifiedName): Option[Data]
 
   def getData(qn: QualifiedName): Data = getDataOption(qn).get
@@ -172,18 +180,27 @@ trait Signature:
       )
     }
 
-  // TODO: remove type index from args of derived constructor function
   def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
     case Node(dataQn, conName) =>
       for
         data <- getDataOption(dataQn)
         constructor <- getConstructorOption(dataQn, conName)
-      yield Definition(qn)(
-        (data.tParamTys.map(_._1) ++ constructor.paramTys)
-          .foldRight(F(DataType(dataQn, constructor.tArgs))) { (binding, ty) =>
-            FunctionType(binding, ty)
-          }
-      )
+      yield
+        val numIndexArgs = data.tParamTys.size - data.numParams
+        Definition(qn)(
+          (data.tParamTys.take(data.numParams).map(_._1) ++
+            constructor.paramTys.strengthen(numIndexArgs, 0))
+            .foldRight(
+              F(
+                DataType(
+                  dataQn,
+                  constructor.tArgs.map(_.strengthen(numIndexArgs, 0))
+                )
+              )
+            ) { (binding, ty) =>
+              FunctionType(binding, ty)
+            }
+        )
     case _ => None
 
 
@@ -193,13 +210,15 @@ trait Signature:
         data <- getDataOption(dataQn)
         constructor <- getConstructorOption(dataQn, conName)
       yield
-        val allBindings = data.tParamTys.map(_._1) ++ constructor.paramTys
+        val numIndexArgs = data.tParamTys.size - data.numParams
+        val allBindings = data.tParamTys.take(data.numParams).map(_._1) ++
+          constructor.paramTys.strengthen(numIndexArgs, 0)
         IndexedSeq(
           Clause(
             allBindings,
             pVars(allBindings.size - 1),
             Return(Con(conName, vars(constructor.paramTys.size - 1))),
-            F(DataType(dataQn, constructor.tArgs))
+            F(DataType(dataQn, constructor.tArgs.map(_.strengthen(numIndexArgs, 0))))
           )
         )
     case _ => None
