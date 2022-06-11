@@ -6,7 +6,7 @@ import com.github.tgeng.archon.core.ir.*
 
 enum IrError extends HasException:
   case Unknown
-  case EffectfulCType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
+  case EffectfulCTermAsType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
   case ExpectCell(tm: VTerm)
   case ExpectCellType(ty: VTerm)
   case ExpectCellTypeWithHeap(heapKey: HeapKey)

@@ -267,7 +267,7 @@ def inferType(tm: VTerm)
       for ctyTy <- inferType(cty)
           r <- ctyTy match
             case CType(ul, _, eff) if eff == Total => Right(Type(ul, tm))
-            case CType(_, _, _) => Left(EffectfulCType(cty))
+            case CType(_, _, _) => Left(EffectfulCTermAsType(cty))
             case _ => Left(NotTypeError(tm))
       yield r
     case Thunk(c) =>
@@ -412,13 +412,14 @@ def inferType(tm: CTerm)
             case Type(ul1, _) =>
               for bodyTyTy <- inferType(bodyTy)(using Γ :+ binding)
                   r <- bodyTyTy match
-                    case CType(ul2, _, _) => Right(
-                      CType(
-                        ULevelMax(ul1, ul2.weakened),
-                        tm,
-                        Total
-                      )
-                    )
+                    case CType(ul2, _, eff) if eff == Total =>
+                      Right(CType(ULevelMax(ul1, ul2.weakened), tm, Total))
+                    // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
+                    // inference.
+                    case F(Type(ul2, _), eff) if eff == Total =>
+                      Right(CType(ULevelMax(ul1, ul2.weakened), tm, Total))
+                    case CType(_, _, _) | F(Type(_, _), _) =>
+                      Left(EffectfulCTermAsType(bodyTy))
                     case _ => Left(NotCTypeError(bodyTy))
               yield r
             case _ => Left(NotTypeError(binding.ty))
@@ -990,7 +991,7 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
         case CType(ul, _, eff) if eff == Total => levelBound match
           case Some(bound) => checkULevelSubsumption(ul, bound)
           case _ => Right(())
-        case _: CType => Left(EffectfulCType(cTy))
+        case _: CType => Left(EffectfulCTermAsType(cTy))
         case _ => Left(NotCTypeError(cTy))
   yield r
 
@@ -1009,7 +1010,7 @@ def reduceVType(vTy: CTerm)
                   "type checking has bugs: reduced value of type `F ...` must be `Return ...`."
                 )
           yield r
-        case F(_, _) => Left(EffectfulCType(vTy))
+        case F(_, _) => Left(EffectfulCTermAsType(vTy))
         case _ => Left(ExpectFType(vTy))
   yield r
 
@@ -1023,7 +1024,12 @@ def reduceCType(cTy: CTerm)
     for cTyTy <- inferType(cTy)
         r <- cTyTy match
           case CType(_, _, eff) if eff == Total => reduce(cTy)
-          case _: CType => Left(EffectfulCType(cTy))
+          // Automatically promote a SomeVType to F(SomeVType).
+          case F(_, eff) if eff == Total => reduce(cTy).map {
+            case Return(vty) => F(vty)
+            case c => throw IllegalStateException(s"type checking has bugs: $c should be of form `Return(...)`")
+          }
+          case _: CType => Left(EffectfulCTermAsType(cTy))
           case _ => Left(NotCTypeError(cTy))
     yield r
 
