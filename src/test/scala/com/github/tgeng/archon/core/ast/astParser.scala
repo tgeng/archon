@@ -123,23 +123,18 @@ object AstParser:
   private def pattern: StrParser[AstPattern] = P {
     val pVar = name.map(AstPVar(_))
 
-    val dataType =
+    val conParts =
       for name <- name << P.whitespaces
           args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from("}")
-      yield AstPDataType(name, args)
-    val forcedDataType = P.from(".") >> dataType
-
-    val con =
-      for name <- name << P.whitespaces
-          args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from("}")
-      yield AstPConstructor(name, args)
-    val forcedCon = P.from(".") >> con
+      yield (name, args)
+    val con = P(conParts.map(AstPConstructor(_, _)))
+    val forcedCon = P(P.from(".") >> conParts.map(AstPForcedConstructor(_, _)))
 
     val forced = P.from(".(") >%> term.map(AstPForced(_)) <%< P.from(")")
 
     val absurd = P.from("(") >%> P.from(")").as(AstPAbsurd)
 
-    pVar || dataType || forcedDataType || con || forcedCon || forced || absurd
+    forcedCon || con || forced || pVar || absurd
   }
 
   def term: StrParser[AstTerm] = P {

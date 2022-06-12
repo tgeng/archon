@@ -161,16 +161,17 @@ def astToIr(ast: AstPattern)
   (using ctx: NameContext)
   (using Σ: TestSignature): Either[AstError, Pattern] = ast match
   case v: AstPVar => resolve(v)
-  case AstPDataType(name, args) =>
+  case AstPConstructor(name, args) =>
     Σ.resolveOption(name) match
-      case Some(qn) => transpose(args.map(astToIr)).map(PDataType(qn, _))
+      case Some(qn) => Σ.getDataOption(qn) match
+        case Some(_) => transpose(args.map(astToIr)).map(PDataType(qn, _))
+        case _ => transpose(args.map(astToIr)).map(PConstructor(name, _))
       case None => Left(UnresolvedNameInPattern(name))
-  case AstPForcedDataType(name, args) => Σ.resolveOption(name) match
-    case Some(qn) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
+  case AstPForcedConstructor(name, args) => Σ.resolveOption(name) match
+    case Some(qn) => Σ.getDataOption(qn) match
+      case Some(_) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
+      case _ => transpose(args.map(astToIr)).map(PForcedConstructor(name, _))
     case None => Left(UnresolvedNameInPattern(name))
-  case AstPConstructor(name, args) => transpose(args.map(astToIr)).map(PConstructor(name, _))
-  case AstPForcedConstructor(name, args) =>
-    transpose(args.map(astToIr)).map(PForcedConstructor(name, _))
   case AstPForced(term) =>
     for
       cTerm <- astToIr(term)

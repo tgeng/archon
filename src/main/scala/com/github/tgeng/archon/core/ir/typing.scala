@@ -405,8 +405,9 @@ def inferType(tm: CTerm)
             case F(ty, effects) =>
               for ctxTy <-
                     if effects == Total then
-                    // Do the reduction onsite so that type checking in sub terms can leverage the more specific
-                    // type.
+                    // Do the reduction onsite so that type checking in sub terms can leverage the
+                    // more specific type. More importantly, this way we do not need to reference
+                    // the result of a computation in the inferred type.
                       for t <- reduce(t)
                           r <- t match
                             case Return(v) => inferType(ctx.substLowers(v))
@@ -415,7 +416,18 @@ def inferType(tm: CTerm)
                             )
                       yield r
                     // Otherwise, just add the binding to the context and continue type checking.
-                    else inferType(ctx)(using Γ :+ Binding(ty)(gn"LetVar")).map(_.weakened)
+                    else
+                      for ctxTy <- inferType(ctx)(using Γ :+ Binding(ty)(gn"LetVar"))
+                          _ <-
+                            // Report an error if the type of `ctx` needs to reference the effectful
+                            // computation. User should use a dependent sum type to wrap such
+                            // references manually to avoid the leak.
+                            val (positiveFreeVars, negativeFreeVars) = getFreeVars(ctxTy)(using 0)
+                            if positiveFreeVars(0) || negativeFreeVars(0) then
+                              Left(LeakedReferenceToEffectfulComputationResult(t))
+                            else
+                              Right(())
+                      yield ctxTy.strengthened
               yield augmentEffect(effects, ctxTy)
             case _ => Left(ExpectFType(tTy))
       // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
@@ -712,6 +724,9 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
               ))
             yield r
           case (_, Heap(GlobalHeapKey), Some(HeapType)) if mode == SUBSUMPTION => Right(())
+          case (v: Var, ty2, _) if mode == CheckSubsumptionMode.SUBSUMPTION => Γ(v).ty match
+            case Type(_, upperBound) => checkSubsumption(upperBound, ty2, None)
+            case _ => Left(NotVSubsumption(sub, sup, ty, mode))
           case _ => Left(NotVSubsumption(sub, sup, ty, mode))
 
   debugSubsumption(rawSub, rawSup, rawTy, impl)

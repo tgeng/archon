@@ -40,3 +40,4 @@ enum IrError extends HasException:
   case MissingConstructor(name: Name, qn: QualifiedName)
   case MissingField(name: Name, qn: QualifiedName)
   case MissingOperator(name: Name, qn: QualifiedName)
+  case LeakedReferenceToEffectfulComputationResult(effectfulTerm: CTerm)

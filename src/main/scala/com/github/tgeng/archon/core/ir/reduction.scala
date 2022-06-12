@@ -24,21 +24,24 @@ extension[T] (a: mutable.ArrayBuffer[T])
   def pushAll(ts: Iterable[T]) = a.addAll(ts)
 
 
-private val builtinHandlers = Seq(
-  CTerm.HeapHandler(
-    VTerm.Total, // placeholder value, not important
-    Some(GlobalHeapKey),
-    IndexedSeq(),
-    CTerm.Hole
-  )
-)
-
 private final class StackMachine(
   val stack: mutable.ArrayBuffer[CTerm],
   val signature: Signature,
 ):
 
-  stack.prependAll(builtinHandlers)
+  // Note: for now this does not seem to be useful because this stack machine is only used for type
+  // checking, in which case there are no builtin handlers at all because during type checking all
+  // computations carried by this machine should be total.
+
+  // stack.prependAll(builtinHandlers)
+  // private val builtinHandlers = Seq(
+  //   CTerm.HeapHandler(
+  //     VTerm.Total, // placeholder value, not important
+  //     Some(GlobalHeapKey),
+  //     IndexedSeq(),
+  //     CTerm.Hole
+  //   )
+  // )
 
   private val heapKeyIndex = mutable.WeakHashMap[HeapKey, mutable.Stack[Nat]]()
   refreshHeapKeyIndex()
@@ -70,7 +73,7 @@ private final class StackMachine(
       case Hole => throw IllegalStateException()
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
-        if stack.size == builtinHandlers.length then
+        if stack.isEmpty then
           Right(pc)
         else
           run(substHole(stack.pop(), pc), true)
@@ -353,7 +356,7 @@ private final class StackMachine(
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
-    while (stack.size >= builtinHandlers.length) {
+    while (stack.nonEmpty) {
       current = substHole(stack.pop(), current)
     }
     current

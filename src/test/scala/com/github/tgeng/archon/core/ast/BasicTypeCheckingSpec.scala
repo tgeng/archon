@@ -64,7 +64,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
      pure data Vector (l: Level) (A: Type l): Nat -> Type l;
        Nil: Vector l A Z;
        Cons: n: Nat -> A -> Vector l A n -> Vector l A (S n);
-   """
+  """
 
   "vector" in ~ {
     t"Nil L0 Nat" hasType t"Vector L0 Nat Z"
@@ -83,7 +83,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
   }
 //  +d"""
 //       def plus: Nat -> Nat -> Nat;
-//         {n: Nat} Z{} n => n : Nat;
-//         {m: Nat, n: Nat} S{m} n => S (plus m n) : Nat;
+//         {n: Nat} Z{} n = n : Nat;
+//         {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
 //   """
 }

@@ -21,9 +21,11 @@ class SignatureSpec extends AnyFreeSpec :
 
   def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
     ctx.enableDebugging = true
-    val result = block
-    ctx.enableDebugging = false
-    result
+    try {
+      block
+    } finally {
+      ctx.enableDebugging = false
+    }
 
   given TestContext = new TestContext :
     override def testName: String = SignatureSpec.this.getClass.getSimpleName.!!
