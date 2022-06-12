@@ -444,8 +444,9 @@ def inferType(tm: CTerm)
       for funTy <- inferType(fun)
           r <- funTy match
             case FunctionType(binding, bodyTy, effects) =>
-              checkType(arg, binding.ty) >>
-                Right(augmentEffect(effects, bodyTy.substLowers(arg)))
+              for _ <- checkType(arg, binding.ty)
+                  bodyTy <- reduceCType(bodyTy.substLowers(arg))
+              yield augmentEffect(effects, bodyTy)
             case _ => Left(ExpectFunction(fun))
       yield r
     case RecordType(qn, args, effects) =>
@@ -1061,7 +1062,7 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
     EffectsUnion(eff, effects)
   )
   case RecordType(qn, args, effects) => RecordType(qn, args, EffectsUnion(eff, effects))
-  case _ => throw IllegalArgumentException()
+  case _ => throw IllegalArgumentException(s"trying to augment $cty with $eff")
 
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   es.first {

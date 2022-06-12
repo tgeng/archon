@@ -40,7 +40,7 @@ private def resolve(astPVar: AstPVar)
   (using Σ: TestSignature): Either[AstError, Pattern] =
   ctx._2.get(astPVar.name) match
     case None => Left(UnresolvedPVar(astPVar))
-    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber))
+    case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber - 1))
 
 private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx :+ name)

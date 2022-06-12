@@ -71,14 +71,19 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"Cons L0 Nat (S Z) Z (Nil L0 Nat)" hasType t"Vector L0 Nat (S Z)"
   }
 
-  "basic definitions" in ~ {
+  "trivial definitions" in ~ {
     +d"""
-       def foo1: Type L0;
-         {} = U Nat : Type L0;
+        def foo1: Type L0;
+          {} = U Nat : Type L0;
+        def foo2: Type L0;
+          {} = U (<heap global> Nat) : Type L0;
+        def succ: Nat -> Nat;
+          {n: Nat} n = S n : Nat;
      """
-    +d"""
-       def foo2: Type L0;
-         {} = U (<heap global> Nat) : Type L0;
-   """
   }
+//  +d"""
+//       def plus: Nat -> Nat -> Nat;
+//         {n: Nat} Z{} n => n : Nat;
+//         {m: Nat, n: Nat} S{m} n => S (plus m n) : Nat;
+//   """
 }
