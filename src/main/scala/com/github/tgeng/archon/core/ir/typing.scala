@@ -16,10 +16,10 @@ import scala.annotation.tailrec
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   def trace[L, R](
     startMessage: String,
-    successMsg: R => String,
-    failureMsg: L => String,
-    action: => Either[L, R]
-  )(using Γ: Context): Either[L, R] =
+    successMsg: R => String = (_: R) => "",
+    failureMsg: L => String = (l: L) => l.toString,
+  )
+    (action: => Either[L, R])(using Γ: Context): Either[L, R] =
     lazy val result: Either[L, R] = action
     if enableDebugging then
       val indent = "│ " * (traceLevel)
@@ -41,7 +41,7 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
 def checkData(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking data signature $qn") {
   given Context = IndexedSeq()
 
   Σ.getDataOption(qn) match
@@ -50,11 +50,12 @@ def checkData(qn: QualifiedName)
       val tParams = data.tParamTys.map(_._1)
       checkParameterTypeDeclarations(tParams) >>
         checkULevel(data.ul)(using tParams.toIndexedSeq)
+}
 
 def checkDataConstructor(qn: QualifiedName, con: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking data constructor $qn.${con.name}") {
   Σ.getDataOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(data) =>
@@ -88,6 +89,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
         }
         if bindingWithIncorrectUsage.isEmpty then ()
         else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
+}
 
 def checkDataConstructors(qn: QualifiedName)
   (using Σ: Signature)
@@ -102,7 +104,7 @@ def checkDataConstructors(qn: QualifiedName)
 def checkRecord(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking record signature $qn") {
   given Context = IndexedSeq()
 
   Σ.getRecordOption(qn) match
@@ -111,11 +113,12 @@ def checkRecord(qn: QualifiedName)
       val tParams = record.tParamTys.map(_._1)
       checkParameterTypeDeclarations(tParams) >>
         checkULevel(record.ul)(using tParams.toIndexedSeq)
+}
 
 def checkRecordField(qn: QualifiedName, field: Field)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking record field $qn.${field.name}") {
   Σ.getRecordOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(record) =>
@@ -137,6 +140,7 @@ def checkRecordField(qn: QualifiedName, field: Field)
           }
           if bindingWithIncorrectUsage.isEmpty then ()
           else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
+}
 
 def checkRecordFields(qn: QualifiedName)
   (using Σ: Signature)
@@ -161,17 +165,18 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
 def checkDef(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking def signature $qn") {
   given Context = IndexedSeq()
 
   Σ.getDefinitionOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(definition) => checkIsCType(definition.ty)
+}
 
 def checkClause(qn: QualifiedName, clause: Clause)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking def clause $qn") {
   val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
     case (Some(f), p) => p.toElimination match
       case Some(ETerm(t)) => Some(Application(f, t))
@@ -185,6 +190,7 @@ def checkClause(qn: QualifiedName, clause: Clause)
       given Context = clause.bindings.toIndexedSeq
 
       checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty)
+}
 
 def checkClauses(qn: QualifiedName)
   (using Σ: Signature)
@@ -197,18 +203,19 @@ def checkClauses(qn: QualifiedName)
 def checkEffect(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking effect signature $qn") {
   given Context = IndexedSeq()
 
   Σ.getEffectOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(effect) =>
       checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
+}
 
 def checkOperator(qn: QualifiedName, operator: Operator)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace(s"checking effect operator $qn.${operator.name}") {
   Σ.getEffectOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(effect) =>
@@ -216,6 +223,7 @@ def checkOperator(qn: QualifiedName, operator: Operator)
 
       checkParameterTypeDeclarations(operator.paramTys) >>
         checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
+}
 
 def checkOperators(qn: QualifiedName)
   (using Σ: Signature)
@@ -874,7 +882,9 @@ private def checkArePureTypes(telescope: Telescope)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
-  case binding :: telescope => checkIsPure(binding.ty)(using 0) >> checkArePureTypes(telescope)(using Γ :+ binding)
+  case binding :: telescope => checkIsPure(binding.ty)(using 0) >> checkArePureTypes(telescope)(
+    using Γ :+ binding
+  )
 
 private def checkIsPure(tm: VTerm)
   (using numDataTParams: Nat)
@@ -1057,20 +1067,12 @@ extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
 private def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
-  (using Context)(using ctx: TypingContext): Either[L, R] = ctx.trace(
-  s"checking $tm : $ty",
-  _ => "checked",
-  e => e.toString,
-  result
-)
+  (using Context)(using ctx: TypingContext): Either[L, R] =
+  ctx.trace(s"checking $tm : $ty")(result)
 
 private def debugInfer[L, R](tm: Any, result: => Either[L, R])
-  (using Context)(using ctx: TypingContext): Either[L, R] = ctx.trace(
-  s"inferring type $tm",
-  r => r.toString,
-  e => e.toString,
-  result
-)
+  (using Context)(using ctx: TypingContext): Either[L, R] =
+  ctx.trace[L, R](s"inferring type $tm", _.toString)(result)
 
 private def debugSubsumption[L, R](
   rawSub: Any,
@@ -1085,9 +1087,4 @@ private def debugSubsumption[L, R](
   val modeString = mode match
     case CheckSubsumptionMode.SUBSUMPTION => "⪯"
     case CheckSubsumptionMode.CONVERSION => "≡"
-  ctx.trace(
-    s"deciding $rawSub $modeString $rawSup : $rawTy",
-    _ => "decided",
-    e => e.toString,
-    result
-  )
+  ctx.trace(s"deciding $rawSub $modeString $rawSup : $rawTy")(result)

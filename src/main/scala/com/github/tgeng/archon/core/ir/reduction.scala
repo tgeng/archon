@@ -394,9 +394,5 @@ object Reducible:
     (using Context)
     (using Signature)
     (using ctx: TypingContext)
-  : Either[IrError, CTerm] = ctx.trace(
-    s"reducing $t",
-    r => r.toString,
-    e => e.toString,
-    summon[Reducible[CTerm]].reduce(t),
-  )
+  : Either[IrError, CTerm] =
+    ctx.trace[IrError, CTerm](s"reducing $t", _.toString)(summon[Reducible[CTerm]].reduce(t))

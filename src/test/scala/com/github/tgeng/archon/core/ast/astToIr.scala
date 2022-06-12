@@ -26,14 +26,18 @@ type NameContext = (Int, Map[Name, Int])
 
 val emptyNameContext: NameContext = (0, Map.empty)
 
-private def resolve(astVar: AstIdentifier)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, Either[CTerm, VTerm]] =
+private def resolve(astVar: AstIdentifier)
+  (using ctx: NameContext)
+  (using Σ: TestSignature): Either[AstError, Either[CTerm, VTerm]] =
   ctx._2.get(astVar.name) match
     case Some(dbNumber) => Right(Right(Var(ctx._1 - dbNumber - 1)))
     case None => Σ.resolveOption(astVar.name) match
       case Some(qn) => Right(Left(Def(qn)))
       case None => Left(UnresolvedIdentifier(astVar))
 
-private def resolve(astPVar: AstPVar)(using ctx: NameContext)(using Σ: TestSignature): Either[AstError, Pattern] =
+private def resolve(astPVar: AstPVar)
+  (using ctx: NameContext)
+  (using Σ: TestSignature): Either[AstError, Pattern] =
   ctx._2.get(astPVar.name) match
     case None => Left(UnresolvedPVar(astPVar))
     case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber))
@@ -46,7 +50,9 @@ private def bind[T](names: List[Name])(block: NameContext ?=> T)(using ctx: Name
 
 extension (ctx: NameContext)
   private def :+(name: Name) = (ctx._1 + 1, ctx._2.updated(name, ctx._1))
-  private def ++(names: collection.Seq[Name]) = (ctx._1 + names.size, names.zipWithIndex.foldLeft(ctx._2) { (map, tuple) =>
+  private def ++(names: collection.Seq[Name]) = (ctx._1 + names.size, names.zipWithIndex.foldLeft(
+    ctx._2
+  ) { (map, tuple) =>
     tuple match
       case (name, offset) => map.updated(name, ctx._1 + offset)
   })
@@ -69,7 +75,12 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
           )
       yield (ty, constructors)
     }.map {
-      case (tParamTys, (ty, constructors)) => PreData(moduleQn / name)(tParamTys, ty, isPure, constructors)
+      case (tParamTys, (ty, constructors)) => PreData(moduleQn / name)(
+        tParamTys,
+        ty,
+        isPure,
+        constructors
+      )
     }
     case AstRecord(name, tParamTys, ty, fields) => astToIr(tParamTys) {
       for ty <- astToIr(ty)
@@ -117,10 +128,11 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
 private def astToIr[T](tTelescope: AstTTelescope)
   (action: NameContext ?=> Either[AstError, T])
   (using ctx: NameContext)
-  (using Σ: TestSignature): Either[AstError, (PreTTelescope, T)] = astToIr(tTelescope.map(_._1))(action)
-  .map {
-    case (telescope, t) => (telescope.zip(tTelescope.map(_._2)), t)
-  }
+  (using Σ: TestSignature): Either[AstError, (PreTTelescope, T)] =
+  astToIr(tTelescope.map(_._1))(action)
+    .map {
+      case (telescope, t) => (telescope.zip(tTelescope.map(_._2)), t)
+    }
 
 @targetName("astToIrTelescope")
 private def astToIr[T](telescope: AstTelescope)
@@ -128,12 +140,13 @@ private def astToIr[T](telescope: AstTelescope)
   (using ctx: NameContext)
   (using Σ: TestSignature): Either[AstError, (PreTelescope, T)] = telescope match
   case Nil => action.map((Nil, _))
-  case binding :: telescope => bind(binding.name) {
+  case binding :: telescope =>
     for ty <- astToIr(binding.ty)
-        r <- astToIr(telescope)(action)
+        r <- bind(binding.name) {
+          astToIr(telescope)(action)
+        }
     yield r match
       case (tys, t) => (Binding(ty)(binding.name) :: tys, t)
-  }
 
 def astToIr(ast: AstCoPattern)
   (using ctx: NameContext)

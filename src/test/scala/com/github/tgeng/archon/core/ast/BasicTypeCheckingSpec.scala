@@ -60,8 +60,15 @@ class BasicTypeCheckingSpec extends SignatureSpec {
       t"Nat" hasType t"Type L0"
     }
 
-//    +d"""
-//       pure data Vector: Type
-//     """
+    +d"""
+       pure data Vector (l: Level) (A: Type l): Nat -> Type l;
+         Nil: Vector l A Z;
+         Cons: n: Nat -> A -> Vector l A n -> Vector l A (S n);
+     """
+
+    "vector" in ~ {
+      t"Nil L0 Nat" hasType t"Vector L0 Nat Z"
+      t"Cons L0 Nat (S Z) Z (Nil L0 Nat)" hasType t"Vector L0 Nat (S Z)"
+    }
   }
 }
