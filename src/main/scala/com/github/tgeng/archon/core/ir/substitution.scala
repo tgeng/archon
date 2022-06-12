@@ -75,25 +75,28 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
     val operands = effects.unionOperands.map(transformVar)
-    val newLiteral = effects.literal.to(mutable.ArrayBuffer)
+    val newLiterals = effects.literal.to(mutable.ArrayBuffer)
     val newOperands = mutable.ArrayBuffer[Var]()
     val nonVarOperands = mutable.ArrayBuffer[CTerm]()
     for operand <- operands do
       operand match
         case r: Var => newOperands.append(r)
         case Effects(literal, operands) =>
-          newLiteral.appendAll(literal)
+          newLiterals.appendAll(literal)
           newOperands.appendAll(operands)
         case Collapse(c) => nonVarOperands.addOne(c)
         case _ => throw IllegalArgumentException("type error")
+    newLiterals.mapInPlace { (qn, args) =>
+      (qn, args.map(transformVTerm))
+    }
     if nonVarOperands.isEmpty then
-      Effects(newLiteral.to(ListSet), newOperands.to(ListSet))
+      Effects(newLiterals.to(ListSet), newOperands.to(ListSet))
     else
       Collapse(
         nonVarOperands.foldLeft(
           Return(
             Effects(
-              newLiteral.to(ListSet),
+              newLiterals.to(ListSet),
               (newOperands.map(_.weaken(nonVarOperands.size, 0).asInstanceOf[Var]) ++
                 vars(nonVarOperands.size - 1))
                 .to(ListSet)

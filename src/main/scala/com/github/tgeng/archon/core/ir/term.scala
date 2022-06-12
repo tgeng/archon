@@ -19,7 +19,8 @@ type Arguments = List[VTerm]
 
 class HeapKey
 
-val GlobalHeapKey = new HeapKey
+val GlobalHeapKey = new HeapKey:
+  override def toString = "<globalHeapKey>"
 
 type Eff = (QualifiedName, Arguments)
 

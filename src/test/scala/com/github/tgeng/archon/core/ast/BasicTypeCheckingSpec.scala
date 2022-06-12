@@ -30,6 +30,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
     t"Heap" hasType t"Type L0"
     t"Effects" hasType t"Type L0"
+    t"heap global" hasType t"Effects"
     t"Level" hasType t"TYPE0"
 
     t"Cell L0 h Effects" hasType t"Type L0"
@@ -46,9 +47,9 @@ class BasicTypeCheckingSpec extends SignatureSpec {
   }
 
   +d"""
-       pure data Nat: Type L0;
-         Z: Nat;
-         S: Nat -> Nat;
+     pure data Nat: Type L0;
+       Z: Nat;
+       S: Nat -> Nat;
    """
 
   "nat" in ~ {
@@ -60,13 +61,24 @@ class BasicTypeCheckingSpec extends SignatureSpec {
   }
 
   +d"""
-       pure data Vector (l: Level) (A: Type l): Nat -> Type l;
-         Nil: Vector l A Z;
-         Cons: n: Nat -> A -> Vector l A n -> Vector l A (S n);
+     pure data Vector (l: Level) (A: Type l): Nat -> Type l;
+       Nil: Vector l A Z;
+       Cons: n: Nat -> A -> Vector l A n -> Vector l A (S n);
    """
 
   "vector" in ~ {
     t"Nil L0 Nat" hasType t"Vector L0 Nat Z"
     t"Cons L0 Nat (S Z) Z (Nil L0 Nat)" hasType t"Vector L0 Nat (S Z)"
+  }
+
+  "basic definitions" in ~ {
+    +d"""
+       def foo1: Type L0;
+         {} = U Nat : Type L0;
+     """
+    +d"""
+       def foo2: Type L0;
+         {} = U (<heap global> Nat) : Type L0;
+   """
   }
 }

@@ -242,7 +242,7 @@ class TestSignature(
         case (SIGNATURE, preDefinition: PreDefinition) =>
           val definition = elaborateSignature(preDefinition).asRight
           allDefinitions(definition.qn) = definition
-          checkRecord(definition.qn).asRight
+          checkDef(definition.qn).asRight
         case (BODY, preDefinition: PreDefinition) =>
           val clauses = elaborateBody(preDefinition).asRight
           allClauses(preDefinition.qn) = clauses.toIndexedSeq
@@ -250,7 +250,7 @@ class TestSignature(
         case (SIGNATURE, preEffect: PreEffect) =>
           val effect = elaborateSignature(preEffect).asRight
           allEffects(effect.qn) = effect
-          checkRecord(effect.qn).asRight
+          checkEffect(effect.qn).asRight
         case (BODY, preEffect: PreEffect) =>
           val operators = elaborateBody(preEffect).asRight
           allOperators(preEffect.qn) = operators.toIndexedSeq

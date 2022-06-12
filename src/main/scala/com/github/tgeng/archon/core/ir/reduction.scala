@@ -62,9 +62,9 @@ private final class StackMachine(
    */
   @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false)
-    (using ctx: Context)
+    (using Context)
     (using Σ: Signature)
-    (using TypingContext)
+    (using ctx: TypingContext)
   : Either[IrError, CTerm] =
     pc match
       case Hole => throw IllegalStateException()

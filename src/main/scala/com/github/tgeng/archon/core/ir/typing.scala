@@ -14,6 +14,8 @@ import Elimination.*
 import scala.annotation.tailrec
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
+  private def indent = "│ " * (traceLevel)
+
   def trace[L, R](
     startMessage: String,
     successMsg: R => String = (_: R) => "",
@@ -22,7 +24,6 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     (action: => Either[L, R])(using Γ: Context): Either[L, R] =
     lazy val result: Either[L, R] = action
     if enableDebugging then
-      val indent = "│ " * (traceLevel)
       println(indent)
       println(
         indent + "   " + Γ.zipWithIndex.map { (binding, i) =>
@@ -37,6 +38,11 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
       traceLevel -= 1
       println(indent + "└─ " + endMessage)
     result
+
+  inline def debug[T](inline t: T) : T =
+    if enableDebugging then
+      println(indent + stringify(t) + " = " + t)
+    t
 
 def checkData(qn: QualifiedName)
   (using Σ: Signature)
@@ -275,7 +281,9 @@ def inferType(tm: VTerm)
       for ctyTy <- inferType(cty)
           r <- ctyTy match
             case CType(ul, _, eff) if eff == Total => Right(Type(ul, tm))
-            case CType(_, _, _) => Left(EffectfulCTermAsType(cty))
+            // Automatically promote SomeVType to F(SomeVType)
+            case F(Type(ul, _), eff) if eff == Total => Right(Type(ul, tm))
+            case CType(_, _, _) | F(Type(_, _), _) => Left(EffectfulCTermAsType(cty))
             case _ => Left(NotTypeError(tm))
       yield r
     case Thunk(c) =>
