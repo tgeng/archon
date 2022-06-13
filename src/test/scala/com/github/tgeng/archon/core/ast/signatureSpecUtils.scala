@@ -227,36 +227,36 @@ class TestSignature(
       case Right(sortedDeclarations) => sortedDeclarations.foreach {
         case (SIGNATURE, preData: PreData) =>
           val data = elaborateSignature(preData).asRight
+          checkData(data).asRight
           allData(data.qn) = data
-          checkData(data.qn).asRight
         case (BODY, preData: PreData) =>
           val constructors = elaborateBody(preData).asRight
+          checkDataConstructors(preData.qn, constructors).asRight
           allConstructors(preData.qn) = constructors.toIndexedSeq
-          checkDataConstructors(preData.qn).asRight
         case (SIGNATURE, preRecord: PreRecord) =>
           val record = elaborateSignature(preRecord).asRight
+          checkRecord(record).asRight
           allRecords(record.qn) = record
-          checkRecord(record.qn).asRight
         case (BODY, preRecord: PreRecord) =>
           val fields = elaborateBody(preRecord).asRight
+          checkRecordFields(preRecord.qn, fields).asRight
           allFields(preRecord.qn) = fields.toIndexedSeq
-          checkRecordFields(preRecord.qn).asRight
         case (SIGNATURE, preDefinition: PreDefinition) =>
           val definition = elaborateSignature(preDefinition).asRight
+          checkDef(definition).asRight
           allDefinitions(definition.qn) = definition
-          checkDef(definition.qn).asRight
         case (BODY, preDefinition: PreDefinition) =>
           val clauses = elaborateBody(preDefinition).asRight
+          checkClauses(preDefinition.qn, clauses).asRight
           allClauses(preDefinition.qn) = clauses.toIndexedSeq
-          checkClauses(preDefinition.qn).asRight
         case (SIGNATURE, preEffect: PreEffect) =>
           val effect = elaborateSignature(preEffect).asRight
+          checkEffect(effect).asRight
           allEffects(effect.qn) = effect
-          checkEffect(effect.qn).asRight
         case (BODY, preEffect: PreEffect) =>
           val operators = elaborateBody(preEffect).asRight
+          checkOperators(preEffect.qn, operators).asRight
           allOperators(preEffect.qn) = operators.toIndexedSeq
-          checkOperators(preEffect.qn).asRight
       }
 
 extension (b: MutableContext ?=> TestSignature ?=> Unit)

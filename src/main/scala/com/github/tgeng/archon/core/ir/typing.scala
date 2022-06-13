@@ -44,20 +44,15 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
       println(indent + stringify(t) + " = " + t)
     t
 
-// TODO: pass in the whole data here instead of read it from signature. Anything added to signature
-// must already be checked.
-def checkData(qn: QualifiedName)
+def checkData(data: Data)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = ctx.trace(s"checking data signature $qn") {
+: Either[IrError, Unit] = ctx.trace(s"checking data signature ${data.qn}") {
   given Context = IndexedSeq()
 
-  Σ.getDataOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(data) =>
-      val tParams = data.tParamTys.map(_._1)
-      checkParameterTypeDeclarations(tParams) >>
-        checkULevel(data.ul)(using tParams.toIndexedSeq)
+  val tParams = data.tParamTys.map(_._1)
+  checkParameterTypeDeclarations(tParams) >>
+    checkULevel(data.ul)(using tParams.toIndexedSeq)
 }
 
 def checkDataConstructor(qn: QualifiedName, con: Constructor)
@@ -99,28 +94,23 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
         else Left(IllegalVarianceInData(data.qn, bindingWithIncorrectUsage.map(_._2)))
 }
 
-def checkDataConstructors(qn: QualifiedName)
+def checkDataConstructors(qn: QualifiedName, constructors: Seq[Constructor])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  Σ.getConstructorsOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(constructors) => allRight(constructors.map { con => checkDataConstructor(qn, con) })
+  allRight(constructors.map { con => checkDataConstructor(qn, con) })
 
-def checkRecord(qn: QualifiedName)
+def checkRecord(record: Record)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = ctx.trace(s"checking record signature $qn") {
+: Either[IrError, Unit] = ctx.trace(s"checking record signature ${record.qn}") {
   given Context = IndexedSeq()
 
-  Σ.getRecordOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(record) =>
-      val tParams = record.tParamTys.map(_._1)
-      checkParameterTypeDeclarations(tParams) >>
-        checkULevel(record.ul)(using tParams.toIndexedSeq)
+  val tParams = record.tParamTys.map(_._1)
+  checkParameterTypeDeclarations(tParams) >>
+    checkULevel(record.ul)(using tParams.toIndexedSeq)
 }
 
 def checkRecordField(qn: QualifiedName, field: Field)
@@ -150,15 +140,13 @@ def checkRecordField(qn: QualifiedName, field: Field)
           else Left(IllegalVarianceInRecord(record.qn, bindingWithIncorrectUsage.map(_._2)))
 }
 
-def checkRecordFields(qn: QualifiedName)
+def checkRecordFields(qn: QualifiedName, fields: Seq[Field])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  Σ.getFieldsOption(qn) match
-    case None => Left(MissingDefinition(qn))
-    case Some(fields) => allRight(fields.map { field => checkRecordField(qn, field) })
+  allRight(fields.map { field => checkRecordField(qn, field) })
 
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U(
@@ -170,15 +158,13 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   )
 )(gn"self")
 
-def checkDef(qn: QualifiedName)
+def checkDef(definition: Definition)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = ctx.trace(s"checking def signature $qn") {
+: Either[IrError, Unit] = ctx.trace(s"checking def signature ${definition.qn}") {
   given Context = IndexedSeq()
 
-  Σ.getDefinitionOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(definition) => checkIsCType(definition.ty)
+  checkIsCType(definition.ty)
 }
 
 def checkClause(qn: QualifiedName, clause: Clause)
@@ -200,24 +186,19 @@ def checkClause(qn: QualifiedName, clause: Clause)
       checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty)
 }
 
-def checkClauses(qn: QualifiedName)
+def checkClauses(qn: QualifiedName, clauses: Seq[Clause])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  Σ.getClausesOption(qn) match
-    case None => Left(MissingDefinition(qn))
-    case Some(clauses) => allRight(clauses.map { clause => checkClause(qn, clause) })
+  allRight(clauses.map { clause => checkClause(qn, clause) })
 
-def checkEffect(qn: QualifiedName)
+def checkEffect(effect: Effect)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = ctx.trace(s"checking effect signature $qn") {
+: Either[IrError, Unit] = ctx.trace(s"checking effect signature ${effect.qn}") {
   given Context = IndexedSeq()
 
-  Σ.getEffectOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(effect) =>
-      checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
+  checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
 }
 
 def checkOperator(qn: QualifiedName, operator: Operator)
@@ -233,13 +214,11 @@ def checkOperator(qn: QualifiedName, operator: Operator)
         checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
 }
 
-def checkOperators(qn: QualifiedName)
+def checkOperators(qn: QualifiedName, operators: Seq[Operator])
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] =
-  Σ.getOperatorsOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(operators) => allRight(operators.map { operator => checkOperator(qn, operator) })
+  allRight(operators.map { operator => checkOperator(qn, operator) })
 
 private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
