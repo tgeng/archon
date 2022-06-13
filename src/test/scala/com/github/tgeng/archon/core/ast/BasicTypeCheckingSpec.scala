@@ -1,9 +1,9 @@
 package com.github.tgeng.archon.core.ast
 
 class BasicTypeCheckingSpec extends SignatureSpec {
-  +b"h: Heap"
 
   "built-ins" in ~ {
+    +b"h: Heap"
     +b"l: Level"
 
     t"L0" hasType t"Level"
@@ -81,9 +81,9 @@ class BasicTypeCheckingSpec extends SignatureSpec {
           {n: Nat} n = S n : Nat;
      """
   }
-//  +d"""
-//       def plus: Nat -> Nat -> Nat;
-//         {n: Nat} Z{} n = n : Nat;
-//         {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
-//   """
+  +d"""
+     def plus: Nat -> Nat -> Nat;
+       {n: Nat} Z{} n = n : Nat;
+       {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
+  """
 }

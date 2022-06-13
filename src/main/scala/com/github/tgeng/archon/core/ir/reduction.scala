@@ -69,6 +69,7 @@ private final class StackMachine(
     (using Σ: Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
+    ctx.debug(pc)
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -95,12 +96,15 @@ private final class StackMachine(
               ) match
                 case MatchingStatus.Matched =>
                   stack.dropRightInPlace(lhs.length)
-                  Some(Right(rhs.subst(mapping.get)))
-                case MatchingStatus.Stuck => Some(Right(reconstructTermFromStack(pc)))
+                  Some(Right((rhs.subst(mapping.get), /* stuck */ false)))
+                case MatchingStatus.Stuck => Some(Right((reconstructTermFromStack(pc), /* stuck */ true)))
                 case MatchingStatus.Mismatch => None
           } match
-            case Some(Right(t)) => run(t)
-            case None => throw IllegalArgumentException(s"leaky pattern in $qn")
+            case Some(Right((t, false))) => run(t)
+            case Some(Right((t, true))) => Right(t)
+            // This is possible when checking the clauses of a definition in some mutually recursive
+            // definitions
+            case None => Right(reconstructTermFromStack(pc))
       case Force(v) => v.normalized match
         case Left(e) => Left(e)
         case Right(Thunk(c)) => run(c)

@@ -44,6 +44,8 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
       println(indent + stringify(t) + " = " + t)
     t
 
+// TODO: pass in the whole data here instead of read it from signature. Anything added to signature
+// must already be checked.
 def checkData(qn: QualifiedName)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -411,9 +413,7 @@ def inferType(tm: CTerm)
                       for t <- reduce(t)
                           r <- t match
                             case Return(v) => inferType(ctx.substLowers(v))
-                            case _ => throw IllegalStateException(
-                              "impossible since we have checked type of t to be F(...)"
-                            )
+                            case c => inferType(ctx.substLowers(Collapse(c)))
                       yield r
                     // Otherwise, just add the binding to the context and continue type checking.
                     else
