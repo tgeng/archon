@@ -1,8 +1,14 @@
 package com.github.tgeng.archon.core.ast
 
+import com.github.tgeng.archon.common.*
+import scala.collection.mutable
+
 class BasicTypeCheckingSpec extends SignatureSpec {
 
-  "built-ins" in ~ {
+  given MutableContext = mutable.ArrayBuffer()
+  given TestSignature = TestSignature()
+
+  "built-ins" in scope {
     +b"h: Heap"
     +b"l: Level"
 
@@ -52,7 +58,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        S: Nat -> Nat;
    """
 
-  "nat" in ~ {
+  "nat" in scope {
     t"Z" hasType t"Nat"
     t"Z" doesNotHaveType t"Level"
     t"S Z" hasType t"Nat"
@@ -66,12 +72,12 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        Cons: n: Nat -> A -> Vector l A n -> Vector l A (S n);
   """
 
-  "vector" in ~ {
+  "vector" in scope {
     t"Nil L0 Nat" hasType t"Vector L0 Nat Z"
     t"Cons L0 Nat (S Z) Z (Nil L0 Nat)" hasType t"Vector L0 Nat (S Z)"
   }
 
-  "trivial definitions" in ~ {
+  "trivial definitions" in scope {
     +d"""
         def foo1: Type L0;
           {} = U Nat : Type L0;
@@ -87,7 +93,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
   """
 
-  "nat ops" in ~ {
+  "nat ops" in scope {
     t"plus Z Z" ≡ t"Z"
     t"plus (S Z) Z" ≡ t"S Z"
     t"plus (S Z) (S Z)" ≡ t"S (S Z)"

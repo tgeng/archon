@@ -97,6 +97,8 @@ extension[T] (inline t: T)
     if predicate(t) then println(t)
     t
 
+  inline def systemId: Int = System.identityHashCode(t)
+
 def caching[A, B](f: A => B): A => B =
   val cache = mutable.Map[A, B]()
   a => cache.getOrElseUpdate(a, f(a))

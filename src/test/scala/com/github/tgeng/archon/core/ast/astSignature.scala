@@ -9,28 +9,30 @@ type AstTelescope = List[Binding[AstTerm]]
 
 enum AstDeclaration:
   case AstData(
-    val name: Name,
+    override val name: Name,
     val tParamTys: AstTTelescope,
     val ty: AstTerm,
     val isPure: Boolean,
     val constructors: List[AstConstructor]
   )
   case AstRecord(
-    val name: Name,
+    override val name: Name,
     val tParamTys: AstTTelescope,
     val ty: AstTerm,
     val fields: List[AstField]
   )
   case AstDefinition(
-    val name: Name,
+    override val name: Name,
     val ty: AstTerm,
     val clauses: List[AstClause]
   )
   case AstEffect(
-    val name: Name,
+    override val name: Name,
     val tParamTys: AstTelescope,
     val operators: List[AstOperator]
   )
+  
+  def name: Name
 
 case class AstConstructor(
   name: Name,

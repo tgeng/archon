@@ -32,19 +32,6 @@ class SignatureSpec extends AnyFreeSpec :
 
     override def fail(message: String) = SignatureSpec.this.fail(message)
 
-  given Γ: MutableContext = mutable.ArrayBuffer()
-
-  given TestSignature = TestSignature(
-    mutable.Map(),
-    mutable.Map(),
-    mutable.Map(),
-    mutable.Map(),
-    mutable.Map(),
-    mutable.Map(),
-    mutable.Map(),
-    mutable.Map(),
-  )
-
   extension (tm: AstTerm)
     infix def hasType(ty: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
@@ -56,7 +43,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Left(e) => fail(e.toString, e.exception)
 
     infix def doesNotHaveType(ty: AstTerm)
-      (using Context)
+      (using Γ: Context)
       (using TestSignature)
       (using TypingContext) =
       given NameContext = Γ
@@ -67,7 +54,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Right(_) => fail(s"expect $tm to not have type $ty")
         case Left(e) =>
 
-    infix def ⪯(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+    infix def ⪯(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
 
       val cTm = astToIr(tm).asRight
@@ -77,7 +64,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Right(_) =>
         case Left(e) => fail(e.toString, e.exception)
 
-    infix def ⋠(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+    infix def ⋠(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
 
       val cTm = astToIr(tm).asRight
@@ -87,7 +74,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Right(_) => fail(s"expect $tm ⋠ $tm2")
         case Left(e) =>
 
-    infix def ≡(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+    infix def ≡(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
 
       val cTm = astToIr(tm).asRight
@@ -97,7 +84,7 @@ class SignatureSpec extends AnyFreeSpec :
         case Right(_) =>
         case Left(e) => fail(e.toString, e.exception)
 
-    infix def ≢(tm2: AstTerm)(using Context)(using TestSignature)(using TypingContext) =
+    infix def ≢(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
       given NameContext = Γ
 
       val cTm = astToIr(tm).asRight
@@ -109,15 +96,23 @@ class SignatureSpec extends AnyFreeSpec :
 
 
 class TestSignature(
-  private val allData: mutable.Map[QualifiedName, Data],
-  private val allConstructors: mutable.Map[QualifiedName, IndexedSeq[Constructor]],
-  private val allRecords: mutable.Map[QualifiedName, Record],
-  private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]],
-  private val allDefinitions: mutable.Map[QualifiedName, Definition],
-  private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]],
-  private val allEffects: mutable.Map[QualifiedName, Effect],
-  private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]],
+  private val allData: mutable.Map[QualifiedName, Data] = mutable.Map(),
+  private val allConstructors: mutable.Map[QualifiedName, IndexedSeq[Constructor]] = mutable.Map(),
+  private val allRecords: mutable.Map[QualifiedName, Record] = mutable.Map(),
+  private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]] = mutable.Map(),
+  private val allDefinitions: mutable.Map[QualifiedName, Definition] = mutable.Map(),
+  private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] = mutable.Map(),
+  private val allEffects: mutable.Map[QualifiedName, Effect] = mutable.Map(),
+  private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] = mutable.Map(),
 ) extends BuiltinSignature :
+
+  override def toString: String =
+    s"""
+       |data:    ${allData.keys}
+       |records: ${allRecords.keys}
+       |defs:    ${allDefinitions.keys}
+       |effects: ${allEffects.keys}
+       |""".stripMargin
 
   private val qnByName = mutable.Map[Name, QualifiedName]()
 
@@ -259,14 +254,15 @@ class TestSignature(
           allOperators(preEffect.qn) = operators.toIndexedSeq
       }
 
-extension (b: MutableContext ?=> TestSignature ?=> Unit)
-  def unary_~(using Γ: MutableContext)
-    (using Σ: TestSignature) = b(using mutable.ArrayBuffer(Γ.toArray: _*))(using Σ.copy)
+def scope(b: (MutableContext, TestSignature) ?=> Unit)(using Γ: MutableContext)(using Σ: TestSignature) =
+    val newContext: MutableContext = mutable.ArrayBuffer(Γ.toArray: _*)
+    val newSignature: TestSignature = Σ.copy
+    b(using newContext, newSignature)
 
 given Conversion[Context, NameContext] = NameContext.fromContext
 
 extension (binding: Binding[AstTerm])
-  def unary_+(using Γ: MutableContext)(using Context)(using TestSignature)(using TypingContext) =
+  def unary_+(using Γ: MutableContext)(using TestSignature)(using TypingContext) =
     given NameContext = Γ
 
     val ty = astToIr(binding.ty).asRight
@@ -274,6 +270,5 @@ extension (binding: Binding[AstTerm])
     Γ.addOne(Binding(vTy)(binding.name))
 
 extension (declarations: List[AstDeclaration])
-  def unary_+(using Σ: TestSignature)(using TypingContext)(using TestContext) = Σ.addDeclarations(
-    declarations
-  )
+  def unary_+(using Σ: TestSignature)(using TypingContext)(using TestContext) =
+    Σ.addDeclarations(declarations)
