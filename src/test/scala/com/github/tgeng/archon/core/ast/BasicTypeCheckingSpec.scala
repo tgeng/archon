@@ -86,4 +86,10 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        {n: Nat} Z{} n = n : Nat;
        {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
   """
+
+  "nat ops" in ~ {
+    t"plus Z Z" ≡ t"Z"
+    t"plus (S Z) Z" ≡ t"S Z"
+    t"plus (S Z) (S Z)" ≡ t"S (S Z)"
+  }
 }

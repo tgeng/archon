@@ -69,7 +69,6 @@ private final class StackMachine(
     (using Σ: Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
-    ctx.debug(pc)
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -90,7 +89,7 @@ private final class StackMachine(
                   stack.reverseIterator.map {
                     case Application(_, arg) => Elimination.ETerm(arg)
                     case Projection(_, name) => Elimination.EProj(name)
-                    case _ => throw IllegalArgumentException("type error")
+                    case t => throw IllegalArgumentException(s"type error: expect application or projection, but got $t")
                   }
                 ), mapping, MatchingStatus.Matched
               ) match

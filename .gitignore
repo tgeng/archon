@@ -95,4 +95,4 @@ project/plugins/project/
 .metals/
 .bloop/
 project/metals.sbt
-
+.bsp
