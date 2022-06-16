@@ -116,7 +116,7 @@ class TestSignature(
 
   private val qnByName = mutable.Map[Name, QualifiedName]()
 
-  private def updateQnByName(qn: QualifiedName) = qn match
+  private def updateQnByName(qn: QualifiedName): Unit = qn match
     case QualifiedName.Root => throw IllegalArgumentException()
     case QualifiedName.Node(_, name) =>
       assert(!qnByName.contains(name), s"$qnByName already contains $name")

@@ -6,6 +6,7 @@ import scala.collection.mutable
 class BasicTypeCheckingSpec extends SignatureSpec {
 
   given MutableContext = mutable.ArrayBuffer()
+
   given TestSignature = TestSignature()
 
   "built-ins" in scope {
@@ -97,5 +98,24 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"plus Z Z" ≡ t"Z"
     t"plus (S Z) Z" ≡ t"S Z"
     t"plus (S Z) (S Z)" ≡ t"S (S Z)"
+    t"Refl L0 Nat (S (S Z))" hasType t"Equality L0 Nat (plus (S Z) (S Z)) (S (S Z))"
+    t"Refl L0 Nat (S (S Z))" doesNotHaveType t"Equality L0 Nat (plus (S Z) (S Z)) Z"
+  }
+
+  "heap effect" in scope {
+    t"""
+        hpv a <>;
+        L0
+     """ hasType t"Level"
+    t"""
+        hpv a <>;
+        L0
+     """ ≡ t"L0"
+      t"""
+        hpv a <>;
+        let v = alloc L0 a Nat ;
+        let v = set L0 a Nat v Z;
+        get L0 a Nat v
+     """ hasType t"Nat"
   }
 }

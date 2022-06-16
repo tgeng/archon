@@ -498,9 +498,9 @@ object Builtins:
           FunctionType(
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
             FunctionType(
-              Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell"),
+              Binding(DataType(Builtins.CellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell"),
               F(
-                DataType(Builtins.CellQn, Var(3) :: Var(2) :: Var(1) :: Nil),
+                Var(1),
                 EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
               )
             )
@@ -512,13 +512,12 @@ object Builtins:
           Binding(LevelType)(n"level") ::
             Binding(HeapType)(n"h") ::
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
-            Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell") ::
-            Binding(Var(1))(n"value") ::
+            Binding(DataType(Builtins.CellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell") ::
             Nil,
           CPattern(PVar(3)) :: CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           GetOp(Var(0)),
           F(
-            DataType(Builtins.CellQn, Var(3) :: Var(2) :: Var(1) :: Nil),
+            Var(1),
             EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
           )
         )

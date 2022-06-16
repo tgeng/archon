@@ -39,7 +39,7 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
       println(indent + "└─ " + endMessage)
     result
 
-  inline def debug[T](inline t: T) : T =
+  inline def debug[T](inline t: T): T =
     if enableDebugging then
       println(indent + stringify(t) + " = " + t)
     t
@@ -491,7 +491,7 @@ def inferType(tm: CTerm)
                 handlers.keySet != operators.map(_.name).toSet then
                 Left(UnmatchedHandlerImplementation(qn, handlers.keys))
               else
-                val outputCType = F(otherEffects, outputType)
+                val outputCType = F(outputType, otherEffects)
                 for _ <- checkTypes(args, effect.tParamTys)
                     inputCTy <- inferType(input)
                     r <- inputCTy match
@@ -534,8 +534,8 @@ def inferType(tm: CTerm)
         checkIsType(vTy) >>
         Right(
           F(
-            EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
             CellType(heap, vTy, CellStatus.Uninitialized),
+            EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
           )
         )
     case SetOp(cell, value) =>
@@ -544,8 +544,8 @@ def inferType(tm: CTerm)
             case CellType(heap, vTy, _) => checkType(value, vTy) >>
               Right(
                 F(
-                  EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                   CellType(heap, vTy, CellStatus.Initialized),
+                  EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                 )
               )
             case _ => Left(ExpectCell(cell))
@@ -556,8 +556,8 @@ def inferType(tm: CTerm)
             case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
               Right(
                 F(
-                  EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                   CellType(heap, vTy, CellStatus.Initialized),
+                  EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                 )
               )
             case _: CellType => Left(UninitializedCell(tm))
@@ -565,6 +565,7 @@ def inferType(tm: CTerm)
       yield r
     case HeapHandler(otherEffects, _, _, input) =>
       val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
+      given Context = Γ :+ heapVarBinding
       for inputCTy <- inferType(input)
           r <- inputCTy match
             case F(inputTy, eff) =>
@@ -575,12 +576,12 @@ def inferType(tm: CTerm)
                   otherEffects.weakened
                 ),
                 Some(EffectsType)
-              )(using SUBSUMPTION)(using Γ :+ heapVarBinding)
+              )(using SUBSUMPTION)
               // TODO: check heap variable is not leaked. If it's leaked, there is no point using
               //  this handler at all. Simply using GlobalHeapKey is the right thing to do. This is
               //  because a creating a leaked heap key itself is performing a side effect with global
               //  heap.
-              Right(F(otherEffects, inputTy))
+              Right(F(inputTy, otherEffects))
             case _ => Left(ExpectFType(inputCTy))
       yield r
 )
@@ -927,15 +928,16 @@ private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-: Either[IrError, Unit] = (eff1.normalized, eff2.normalized) match
-  case (Left(e), _) => Left(e)
-  case (_, Left(e)) => Left(e)
-  case (Right(eff1), Right(eff2)) if eff1 == eff2 => Right(())
-  case (Right(Effects(literals1, unionOperands1)), Right(Effects(literals2, unionOperands2)))
-    if mode == CheckSubsumptionMode && literals1.subsetOf(literals2) && unionOperands1.subsetOf(
-      unionOperands2
-    ) => Right(())
-  case _ => Left(NotEffectSubsumption(eff1, eff2, mode))
+: Either[IrError, Unit] =
+  (eff1.normalized, eff2.normalized) match
+    case (Left(e), _) => Left(e)
+    case (_, Left(e)) => Left(e)
+    case (Right(eff1), Right(eff2)) if eff1 == eff2 => Right(())
+    case (Right(Effects(literals1, unionOperands1)), Right(Effects(literals2, unionOperands2)))
+      if mode == CheckSubsumptionMode.SUBSUMPTION &&
+        literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
+      Right(())
+    case _ => Left(NotEffectSubsumption(eff1, eff2, mode))
 
 /**
  * Check that `ul1` is lower or equal to `ul2`.

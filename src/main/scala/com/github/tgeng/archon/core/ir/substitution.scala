@@ -30,7 +30,10 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
 
   override def transformEffects(effects: Effects)(using ctx: (Int, Int))(using Σ: Signature) =
     Effects(
-      effects.literal, effects.unionOperands.map(
+      effects.literal.map{
+        case (qn, args) => (qn, args.map(v => transformVTerm(v)))
+      },
+      effects.unionOperands.map(
         transformVar(_).asInstanceOf[VTerm.Var]
       )
     )
