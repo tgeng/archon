@@ -41,3 +41,4 @@ enum IrError extends HasException:
   case MissingField(name: Name, qn: QualifiedName)
   case MissingOperator(name: Name, qn: QualifiedName)
   case LeakedReferenceToEffectfulComputationResult(effectfulTerm: CTerm)
+  case LeakedReferenceToHeapVariable(leakyTerm: CTerm)

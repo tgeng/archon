@@ -248,7 +248,10 @@ def inferType(tm: VTerm)
       for _ <- checkULevel(ul)
           upperBoundTy <- inferType(upperBound)
           _ <- upperBoundTy match
-            case Type(ul2, _) => checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
+            case Type(ul2, _) => checkULevelSubsumption(
+              ul,
+              ul2
+            )(using CheckSubsumptionMode.CONVERSION)
             case _ => Left(ExpectVType(upperBound))
       yield Type(ULevelSuc(ul), tm)
     case Pure(ul) => Right(Type(ul, tm))
@@ -360,7 +363,10 @@ def inferType(tm: CTerm)
           _ <- checkULevel(ul)
           upperBoundTy <- inferType(upperBound)
           _ <- upperBoundTy match
-            case CType(ul2, _, _) => checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
+            case CType(ul2, _, _) => checkULevelSubsumption(
+              ul,
+              ul2
+            )(using CheckSubsumptionMode.CONVERSION)
             case _ => Left(ExpectCType(upperBound))
       yield CType(ULevelSuc(ul), tm, Total)
     case CTop(ul, effects) =>
@@ -403,15 +409,10 @@ def inferType(tm: CTerm)
                     // Otherwise, just add the binding to the context and continue type checking.
                     else
                       for ctxTy <- inferType(ctx)(using Γ :+ Binding(ty)(gn"LetVar"))
-                          _ <-
-                            // Report an error if the type of `ctx` needs to reference the effectful
-                            // computation. User should use a dependent sum type to wrap such
-                            // references manually to avoid the leak.
-                            val (positiveFreeVars, negativeFreeVars) = getFreeVars(ctxTy)(using 0)
-                            if positiveFreeVars(0) || negativeFreeVars(0) then
-                              Left(LeakedReferenceToEffectfulComputationResult(t))
-                            else
-                              Right(())
+                          // Report an error if the type of `ctx` needs to reference the effectful
+                          // computation. User should use a dependent sum type to wrap such
+                          // references manually to avoid the leak.
+                          _ <- checkVar0Leak(ctxTy, LeakedReferenceToEffectfulComputationResult(t))
                       yield ctxTy.strengthened
               yield augmentEffect(effects, ctxTy)
             case _ => Left(ExpectFType(tTy))
@@ -577,19 +578,21 @@ def inferType(tm: CTerm)
       for inputCTy <- inferType(input)
           r <- inputCTy match
             case F(inputTy, eff) =>
-              checkSubsumption(
-                eff,
-                EffectsUnion(
-                  EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(0) :: Nil))),
-                  otherEffects.weakened
-                ),
-                Some(EffectsType)
-              )(using SUBSUMPTION)
-              // TODO: check heap variable is not leaked. If it's leaked, there is no point using
-              //  this handler at all. Simply using GlobalHeapKey is the right thing to do. This is
-              //  because a creating a leaked heap key itself is performing a side effect with global
-              //  heap.
-              Right(F(inputTy, otherEffects))
+              for
+                _ <- checkSubsumption(
+                  eff,
+                  EffectsUnion(
+                    EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(0) :: Nil))),
+                    otherEffects.weakened
+                  ),
+                  Some(EffectsType)
+                )(using SUBSUMPTION)
+                // TODO: Use more sophisticated check here to catch leak through wrapping heap
+                //  variable inside things. If it's leaked, there is no point using this handler at
+                //  all. Simply using GlobalHeapKey is the right thing to do. This is because a
+                //  creating a leaked heap key itself is performing a side effect with global heap.
+                _ <- checkVar0Leak(inputTy, LeakedReferenceToHeapVariable(input))
+              yield F(inputTy.strengthened, otherEffects)
             case _ => Left(ExpectFType(inputCTy))
       yield r
 )
@@ -634,6 +637,7 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
       case (_, Left(e)) => Left(e)
       case (Right(sub), Right(sup)) =>
         (sub, sup, ty) match
+          case (_, _, Some(EffectsType)) => checkEffSubsumption(sub, sup)
           case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
             checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
           case (ty, Top(ul2), _) =>
@@ -935,7 +939,7 @@ private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
-  (using TypingContext)
+  (using ctx: TypingContext)
 : Either[IrError, Unit] =
   (eff1.normalized, eff2.normalized) match
     case (Left(e), _) => Left(e)
@@ -1067,6 +1071,16 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   )
   case RecordType(qn, args, effects) => RecordType(qn, args, EffectsUnion(eff, effects))
   case _ => throw IllegalArgumentException(s"trying to augment $cty with $eff")
+
+private def checkVar0Leak(ty: CTerm | VTerm, error: => IrError)
+  (using Σ: Signature): Either[IrError, Unit] =
+  val (positiveFreeVars, negativeFreeVars) = ty match
+    case ty: CTerm => getFreeVars(ty)(using 0)
+    case ty: VTerm => getFreeVars(ty)(using 0)
+  if positiveFreeVars(0) || negativeFreeVars(0) then
+    Left(error)
+  else
+    Right(())
 
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   es.first {

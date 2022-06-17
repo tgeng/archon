@@ -15,6 +15,7 @@ trait TestContext:
   def testName: String
 
   def fail(message: String): Nothing
+  def fail(message: String, cause: Throwable): Nothing
 
 class SignatureSpec extends AnyFreeSpec :
   given TypingContext = new TypingContext(0, false) {}
@@ -23,6 +24,7 @@ class SignatureSpec extends AnyFreeSpec :
     override def testName: String = SignatureSpec.this.getClass.getSimpleName.!!
 
     override def fail(message: String) = SignatureSpec.this.fail(message)
+    override def fail(message: String, cause: Throwable) = SignatureSpec.this.fail(message, cause)
 
 def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
   ctx.enableDebugging = true
@@ -96,7 +98,10 @@ def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using ctx: T
     case Right(r) => r
     case Left(l) => debug {
       action
-      ctx.fail(l.toString)
+      if l.isInstanceOf[HasException] then
+        ctx.fail(l.toString, l.asInstanceOf[HasException].exception)
+      else
+        ctx.fail(l.toString)
     }
 
 
