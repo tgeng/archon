@@ -163,8 +163,8 @@ object Builtins:
       )),
 
     /**
-     * SubTypeOf : (level : LevelType) -> (upperBound : Type(level + 1, Top(level + 1))) -> Type(level + 1, Type(level, upperBound))
-     * {level : LevelType, upperBound: Type(level + 1, Top(level + 1))} |- level upperBound := .return Type(level, upperBound)
+     * SubTypeOf : (level : LevelType) -> (upperBound : Type(level, Top(level))) -> Type(level + 1, Type(level, upperBound))
+     * {level : LevelType, upperBound: Type(level, Top(level))} |- level upperBound := .return Type(level, upperBound)
      */
     (Builtins.SubtypeOfQn,
       FunctionType(
@@ -172,8 +172,8 @@ object Builtins:
         FunctionType(
           Binding(
             Type(
-              USimpleLevel(LevelSuc(Var(0))),
-              Top(USimpleLevel(LevelSuc(Var(0))))
+              USimpleLevel(Var(0)),
+              Top(USimpleLevel(Var(0)))
             )
           )(n"upperBound"),
           F(Type(USimpleLevel(LevelSuc(Var(1))), Type(USimpleLevel(Var(1)), Var(0))))
@@ -184,8 +184,8 @@ object Builtins:
           Binding(LevelType)(n"level") ::
             Binding(
               Type(
-                USimpleLevel(LevelSuc(Var(0))),
-                Top(USimpleLevel(LevelSuc(Var(0))))
+                USimpleLevel(Var(0)),
+                Top(USimpleLevel(Var(0)))
               )
             )(n"upperBound") ::
             Nil,
@@ -317,17 +317,17 @@ object Builtins:
     ),
 
     /**
-     * CSubTypeOf : (level : LevelType) -> (effects: EffectsType) -> (upperBound : U(CType(level + 1, CTop(level + 1, effects)))) -> CType(level + 1, .force upperBound, Total)
-     * {level : LevelType, effects: Effects, upperBound: U(CType(level + 1, CTop(level + 1, effects)))} |- level effects upperBound := CType(level, .force upperBound, effects)
+     * CSubTypeOf : (level : LevelType) -> (effects: EffectsType) -> (upperBound : U(CType(level, CTop(level, effects)))) -> CType(level + 1, .force upperBound, Total)
+     * {level : LevelType, effects: Effects, upperBound: U(CType(level + 1, CTop(level, effects)))} |- level effects upperBound := CType(level, .force upperBound, effects)
      */
-    (Builtins.SubtypeOfQn,
+    (Builtins.CSubtypeOfQn,
       FunctionType(
         Binding(LevelType)(n"level"),
         FunctionType(
           Binding(EffectsType)(n"effects"),
           FunctionType(
             Binding(
-              U(CType(USimpleLevel(LevelSuc(Var(1))), CTop(USimpleLevel(LevelSuc(Var(1))), Var(0))))
+              U(CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0))))
             )(n"upperBound"),
             CType(
               USimpleLevel(LevelSuc(Var(2))),
@@ -341,7 +341,7 @@ object Builtins:
           Binding(LevelType)(n"level") ::
             Binding(EffectsType)(n"effects") ::
             Binding(
-              U(CType(USimpleLevel(LevelSuc(Var(1))), CTop(USimpleLevel(LevelSuc(Var(1))), Var(0))))
+              U(CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0))))
             )(n"upperBound") ::
             Nil,
           CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
