@@ -69,6 +69,22 @@ class BasicTypeCheckingSpec extends SignatureSpec {
             assertRight(checkClause(qn, clause))
           }
     }
+    Builtins.builtinRecords.foreach { (qn, v) =>
+      v match
+        case (record, fields) =>
+          assertRight(checkRecord(record))
+          fields.foreach { field =>
+            assertRight(checkRecordField(qn, field))
+          }
+    }
+    Builtins.builtinEffects.foreach { (qn, v) =>
+      v match
+        case (effect, operators) =>
+          assertRight(checkEffect(effect))
+          operators.foreach { operator =>
+            assertRight(checkOperator(qn, operator))
+          }
+    }
   }
 
   +d"""
