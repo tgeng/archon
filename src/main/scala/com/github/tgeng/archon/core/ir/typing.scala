@@ -244,10 +244,13 @@ def inferType(tm: VTerm)
   (using ctx: TypingContext)
 : Either[IrError, VTerm] = debugInfer(
   tm, tm match
-    case Type(level, upperBound) =>
-      checkULevel(level) >>
-        checkType(upperBound, Type(level, Top(level))) >>
-        Right(Type(ULevelSuc(level), tm))
+    case Type(ul, upperBound) =>
+      for _ <- checkULevel(ul)
+          upperBoundTy <- inferType(upperBound)
+          _ <- upperBoundTy match
+            case Type(ul2, _) => checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
+            case _ => Left(ExpectVType(upperBound))
+      yield Type(ULevelSuc(ul), tm)
     case Pure(ul) => Right(Type(ul, tm))
     case Top(ul) => Right(Type(ul, tm))
     case r: Var => Right(Γ(r).ty)
@@ -353,10 +356,13 @@ def inferType(tm: CTerm)
   tm, tm match
     case Hole => throw IllegalArgumentException("hole should only be present during reduction")
     case CType(ul, upperBound, effects) =>
-      checkType(effects, EffectsType) >>
-        checkULevel(ul) >>
-        checkType(upperBound, CType(ul, CTop(ul), effects)) >>
-        Right(CType(ULevelSuc(ul), tm, Total))
+      for _ <- checkType(effects, EffectsType)
+          _ <- checkULevel(ul)
+          upperBoundTy <- inferType(upperBound)
+          _ <- upperBoundTy match
+            case CType(ul2, _, _) => checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
+            case _ => Left(ExpectCType(upperBound))
+      yield CType(ULevelSuc(ul), tm, Total)
     case CTop(ul, effects) =>
       checkType(effects, EffectsType) >>
         checkULevel(ul) >>
@@ -556,7 +562,7 @@ def inferType(tm: CTerm)
             case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
               Right(
                 F(
-                  CellType(heap, vTy, CellStatus.Initialized),
+                  vTy,
                   EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
                 )
               )
@@ -565,7 +571,9 @@ def inferType(tm: CTerm)
       yield r
     case HeapHandler(otherEffects, _, _, input) =>
       val heapVarBinding = Binding[VTerm](HeapType)(gn"heap")
+
       given Context = Γ :+ heapVarBinding
+
       for inputCTy <- inferType(input)
           r <- inputCTy match
             case F(inputTy, eff) =>

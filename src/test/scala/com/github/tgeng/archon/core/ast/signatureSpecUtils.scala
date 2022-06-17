@@ -19,80 +19,102 @@ trait TestContext:
 class SignatureSpec extends AnyFreeSpec :
   given TypingContext = new TypingContext(0, false) {}
 
-  def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
-    ctx.enableDebugging = true
-    try {
-      block
-    } finally {
-      ctx.enableDebugging = false
-    }
-
   given TestContext = new TestContext :
     override def testName: String = SignatureSpec.this.getClass.getSimpleName.!!
 
     override def fail(message: String) = SignatureSpec.this.fail(message)
 
-  extension (tm: AstTerm)
-    infix def hasType(ty: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
-      given NameContext = Γ
+def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
+  ctx.enableDebugging = true
+  try {
+    block
+  } finally {
+    ctx.enableDebugging = false
+  }
 
-      val cTm = astToIr(tm).asRight
-      val cTy = astToIr(ty).asRight
-      checkType(cTm, cTy) match
-        case Right(_) =>
-        case Left(e) => fail(e.toString, e.exception)
+extension (using Γ: Context)
+  (using TestSignature)
+  (using TypingContext)
+  (using TestContext)
+  (tm: AstTerm)
+  infix def hasType(ty: AstTerm): Unit =
+    given NameContext = Γ
 
-    infix def doesNotHaveType(ty: AstTerm)
-      (using Γ: Context)
-      (using TestSignature)
-      (using TypingContext) =
-      given NameContext = Γ
+    val cTm = astToIr(tm).asRight
+    val cTy = astToIr(ty).asRight
+    assertRight(checkType(cTm, cTy))
 
-      val cTm = astToIr(tm).asRight
-      val cTy = astToIr(ty).asRight
-      checkType(cTm, cTy) match
-        case Right(_) => fail(s"expect $tm to not have type $ty")
-        case Left(e) =>
+  infix def doesNotHaveType(ty: AstTerm): Unit =
+    given NameContext = Γ
 
-    infix def ⪯(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
-      given NameContext = Γ
+    val cTm = astToIr(tm).asRight
+    val cTy = astToIr(ty).asRight
+    assertLeft(checkType(cTm, cTy))
 
-      val cTm = astToIr(tm).asRight
-      val cTm2 = astToIr(tm2).asRight
-      val cTy = inferType(cTm).asRight
-      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION) match
-        case Right(_) =>
-        case Left(e) => fail(e.toString, e.exception)
+  infix def ⪯(tm2: AstTerm): Unit =
+    given NameContext = Γ
 
-    infix def ⋠(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
-      given NameContext = Γ
+    val cTm = astToIr(tm).asRight
+    val cTm2 = astToIr(tm2).asRight
+    val cTy = inferType(cTm).asRight
+    assertRight(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION))
 
-      val cTm = astToIr(tm).asRight
-      val cTm2 = astToIr(tm2).asRight
-      val cTy = inferType(cTm).asRight
-      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION) match
-        case Right(_) => fail(s"expect $tm ⋠ $tm2")
-        case Left(e) =>
+  infix def ⋠(tm2: AstTerm): Unit =
+    given NameContext = Γ
 
-    infix def ≡(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
-      given NameContext = Γ
+    val cTm = astToIr(tm).asRight
+    val cTm2 = astToIr(tm2).asRight
+    val cTy = inferType(cTm).asRight
+    assertLeft(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION))
 
-      val cTm = astToIr(tm).asRight
-      val cTm2 = astToIr(tm2).asRight
-      val cTy = inferType(cTm).asRight
-      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION) match
-        case Right(_) =>
-        case Left(e) => fail(e.toString, e.exception)
+  infix def ≡(tm2: AstTerm): Unit =
+    given NameContext = Γ
 
-    infix def ≢(tm2: AstTerm)(using Γ: Context)(using TestSignature)(using TypingContext) =
-      given NameContext = Γ
+    val cTm = astToIr(tm).asRight
+    val cTm2 = astToIr(tm2).asRight
+    val cTy = inferType(cTm).asRight
+    assertRight(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION))
 
-      val cTm = astToIr(tm).asRight
-      val cTm2 = astToIr(tm2).asRight
-      val cTy = inferType(cTm).asRight
-      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION) match
-        case Right(_) => fail(s"expect $tm ≢ $tm2")
-        case Left(e) =>
+  infix def ≢(tm2: AstTerm): Unit =
+    given NameContext = Γ
+
+    val cTm = astToIr(tm).asRight
+    val cTm2 = astToIr(tm2).asRight
+    val cTy = inferType(cTm).asRight
+    assertLeft(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION))
+
+def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using ctx: TestContext): R =
+  val r: Either[L, R] = try {
+    action
+  } catch {
+    case _: Any => debug {
+      action
+      ctx.fail("should throw above")
+    }
+  }
+  r match
+    case Right(r) => r
+    case Left(l) => debug {
+      action
+      ctx.fail(l.toString)
+    }
+
+
+def assertLeft[L, R](action: => Either[L, R])(using TypingContext)(using ctx: TestContext): L =
+  val r: Either[L, R] = try {
+    action
+  } catch {
+    case _: Any => debug {
+      action
+      ctx.fail("should throw above")
+    }
+  }
+  r match
+    case Left(l) => l
+    case Right(_) => debug {
+      action
+      ctx.fail("Expect to fail, but succeeded.")
+    }
 
 
 class TestSignature(
@@ -254,10 +276,12 @@ class TestSignature(
           allOperators(preEffect.qn) = operators.toIndexedSeq
       }
 
-def scope(b: (MutableContext, TestSignature) ?=> Unit)(using Γ: MutableContext)(using Σ: TestSignature) =
-    val newContext: MutableContext = mutable.ArrayBuffer(Γ.toArray: _*)
-    val newSignature: TestSignature = Σ.copy
-    b(using newContext, newSignature)
+def scope(b: (MutableContext, TestSignature) ?=> Unit)
+  (using Γ: MutableContext)
+  (using Σ: TestSignature) =
+  val newContext: MutableContext = mutable.ArrayBuffer(Γ.toArray: _*)
+  val newSignature: TestSignature = Σ.copy
+  b(using newContext, newSignature)
 
 given Conversion[Context, NameContext] = NameContext.fromContext
 

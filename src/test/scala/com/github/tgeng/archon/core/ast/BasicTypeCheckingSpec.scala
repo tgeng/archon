@@ -1,6 +1,8 @@
 package com.github.tgeng.archon.core.ast
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core.ir.*
+
 import scala.collection.mutable
 
 class BasicTypeCheckingSpec extends SignatureSpec {
@@ -51,6 +53,22 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"Effects -> Effects" hasType t"CType L0 <>"
     t"Effects -> Effects -> Effects" hasType t"CType L0 <>"
     t"Level -> Effects" hasType t"CTYPE0"
+    Builtins.builtinData.foreach { (qn, v) =>
+      v match
+        case (data, constructors) =>
+          assertRight(checkData(data))
+          constructors.foreach { con =>
+            assertRight(checkDataConstructor(qn, con))
+          }
+    }
+    Builtins.builtinDefinitions.foreach { (qn, v) =>
+      v match
+        case (definition, clauses) =>
+          assertRight(checkDef(definition))
+          clauses.foreach { clause =>
+            assertRight(checkClause(qn, clause))
+          }
+    }
   }
 
   +d"""
@@ -111,7 +129,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
         hpv a <>;
         L0
      """ ≡ t"L0"
-      t"""
+    t"""
         hpv a <>;
         let v = alloc L0 a Nat ;
         let v = set L0 a Nat v Z;

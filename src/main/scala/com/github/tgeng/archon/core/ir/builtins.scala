@@ -92,7 +92,7 @@ object Builtins:
       Constructor(
         n"MkCell",
         Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"delegate") :: Nil,
-        Var(2) :: Var(1) :: Var(0) :: Nil
+        Var(3) :: Var(2) :: Var(1) :: Nil
       )
     )),
     (Builtins.UCellQn,
@@ -113,7 +113,7 @@ object Builtins:
       Constructor(
         n"MkUCell",
         Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"delegate") :: Nil,
-        Var(2) :: Var(1) :: Var(0) :: Nil
+        Var(3) :: Var(2) :: Var(1) :: Nil
       )
     )),
   ).map {
@@ -480,7 +480,18 @@ object Builtins:
           CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
           Let(
             AllocOp(Var(1), Var(0)),
-            Return(Con(n"MkUCell", Var(0) :: Nil))
+            Application(
+              Application(
+                Application(
+                  Application(
+                    Def(Builtins.UCellQn / n"MkUCell"), Var(3)
+                  ),
+                  Var(2)
+                ),
+                Var(1)
+              ),
+              Var(0)
+            )
           )(n"cell"),
           F(
             DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil),
@@ -512,9 +523,13 @@ object Builtins:
           Binding(LevelType)(n"level") ::
             Binding(HeapType)(n"h") ::
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
-            Binding(DataType(Builtins.CellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell") ::
+            Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"cell") ::
             Nil,
-          CPattern(PVar(3)) :: CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+          CPattern(PVar(3)) ::
+            CPattern(PVar(2)) ::
+            CPattern(PVar(1)) ::
+            CPattern(PConstructor(n"MkCell", PVar(0) :: Nil)) ::
+            Nil,
           GetOp(Var(0)),
           F(
             Var(1),
@@ -550,14 +565,28 @@ object Builtins:
           Binding(LevelType)(n"level") ::
             Binding(HeapType)(n"h") ::
             Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
-            Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell") ::
+            Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"cell") ::
             Binding(Var(1))(n"value") ::
             Nil,
-          CPattern(PVar(4)) :: CPattern(PVar(3)) :: CPattern(PVar(2)) :: CPattern(PVar(1)) ::
+          CPattern(PVar(4)) ::
+            CPattern(PVar(3)) ::
+            CPattern(PVar(2)) ::
+            CPattern(PConstructor(n"MkUCell", PVar(1) :: Nil)) ::
             CPattern(PVar(0)) :: Nil,
           Let(
             SetOp(Var(1), Var(0)),
-            Return(Con(n"MkCell", Var(0) :: Nil))
+            Application(
+              Application(
+                Application(
+                  Application(
+                    Def(Builtins.CellQn / n"MkCell"), Var(5)
+                  ),
+                  Var(4)
+                ),
+                Var(3)
+              ),
+              Var(0)
+            )
           )(n"cell"),
           F(
             DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
