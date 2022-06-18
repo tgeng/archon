@@ -248,36 +248,36 @@ class TestSignature(
       case Left(cycle) => tCtx.fail(s"detected cycles in declarations: $cycle")
       case Right(sortedDeclarations) => sortedDeclarations.foreach {
         case (SIGNATURE, preData: PreData) =>
-          val data = elaborateSignature(preData).asRight
-          checkData(data).asRight
+          val data = assertRight(elaborateSignature(preData))
+          assertRight(checkData(data))
           allData(data.qn) = data
         case (BODY, preData: PreData) =>
-          val constructors = elaborateBody(preData).asRight
-          checkDataConstructors(preData.qn, constructors).asRight
+          val constructors = assertRight(elaborateBody(preData))
+          assertRight(checkDataConstructors(preData.qn, constructors))
           allConstructors(preData.qn) = constructors.toIndexedSeq
         case (SIGNATURE, preRecord: PreRecord) =>
-          val record = elaborateSignature(preRecord).asRight
-          checkRecord(record).asRight
+          val record = assertRight(elaborateSignature(preRecord))
+          assertRight(checkRecord(record))
           allRecords(record.qn) = record
         case (BODY, preRecord: PreRecord) =>
-          val fields = elaborateBody(preRecord).asRight
-          checkRecordFields(preRecord.qn, fields).asRight
+          val fields = assertRight(elaborateBody(preRecord))
+          assertRight(checkRecordFields(preRecord.qn, fields))
           allFields(preRecord.qn) = fields.toIndexedSeq
         case (SIGNATURE, preDefinition: PreDefinition) =>
-          val definition = elaborateSignature(preDefinition).asRight
-          checkDef(definition).asRight
+          val definition = assertRight(elaborateSignature(preDefinition))
+          assertRight(checkDef(definition))
           allDefinitions(definition.qn) = definition
         case (BODY, preDefinition: PreDefinition) =>
-          val clauses = elaborateBody(preDefinition).asRight
-          checkClauses(preDefinition.qn, clauses).asRight
+          val clauses = assertRight(elaborateBody(preDefinition))
+          assertRight(checkClauses(preDefinition.qn, clauses))
           allClauses(preDefinition.qn) = clauses.toIndexedSeq
         case (SIGNATURE, preEffect: PreEffect) =>
-          val effect = elaborateSignature(preEffect).asRight
-          checkEffect(effect).asRight
+          val effect = assertRight(elaborateSignature(preEffect))
+          assertRight(checkEffect(effect))
           allEffects(effect.qn) = effect
         case (BODY, preEffect: PreEffect) =>
-          val operators = elaborateBody(preEffect).asRight
-          checkOperators(preEffect.qn, operators).asRight
+          val operators = assertRight(elaborateBody(preEffect))
+          assertRight(checkOperators(preEffect.qn, operators))
           allOperators(preEffect.qn) = operators.toIndexedSeq
       }
 

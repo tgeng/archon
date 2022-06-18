@@ -279,9 +279,13 @@ def elaborateSignature(effect: PreEffect)
     elaborateTelescope(effect.tParamTys).map(Effect(effect.qn)(_))
   }
 
-def elaborateBody(effect: PreEffect)
-  (using Signature)
+def elaborateBody(preEffect: PreEffect)
+  (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, List[Operator]] =
+  val effect = Σ.getEffect(preEffect.qn)
+
+  given Context = effect.tParamTys.toIndexedSeq
+
   ctx.trace(s"elaborating effect body ${effect.qn}") {
     def elaborateTy(ty: CTerm)
       (using Γ: Context)
@@ -300,7 +304,7 @@ def elaborateBody(effect: PreEffect)
       yield r
 
     transpose(
-      effect.operators.map { operator =>
+      preEffect.operators.map { operator =>
         ctx.trace(s"elaborating operator ${operator.name}") {
           elaborateTy(operator.ty).map {
             case (paramTys, resultTy) => Operator(operator.name, paramTys, resultTy)

@@ -208,9 +208,9 @@ def checkOperator(qn: QualifiedName, operator: Operator)
   Σ.getEffectOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(effect) =>
-      given Γ: Context = effect.tParamTys.toIndexedSeq
+      val Γ = effect.tParamTys.toIndexedSeq
 
-      checkParameterTypeDeclarations(operator.paramTys) >>
+      checkParameterTypeDeclarations(operator.paramTys)(using Γ) >>
         checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
 }
 

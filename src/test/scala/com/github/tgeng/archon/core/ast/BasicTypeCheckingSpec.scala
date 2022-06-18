@@ -147,9 +147,14 @@ class BasicTypeCheckingSpec extends SignatureSpec {
      """ ≡ t"L0"
     t"""
         hpv a <>;
-        let v = alloc L0 a Nat ;
+        let v = alloc L0 a Nat;
         let v = set L0 a Nat v Z;
         get L0 a Nat v
      """ hasType t"Nat"
   }
+
+  +d"""
+     effect exception (l: Level) (A: Type l);
+       throw: T: Type l -> A -> T;
+   """
 }
