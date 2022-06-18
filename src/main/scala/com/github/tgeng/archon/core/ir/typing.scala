@@ -515,17 +515,19 @@ def inferType(tm: CTerm)
                             _ <- allRight(
                               operators.map { opDecl =>
                                 val handlerBody = handlers(opDecl.name)
+                                val opParamTys = opDecl.paramTys.substLowers(args: _*)
+                                val opResultTy = opDecl.resultTy.substLowers(args: _*)
                                 checkType(
                                   handlerBody,
-                                  outputCType.weaken(opDecl.paramTys.size + 1, 0)
+                                  outputCType.weaken(opParamTys.size + 1, 0)
                                 )(
                                   using Γ ++
-                                    opDecl.paramTys :+
+                                    opParamTys :+
                                     Binding(
                                       U(
                                         FunctionType(
-                                          Binding(opDecl.resultTy)(gn"output"),
-                                          F(opDecl.resultTy, otherEffects),
+                                          Binding(opResultTy)(gn"output"),
+                                          F(opResultTy, otherEffects),
                                           otherEffects
                                         )
                                       )

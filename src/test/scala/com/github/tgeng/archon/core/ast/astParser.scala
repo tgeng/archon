@@ -159,7 +159,7 @@ object AstParser:
 
     val transformHandler: StrParser[Handler] =
       for
-        name <- P.from("rtn") >%> name <%< P.from("->") << P.whitespaces
+        name <- P.stringFrom("rtn\\b".r) >%> name <%< P.from("->") << P.whitespaces
         body <- rhs
       yield HTransform(name, body)
 
@@ -171,7 +171,7 @@ object AstParser:
         body <- rhs
       yield HOp(handlerName, argNames.dropRight(1), argNames.last, body)
     for
-      _ <- P.from("hdl") << P.whitespaces
+      _ <- P.stringFrom("hdl\\b".r) << P.whitespaces
       eff <- astEff << P.whitespaces
       otherEffects <- atom << P.whitespaces
       outputType <- atom << P.whitespaces
@@ -200,14 +200,14 @@ object AstParser:
 
   private def sHeapHandler: StrParser[SHeapHandler] = P {
     for
-      _ <- P.from("hpv") << P.whitespaces
+      _ <- P.stringFrom("hpv\\b".r) << P.whitespaces
       heapVarName <- name << P.whitespaces
       otherEffects <- atom << P.whitespaces
     yield SHeapHandler(otherEffects, heapVarName)
   }
 
   private def sBinding: StrParser[SBinding] = P {
-    for name <- P.from("let") >%> name <%< P.from("=") << P.whitespaces
+    for name <- P.stringFrom("let\\b".r) >%> name <%< P.from("=") << P.whitespaces
         t <- rhs
     yield SBinding(name, t)
   }
@@ -265,7 +265,7 @@ object AstParser:
 
   private def builtins: StrParser[AstTerm] = P {
     (for
-      head <- P.stringFrom("clp|U|thk|Cell|UCell|Equality|frc".r)
+      head <- P.stringFrom("(clp|U|thk|frc)\\b".r)
       _ <- P.whitespaces
       args <- atom sepByGreedy P.whitespaces
       r <- (head, args) match

@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ast
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
 import scala.collection.mutable
@@ -157,4 +158,16 @@ class BasicTypeCheckingSpec extends SignatureSpec {
      effect exception (l: Level) (A: Type l);
        throw: T: Type l -> A -> T;
    """
+
+  "effect handler" in scope {
+    t"throw L0 Nat Unit (S Z)" hasType t"<exception L0 Nat> Unit"
+
+    t"""
+       hdl exception{L0 Nat} <> Nat {
+         throw T n resume -> n
+       };
+       throw L0 Nat Unit (S Z);
+       Z
+     """ ≡ t"""S Z"""
+  }
 }

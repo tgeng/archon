@@ -15,6 +15,7 @@ trait TestContext:
   def testName: String
 
   def fail(message: String): Nothing
+
   def fail(message: String, cause: Throwable): Nothing
 
 class SignatureSpec extends AnyFreeSpec :
@@ -24,6 +25,7 @@ class SignatureSpec extends AnyFreeSpec :
     override def testName: String = SignatureSpec.this.getClass.getSimpleName.!!
 
     override def fail(message: String) = SignatureSpec.this.fail(message)
+
     override def fail(message: String, cause: Throwable) = SignatureSpec.this.fail(message, cause)
 
 def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
@@ -58,7 +60,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = inferType(cTm).asRight
+    val cTy = assertRight(inferType(cTm))
     assertRight(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION))
 
   infix def ⋠(tm2: AstTerm): Unit =
@@ -66,7 +68,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = inferType(cTm).asRight
+    val cTy = assertRight(inferType(cTm))
     assertLeft(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION))
 
   infix def ≡(tm2: AstTerm): Unit =
@@ -74,7 +76,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = inferType(cTm).asRight
+    val cTy = assertRight(inferType(cTm))
     assertRight(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION))
 
   infix def ≢(tm2: AstTerm): Unit =
@@ -82,7 +84,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = inferType(cTm).asRight
+    val cTy = assertRight(inferType(cTm))
     assertLeft(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION))
 
 def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using ctx: TestContext): R =
@@ -166,7 +168,13 @@ class TestSignature(
   }
 
   Builtins.builtinDefinitions.keys.foreach(updateQnByName)
-  Builtins.builtinEffects.keys.foreach(updateQnByName)
+  Builtins.builtinEffects.values.foreach {
+    case (effect, operators) =>
+      updateQnByName(effect.qn)
+      operators.foreach { operator =>
+        updateQnByName(effect.qn / operator.name)
+      }
+  }
 
   allData.keys.foreach(updateQnByName)
   allConstructors.foreach((qn, constructors) => constructors.foreach(c => updateQnByName(qn / c.name)))
@@ -174,6 +182,7 @@ class TestSignature(
   allFields.foreach((qn, fields) => fields.foreach(f => updateQnByName(qn / f.name)))
   allDefinitions.keys.foreach(updateQnByName)
   allEffects.keys.foreach(updateQnByName)
+  allOperators.foreach((qn, operators) => operators.foreach(o => updateQnByName(qn / o.name)))
 
   override def getUserDataOption(qn: QualifiedName) = allData.get(qn)
 
@@ -193,7 +202,7 @@ class TestSignature(
 
   override def getUserOperatorsOption(qn: QualifiedName) = allOperators.get(qn)
 
-  def resolve(name: Name): QualifiedName = qnByName(name)
+  def resolve(name: Name): QualifiedName = resolveOption(name).get
 
   def resolveOption(name: Name): Option[QualifiedName] = name match
     case Name.Normal(n) if n.stripPrefix("TYPE").toIntOption.nonEmpty => Some(Builtins.BuiltinType / n)
@@ -234,7 +243,12 @@ class TestSignature(
           updateQnByName(recordQn / field.name)
         }
       case AstDefinition(name, _, _) => updateQnByName(testModuleQn / name)
-      case AstEffect(name, _, _) => updateQnByName(testModuleQn / name)
+      case AstEffect(name, _, operators) =>
+        val effectQn = testModuleQn / name
+        updateQnByName(effectQn)
+        operators.foreach { operator =>
+          updateQnByName(effectQn / operator.name)
+        }
     }
     val declarations = transpose(
       astDeclarations.map { decl =>

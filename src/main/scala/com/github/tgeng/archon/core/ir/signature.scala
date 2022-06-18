@@ -319,12 +319,19 @@ trait Signature:
       for
         eff <- getEffectOption(effectQn)
         op <- getOperatorOption(effectQn, opName)
-      yield Definition(qn)(
-        (eff.tParamTys ++ op.paramTys)
-          .foldRight(F(op.resultTy)) { (binding, ty) =>
-            FunctionType(binding, ty)
-          }
-      )
+      yield
+        val allParamTys = eff.tParamTys ++ op.paramTys
+        Definition(qn)(
+          allParamTys
+            .foldRight(
+              F(
+                op.resultTy,
+                EffectsLiteral(ListSet((effectQn, vars(allParamTys.size - 1, op.paramTys.size))))
+              )
+            ) { (binding, ty) =>
+              FunctionType(binding, ty)
+            }
+        )
     case _ => None
 
   def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
@@ -339,7 +346,7 @@ trait Signature:
             allBindings,
             pVars(allBindings.size - 1),
             OperatorCall(
-              (effectQn, vars(eff.tParamTys.size - 1)),
+              (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
               opName,
               vars(op.paramTys.size - 1)
             ),
@@ -382,6 +389,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getRecordDerivedDefinitionOption(qn))
       .orElse(getRecordFieldDerivedDefinitionOption(qn))
       .orElse(getEffectDerivedDefinitionOption(qn))
+      .orElse(getEffectOpDerivedDefinitionOption(qn))
       .orElse(getUserDefinitionOption(qn))
       .orElse(Builtins.getBigType(qn).map(_._1))
 
@@ -394,6 +402,7 @@ trait BuiltinSignature extends Signature :
       .orElse(getRecordDerivedClausesOption(qn))
       .orElse(getRecordFieldDerivedClausesOption(qn))
       .orElse(getEffectDerivedClausesOption(qn))
+      .orElse(getEffectOpDerivedClausesOption(qn))
       .orElse(getUserClausesOption(qn))
       .orElse(Builtins.getBigType(qn).map(_._2))
 
