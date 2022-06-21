@@ -156,17 +156,18 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
   +d"""
      effect exception (l: Level) (A: Type l);
-       throw: T: Type l -> A -> T;
+       throw: A -> Nothing;
+     pure data Nothing: Type L0;
    """
 
   "effect handler" in scope {
-    t"throw L0 Nat Unit (S Z)" hasType t"<exception L0 Nat> Unit"
+    t"throw L0 Nat (S Z)" hasType t"<exception L0 Nat> Nothing"
 
     t"""
        hdl exception{L0 Nat} <> Nat {
-         throw T n resume -> n
+         throw n resume -> n
        };
-       throw L0 Nat Unit (S Z);
+       throw L0 Nat (S Z);
        Z
      """ ≡ t"""S Z"""
   }

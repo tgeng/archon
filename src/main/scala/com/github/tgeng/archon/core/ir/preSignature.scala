@@ -75,13 +75,13 @@ def sortPreDeclarations(declarations: Seq[PreDeclaration])
     _.qn, {
       case data: PreData => QualifiedNameVisitor.combine(
         QualifiedNameVisitor.visitPreTTelescope(data.tParamTys),
-        QualifiedNameVisitor.visitCTerm(data.ty),
+        data.ty.visitWith(QualifiedNameVisitor),
       )
       case record: PreRecord => QualifiedNameVisitor.combine(
         QualifiedNameVisitor.visitPreTTelescope(record.tParamTys),
-        QualifiedNameVisitor.visitCTerm(record.ty)
+        record.ty.visitWith(QualifiedNameVisitor)
       )
-      case definition: PreDefinition => QualifiedNameVisitor.visitCTerm(definition.ty)
+      case definition: PreDefinition => definition.ty.visitWith(QualifiedNameVisitor)
       case effect: PreEffect => QualifiedNameVisitor.visitPreTelescope(effect.tParamTys)
     }
   ).view.mapValues(_ & declByQn.keySet).toMap
@@ -105,7 +105,12 @@ def sortPreDeclarations(declarations: Seq[PreDeclaration])
           )
         }: _*
       ) + definition.qn
-      case effect: PreEffect => QualifiedNameVisitor.visitPreTelescope(effect.tParamTys) + effect.qn
+      case effect: PreEffect =>
+        QualifiedNameVisitor.combine(
+          effect.operators.map { operator =>
+            operator.ty.visitWith(QualifiedNameVisitor)
+          }: _*
+        ) + effect.qn
     }
   ).view.mapValues(_ & declByQn.keySet).toMap
 
