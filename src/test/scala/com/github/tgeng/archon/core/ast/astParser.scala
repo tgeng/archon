@@ -68,10 +68,11 @@ object AstParser:
       yield AstClause(bindings, lhs, _rhs, ty)
     }
     for
-      name <- P.from("def") >%> name <%< P.from(":") << P.whitespaces
+      name <- P.from("def") >%> name << P.whitespaces
+      paramTys <- tParamTys.map(_.map(_._1)) <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
       clauses <- clause sepByGreedy P.whitespaces
-    yield AstDefinition(name, ty, clauses)
+    yield AstDefinition(name, paramTys, ty, clauses)
   }
 
   def effectDecl: StrParser[AstEffect] = P {

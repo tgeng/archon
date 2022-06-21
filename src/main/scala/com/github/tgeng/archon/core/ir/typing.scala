@@ -1053,11 +1053,15 @@ def reduceCType(cTy: CTerm)
     for cTyTy <- inferType(cTy)
         r <- cTyTy match
           case CType(_, _, eff) if eff == Total => reduce(cTy)
-          // Automatically promote a SomeVType to F(SomeVType).
-          case F(_, eff) if eff == Total => reduce(cTy).map {
-            case Return(vty) => F(vty)
-            case c => throw IllegalStateException(s"type checking has bugs: $c should be of form `Return(...)`")
-          }
+          case F(_, eff) if eff == Total =>
+
+            def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
+              // Automatically promote a SomeVType to F(SomeVType).
+              case Return(vty) => Right(F(vty))
+              case Let(t, ctx) => reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
+              case c => throw IllegalStateException(s"type checking has bugs: $c should be of form `Return(...)`")
+
+            reduce(cTy).flatMap(unfoldLet)
           case _: CType => Left(EffectfulCTermAsType(cTy))
           case _ => Left(NotCTypeError(cTy))
     yield r

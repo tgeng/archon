@@ -124,9 +124,13 @@ class BasicTypeCheckingSpec extends SignatureSpec {
      """
   }
   +d"""
-     def plus: Nat -> Nat -> Nat;
-       {n: Nat} Z{} n = n : Nat;
-       {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
+    def plus: Nat -> Nat -> Nat;
+      {n: Nat} Z{} n = n : Nat;
+      {m: Nat, n: Nat} S{m} n = S (plus m n) : Nat;
+
+    def concat (l: Level) (A: Type l) : m: Nat -> n: Nat -> Vector l A m -> Vector l A n -> Vector l A (plus m n);
+      {n: Nat, v_n: Vector l A n} Z{} n Nil{} v_n = v_n : Vector l A n;
+      {a: A, m: Nat, n: Nat, v_m: Vector l A m, v_n: Vector l A n} S{m} n Cons{m a v_m} v_n = Cons L0 A (plus m n) a (concat l A m n v_m v_n) : Vector l A (S (plus m n));
   """
 
   "nat ops" in scope {

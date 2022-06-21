@@ -29,6 +29,7 @@ enum PreDeclaration:
     )
   case PreDefinition(val qn: QualifiedName)
     (
+      val paramTys: PreTelescope,
       val ty: CTerm,
       val clauses: List[PreClause]
     )
@@ -255,26 +256,47 @@ def elaborateSignature(definition: PreDefinition)
   (using Signature)
   (using ctx: TypingContext): Either[IrError, Definition] =
   ctx.trace(s"elaborating def signature ${definition.qn}") {
-    reduceCType(definition.ty).map(Definition(definition.qn)(_))
-  }
-
-def elaborateBody(definition: PreDefinition)
-  (using Signature)
-  (using ctx: TypingContext): Either[IrError, List[Clause]] =
-  ctx.trace(s"elaborating def body ${definition.qn}") {
-    transpose(
-      definition.clauses.zipWithIndex.flatMap { (clause, index) =>
-        ctx.trace(s"elaborating clause $index")
-        clause.rhs match
-          case None => List()
-          case Some(rhs) => List(
-            for
-              bindings <- elaborateTelescope(clause.bindings)
-              ty <- reduceCType(clause.ty)
-            yield Clause(bindings, clause.lhs, rhs, ty)
-          )
+    for
+      paramTys <- elaborateTelescope(definition.paramTys)
+      ty <- reduceCType(definition.ty)(using paramTys.toIndexedSeq)
+    yield Definition(definition.qn)(
+      paramTys.foldRight(ty) { (binding, bodyTy) =>
+        FunctionType(binding, bodyTy)
       }
     )
+  }
+
+def elaborateBody(preDefinition: PreDefinition)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, List[Clause]] =
+  ctx.trace(s"elaborating def body ${preDefinition.qn}") {
+    for
+      paramTys <- elaborateTelescope(preDefinition.paramTys)
+      r <- {
+        given Γ: Context = paramTys.toIndexedSeq
+        transpose(
+          preDefinition.clauses.zipWithIndex.flatMap { (clause, index) =>
+            clause.rhs match
+              case None => List()
+              case Some(rhs) => List(
+                ctx.trace(s"elaborating clause $index") {
+                  for
+                    bindings <- elaborateTelescope(clause.bindings)
+                    ty <- reduceCType(clause.ty)(using Γ ++ bindings)
+                  yield
+                    val allBindings = paramTys ++ bindings
+                    Clause(
+                      allBindings, CoPattern.pVars(
+                        allBindings.size - 1,
+                        bindings.size
+                      ) ++ clause.lhs, rhs, ty
+                    )
+                }
+              )
+          }
+        )
+      }
+    yield r
   }
 
 def elaborateSignature(effect: PreEffect)
@@ -331,7 +353,9 @@ private def elaborateTelescope(telescope: PreTelescope)
   (using ctx: TypingContext): Either[IrError, Telescope] = telescope match
   case Nil => Right(Nil)
   case binding :: telescope =>
-    for ty <- reduceVType(binding.ty)
-        newBinding = Binding(ty)(binding.name)
-        telescope <- elaborateTelescope(telescope)(using Γ :+ newBinding)
-    yield newBinding :: telescope
+    ctx.trace("elaborating telescope") {
+      for ty <- reduceVType(binding.ty)
+          newBinding = Binding(ty)(binding.name)
+          telescope <- elaborateTelescope(telescope)(using Γ :+ newBinding)
+      yield newBinding :: telescope
+    }

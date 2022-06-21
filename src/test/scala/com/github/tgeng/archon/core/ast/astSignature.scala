@@ -23,6 +23,7 @@ enum AstDeclaration:
   )
   case AstDefinition(
     override val name: Name,
+    val paramTys: AstTelescope,
     val ty: AstTerm,
     val clauses: List[AstClause]
   )

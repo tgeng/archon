@@ -371,7 +371,7 @@ extension (v: VTerm)
       for reduced <- Reducible.reduce(cTm)
           r <- reduced match
             case Return(v) => Right(v)
-            case _ => Left(IrError.NormalizationError(cTm))
+            case stuckC => Right(Collapse(stuckC))
       yield r
     case _ => Right(v)
 

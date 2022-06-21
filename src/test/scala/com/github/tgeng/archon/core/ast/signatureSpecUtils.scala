@@ -242,7 +242,7 @@ class TestSignature(
         fields.foreach { field =>
           updateQnByName(recordQn / field.name)
         }
-      case AstDefinition(name, _, _) => updateQnByName(testModuleQn / name)
+      case AstDefinition(name, _, _, _) => updateQnByName(testModuleQn / name)
       case AstEffect(name, _, operators) =>
         val effectQn = testModuleQn / name
         updateQnByName(effectQn)
@@ -254,9 +254,7 @@ class TestSignature(
       astDeclarations.map { decl =>
         astToIr(testModuleQn, decl)
       }
-    ) match
-      case Left(e) => tCtx.fail(s"error during ast->pre conversion: $e")
-      case Right(declarations) => declarations
+    ).asRight
 
     sortPreDeclarations(declarations) match
       case Left(cycle) => tCtx.fail(s"detected cycles in declarations: $cycle")

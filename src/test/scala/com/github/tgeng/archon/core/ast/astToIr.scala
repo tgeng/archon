@@ -96,7 +96,7 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
     }.map {
       case (tParamTys, (ty, fields)) => PreRecord(moduleQn / name)(tParamTys, ty, fields)
     }
-    case AstDefinition(name, ty, clauses) =>
+    case AstDefinition(name, paramTys, ty, clauses) => astToIr(paramTys) {
       for ty <- astToIr(ty)
           clauses <- transpose(
             clauses.map { clause =>
@@ -112,7 +112,11 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
               }
             }
           )
-      yield PreDefinition(moduleQn / name)(ty, clauses)
+      yield (ty, clauses)
+    }.map {
+      case (paramTys, (ty, clauses)) =>
+        PreDefinition(moduleQn / name)(paramTys, ty, clauses)
+    }
     case AstEffect(name, tParamTys, operators) => astToIr(tParamTys) {
       transpose(
         operators.map { operator =>
