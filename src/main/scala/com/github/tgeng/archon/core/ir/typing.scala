@@ -1110,7 +1110,7 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
     case _ => Right(())
 
 extension[L, R1] (e1: Either[L, R1])
-  private inline infix def >>[R2](e2: Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
+  private inline infix def >>[R2](e2: =>Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
 private inline def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
