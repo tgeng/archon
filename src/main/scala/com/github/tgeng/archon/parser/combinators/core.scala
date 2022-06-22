@@ -166,13 +166,12 @@ private def flatMapImpl[I, M[+_], T, S]
   (using ap: Applicative[ParseResult[M, *]])
   (using mp: Monad[ParseResult[M, *]])
   : ParserT[I, S, M] =
-  val cachingF = caching(f)
   if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
   else new ParserT[I, S, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
       mp.flatMap(
         m.doParse(index),
-        (advance, t) => fp.map(cachingF(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
+        (advance, t) => fp.map(f(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
       )
 
 given [I, M[+_]]
