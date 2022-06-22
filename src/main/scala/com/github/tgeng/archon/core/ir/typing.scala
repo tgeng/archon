@@ -13,10 +13,15 @@ import Elimination.*
 
 import scala.annotation.tailrec
 
+private val ANSI_RESET = "\u001b[0m"
+private val ANSI_GRAY = "\u001b[90m"
+private val ANSI_RED = "\u001b[31m"
+private val ANSI_GREEN = "\u001b[32m"
+
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   private def indent = "│ " * (traceLevel)
 
-  def trace[L, R](
+  inline def trace[L, R](
     startMessage: String,
     successMsg: R => String = (_: R) => "",
     failureMsg: L => String = (l: L) => l.toString,
@@ -26,17 +31,19 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     if enableDebugging then
       println(indent)
       println(
-        indent + "   " + Γ.zipWithIndex.map { (binding, i) =>
+        indent + "   " + ANSI_GRAY + Γ.zipWithIndex.map { (binding, i) =>
           s"${Γ.size - 1 - i}: ${binding.ty}"
-        }.mkString("{", ", ", "}")
+        }.mkString("{", ", ", "}") + ANSI_RESET
       )
       println(indent + "┌─ " + startMessage)
+      val stacktrace = Thread.currentThread().!!.getStackTrace.!!
+      println(indent + "│  " + ANSI_GRAY + "@" + stacktrace(2).toString + ANSI_RESET)
       traceLevel += 1
       val endMessage = result match
-        case Right(r) => "✅ " + successMsg(r)
-        case Left(l) => "❌ " + failureMsg(l)
+        case Right(r) => "✅ " + ANSI_GREEN + successMsg(r)
+        case Left(l) => "❌ " + ANSI_RED + failureMsg(l)
       traceLevel -= 1
-      println(indent + "└─ " + endMessage)
+      println(indent + "└─ " + endMessage + ANSI_RESET)
     result
 
   inline def debug[T](inline t: T): T =
@@ -989,19 +996,20 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace("checking multiple terms") {
   if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
   else allRight(
     tms.zip(tys).zipWithIndex.map {
       case ((tm, binding), index) => checkType(tm, binding.ty.substLowers(tms.take(index): _*))
     }
   )
+}
 
 def checkIsType(vTy: VTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace("checking is type") {
   for vTyTy <- inferType(vTy)
       r <- vTyTy match
         case Type(ul, _) => levelBound match
@@ -1009,12 +1017,13 @@ def checkIsType(vTy: VTerm, levelBound: Option[ULevel] = None)
           case _ => Right(())
         case _ => Left(NotTypeError(vTy))
   yield r
+}
 
 def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] =
+: Either[IrError, Unit] = ctx.trace("checking is C type") {
   for cTyTy <- inferType(cTy)
       r <- cTyTy match
         case CType(ul, _, eff) if eff == Total => levelBound match
@@ -1023,12 +1032,13 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)
         case _: CType => Left(EffectfulCTermAsType(cTy))
         case _ => Left(NotCTypeError(cTy))
   yield r
+}
 
 def reduceVType(vTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, VTerm] =
+: Either[IrError, VTerm] = ctx.trace("reduce V type") {
   for tyTy <- inferType(vTy)
       r <- tyTy match
         case F(Type(_, _), effect) if effect == Total =>
@@ -1042,29 +1052,32 @@ def reduceVType(vTy: CTerm)
         case F(_, _) => Left(EffectfulCTermAsType(vTy))
         case _ => Left(ExpectFType(vTy))
   yield r
+}
 
 def reduceCType(cTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, CTerm] = cTy match
-  case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop => Right(cTy)
-  case _ =>
-    for cTyTy <- inferType(cTy)
-        r <- cTyTy match
-          case CType(_, _, eff) if eff == Total => reduce(cTy)
-          case F(_, eff) if eff == Total =>
+: Either[IrError, CTerm] = ctx.trace("reduce C type") {
+  cTy match
+    case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop => Right(cTy)
+    case _ =>
+      for cTyTy <- inferType(cTy)
+          r <- cTyTy match
+            case CType(_, _, eff) if eff == Total => reduce(cTy)
+            case F(_, eff) if eff == Total =>
 
-            def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
-              // Automatically promote a SomeVType to F(SomeVType).
-              case Return(vty) => Right(F(vty))
-              case Let(t, ctx) => reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
-              case c => throw IllegalStateException(s"type checking has bugs: $c should be of form `Return(...)`")
+              def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
+                // Automatically promote a SomeVType to F(SomeVType).
+                case Return(vty) => Right(F(vty))
+                case Let(t, ctx) => reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
+                case c => throw IllegalStateException(s"type checking has bugs: $c should be of form `Return(...)`")
 
-            reduce(cTy).flatMap(unfoldLet)
-          case _: CType => Left(EffectfulCTermAsType(cTy))
-          case _ => Left(NotCTypeError(cTy))
-    yield r
+              reduce(cTy).flatMap(unfoldLet)
+            case _: CType => Left(EffectfulCTermAsType(cTy))
+            case _ => Left(NotCTypeError(cTy))
+      yield r
+}
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   case CType(ul, upperBound, effects) => CType(ul, upperBound, EffectsUnion(eff, effects))
@@ -1099,15 +1112,15 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
 extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
-private def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
+private inline def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
   ctx.trace(s"checking $tm : $ty")(result)
 
-private def debugInfer[L, R](tm: Any, result: => Either[L, R])
+private inline def debugInfer[L, R](tm: Any, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
   ctx.trace[L, R](s"inferring type $tm", _.toString)(result)
 
-private def debugSubsumption[L, R](
+private inline def debugSubsumption[L, R](
   rawSub: Any,
   rawSup: Any,
   rawTy: Option[Any],
