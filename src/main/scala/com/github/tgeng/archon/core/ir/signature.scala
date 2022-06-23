@@ -194,7 +194,7 @@ trait Signature:
               F(
                 DataType(
                   dataQn,
-                  constructor.tArgs.map(_.strengthen(numIndexArgs, 0))
+                  constructor.tArgs.map(_.strengthen(numIndexArgs, constructor.paramTys.size))
                 )
               )
             ) { (binding, ty) =>

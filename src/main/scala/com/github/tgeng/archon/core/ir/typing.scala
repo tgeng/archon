@@ -17,6 +17,7 @@ private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
 private val ANSI_RED = "\u001b[31m"
 private val ANSI_GREEN = "\u001b[32m"
+private val ANSI_CYAN = "\u001b[36m"
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   private def indent = "│ " * (traceLevel)
@@ -48,8 +49,13 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
 
   inline def debug[T](inline t: T): T =
     if enableDebugging then
-      println(indent + stringify(t) + " = " + t)
+      println(indent + " " + ANSI_CYAN + stringify(t) + " = " + t + ANSI_RESET)
     t
+
+  def breakpoint: Unit = {
+    if enableDebugging then
+      val i = 1
+  }
 
 def checkData(data: Data)
   (using Σ: Signature)
@@ -728,6 +734,8 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
           case (v: Var, ty2, _) if mode == CheckSubsumptionMode.SUBSUMPTION => Γ(v).ty match
             case Type(_, upperBound) => checkSubsumption(upperBound, ty2, None)
             case _ => Left(NotVSubsumption(sub, sup, ty, mode))
+          case (Collapse(c), v, ty) => checkSubsumption(c, Return(v), ty.map(F(_)))
+          case (v, Collapse(c), ty) => checkSubsumption(Return(v), c, ty.map(F(_)))
           case _ => Left(NotVSubsumption(sub, sup, ty, mode))
 
   debugSubsumption(rawSub, rawSup, rawTy, impl)
@@ -892,15 +900,17 @@ private def simplifyLet(t: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, CTerm] = t match
-  case Let(t, ctx) =>
-    for
-      tTy <- inferType(t)
-      r <- tTy match
-        case F(_, eff) if eff == Total => simplifyLet(ctx.substLowers(Collapse(t)))
-        case _ => Right(t)
-    yield r
-  case _ => Right(t)
+: Either[IrError, CTerm] = ctx.trace[IrError, CTerm](s"simplify $t", successMsg = _.toString) {
+  t match
+    case Let(t, ctx) =>
+      for
+        tTy <- inferType(t)
+        r <- tTy match
+          case F(_, eff) if eff == Total => simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
+          case _ => Right(t)
+      yield r
+    case _ => Right(t)
+}
 
 private def checkArePureTypes(telescope: Telescope)
   (using Γ: Context)
@@ -1110,7 +1120,7 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
     case _ => Right(())
 
 extension[L, R1] (e1: Either[L, R1])
-  private inline infix def >>[R2](e2: =>Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
+  private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
 private inline def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =

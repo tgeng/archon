@@ -211,13 +211,15 @@ extension (v: VTerm)
    * index with the last substitutes 0. Then the result is raised so that the substituted indices
    * are taken by other (deeper) indices.
    */
-  def substLowers(vTerms: VTerm*)(using Σ: Signature) = v
-    // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
-    .strengthen(vTerms.length, 0)
-    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
-    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
-    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
-    .subst(i => vTerms.lift(-(i + 1)))
+  def substLowers(vTerms: VTerm*)(using Σ: Signature) =
+    val count = vTerms.length
+    v
+    // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+    // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+    // first argument `4` at index `0` should replace `$1`.
+    .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+    // strengthen the resulted term so that even higher indices are correct.
+    .strengthen(count, 0)
 
 extension (ul: ULevel)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) = ul.map(
@@ -239,13 +241,15 @@ extension (ul: ULevel)
    * index with the last substitutes 0. Then the result is raised so that the substituted indices
    * are taken by other (deeper) indices.
    */
-  def substLowers(vTerms: VTerm*)(using Σ: Signature) = ul
-    // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
-    .strengthen(vTerms.length, 0)
-    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
-    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
-    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
-    .subst(i => vTerms.lift(-(i + 1)))
+  def substLowers(vTerms: VTerm*)(using Σ: Signature) =
+    val count = vTerms.length
+    ul
+    // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+    // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+    // first argument `4` at index `0` should replace `$1`.
+    .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+    // strengthen the resulted term so that even higher indices are correct.
+    .strengthen(count, 0)
 
 extension (telescope: Telescope)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
@@ -268,10 +272,12 @@ extension (telescope: Telescope)
    * index with the last substitutes 0. Then the result is raised so that the substituted indices
    * are taken by other (deeper) indices.
    */
-  def substLowers(vTerms: VTerm*)(using Σ: Signature) = telescope
-    // Here we use this trick to avoid first raise vTerm by one level and then lower resulted term
-    .strengthen(vTerms.length, 0)
-    // for example, consider substitution happened when applying (4, 5) to function \a, b => a + b. In DeBruijn index
-    // the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. So after strengthening the lambda body becomes
-    // `$-1 + $-2`. Hence, we plus 1 and take the negative to get the index to the array.
-    .subst(i => vTerms.lift(-(i + 1)))
+  def substLowers(vTerms: VTerm*)(using Σ: Signature) =
+    val count = vTerms.length
+    telescope
+    // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+    // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+    // first argument `4` at index `0` should replace `$1`.
+    .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+    // strengthen the resulted term so that even higher indices are correct.
+    .strengthen(count, 0)

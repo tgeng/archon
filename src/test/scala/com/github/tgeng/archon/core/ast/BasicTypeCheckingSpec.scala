@@ -110,7 +110,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
   "vector" in scope {
     t"Nil L0 Nat" hasType t"Vector L0 Nat Z"
-    t"Cons L0 Nat (S Z) Z (Nil L0 Nat)" hasType t"Vector L0 Nat (S Z)"
+    t"Cons L0 Unit Z MkUnit (Nil L0 Unit)" hasType t"Vector L0 Unit (S Z)"
   }
 
   "trivial definitions" in scope {

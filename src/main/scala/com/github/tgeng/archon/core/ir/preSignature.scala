@@ -210,7 +210,6 @@ def elaborateBody(preData: PreData)
       preData.constructors.map { constructor =>
         ctx.trace(s"elaborating constructor ${constructor.name}") {
           // weaken to accommodate data type indices
-          val rt = constructor.ty
           val ty = constructor.ty.weaken(indexCount, 0)
           elaborateTy(ty).map {
             case (paramTys, args) => Constructor(constructor.name, paramTys, args)
