@@ -158,26 +158,29 @@ object AstParser:
 
   private def sHandler: StrParser[SHandler] = P {
 
-    val transformHandler: StrParser[Handler] =
+    val transformHandler: StrParser[Handler] = P {
       for
         name <- P.stringFrom("rtn\\b".r) >%> name <%< P.from("->") << P.whitespaces
         body <- rhs
       yield HTransform(name, body)
+    }
 
-    val opHandler: StrParser[Handler] =
+    val opHandler: StrParser[Handler] = P {
       for
         handlerName <- name << P.whitespaces
         argNames <- name sepBy1 P.whitespaces
         _ <- P.whitespaces >> P.from("->") << P.whitespaces
         body <- rhs
       yield HOp(handlerName, argNames.dropRight(1), argNames.last, body)
+    }
+
     for
       _ <- P.stringFrom("hdl\\b".r) << P.whitespaces
       eff <- astEff << P.whitespaces
       otherEffects <- atom << P.whitespaces
       outputType <- atom << P.whitespaces
       _ <- P.from("{") << P.whitespaces
-      allHandlers <- (transformHandler || opHandler) sepByGreedy (P.whitespaces >> P.from(";") << P.whitespaces)
+      allHandlers <- ((transformHandler || opHandler) <%< P.from(";") << P.whitespaces).*
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
