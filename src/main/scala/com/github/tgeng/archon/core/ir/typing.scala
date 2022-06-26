@@ -19,15 +19,17 @@ private val ANSI_GRAY = "\u001b[90m"
 private val ANSI_RED = "\u001b[31m"
 private val ANSI_GREEN = "\u001b[32m"
 private val ANSI_YELLOW = "\u001b[33m"
+private val ANSI_BLUE = "\u001b[34m"
 private val ANSI_CYAN = "\u001b[36m"
 
-def yellow(s: Any) : String = ANSI_YELLOW + s.toString + ANSI_RESET
+def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   private def indent = "│ " * (traceLevel)
 
   inline def trace[L, R](
-    startMessage: String,
+    title: String,
+    description: String = "",
     successMsg: R => String = (_: R) => "",
     failureMsg: L => String = (l: L) => l.toString,
   )
@@ -36,13 +38,14 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     if enableDebugging then
       println(indent)
       println(
-        indent + "   " + ANSI_GRAY + Γ.zipWithIndex.map { (binding, i) =>
+        indent + "   " + ANSI_BLUE + Γ.zipWithIndex.map { (binding, i) =>
           s"${Γ.size - 1 - i}: ${binding.ty}"
         }.mkString("{", ", ", "}") + ANSI_RESET
       )
-      println(indent + "┌─ " + startMessage.replaceAll("\n", "\n" + indent + "│  "))
       val stacktrace = Thread.currentThread().!!.getStackTrace.!!
-      println(indent + "│  " + ANSI_GRAY + "@" + stacktrace(2).toString + ANSI_RESET)
+      println(indent + "┌─ " + title + " " + ANSI_GRAY + stacktrace(2).toString + ANSI_RESET)
+      if description.nonEmpty then
+        println(indent + "│  " + description.replaceAll("\n", "\n" + indent + "│  "))
       traceLevel += 1
       val endMessage = result match
         case Right(r) => "✅ " + ANSI_GREEN + successMsg(r)
@@ -913,7 +916,11 @@ private def simplifyLet(t: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, CTerm] = ctx.trace[IrError, CTerm](s"simplify\n${yellow(t.sourceInfo)} $t", successMsg = _.toString) {
+: Either[IrError, CTerm] = ctx.trace[IrError, CTerm](
+  s"simplify",
+  s"${yellow(t.sourceInfo)} $t",
+  successMsg = _.toString
+) {
   t match
     case Let(t, ctx) =>
       for
@@ -1138,13 +1145,17 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
 extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
-private inline def debugCheck[L, R](tm: SourceInfoOwner, ty: SourceInfoOwner, result: => Either[L, R])
+private inline def debugCheck[L, R](
+  tm: SourceInfoOwner,
+  ty: SourceInfoOwner,
+  result: => Either[L, R]
+)
   (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace(s"checking\n${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} $ty")(result)
+  ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} $ty")(result)
 
 private inline def debugInfer[L, R](tm: SourceInfoOwner, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace[L, R](s"inferring type\n${yellow(tm.sourceInfo)} $tm", _.toString)(result)
+  ctx.trace[L, R](s"inferring type", s"${yellow(tm.sourceInfo)} $tm", _.toString)(result)
 
 private inline def debugSubsumption[L, R](
   rawSub: SourceInfoOwner,
@@ -1159,4 +1170,9 @@ private inline def debugSubsumption[L, R](
   val modeString = mode match
     case CheckSubsumptionMode.SUBSUMPTION => "⪯"
     case CheckSubsumptionMode.CONVERSION => "≡"
-  ctx.trace(s"deciding\n${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} $rawSup\n:\n${rawTy.map(_.sourceInfo).getOrElse(SiEmpty)} $rawTy")(result)
+  ctx.trace(
+    s"deciding",
+    s"${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} $rawSup\n:\n${
+      rawTy.map(_.sourceInfo).getOrElse(SiEmpty)
+    } $rawTy"
+  )(result)
