@@ -5,7 +5,7 @@ import com.github.tgeng.archon.core.common.*
 
 import SourceInfo.*
 
-enum Pattern(val sourceInfo: SourceInfo):
+enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner :
   case PVar(idx: Nat)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PRefl()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
@@ -34,6 +34,7 @@ import VTerm.*
 extension (p: Pattern)
   def toTerm: Option[VTerm] =
     given SourceInfo = p.sourceInfo
+
     p match
       case PVar(idx) => Some(Var(idx))
       case PRefl() => Some(Refl())
@@ -52,7 +53,7 @@ extension (p: Pattern)
       case PForced(t) => Some(t)
       case PAbsurd() => None
 
-enum CoPattern(val sourceInfo: SourceInfo):
+enum CoPattern(val sourceInfo: SourceInfo) extends SourceInfoOwner :
   case CPattern(pattern: Pattern) extends CoPattern(pattern.sourceInfo)
   case CProjection(name: Name)(using sourceInfo: SourceInfo) extends CoPattern(sourceInfo)
 
@@ -61,9 +62,9 @@ object CoPattern:
     .to(lastIndex, -1)
     .map(i => CPattern(Pattern.PVar(i)(using SiEmpty))).toList
 
-enum Elimination[T]:
-  case ETerm(v: T)
-  case EProj(n: Name)
+enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner :
+  case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
+  case EProj(n: Name)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
 
 import CoPattern.*
 import Elimination.*

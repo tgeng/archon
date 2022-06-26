@@ -239,11 +239,14 @@ def astToIr(ast: AstTerm)
       yield r
     case AstRedux(head, elims) =>
       for head <- astToIr(head)
-          r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](gn"arg", elims) {
+          r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](
+            gn"arg",
+            elims
+          ) {
             _.foldLeft(head) { (c, e) =>
               e match
-                case ETerm(v) => Application(c, v)
-                case EProj(n) => Projection(c, n)
+                case ETerm(v) => Application(c, v)(using v.sourceInfo)
+                case EProj(n) => Projection(c, n)(using e.sourceInfo)
             }
           }
       yield r
@@ -330,8 +333,8 @@ def astToIr(ast: AstTerm)
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)
   (using Σ: TestSignature): Either[AstError, Elimination[CTerm]] = elim match
-  case ETerm(astTerm) => astToIr(astTerm).map(ETerm(_))
-  case EProj(name) => Right(EProj(name))
+  case ETerm(astTerm) => astToIr(astTerm).map(ETerm(_)(using astTerm.sourceInfo))
+  case EProj(name) => Right(EProj(name)(using elim.sourceInfo))
 
 private def chainAst(name: Name, t: AstTerm)
   (block: TestSignature ?=> VTerm => CTerm)
@@ -382,6 +385,7 @@ private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
   (using NameContext)
   (using TestSignature): Either[AstError, CTerm] =
   given SourceInfo = SiEmpty
+
   for r <- {
     // Step 1. Count the number of non-trivial computations present in the computation args.
     // This is used to populate DeBruijn index of let bound variables for these non-trivial
@@ -427,8 +431,8 @@ given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
     (g: T => Either[L, S]): Either[L, List[Elimination[S]]] =
     listEitherFunctor.map(l) {
       _ match
-        case ETerm(t) => g(t).map(ETerm(_))
-        case EProj(n) => Right(EProj(n))
+        case e@ETerm(t) => g(t).map(ETerm(_)(using e.sourceInfo))
+        case e@EProj(n) => Right(EProj(n)(using e.sourceInfo))
     }
 
 given listListEitherFunctor: EitherFunctor[[X] =>> List[List[X]]] with

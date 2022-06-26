@@ -33,7 +33,7 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 extension (eff: Eff)
   def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
-enum ULevel(val sourceInfo: SourceInfo):
+enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner:
   case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)
   case UωLevel(layer: Nat)(using sourceInfo: SourceInfo) extends ULevel(sourceInfo)
 
@@ -69,7 +69,7 @@ enum CellStatus extends Comparable[CellStatus] :
     else if this == CellStatus.Initialized then -1
     else 1
 
-enum VTerm(val sourceInfo: SourceInfo):
+enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
   case Top(ul: ULevel)
@@ -219,7 +219,7 @@ object VTerm:
 sealed trait IType:
   def effects: VTerm
 
-enum CTerm(val sourceInfo: SourceInfo):
+enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
   /**
    * Used in stack machine to represent the computations above the computation term containing
    * this. For example, `f a b` converted to the stack machine becomes

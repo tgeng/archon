@@ -6,7 +6,7 @@ import com.github.tgeng.archon.core.ir.*
 
 type AstEff = (Name, List[AstTerm])
 
-enum AstTerm(val sourceInfo: SourceInfo):
+enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
   case AstDef(qn: QualifiedName)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstIdentifier(name: Name)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstCollapse(c: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)

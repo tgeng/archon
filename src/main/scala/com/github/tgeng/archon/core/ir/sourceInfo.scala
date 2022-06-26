@@ -4,13 +4,17 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.SourceInfo.{SiEffectUnion, SiLevelSuc}
 
+trait SourceInfoOwner:
+  def sourceInfo: SourceInfo
+
 case class Range(
   /** Inclusive */
   start: Nat,
 
   /** Exclusive */
   end: Nat,
-)
+):
+  def +(that: Range): Range = Range(math.min(this.start, that.start), math.max(this.end, that.end))
 
 extension (s: String)
   def substring(r: Range): String = s.substring(r.start, r.end).!!
