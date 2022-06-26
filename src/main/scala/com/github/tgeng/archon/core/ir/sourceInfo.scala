@@ -36,7 +36,7 @@ enum SourceInfo:
     case SiLevelMax(operand1, operand2) => s"<max $operand1 $operand2>"
     case SiEffectUnion(operand1, operand2) => s"<union $operand1 $operand2>"
     case SiTypeOf(tm) => s"<type of $tm>"
-    case SiDerived(qn) => s"<derived def of $qn>"
+    case SiDerived(qn) => s"$qn"
     case SiBuiltin => s"<builtin>"
 
 

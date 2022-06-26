@@ -175,4 +175,29 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        Z
      """ ≡ t"""S Z"""
   }
+
+  +d"""
+     pure data Fin: Nat -> Type L0;
+       FZ: k: Nat -> Fin (S k);
+       FS: k: Nat -> Fin k -> Fin (S k);
+
+     effect dice (numFaces: Nat);
+       roll: Fin numFaces;
+   """
+
+  "dice" in scope {
+    t"""
+       let n1 = S Z;
+       let n2 = S n1;
+       let n3 = S n2;
+       hdl dice{n3} <> (Vector L0 (Fin n3) n3) {
+         rtn x -> Cons L0 (Fin n3) Z x (Nil L0 (Fin n3));
+         roll resume -> concat L0 (Fin n3) n2 n1 (concat L0 (Fin n3) n1 n1 (resume (FZ n2)) (resume (FS n2 (FZ n1)))) (resume (FS n2 (FS n1 (FZ Z))));
+       };
+       roll n3
+     """ hasType t"""
+         let n3 = S (S (S Z));
+         Vector L0 (Fin n3) n3
+         """
+  }
 }

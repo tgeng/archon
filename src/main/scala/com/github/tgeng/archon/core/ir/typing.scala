@@ -18,7 +18,10 @@ private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
 private val ANSI_RED = "\u001b[31m"
 private val ANSI_GREEN = "\u001b[32m"
+private val ANSI_YELLOW = "\u001b[33m"
 private val ANSI_CYAN = "\u001b[36m"
+
+def yellow(s: Any) : String = ANSI_YELLOW + s.toString + ANSI_RESET
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   private def indent = "│ " * (traceLevel)
@@ -37,7 +40,7 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
           s"${Γ.size - 1 - i}: ${binding.ty}"
         }.mkString("{", ", ", "}") + ANSI_RESET
       )
-      println(indent + "┌─ " + startMessage)
+      println(indent + "┌─ " + startMessage.replaceAll("\n", "\n" + indent + "│  "))
       val stacktrace = Thread.currentThread().!!.getStackTrace.!!
       println(indent + "│  " + ANSI_GRAY + "@" + stacktrace(2).toString + ANSI_RESET)
       traceLevel += 1
@@ -910,7 +913,7 @@ private def simplifyLet(t: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, CTerm] = ctx.trace[IrError, CTerm](s"simplify $t", successMsg = _.toString) {
+: Either[IrError, CTerm] = ctx.trace[IrError, CTerm](s"simplify\n${yellow(t.sourceInfo)} $t", successMsg = _.toString) {
   t match
     case Let(t, ctx) =>
       for
@@ -1135,18 +1138,18 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
 extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
-private inline def debugCheck[L, R](tm: Any, ty: Any, result: => Either[L, R])
+private inline def debugCheck[L, R](tm: SourceInfoOwner, ty: SourceInfoOwner, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace(s"checking $tm : $ty")(result)
+  ctx.trace(s"checking\n${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} $ty")(result)
 
-private inline def debugInfer[L, R](tm: Any, result: => Either[L, R])
+private inline def debugInfer[L, R](tm: SourceInfoOwner, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace[L, R](s"inferring type $tm", _.toString)(result)
+  ctx.trace[L, R](s"inferring type\n${yellow(tm.sourceInfo)} $tm", _.toString)(result)
 
 private inline def debugSubsumption[L, R](
-  rawSub: Any,
-  rawSup: Any,
-  rawTy: Option[Any],
+  rawSub: SourceInfoOwner,
+  rawSup: SourceInfoOwner,
+  rawTy: Option[SourceInfoOwner],
   result: => Either[L, R]
 )
   (using mode: CheckSubsumptionMode)
@@ -1156,4 +1159,4 @@ private inline def debugSubsumption[L, R](
   val modeString = mode match
     case CheckSubsumptionMode.SUBSUMPTION => "⪯"
     case CheckSubsumptionMode.CONVERSION => "≡"
-  ctx.trace(s"deciding $rawSub $modeString $rawSup : $rawTy")(result)
+  ctx.trace(s"deciding\n${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} $rawSup\n:\n${rawTy.map(_.sourceInfo).getOrElse(SiEmpty)} $rawTy")(result)
