@@ -9,14 +9,17 @@ import com.github.tgeng.archon.core.ir.CellStatus
 import com.github.tgeng.archon.core.ir.Elimination
 import com.github.tgeng.archon.core.ir.TTelescope
 import com.github.tgeng.archon.core.ir.Variance
+import com.github.tgeng.archon.core.ir.SourceInfo
 import com.github.tgeng.archon.parser.combinators.{*, given}
 import AstTerm.*
 import Statement.*
 import AstPattern.*
 import AstCoPattern.*
 import AstDeclaration.*
+import SourceInfo.*
 
 object AstParser:
+  given SourceInfo = SiEmpty
 
   def declarations: StrParser[List[AstDeclaration]] = (dataDecl | recordDecl | defDecl | effectDecl) sepBy P.whitespaces
 
@@ -133,7 +136,7 @@ object AstParser:
 
     val forced = P.from(".(") >%> term.map(AstPForced(_)) <%< P.from(")")
 
-    val absurd = P.from("(") >%> P.from(")").as(AstPAbsurd)
+    val absurd = P.from("(") >%> P.from(")").as(AstPAbsurd())
 
     forcedCon || con || forced || pVar || absurd
   }
@@ -184,7 +187,7 @@ object AstParser:
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
-      var transformHandler = (n"x", AstIdentifier(n"x"))
+      var transformHandler: (Name, AstTerm) = (n"x", AstIdentifier(n"x"))
 
       for (h <- allHandlers) { // Use old syntax here because IntelliJ's formatter keeps messing up indentations
         h match

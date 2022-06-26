@@ -41,17 +41,17 @@ trait Visitor[C, R]:
 
   def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R = pattern match
     case pVar: PVar => visitPVar(pVar)
-    case PRefl => visitPRefl
+    case pRefl: PRefl => visitPRefl(pRefl)
     case pDataType: PDataType => visitPDataType(pDataType)
     case pForcedDataType: PForcedDataType => visitPForcedDataType(pForcedDataType)
     case pConstructor: PConstructor => visitPConstructor(pConstructor)
     case pForcedConstructor: PForcedConstructor => visitPForcedConstructor(pForcedConstructor)
     case pForced: PForced => visitPForced(pForced)
-    case PAbsurd => visitPAbsurd
+    case pAbsurd: PAbsurd => visitPAbsurd(pAbsurd)
 
   def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature): R = combine()
 
-  def visitPRefl(using ctx: C)(using Σ: Signature): R = combine()
+  def visitPRefl(PRefl: PRefl)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -82,11 +82,11 @@ trait Visitor[C, R]:
   def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature): R =
     visitVTerm(pForced.term)
 
-  def visitPAbsurd(using ctx: C)(using Σ: Signature): R = combine()
+  def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitCoPattern(coPattern: CoPattern)(using ctx: C)(using Σ: Signature): R = coPattern match
-    case p: CPattern => ???
-    case p: CProjection => ???
+    case p: CPattern => visitCPattern(p)
+    case p: CProjection => visitCProjection(p)
 
   def visitCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): R = visitPattern(p.pattern)
 
@@ -103,12 +103,12 @@ trait Visitor[C, R]:
     case dataType: DataType => visitDataType(dataType)
     case con: Con => visitCon(con)
     case equalityType: EqualityType => visitEqualityType(equalityType)
-    case Refl => visitRefl
-    case EffectsType => visitEffectsType
+    case refl: Refl => visitRefl(refl)
+    case effectsType: EffectsType => visitEffectsType(effectsType)
     case effects: Effects => visitEffects(effects)
-    case LevelType => visitLevelType
+    case levelType: LevelType => visitLevelType(levelType)
     case level: Level => visitLevel(level)
-    case HeapType => visitHeapType
+    case heapType: HeapType => visitHeapType(heapType)
     case heap: Heap => visitHeap(heap)
     case cellType: CellType => visitCellType(cellType)
     case cell: Cell => visitCell(cell)
@@ -152,16 +152,16 @@ trait Visitor[C, R]:
       visitVTerm(equalityType.right)
     )
 
-  def visitRefl(using ctx: C)(using Σ: Signature): R = combine()
+  def visitRefl(refl: Refl)(using ctx: C)(using Σ: Signature): R = combine()
 
-  def visitEffectsType(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.EffectsQn)
+  def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.EffectsQn)
 
   def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
     combine(
       (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVar)).toSeq: _*
     )
 
-  def visitLevelType(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.LevelQn)
+  def visitLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.LevelQn)
 
   def visitLevel(level: Level)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -170,7 +170,7 @@ trait Visitor[C, R]:
       }.toSeq: _*
     )
 
-  def visitHeapType(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.HeapQn)
+  def visitHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.HeapQn)
 
   def visitHeap(heap: Heap)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -341,12 +341,12 @@ trait Transformer[C]:
     case dataType: DataType => transformDataType(dataType)
     case con: Con => transformCon(con)
     case equalityType: EqualityType => transformEqualityType(equalityType)
-    case Refl => transformRefl
-    case EffectsType => transformEffectsType
+    case refl: Refl => transformRefl(refl)
+    case effectsType: EffectsType => transformEffectsType(effectsType)
     case effects: Effects => transformEffects(effects)
-    case LevelType => transformLevelType
+    case levelType: LevelType => transformLevelType(levelType)
     case level: Level => transformLevel(level)
-    case HeapType => transformHeapType
+    case heapType: HeapType => transformHeapType(heapType)
     case heap: Heap => transformHeap(heap)
     case cellType: CellType => transformCellType(cellType)
     case cell: Cell => transformCell(cell)
@@ -355,58 +355,49 @@ trait Transformer[C]:
     Type(
       transformULevel(ty.ul),
       transformVTerm(ty.upperBound)
-    )
+    )(using ty.sourceInfo)
 
-  def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(transformULevel(top.ul))
+  def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(transformULevel(top.ul))(using top.sourceInfo)
 
   def transformPure(pure: Pure)
     (using ctx: C)
-    (using Σ: Signature): VTerm = Pure(transformULevel(pure.ul))
+    (using Σ: Signature): VTerm = Pure(transformULevel(pure.ul))(using pure.sourceInfo)
 
   def transformVar(v: Var)(using ctx: C)(using Σ: Signature): VTerm = v
 
   def transformCollapse(collapse: Collapse)
     (using ctx: C)
-    (using Σ: Signature): VTerm = Collapse(transformCTerm(collapse.cTm))
+    (using Σ: Signature): VTerm = Collapse(transformCTerm(collapse.cTm))(using collapse.sourceInfo)
 
-  def transformU(u: U)(using ctx: C)(using Σ: Signature): VTerm = U(transformCTerm(u.cTy))
+  def transformU(u: U)(using ctx: C)(using Σ: Signature): VTerm = U(transformCTerm(u.cTy))(using u.sourceInfo)
 
-  def transformThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature): VTerm = Thunk(
-    transformCTerm(
-      thunk.c
-    )
-  )
+  def transformThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature): VTerm =
+    Thunk(transformCTerm(thunk.c))(using thunk.sourceInfo)
 
   def transformDataType(dataType: DataType)(using ctx: C)(using Σ: Signature): VTerm =
-    DataType(
-      transformQualifiedName(dataType.qn),
-      dataType.args.map(transformVTerm)
-    )
+    DataType(transformQualifiedName(dataType.qn), dataType.args.map(transformVTerm))(using dataType.sourceInfo)
 
   def transformCon(con: Con)(using ctx: C)(using Σ: Signature): VTerm =
-    Con(
-      transformName(con.name),
-      con.args.map(transformVTerm),
-    )
+    Con(transformName(con.name), con.args.map(transformVTerm))(using con.sourceInfo)
 
   def transformEqualityType(equalityType: EqualityType)(using ctx: C)(using Σ: Signature): VTerm =
     EqualityType(
       transformVTerm(equalityType.ty),
       transformVTerm(equalityType.left),
       transformVTerm(equalityType.right)
-    )
+    )(using equalityType.sourceInfo)
 
-  def transformRefl(using ctx: C)(using Σ: Signature): VTerm = Refl
+  def transformRefl(refl: Refl)(using ctx: C)(using Σ: Signature): VTerm = refl
 
-  def transformEffectsType(using ctx: C)(using Σ: Signature): VTerm = EffectsType
+  def transformEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): VTerm = effectsType
 
   def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm
 
-  def transformLevelType(using ctx: C)(using Σ: Signature): VTerm = LevelType
+  def transformLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): VTerm = levelType
 
   def transformLevel(level: Level)(using ctx: C)(using Σ: Signature): VTerm
 
-  def transformHeapType(using ctx: C)(using Σ: Signature): VTerm = HeapType
+  def transformHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): VTerm = heapType
 
   def transformHeap(heap: Heap)(using ctx: C)(using Σ: Signature): VTerm = heap
 
@@ -415,7 +406,7 @@ trait Transformer[C]:
       transformVTerm(cellType.heap),
       transformVTerm(cellType.ty),
       cellType.status,
-    )
+    )(using cellType.sourceInfo)
 
   def transformCell(cell: Cell)(using ctx: C)(using Σ: Signature): VTerm = cell
 
@@ -426,35 +417,35 @@ trait Transformer[C]:
       transformULevel(cType.ul),
       transformCTerm(cType.upperBound),
       transformVTerm(cType.effects)
-    )
+    )(using cType.sourceInfo)
 
   def transformCTop(cTop: CTop)(using ctx: C)(using Σ: Signature): CTerm =
     CTop(
       transformULevel(cTop.ul),
       transformVTerm(cTop.effects),
-    )
+    )(using cTop.sourceInfo)
 
   def transformDef(d: Def)
     (using ctx: C)
-    (using Σ: Signature): CTerm = Def(transformQualifiedName(d.qn))
+    (using Σ: Signature): CTerm = Def(transformQualifiedName(d.qn))(using d.sourceInfo)
 
   def transformForce(force: Force)(using ctx: C)(using Σ: Signature): CTerm =
-    Force(transformVTerm(force.v))
+    Force(transformVTerm(force.v))(using force.sourceInfo)
 
   def transformF(f: F)(using ctx: C)(using Σ: Signature) =
     F(
       transformVTerm(f.vTy),
       transformVTerm(f.effects)
-    )
+    )(using f.sourceInfo)
 
   def transformReturn(r: Return)(using ctx: C)(using Σ: Signature): CTerm =
-    Return(transformVTerm(r.v))
+    Return(transformVTerm(r.v))(using r.sourceInfo)
 
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(
       transformCTerm(let.t),
       transformCTerm(let.ctx)(using offsetContext(ctx, List(let.boundName)))
-    )(let.boundName)
+    )(let.boundName)(using let.sourceInfo)
 
   def transformFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): CTerm =
     FunctionType(
@@ -466,33 +457,33 @@ trait Transformer[C]:
         )
       ),
       transformVTerm(functionType.effects)
-    )
+    )(using functionType.sourceInfo)
 
   def transformApplication(application: Application)(using ctx: C)(using Σ: Signature): CTerm =
     Application(
       transformCTerm(application.fun),
       transformVTerm(application.arg),
-    )
+    )(using application.sourceInfo)
 
   def transformRecordType(recordType: RecordType)(using ctx: C)(using Σ: Signature): CTerm =
     RecordType(
       transformQualifiedName(recordType.qn),
       recordType.args.map(transformVTerm),
       transformVTerm(recordType.effects),
-    )
+    )(using recordType.sourceInfo)
 
   def transformProjection(projection: Projection)(using ctx: C)(using Σ: Signature): CTerm =
     Projection(
       transformCTerm(projection.rec),
       transformName(projection.name),
-    )
+    )(using projection.sourceInfo)
 
   def transformOperatorCall(operatorCall: OperatorCall)(using ctx: C)(using Σ: Signature): CTerm =
     OperatorCall(
       transformEff(operatorCall.eff),
       transformName(operatorCall.name),
       operatorCall.args.map(transformVTerm),
-    )
+    )(using operatorCall.sourceInfo)
 
   def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
     Continuation(continuation.capturedStack.map(transformCTerm))
@@ -513,22 +504,22 @@ trait Transformer[C]:
         ))
       },
       transformCTerm(handler.input),
-    )
+    )(using handler.sourceInfo)
 
   def transformAllocOp(allocOp: AllocOp)(using ctx: C)(using Σ: Signature): CTerm =
     AllocOp(
       transformVTerm(allocOp.heap),
       transformVTerm(allocOp.ty),
-    )
+    )(using allocOp.sourceInfo)
 
   def transformSetOp(setOp: SetOp)(using ctx: C)(using Σ: Signature): CTerm =
     SetOp(
       transformVTerm(setOp.cell),
       transformVTerm(setOp.value),
-    )
+    )(using setOp.sourceInfo)
 
   def transformGetOp(getOp: GetOp)(using ctx: C)(using Σ: Signature): CTerm =
-    GetOp(transformVTerm(getOp.cell))
+    GetOp(transformVTerm(getOp.cell))(using getOp.sourceInfo)
 
   def transformHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): CTerm =
     HeapHandler(
@@ -536,14 +527,14 @@ trait Transformer[C]:
       heapHandler.key,
       heapHandler.heapContent,
       transformCTerm(heapHandler.input)(using offsetContext(ctx, List(gn"h")))
-    )
+    )(using heapHandler.sourceInfo)
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))
 
   def transformULevel(ul: ULevel)(using ctx: C)(using Σ: Signature): ULevel = ul match
     case USimpleLevel(level) => USimpleLevel(transformVTerm(level))
-    case UωLevel(layer) => UωLevel(transformBigLevel(layer))
+    case UωLevel(layer) => UωLevel(transformBigLevel(layer))(using ul.sourceInfo)
 
   def transformBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature): Nat = layer
 

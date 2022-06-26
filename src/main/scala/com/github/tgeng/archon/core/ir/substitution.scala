@@ -26,7 +26,7 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
     (ctx._1, ctx._2 + bindingNames.size)
 
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
-    if v.index >= ctx._2 then Var(v.index + ctx._1) else v
+    if v.index >= ctx._2 then Var(v.index + ctx._1)(using v.sourceInfo) else v
 
   override def transformEffects(effects: Effects)(using ctx: (Int, Int))(using Σ: Signature) =
     Effects(
@@ -36,13 +36,13 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
       effects.unionOperands.map(
         transformVar(_).asInstanceOf[VTerm.Var]
       )
-    )
+    )(using effects.sourceInfo)
 
   override def transformLevel(level: Level)(using ctx: (Int, Int))(using Σ: Signature) =
     Level(
       level.literal,
       level.maxOperands.map { (k, v) => (transformVar(k).asInstanceOf[VTerm.Var], v) }
-    )
+    )(using level.sourceInfo)
 
 end RaiseTransformer
 
@@ -77,6 +77,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
   override def transformEffects(effects: Effects)
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
+    given SourceInfo = effects.sourceInfo
     val operands = effects.unionOperands.map(transformVar)
     val newLiterals = effects.literal.to(mutable.ArrayBuffer)
     val newOperands = mutable.ArrayBuffer[Var]()
@@ -96,7 +97,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
       Effects(newLiterals.to(ListSet), newOperands.to(ListSet))
     else
       Collapse(
-        nonVarOperands.foldLeft(
+        nonVarOperands.foldLeft[CTerm](
           Return(
             Effects(
               newLiterals.to(ListSet),
@@ -113,6 +114,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
   override def transformLevel(level: Level)
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
+    given SourceInfo = level.sourceInfo
     val operands = level.maxOperands.map { (ref, lOffset) => (transformVar(ref), lOffset) }
     var newLiteral = level.literal
     val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
@@ -135,7 +137,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
       Level(newLiteral, ListMap.from(newOperands))
     else
       Collapse(
-        nonVarOperands.foldLeft(
+        nonVarOperands.foldLeft[CTerm](
           Return(
             Level(
               newLiteral, ListMap.from(

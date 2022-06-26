@@ -5,10 +5,14 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.ULevel.USimpleLevel
 
+import SourceInfo.*
+
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
 
 type TTelescope = List[(Binding[VTerm], Variance)]
+
+given SourceInfo = SiEmpty
 
 enum Declaration:
   case Data(val qn: QualifiedName)
@@ -154,10 +158,12 @@ trait Signature:
   import QualifiedName.*
 
   def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    given SourceInfo = SiDerived(qn)
+
     for
       data <- getDataOption(qn)
     yield Definition(qn)(
-      data.tParamTys.foldRight(
+      data.tParamTys.foldRight[CTerm](
         F(Type(data.ul, DataType(qn, vars(data.tParamTys.size - 1))))
       ) { (bindingAndVariance, bodyTy) =>
         bindingAndVariance match
@@ -166,6 +172,8 @@ trait Signature:
     )
 
   def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    given SourceInfo = SiDerived(qn)
+
     for
       data <- getDataOption(qn)
     yield {
@@ -180,54 +188,62 @@ trait Signature:
       )
     }
 
-  def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
-    case Node(dataQn, conName) =>
-      for
-        data <- getDataOption(dataQn)
-        constructor <- getConstructorOption(dataQn, conName)
-      yield
-        val numIndexArgs = data.tParamTys.size - data.numParams
-        Definition(qn)(
-          (data.tParamTys.take(data.numParams).map(_._1) ++
-            constructor.paramTys.strengthen(numIndexArgs, 0))
-            .foldRight(
-              F(
-                DataType(
-                  dataQn,
-                  constructor.tArgs.map(_.strengthen(numIndexArgs, constructor.paramTys.size))
+  def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    given SourceInfo = SiDerived(qn)
+
+    qn match
+      case Node(dataQn, conName) =>
+        for
+          data <- getDataOption(dataQn)
+          constructor <- getConstructorOption(dataQn, conName)
+        yield
+          val numIndexArgs = data.tParamTys.size - data.numParams
+          Definition(qn)(
+            (data.tParamTys.take(data.numParams).map(_._1) ++
+              constructor.paramTys.strengthen(numIndexArgs, 0))
+              .foldRight[CTerm](
+                F(
+                  DataType(
+                    dataQn,
+                    constructor.tArgs.map(_.strengthen(numIndexArgs, constructor.paramTys.size))
+                  )
                 )
-              )
-            ) { (binding, ty) =>
-              FunctionType(binding, ty)
-            }
-        )
-    case _ => None
-
-
-  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
-    case Node(dataQn, conName) =>
-      for
-        data <- getDataOption(dataQn)
-        constructor <- getConstructorOption(dataQn, conName)
-      yield
-        val numIndexArgs = data.tParamTys.size - data.numParams
-        val allBindings = data.tParamTys.take(data.numParams).map(_._1) ++
-          constructor.paramTys.strengthen(numIndexArgs, 0)
-        IndexedSeq(
-          Clause(
-            allBindings,
-            pVars(allBindings.size - 1),
-            Return(Con(conName, vars(constructor.paramTys.size - 1))),
-            F(DataType(dataQn, constructor.tArgs.map(_.strengthen(numIndexArgs, 0))))
+              ) { (binding, ty) =>
+                FunctionType(binding, ty)
+              }
           )
-        )
-    case _ => None
+      case _ => None
+
+
+  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    given SourceInfo = SiDerived(qn)
+
+    qn match
+      case Node(dataQn, conName) =>
+        for
+          data <- getDataOption(dataQn)
+          constructor <- getConstructorOption(dataQn, conName)
+        yield
+          val numIndexArgs = data.tParamTys.size - data.numParams
+          val allBindings = data.tParamTys.take(data.numParams).map(_._1) ++
+            constructor.paramTys.strengthen(numIndexArgs, 0)
+          IndexedSeq(
+            Clause(
+              allBindings,
+              pVars(allBindings.size - 1),
+              Return(Con(conName, vars(constructor.paramTys.size - 1))),
+              F(DataType(dataQn, constructor.tArgs.map(_.strengthen(numIndexArgs, 0))))
+            )
+          )
+      case _ => None
 
   def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    given SourceInfo = SiDerived(qn)
+
     for
       record <- getRecordOption(qn)
     yield Definition(qn)(
-      record.tParamTys.foldRight(
+      record.tParamTys.foldRight[CTerm](
         CType(record.ul, RecordType(qn, vars(record.tParamTys.size - 1)))
       ) { (bindingAndVariance, bodyTy) =>
         bindingAndVariance match
@@ -236,6 +252,8 @@ trait Signature:
     )
 
   def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    given SourceInfo = SiDerived(qn)
+
     for
       record <- getRecordOption(qn)
     yield {
@@ -250,56 +268,66 @@ trait Signature:
       )
     }
 
-  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
-    case Node(recordQn, fieldName) =>
-      for
-        record <- getRecordOption(qn)
-        field <- getFieldOption(qn, fieldName)
-      yield Definition(qn)(
-        record.tParamTys.foldRight(
-          FunctionType(
-            Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
+  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    given SourceInfo = SiDerived(qn)
+
+    qn match
+      case Node(recordQn, fieldName) =>
+        for
+          record <- getRecordOption(qn)
+          field <- getFieldOption(qn, fieldName)
+        yield Definition(qn)(
+          record.tParamTys.foldRight[CTerm](
+            FunctionType(
+              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
+              field.ty
+            )
+          ) { (bindingAndVariance, bodyTy) =>
+            bindingAndVariance match
+              case (binding, _) => FunctionType(binding, bodyTy)
+          }
+        )
+      case _ => None
+
+  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    given SourceInfo = SiDerived(qn)
+
+    qn match
+      case Node(recordQn, fieldName) =>
+        for
+          record <- getRecordOption(qn)
+          field <- getFieldOption(qn, fieldName)
+        yield IndexedSeq(
+          Clause(
+            record.tParamTys.map(_._1) :+ Binding(
+              U(
+                RecordType(
+                  recordQn,
+                  vars(record.tParamTys.size - 1)
+                )
+              )
+            )(gn"self"),
+            pVars(record.tParamTys.size),
+            Projection(Force(Var(0)), fieldName),
             field.ty
           )
-        ) { (bindingAndVariance, bodyTy) =>
-          bindingAndVariance match
-            case (binding, _) => FunctionType(binding, bodyTy)
-        }
-      )
-    case _ => None
-
-  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
-    case Node(recordQn, fieldName) =>
-      for
-        record <- getRecordOption(qn)
-        field <- getFieldOption(qn, fieldName)
-      yield IndexedSeq(
-        Clause(
-          record.tParamTys.map(_._1) :+ Binding(
-            U(
-              RecordType(
-                recordQn,
-                vars(record.tParamTys.size - 1)
-              )
-            )
-          )(gn"self"),
-          pVars(record.tParamTys.size),
-          Projection(Force(Var(0)), fieldName),
-          field.ty
         )
-      )
-    case _ => None
+      case _ => None
 
   def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    given SourceInfo = SiDerived(qn)
+
     for
       effect <- getEffectOption(qn)
     yield Definition(qn)(
-      effect.tParamTys.foldRight(F(EffectsType)) {
+      effect.tParamTys.foldRight[CTerm](F(EffectsType())) {
         case (binding, bodyTy) => FunctionType(binding, bodyTy)
       }
     )
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    given SourceInfo = SiDerived(qn)
+
     for
       effect <- getEffectOption(qn)
     yield {
@@ -309,51 +337,57 @@ trait Signature:
           effect.tParamTys,
           pVars(highestDbIndex),
           Return(EffectsLiteral(ListSet((qn, vars(highestDbIndex))))),
-          F(EffectsType)
+          F(EffectsType())
         )
       )
     }
 
-  def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] = qn match
-    case Node(effectQn, opName) =>
-      for
-        eff <- getEffectOption(effectQn)
-        op <- getOperatorOption(effectQn, opName)
-      yield
-        val allParamTys = eff.tParamTys ++ op.paramTys
-        Definition(qn)(
-          allParamTys
-            .foldRight(
-              F(
-                op.resultTy,
-                EffectsLiteral(ListSet((effectQn, vars(allParamTys.size - 1, op.paramTys.size))))
-              )
-            ) { (binding, ty) =>
-              FunctionType(binding, ty)
-            }
-        )
-    case _ => None
+  def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    given SourceInfo = SiDerived(qn)
 
-  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] = qn match
-    case Node(effectQn, opName) =>
-      for
-        eff <- getEffectOption(effectQn)
-        op <- getOperatorOption(effectQn, opName)
-      yield
-        val allBindings = eff.tParamTys ++ op.paramTys
-        IndexedSeq(
-          Clause(
-            allBindings,
-            pVars(allBindings.size - 1),
-            OperatorCall(
-              (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
-              opName,
-              vars(op.paramTys.size - 1)
-            ),
-            F(op.resultTy)
+    qn match
+      case Node(effectQn, opName) =>
+        for
+          eff <- getEffectOption(effectQn)
+          op <- getOperatorOption(effectQn, opName)
+        yield
+          val allParamTys = eff.tParamTys ++ op.paramTys
+          Definition(qn)(
+            allParamTys
+              .foldRight[CTerm](
+                F(
+                  op.resultTy,
+                  EffectsLiteral(ListSet((effectQn, vars(allParamTys.size - 1, op.paramTys.size))))
+                )
+              ) { (binding, ty) =>
+                FunctionType(binding, ty)
+              }
           )
-        )
-    case _ => None
+      case _ => None
+
+  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    given SourceInfo = SiDerived(qn)
+
+    qn match
+      case Node(effectQn, opName) =>
+        for
+          eff <- getEffectOption(effectQn)
+          op <- getOperatorOption(effectQn, opName)
+        yield
+          val allBindings = eff.tParamTys ++ op.paramTys
+          IndexedSeq(
+            Clause(
+              allBindings,
+              pVars(allBindings.size - 1),
+              OperatorCall(
+                (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
+                opName,
+                vars(op.paramTys.size - 1)
+              ),
+              F(op.resultTy)
+            )
+          )
+      case _ => None
 
 trait BuiltinSignature extends Signature :
   override def getDataOption(qn: QualifiedName): Option[Declaration.Data] =

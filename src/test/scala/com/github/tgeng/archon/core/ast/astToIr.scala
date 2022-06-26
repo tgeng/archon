@@ -8,7 +8,6 @@ import com.github.tgeng.archon.core.ir.*
 import collection.immutable.{ListMap, ListSet}
 import collection.mutable
 import AstTerm.*
-import AstULevel.*
 import VTerm.*
 import CTerm.*
 import ULevel.*
@@ -21,6 +20,7 @@ import CoPattern.*
 import AstDeclaration.*
 import Elimination.*
 import PreDeclaration.*
+import SourceInfo.*
 
 type NameContext = (Int, Map[Name, Int])
 
@@ -29,6 +29,8 @@ val emptyNameContext: NameContext = (0, Map.empty)
 private def resolve(astVar: AstIdentifier)
   (using ctx: NameContext)
   (using Σ: TestSignature): Either[AstError, Either[CTerm, VTerm]] =
+  given SourceInfo = astVar.sourceInfo
+
   ctx._2.get(astVar.name) match
     case Some(dbNumber) => Right(Right(Var(ctx._1 - dbNumber - 1)))
     case None => Σ.resolveOption(astVar.name) match
@@ -38,6 +40,8 @@ private def resolve(astVar: AstIdentifier)
 private def resolve(astPVar: AstPVar)
   (using ctx: NameContext)
   (using Σ: TestSignature): Either[AstError, Pattern] =
+  given SourceInfo = astPVar.sourceInfo
+
   ctx._2.get(astPVar.name) match
     case None => Left(UnresolvedPVar(astPVar))
     case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber - 1))
@@ -154,165 +158,174 @@ private def astToIr[T](telescope: AstTelescope)
 
 def astToIr(ast: AstCoPattern)
   (using ctx: NameContext)
-  (using Σ: TestSignature): Either[AstError, CoPattern] = ast match
-  case AstCPattern(p) =>
-    for
-      p <- astToIr(p)
-    yield CPattern(p)
-  case AstCProjection(name) => Right(CProjection(name))
+  (using Σ: TestSignature): Either[AstError, CoPattern] =
+  given SourceInfo = ast.sourceInfo
+
+  ast match
+    case AstCPattern(p) =>
+      for
+        p <- astToIr(p)
+      yield CPattern(p)
+    case AstCProjection(name) => Right(CProjection(name))
 
 def astToIr(ast: AstPattern)
   (using ctx: NameContext)
-  (using Σ: TestSignature): Either[AstError, Pattern] = ast match
-  case v: AstPVar => resolve(v)
-  case AstPConstructor(name, args) =>
-    Σ.resolveOption(name) match
+  (using Σ: TestSignature): Either[AstError, Pattern] =
+  given SourceInfo = ast.sourceInfo
+
+  ast match
+    case v: AstPVar => resolve(v)
+    case AstPConstructor(name, args) =>
+      Σ.resolveOption(name) match
+        case Some(qn) => Σ.getDataOption(qn) match
+          case Some(_) => transpose(args.map(astToIr)).map(PDataType(qn, _))
+          case _ => transpose(args.map(astToIr)).map(PConstructor(name, _))
+        case None => Left(UnresolvedNameInPattern(name))
+    case AstPForcedConstructor(name, args) => Σ.resolveOption(name) match
       case Some(qn) => Σ.getDataOption(qn) match
-        case Some(_) => transpose(args.map(astToIr)).map(PDataType(qn, _))
-        case _ => transpose(args.map(astToIr)).map(PConstructor(name, _))
+        case Some(_) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
+        case _ => transpose(args.map(astToIr)).map(PForcedConstructor(name, _))
       case None => Left(UnresolvedNameInPattern(name))
-  case AstPForcedConstructor(name, args) => Σ.resolveOption(name) match
-    case Some(qn) => Σ.getDataOption(qn) match
-      case Some(_) => transpose(args.map(astToIr)).map(PForcedDataType(qn, _))
-      case _ => transpose(args.map(astToIr)).map(PForcedConstructor(name, _))
-    case None => Left(UnresolvedNameInPattern(name))
-  case AstPForced(term) =>
-    for
-      cTerm <- astToIr(term)
-    yield PForced(Collapse(cTerm))
-  case AstPAbsurd => Right(PAbsurd)
+    case AstPForced(term) =>
+      for
+        cTerm <- astToIr(term)
+      yield PForced(Collapse(cTerm))
+    case AstPAbsurd() => Right(PAbsurd())
 
 def astToIr(ast: AstTerm)
   (using ctx: NameContext)
-  (using Σ: TestSignature): Either[AstError, CTerm] = ast match
-  case AstDef(qn) => Right(Def(qn))
-  case v: AstIdentifier =>
-    for
-      v <- resolve(v)
-    yield v match
-      case Right(v) => Return(v)
-      case Left(c) => c
-  case AstCollapse(c) =>
-    for c <- astToIr(c)
-      yield Return(Collapse(c))
-  case AstU(cty) =>
-    for cty <- astToIr(cty)
-      yield Return(U(cty))
-  case AstThunk(c) =>
-    for c <- astToIr(c)
-      yield Return(Thunk(c))
-  case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
-  case AstForce(v) => chainAst(gn"v", v)(Force(_))
-  case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
-    case vTy :: effects :: Nil => F(vTy, effects)
-    case _ => throw IllegalStateException()
-  }
-  case AstFunctionType(argName, argTy, bodyTy, effects) =>
-    for argTy <- astToIr(argTy)
-        effects <- bind(argName) {
-          astToIr(effects)
-        }
-        bodyTy <- bind(argName) {
-          astToIr(bodyTy)
-        }
-        r <- chain((gn"argTy", argTy), (gn"eff", effects)) {
-          case (argTy :: effects :: Nil, n) => FunctionType(
-            Binding(argTy)(argName),
-            bodyTy.weaken(n, 1),
-            effects
-          )
-          case _ => throw IllegalStateException()
-        }
-    yield r
-  case AstRedux(head, elims) =>
-    for head <- astToIr(head)
-        r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](gn"arg", elims) {
-          _.foldLeft(head) { (c, e) =>
-            e match
-              case ETerm(v) => Application(c, v)
-              case EProj(n) => Projection(c, n)
+  (using Σ: TestSignature): Either[AstError, CTerm] =
+  given SourceInfo = ast.sourceInfo
+
+  ast match
+    case AstDef(qn) => Right(Def(qn))
+    case v: AstIdentifier =>
+      for
+        v <- resolve(v)
+      yield v match
+        case Right(v) => Return(v)
+        case Left(c) => c
+    case AstCollapse(c) =>
+      for c <- astToIr(c)
+        yield Return(Collapse(c))
+    case AstU(cty) =>
+      for cty <- astToIr(cty)
+        yield Return(U(cty))
+    case AstThunk(c) =>
+      for c <- astToIr(c)
+        yield Return(Thunk(c))
+    case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
+    case AstForce(v) => chainAst(gn"v", v)(Force(_))
+    case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
+      case vTy :: effects :: Nil => F(vTy, effects)
+      case _ => throw IllegalStateException()
+    }
+    case AstFunctionType(argName, argTy, bodyTy, effects) =>
+      for argTy <- astToIr(argTy)
+          effects <- bind(argName) {
+            astToIr(effects)
           }
-        }
-    yield r
-  case AstBlock(statements) =>
-    import Statement.*
-    def foldSequence(statements: List[Statement])
-      (using ctx: NameContext): Either[AstError, CTerm] =
-      statements match
-        case Nil => Right(Def(Builtins.UnitQn))
-        case STerm(astTerm) :: Nil => astToIr(astTerm)
-        case SBinding(_, astTerm) :: Nil => astToIr(astTerm)
-        case STerm(t) :: rest =>
-          val name = gn"_"
-          for
-            t <- astToIr(t)
-            ctx <- bind(name) {
-              foldSequence(rest)
+          bodyTy <- bind(argName) {
+            astToIr(bodyTy)
+          }
+          r <- chain((gn"argTy", argTy), (gn"eff", effects)) {
+            case (argTy :: effects :: Nil, n) => FunctionType(
+              Binding(argTy)(argName),
+              bodyTy.weaken(n, 1),
+              effects
+            )
+            case _ => throw IllegalStateException()
+          }
+      yield r
+    case AstRedux(head, elims) =>
+      for head <- astToIr(head)
+          r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](gn"arg", elims) {
+            _.foldLeft(head) { (c, e) =>
+              e match
+                case ETerm(v) => Application(c, v)
+                case EProj(n) => Projection(c, n)
             }
-          yield Let(t, ctx)(name)
-        case SBinding(name, t) :: rest =>
-          for
-            t <- astToIr(t)
-            ctx <- bind(name) {
-              foldSequence(rest)
-            }
-          yield Let(t, ctx)(name)
-        case SHandler(
-        (effName, effArgs),
-        otherEffects,
-        outputType,
-        transformInputName,
-        transform,
-        handlers,
-        ) :: rest =>
-          for effArgs <- transpose(effArgs.map(astToIr))
-              otherEffects <- astToIr(otherEffects)
-              outputType <- astToIr(outputType)
-              transform <- bind(transformInputName) {
-                astToIr(transform)
-              }
-              handlers <- transposeValues(
-                handlers.view.mapValues { (argNames, resumeName, astTerm) =>
-                  bind(argNames :+ resumeName) {
-                    astToIr(astTerm).map((argNames.size + 1, _))
-                  }
-                }.toMap
-              )
-              input <- foldSequence(rest)
-              r <- chain[[X] =>> List[List[X]]](
-                effArgs.map((gn"effArg", _)) :: List((gn"otherEff", otherEffects)) :: List((gn"outputType", outputType)) :: Nil
-              ) {
-                case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
-                  Handler(
-                    (Σ.resolve(effName), effArgs),
-                    otherEffects,
-                    outputType,
-                    transform.weaken(n, 1),
-                    handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
-                    input.weaken(n, 0)
-                  )
-                case _ => throw IllegalStateException()
-              }
-          yield r
-        case SHeapHandler(
-        otherEffects,
-        heapVarName,
-        ) :: rest =>
-          for otherEffects <- astToIr(otherEffects)
-              input <- bind(heapVarName) {
+          }
+      yield r
+    case AstBlock(statements) =>
+      import Statement.*
+      def foldSequence(statements: List[Statement])
+        (using ctx: NameContext): Either[AstError, CTerm] =
+        statements match
+          case Nil => Right(Def(Builtins.UnitQn))
+          case STerm(astTerm) :: Nil => astToIr(astTerm)
+          case SBinding(_, astTerm) :: Nil => astToIr(astTerm)
+          case STerm(t) :: rest =>
+            val name = gn"_"
+            for
+              t <- astToIr(t)
+              ctx <- bind(name) {
                 foldSequence(rest)
               }
-              r <- chain(gn"otherEff", otherEffects) {
-                case (otherEffects, n) => HeapHandler(
-                  otherEffects,
-                  None,
-                  IndexedSeq(),
-                  input.weaken(n, 1)
-                )
+            yield Let(t, ctx)(name)
+          case SBinding(name, t) :: rest =>
+            for
+              t <- astToIr(t)
+              ctx <- bind(name) {
+                foldSequence(rest)
               }
-          yield r
+            yield Let(t, ctx)(name)
+          case SHandler(
+          (effName, effArgs),
+          otherEffects,
+          outputType,
+          transformInputName,
+          transform,
+          handlers,
+          ) :: rest =>
+            for effArgs <- transpose(effArgs.map(astToIr))
+                otherEffects <- astToIr(otherEffects)
+                outputType <- astToIr(outputType)
+                transform <- bind(transformInputName) {
+                  astToIr(transform)
+                }
+                handlers <- transposeValues(
+                  handlers.view.mapValues { (argNames, resumeName, astTerm) =>
+                    bind(argNames :+ resumeName) {
+                      astToIr(astTerm).map((argNames.size + 1, _))
+                    }
+                  }.toMap
+                )
+                input <- foldSequence(rest)
+                r <- chain[[X] =>> List[List[X]]](
+                  effArgs.map((gn"effArg", _)) :: List((gn"otherEff", otherEffects)) :: List((gn"outputType", outputType)) :: Nil
+                ) {
+                  case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
+                    Handler(
+                      (Σ.resolve(effName), effArgs),
+                      otherEffects,
+                      outputType,
+                      transform.weaken(n, 1),
+                      handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
+                      input.weaken(n, 0)
+                    )
+                  case _ => throw IllegalStateException()
+                }
+            yield r
+          case SHeapHandler(
+          otherEffects,
+          heapVarName,
+          ) :: rest =>
+            for otherEffects <- astToIr(otherEffects)
+                input <- bind(heapVarName) {
+                  foldSequence(rest)
+                }
+                r <- chain(gn"otherEff", otherEffects) {
+                  case (otherEffects, n) => HeapHandler(
+                    otherEffects,
+                    None,
+                    IndexedSeq(),
+                    input.weaken(n, 1)
+                  )
+                }
+            yield r
 
-    foldSequence(statements)
+      foldSequence(statements)
 
 private def astToIr(elim: Elimination[AstTerm])
   (using ctx: NameContext)
@@ -368,6 +381,7 @@ private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
   (block: TestSignature ?=> (T[VTerm], /* number of non-trivial computations bound */ Int) => CTerm)
   (using NameContext)
   (using TestSignature): Either[AstError, CTerm] =
+  given SourceInfo = SiEmpty
   for r <- {
     // Step 1. Count the number of non-trivial computations present in the computation args.
     // This is used to populate DeBruijn index of let bound variables for these non-trivial

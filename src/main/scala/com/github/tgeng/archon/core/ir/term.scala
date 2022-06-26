@@ -4,6 +4,7 @@ import scala.collection.immutable.{ListMap, ListSet}
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import QualifiedName.*
+import SourceInfo.*
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -19,7 +20,7 @@ type Arguments = List[VTerm]
 
 class HeapKey
 
-val GlobalHeapKey = new HeapKey:
+val GlobalHeapKey = new HeapKey :
   override def toString = "<globalHeapKey>"
 
 type Eff = (QualifiedName, Arguments)
@@ -32,9 +33,9 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 extension (eff: Eff)
   def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
-enum ULevel:
-  case USimpleLevel(level: VTerm)
-  case UωLevel(layer: Nat)
+enum ULevel(val sourceInfo: SourceInfo):
+  case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)
+  case UωLevel(layer: Nat)(using sourceInfo: SourceInfo) extends ULevel(sourceInfo)
 
 object ULevel:
   extension (u: ULevel)
@@ -42,15 +43,23 @@ object ULevel:
       case USimpleLevel(level) => USimpleLevel(f(level))
       case _: ULevel.UωLevel => u
 
-  def ULevelSuc(u: ULevel): ULevel = u match
-    case USimpleLevel(l) => USimpleLevel(VTerm.LevelSuc(l))
-    case UωLevel(layer) => UωLevel(layer + 1)
+  def ULevelSuc(u: ULevel): ULevel =
+    given SourceInfo = SiLevelSuc(u.sourceInfo)
 
-  def ULevelMax(u1: ULevel, u2: ULevel): ULevel = (u1, u2) match
-    case (USimpleLevel(l1), USimpleLevel(l2)) => USimpleLevel(VTerm.LevelMax(l1, l2))
-    case (UωLevel(layer1), UωLevel(layer2)) => UωLevel(math.max(layer1, layer2))
-    case (_, u: UωLevel) => u
-    case (u, _) => u
+    u match
+      case USimpleLevel(l) => USimpleLevel(VTerm.LevelSuc(l))
+      case UωLevel(layer) => UωLevel(layer + 1)
+
+  def ULevelMax(u1: ULevel, u2: ULevel): ULevel =
+    given SourceInfo = SiLevelMax(u1.sourceInfo, u2.sourceInfo)
+
+    (u1, u2) match
+      case (USimpleLevel(l1), USimpleLevel(l2)) =>
+        USimpleLevel(VTerm.LevelMax(l1, l2))
+      case (UωLevel(layer1), UωLevel(layer2)) =>
+        UωLevel(math.max(layer1, layer2))
+      case (_, u: UωLevel) => u
+      case (u, _) => u
 
 enum CellStatus extends Comparable[CellStatus] :
   case Initialized, Uninitialized
@@ -60,16 +69,19 @@ enum CellStatus extends Comparable[CellStatus] :
     else if this == CellStatus.Initialized then -1
     else 1
 
-enum VTerm:
-  case Type(ul: ULevel, upperBound: VTerm) extends VTerm, QualifiedNameOwner(TypeQn)
-  case Top(ul: ULevel) extends VTerm, QualifiedNameOwner(TopQn)
+enum VTerm(val sourceInfo: SourceInfo):
+  case Type(ul: ULevel, upperBound: VTerm)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
+  case Top(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
   /**
    * Top type of pure value types.
    */
-  case Pure(ul: ULevel) extends VTerm, QualifiedNameOwner(PureQn)
+  case Pure(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(PureQn)
 
-  case Var(index: Nat)
+  case Var(index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /**
    * Execute a effect free computation and get the returned value. That is, `cTm` must be of type
@@ -77,59 +89,73 @@ enum VTerm:
    * computations into values so that the type theory is as expressive as typical dependent type
    * theory.
    */
-  case Collapse(cTm: CTerm)
+  case Collapse(cTm: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case U(cTy: CTerm)
-  case Thunk(c: CTerm)
+  case U(cTy: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case DataType(qn: QualifiedName, args: Arguments = Nil) extends VTerm, QualifiedNameOwner(qn)
+  case DataType(qn: QualifiedName, args: Arguments = Nil)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(qn)
   case Con(name: Name, args: Arguments = Nil)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case EqualityType(
     ty: VTerm,
     left: VTerm,
     right: VTerm
-  ) extends VTerm //, QualifiedNameOwner(EqualityQn)
-  case Refl
+  )(using sourceInfo: SourceInfo) extends VTerm(sourceInfo) //, QualifiedNameOwner(EqualityQn)
+  case Refl()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case EffectsType extends VTerm, QualifiedNameOwner(EffectsQn)
+  case EffectsType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
+    EffectsQn
+  )
   case Effects(literal: ListSet[Eff], unionOperands: ListSet[VTerm.Var])
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case LevelType extends VTerm, QualifiedNameOwner(LevelQn)
+  case LevelType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
+    LevelQn
+  )
   case Level(literal: Nat, maxOperands: ListMap[VTerm.Var, /* level offset */ Nat])
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Heap */
-  case HeapType extends VTerm, QualifiedNameOwner(HeapQn)
+  case HeapType()
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(HeapQn)
 
   /**
    * Internal only, created by [[CTerm.HeapHandler]]
    */
-  case Heap(key: HeapKey)
+  case Heap(key: HeapKey)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Cell */
   case CellType(
     heap: VTerm,
     ty: VTerm,
     status: CellStatus
-  ) extends VTerm //, QualifiedNameOwner(CellQn)
+  )(using sourceInfo: SourceInfo) extends VTerm(sourceInfo) //, QualifiedNameOwner(CellQn)
 
   /**
    * Internal only, created by [[CTerm.AllocOp]]
    */
-  case Cell(heapKey: HeapKey, index: Nat)
+  case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R = visitor.visitVTerm(this)
-  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): VTerm = transformer.transformVTerm(this)
+  def visitWith[C, R](visitor: Visitor[C, R])
+    (using ctx: C)
+    (using Σ: Signature): R = visitor.visitVTerm(this)
+
+  def transformWith[C](transformer: Transformer[C])
+    (using ctx: C)
+    (using Σ: Signature): VTerm = transformer.transformVTerm(this)
 
 object VTerm:
-  def LevelLiteral(n: Nat): Level = Level(n, ListMap())
+  def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level = Level(n, ListMap())
 
   def LevelSuc(t: VTerm): Level = t match
     case Level(literal, maxOperands) => Level(
       literal + 1,
       maxOperands.map { (r, o) => (r, o + 1) }
-    )
-    case r: Var => Level(1, ListMap((r, 1)))
+    )(using SiLevelSuc(t.sourceInfo))
+    case r: Var => Level(1, ListMap((r, 1)))(using SiLevelSuc(t.sourceInfo))
     case _ => throw IllegalArgumentException("type error")
 
   def LevelMax(t1: VTerm, t2: VTerm): Level = t1 match
@@ -141,43 +167,59 @@ object VTerm:
             .groupBy(_._1)
             .map { (k, vs) => (k, vs.map(_._2).max) }
         )
-      )
-      case r: Var => Level(literal1, maxOperands1.updated(r, 0))
+      )(using SiLevelMax(t1.sourceInfo, t2.sourceInfo))
+      case r: Var =>
+        Level(literal1, maxOperands1.updated(r, 0))(using SiLevelMax(t1.sourceInfo, t2.sourceInfo))
       case _ => throw IllegalArgumentException("type error")
     case r1: Var => t2 match
-      case Level(literal2, maxOperands2) => Level(literal2, maxOperands2.updated(r1, 0))
-      case r2: Var => Level(0, ListMap((r1, 0), (r2, 0)))
-      case _ => throw IllegalArgumentException("type error")
-    case _ => throw IllegalArgumentException("type error")
-
-  def Total = EffectsLiteral(ListSet.empty)
-
-  def EffectsLiteral(effects: ListSet[Eff]): Effects = Effects(effects, ListSet.empty)
-
-  def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects = effects1 match
-    case Effects(literal1, unionOperands1) => effects2 match
-      case Effects(literal2, unionOperands2) => Effects(
-        literal1 ++ literal2,
-        unionOperands1 ++ unionOperands2
+      case Level(literal2, maxOperands2) =>
+        Level(literal2, maxOperands2.updated(r1, 0))(using SiLevelMax(t1.sourceInfo, t2.sourceInfo))
+      case r2: Var => Level(0, ListMap((r1, 0), (r2, 0)))(
+        using SiLevelMax(
+          t1.sourceInfo,
+          t2.sourceInfo
+        )
       )
-      case r: Var => Effects(literal1, unionOperands1 + r)
-      case _ => throw IllegalArgumentException("type error")
-    case r1: Var => effects2 match
-      case Effects(literal2, unionOperands2) => Effects(literal2, unionOperands2 + r1)
-      case r2: Var => Effects(ListSet(), ListSet(r1, r2))
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
+
+  def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(ListSet.empty)
+
+  def EffectsLiteral(effects: ListSet[Eff])(using sourceInfo: SourceInfo): Effects = Effects(
+    effects,
+    ListSet.empty
+  )
+
+  def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
+    given SourceInfo = SiEffectUnion(effects1.sourceInfo, effects2.sourceInfo)
+
+    effects1 match
+      case Effects(literal1, unionOperands1) => effects2 match
+        case Effects(literal2, unionOperands2) => Effects(
+          literal1 ++ literal2,
+          unionOperands1 ++ unionOperands2
+        )
+        case r: Var => Effects(literal1, unionOperands1 + r)
+        case _ => throw IllegalArgumentException("type error")
+      case r1: Var => effects2 match
+        case Effects(literal2, unionOperands2) => Effects(
+          literal2,
+          unionOperands2 + r1
+        )
+        case r2: Var => Effects(ListSet(), ListSet(r1, r2))
+        case _ => throw IllegalArgumentException("type error")
+      case _ => throw IllegalArgumentException("type error")
 
   def vars(firstIndex: Nat, lastIndex: Nat = 0): List[Var] = firstIndex
     .to(lastIndex, -1)
-    .map(new Var(_))
+    .map(new Var(_)(using SiEmpty))
     .toList
 
 
 sealed trait IType:
   def effects: VTerm
 
-enum CTerm:
+enum CTerm(val sourceInfo: SourceInfo):
   /**
    * Used in stack machine to represent the computations above the computation term containing
    * this. For example, `f a b` converted to the stack machine becomes
@@ -185,42 +227,53 @@ enum CTerm:
    *  - Application(Hole, a)
    *  - Application(Hole, b)
    */
-  case Hole
+  case Hole extends CTerm(SiEmpty)
 
   /** archon.builtin.CType */
-  case CType(ul: ULevel, upperBound: CTerm, effects: VTerm = VTerm.Total) extends CTerm, IType
-  case CTop(ul: ULevel, effects: VTerm = VTerm.Total) extends CTerm, IType
+  case CType(
+    ul: ULevel,
+    upperBound: CTerm,
+    effects: VTerm = VTerm.Total(using SiEmpty)
+  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case Def(qn: QualifiedName)
+  case CTop(ul: ULevel, effects: VTerm = VTerm.Total(using SiEmpty))
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case Force(v: VTerm)
+  case Def(qn: QualifiedName)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+
+  case Force(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.F */
-  case F(vTy: VTerm, effects: VTerm = VTerm.Total) extends CTerm, IType
-  case Return(v: VTerm)
+  case F(vTy: VTerm, effects: VTerm = VTerm.Total(using SiEmpty))
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  case Return(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
-  case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)(val boundName: Name = gn"_")
+  case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)
+    (val boundName: Name = gn"_")
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.Function */
   case FunctionType(
     binding: Binding[VTerm], // effects that needed for getting the function of this type. The effects caused
     // by function application is tracked by the `bodyTy`.
     bodyTy: CTerm, /* binding offset = 1 */
-    effects: VTerm = VTerm.Total
-  ) extends CTerm, IType
-  case Application(fun: CTerm, arg: VTerm)
+    effects: VTerm = VTerm.Total(using SiEmpty)
+  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+
+  case Application(fun: CTerm, arg: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case RecordType(
     qn: QualifiedName,
     args: Arguments = Nil,
-    effects: VTerm = VTerm.Total
-  ) extends CTerm, IType, QualifiedNameOwner(qn)
+    effects: VTerm = VTerm.Total(using SiEmpty)
+  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType, QualifiedNameOwner(qn)
 
-  case Projection(rec: CTerm, name: Name)
+  case Projection(rec: CTerm, name: Name)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /**
    * Internal only. This is only created by reduction.
@@ -234,7 +287,7 @@ enum CTerm:
    *                     first term is at the bottom of the stack and the last term is the tip of
    *                     the stack.
    */
-  case Continuation(capturedStack: Seq[CTerm])
+  case Continuation(capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
 
   case Handler(
     eff: Eff,
@@ -261,11 +314,11 @@ enum CTerm:
      */
     handlers: Map[Name, /* binding offset = paramTys + 1 (for resume) */ CTerm],
     input: CTerm,
-  )
+  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  case AllocOp(heap: VTerm, ty: VTerm)
-  case SetOp(cell: VTerm, value: VTerm)
-  case GetOp(cell: VTerm)
+  case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case SetOp(cell: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case HeapHandler(
     otherEffects: VTerm,
 
@@ -283,14 +336,19 @@ enum CTerm:
      * flexibility is needed, one should use `GlobalHeapKey` instead.
      */
     /* binding offset + 1 */ input: CTerm,
-  )
+  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-// TODO: support array operations on heap
-// TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
-//  support quotient type and set semantic is very common in software engineering.
+  // TODO: support array operations on heap
+  // TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
+  //  support quotient type and set semantic is very common in software engineering.
 
-  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R = visitor.visitCTerm(this)
-  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): CTerm = transformer.transformCTerm(this)
+  def visitWith[C, R](visitor: Visitor[C, R])
+    (using ctx: C)
+    (using Σ: Signature): R = visitor.visitCTerm(this)
+
+  def transformWith[C](transformer: Transformer[C])
+    (using ctx: C)
+    (using Σ: Signature): CTerm = transformer.transformCTerm(this)
 
 def getFreeVars(tele: Telescope)
   (using bar: Nat)
@@ -303,7 +361,7 @@ private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /
   import VTerm.*
   import CTerm.*
 
-  override def offsetContext(bar: Nat, bindingNames: =>List[Name]): Nat = bar + bindingNames.size
+  override def offsetContext(bar: Nat, bindingNames: => List[Name]): Nat = bar + bindingNames.size
 
   override def combine(freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
     (using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =

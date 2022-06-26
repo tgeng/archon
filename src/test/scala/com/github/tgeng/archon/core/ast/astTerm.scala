@@ -6,22 +6,18 @@ import com.github.tgeng.archon.core.ir.*
 
 type AstEff = (Name, List[AstTerm])
 
-enum AstULevel:
-  case AstUSimpleLevel(level: AstTerm)
-  case AstUωLevel(layer: Nat)
-
-enum AstTerm:
-  case AstDef(qn: QualifiedName)
-  case AstIdentifier(name: Name)
-  case AstCollapse(c: AstTerm)
-  case AstU(cty: AstTerm)
-  case AstThunk(c: AstTerm)
-  case AstLevelLiteral(level: Nat)
-  case AstForce(v: AstTerm)
-  case AstF(vTy: AstTerm, effects: AstTerm)
-  case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
-  case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])
-  case AstBlock(statements: List[Statement])
+enum AstTerm(val sourceInfo: SourceInfo):
+  case AstDef(qn: QualifiedName)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstIdentifier(name: Name)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstCollapse(c: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstU(cty: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstThunk(c: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstLevelLiteral(level: Nat)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstForce(v: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstF(vTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstBlock(statements: List[Statement])(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
 
 enum Statement:
   case STerm(term: AstTerm)

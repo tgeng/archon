@@ -69,6 +69,8 @@ private final class StackMachine(
     (using Σ: Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
+    given SourceInfo = pc.sourceInfo
+
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -304,10 +306,10 @@ private final class StackMachine(
         var elims = rest
         elim match
           case (CPattern(PVar(idx)), ETerm(v)) => mapping(idx) = v
-          case (CPattern(PRefl), ETerm(Refl)) |
-               (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType)) |
-               (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType)) |
-               (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType)) |
+          case (CPattern(PRefl()), ETerm(Refl())) |
+               (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType())) |
+               (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType())) |
+               (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType())) |
                (CPattern(PForced(_)), ETerm(_)) =>
           case (CPattern(PDataType(TypeQn, p :: Nil)), ETerm(Type(l, upperBound))) =>
             l match
@@ -341,21 +343,23 @@ private final class StackMachine(
           case (CProjection(n1), EProj(n2)) if n1 == n2 =>
           case (CProjection(_), ETerm(_)) |
                (_, EProj(_)) |
-               (CPattern(PAbsurd), _) => throw IllegalArgumentException("type error")
+               (CPattern(PAbsurd()), _) => throw IllegalArgumentException("type error")
           case (_, ETerm(Var(_))) => status = MatchingStatus.Stuck
           // Note that we make mismatch dominating stuck because we do not eval by case tree during
           // type checking.
           case _ => return MatchingStatus.Mismatch
         matchPattern(elims, mapping, status)
 
-  private def substHole(ctx: CTerm, c: CTerm): CTerm = ctx match
-    case l@Let(t, ctx) => Let(c, ctx)(l.boundName)
-    case Application(fun, arg) => Application(c, arg)
-    case Projection(rec, name) => Projection(c, name)
-    case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
-      Handler(eff, otherEffects, outputType, transform, handlers, c)
-    case HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)
-    case _ => throw IllegalArgumentException("unexpected context")
+  private def substHole(ctx: CTerm, c: CTerm): CTerm =
+    given SourceInfo = ctx.sourceInfo
+    ctx match
+      case l@Let(t, ctx) => Let(c, ctx)(l.boundName)
+      case Application(fun, arg) => Application(c, arg)
+      case Projection(rec, name) => Projection(c, name)
+      case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+        Handler(eff, otherEffects, outputType, transform, handlers, c)
+      case HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)
+      case _ => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
@@ -371,7 +375,7 @@ extension (v: VTerm)
       for reduced <- Reducible.reduce(cTm)
           r <- reduced match
             case Return(v) => Right(v)
-            case stuckC => Right(Collapse(stuckC))
+            case stuckC => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case _ => Right(v)
 

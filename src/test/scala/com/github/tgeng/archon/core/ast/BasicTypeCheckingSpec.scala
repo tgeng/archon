@@ -169,7 +169,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
     t"""
        hdl exception{L0 Nat} <> Nat {
-         throw n resume -> n
+         throw n resume -> n;
        };
        throw L0 Nat (S Z);
        Z

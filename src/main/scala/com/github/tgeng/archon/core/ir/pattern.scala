@@ -3,9 +3,11 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
-enum Pattern:
-  case PVar(idx: Nat)
-  case PRefl
+import SourceInfo.*
+
+enum Pattern(val sourceInfo: SourceInfo):
+  case PVar(idx: Nat)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+  case PRefl()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
   /**
    * Note that matching computation type is prohibited. This should simplify compilation. In addition, it's unclear how
@@ -13,44 +15,51 @@ enum Pattern:
    * at type level.
    */
   case PDataType(qn: QualifiedName, args: List[Pattern])
+    (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PForcedDataType(qn: QualifiedName, args: List[Pattern])
+    (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   // Note that we do not allow matching specific values of level, effect, and heap because there are no corresponding
   // eliminators. All these can only be matched with a pattern variable.
-  case PConstructor(name: Name, args: List[Pattern])
+  case PConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo) extends Pattern(
+    sourceInfo
+  )
   case PForcedConstructor(name: Name, args: List[Pattern])
-  case PForced(term: VTerm)
-  case PAbsurd
+    (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+  case PForced(term: VTerm)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+  case PAbsurd()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
 import Pattern.*
 import VTerm.*
 
 extension (p: Pattern)
-  def toTerm: Option[VTerm] = p match
-    case PVar(idx) => Some(Var(idx))
-    case PRefl => Some(Refl)
-    case PDataType(qn, args) =>
-      for args <- transpose(args.map(_.toTerm))
-        yield DataType(qn, args)
-    case PForcedDataType(qn, args) =>
-      for args <- transpose(args.map(_.toTerm))
-        yield DataType(qn, args)
-    case PConstructor(name, args) =>
-      for args <- transpose(args.map(_.toTerm))
-        yield Con(name, args)
-    case PForcedConstructor(name, args) =>
-      for args <- transpose(args.map(_.toTerm))
-        yield Con(name, args)
-    case PForced(t) => Some(t)
-    case PAbsurd => None
+  def toTerm: Option[VTerm] =
+    given SourceInfo = p.sourceInfo
+    p match
+      case PVar(idx) => Some(Var(idx))
+      case PRefl() => Some(Refl())
+      case PDataType(qn, args) =>
+        for args <- transpose(args.map(_.toTerm))
+          yield DataType(qn, args)
+      case PForcedDataType(qn, args) =>
+        for args <- transpose(args.map(_.toTerm))
+          yield DataType(qn, args)
+      case PConstructor(name, args) =>
+        for args <- transpose(args.map(_.toTerm))
+          yield Con(name, args)
+      case PForcedConstructor(name, args) =>
+        for args <- transpose(args.map(_.toTerm))
+          yield Con(name, args)
+      case PForced(t) => Some(t)
+      case PAbsurd() => None
 
-enum CoPattern:
-  case CPattern(pattern: Pattern)
-  case CProjection(name: Name)
+enum CoPattern(val sourceInfo: SourceInfo):
+  case CPattern(pattern: Pattern) extends CoPattern(pattern.sourceInfo)
+  case CProjection(name: Name)(using sourceInfo: SourceInfo) extends CoPattern(sourceInfo)
 
 object CoPattern:
   def pVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] = firstIndex
     .to(lastIndex, -1)
-    .map(i => CPattern(Pattern.PVar(i))).toList
+    .map(i => CPattern(Pattern.PVar(i)(using SiEmpty))).toList
 
 enum Elimination[T]:
   case ETerm(v: T)

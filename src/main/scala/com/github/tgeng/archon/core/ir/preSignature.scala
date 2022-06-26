@@ -4,6 +4,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
 import Reducible.reduce
+import SourceInfo.*
 
 type PreTTelescope = List[(Binding[CTerm], Variance)]
 type PreTelescope = List[Binding[CTerm]]
@@ -238,6 +239,8 @@ def elaborateBody(preRecord: PreRecord)
   ctx.trace(s"elaborating record body ${preRecord.qn}") {
     val record = Σ.getRecord(preRecord.qn)
 
+    given SourceInfo = SiEmpty
+
     given Context = record.tParamTys.map(_._1).toIndexedSeq :+
       Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))))(n"self")
 
@@ -254,6 +257,8 @@ def elaborateBody(preRecord: PreRecord)
 def elaborateSignature(definition: PreDefinition)
   (using Signature)
   (using ctx: TypingContext): Either[IrError, Definition] =
+  given SourceInfo = SiEmpty
+
   ctx.trace(s"elaborating def signature ${definition.qn}") {
     for
       paramTys <- elaborateTelescope(definition.paramTys)
@@ -273,6 +278,7 @@ def elaborateBody(preDefinition: PreDefinition)
       paramTys <- elaborateTelescope(preDefinition.paramTys)
       r <- {
         given Γ: Context = paramTys.toIndexedSeq
+
         transpose(
           preDefinition.clauses.zipWithIndex.flatMap { (clause, index) =>
             clause.rhs match
