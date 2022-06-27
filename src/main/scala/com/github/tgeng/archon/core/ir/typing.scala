@@ -633,12 +633,12 @@ def checkType(tm: CTerm, ty: CTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, Unit] = debugCheck(
-  tm, ty, tm match
-    case _ =>
-      for tmTy <- inferType(tm)
-          ty <- reduceCType(ty)
-          r <- checkSubsumption(tmTy, ty, None)
-      yield r
+  tm,
+  ty,
+  for tmTy <- inferType(tm)
+      ty <- reduceCType(ty)
+      r <- checkSubsumption(tmTy, ty, None)
+  yield r
 )
 
 enum CheckSubsumptionMode:
