@@ -183,6 +183,10 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
      effect dice (numFaces: Nat);
        roll: Fin numFaces;
+
+     def finToNat: bound: Nat -> Fin bound -> Nat;
+       {n: Nat} S{n} FZ{n} = Z: Nat;
+       {n: Nat, f: Fin n} S{n} FS{n f} = S (finToNat n f): Nat;
    """
 
   "dice" in scope {
@@ -190,14 +194,15 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        let n1 = S Z;
        let n2 = S n1;
        let n3 = S n2;
-       hdl dice{n3} <> (Vector L0 (Fin n3) n3) {
-         rtn x -> Cons L0 (Fin n3) Z x (Nil L0 (Fin n3));
-         roll resume -> concat L0 (Fin n3) n2 n1 (concat L0 (Fin n3) n1 n1 (resume (FZ n2)) (resume (FS n2 (FZ n1)))) (resume (FS n2 (FS n1 (FZ Z))));
+       hdl dice{n3} <> Nat {
+         roll resume -> plus
+                          (plus
+                            ((frc resume) (FZ n2))
+                            ((frc resume) (FS n2 (FZ n1)))
+                          )
+                          ((frc resume) (FS n2 (FS n1 (FZ Z))));
        };
-       roll n3
-     """ hasType t"""
-         let n3 = S (S (S Z));
-         Vector L0 (Fin n3) n3
-         """
+       finToNat n3 (roll n3)
+     """ ≡ t"S (S (S (S (S (S Z)))))"
   }
 }

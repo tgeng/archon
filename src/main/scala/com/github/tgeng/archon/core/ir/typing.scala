@@ -418,7 +418,7 @@ def inferType(tm: CTerm)
       case Return(v) =>
         for vTy <- inferType(v)
           yield F(vTy, Total)
-      case Let(t, ctx) =>
+      case Let(t, body) =>
         for tTy <- inferType(t)
             r <- tTy match
               case F(ty, effects) =>
@@ -429,13 +429,13 @@ def inferType(tm: CTerm)
                       // the result of a computation in the inferred type.
                         for t <- reduce(t)
                             r <- t match
-                              case Return(v) => inferType(ctx.substLowers(v))
-                              case c => inferType(ctx.substLowers(Collapse(c)))
+                              case Return(v) => inferType(body.substLowers(v))
+                              case c => inferType(body.substLowers(Collapse(c)))
                         yield r
                       // Otherwise, just add the binding to the context and continue type checking.
                       else
-                        for ctxTy <- inferType(ctx)(using Γ :+ Binding(ty)(gn"LetVar"))
-                            // Report an error if the type of `ctx` needs to reference the effectful
+                        for ctxTy <- inferType(body)(using Γ :+ Binding(ty)(gn"LetVar"))
+                            // Report an error if the type of `body` needs to reference the effectful
                             // computation. User should use a dependent sum type to wrap such
                             // references manually to avoid the leak.
                             _ <- checkVar0Leak(
@@ -556,7 +556,7 @@ def inferType(tm: CTerm)
                                         U(
                                           FunctionType(
                                             Binding(opResultTy)(gn"output"),
-                                            F(opResultTy, otherEffects),
+                                            F(outputType.weaken(opParamTys.size + 1, 0), otherEffects),
                                             otherEffects
                                           )
                                         )

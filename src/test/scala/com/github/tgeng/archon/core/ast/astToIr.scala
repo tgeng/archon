@@ -242,8 +242,8 @@ def astToIr(ast: AstTerm)
           r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](
             gn"arg",
             elims
-          ) {
-            _.foldLeft(head) { (c, e) =>
+          ) { (terms, offset) =>
+            terms.foldLeft(head.weaken(offset, 0)) { (c, e) =>
               e match
                 case ETerm(v) => Application(c, v)(using v.sourceInfo)
                 case EProj(n) => Projection(c, n)(using e.sourceInfo)
@@ -359,12 +359,12 @@ private def chainAst[T[_] : EitherFunctor](ts: T[(Name, AstTerm)])
   yield r
 
 private def chainAstWithDefaultName[T[_] : EitherFunctor](defaultName: Name, ts: T[AstTerm])
-  (block: TestSignature ?=> T[VTerm] => CTerm)
+  (block: TestSignature ?=> (T[VTerm], Nat) => CTerm)
   (using NameContext)
   (using TestSignature): Either[AstError, CTerm] =
   val f = summon[EitherFunctor[T]]
   for ts <- f.map(ts) { t => astToIr(t).map((defaultName, _)) }
-      r <- chain(ts) { (t, _) => block(t) }
+      r <- chain(ts) { (t, offset) => block(t, offset) }
   yield r
 
 private def chain(name: Name, t: CTerm)
