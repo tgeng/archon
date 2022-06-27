@@ -203,6 +203,6 @@ class BasicTypeCheckingSpec extends SignatureSpec {
                           ((frc resume) (FS n2 (FS n1 (FZ Z))));
        };
        finToNat n3 (roll n3)
-     """ ≡ t"S (S (S (S (S (S Z)))))"
+     """ ≡ t"S (S (S Z))"
   }
 }

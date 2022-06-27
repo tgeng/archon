@@ -205,11 +205,13 @@ private final class StackMachine(
             val currentStackHeight = stack.length
             stack.pushAll(capturedStack)
             refreshHeapKeyIndex(currentStackHeight)
-            run(Force(arg))
+            run(Return(arg))
           case _ => throw IllegalArgumentException("type error")
       case Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, input) =>
         if reduceDown then
-          run(transform.substLowers(Thunk(input)))
+          input match
+            case Return(v) => run(transform.substLowers(v))
+            case _ => throw IllegalArgumentException("type error")
         else
           effArgs.normalized match
             case Left(e) => Left(e)
