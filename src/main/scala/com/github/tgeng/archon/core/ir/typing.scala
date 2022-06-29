@@ -21,8 +21,10 @@ private val ANSI_GREEN = "\u001b[32m"
 private val ANSI_YELLOW = "\u001b[33m"
 private val ANSI_BLUE = "\u001b[34m"
 private val ANSI_CYAN = "\u001b[36m"
+private val ANSI_WHITE = "\u001b[37m"
 
 def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
+def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   private def indent = "│ " * (traceLevel)
@@ -43,7 +45,7 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
         }.mkString("{", ", ", "}") + ANSI_RESET
       )
       val stacktrace = Thread.currentThread().!!.getStackTrace.!!
-      println(indent + "┌─ " + title + " " + ANSI_GRAY + stacktrace(2).toString + ANSI_RESET)
+      println(indent + "┌─ " + title + " " + ANSI_WHITE + "@" + stacktrace(2).toString + ANSI_RESET)
       if description.nonEmpty then
         println(indent + "│  " + description.replaceAll("\n", "\n" + indent + "│  "))
       traceLevel += 1
@@ -919,7 +921,7 @@ private def simplifyLet(t: CTerm)
 : Either[IrError, CTerm] = ctx.trace[IrError, CTerm](
   s"simplify",
   s"${yellow(t.sourceInfo)} $t",
-  successMsg = _.toString
+  successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(tm)}"
 ) {
   t match
     case Let(t, ctx) =>
@@ -1153,9 +1155,9 @@ private inline def debugCheck[L, R](
   (using Context)(using ctx: TypingContext): Either[L, R] =
   ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} $ty")(result)
 
-private inline def debugInfer[L, R](tm: SourceInfoOwner, result: => Either[L, R])
+private inline def debugInfer[L, R <: SourceInfoOwner](tm: SourceInfoOwner, result: => Either[L, R])
   (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace[L, R](s"inferring type", s"${yellow(tm.sourceInfo)} $tm", _.toString)(result)
+  ctx.trace[L, R](s"inferring type", s"${yellow(tm.sourceInfo)} $tm", ty => s"${yellow(ty.sourceInfo)} ${green(ty)}")(result)
 
 private inline def debugSubsumption[L, R](
   rawSub: SourceInfoOwner,

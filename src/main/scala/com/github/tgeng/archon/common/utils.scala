@@ -85,7 +85,7 @@ extension (s: String)
   def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
 
 extension[T] (inline t: T)
-  inline def debug: T =
+  inline def show: T =
     println(stringify(t) + " = " + t)
     t
 

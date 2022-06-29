@@ -407,4 +407,4 @@ object Reducible:
     (using Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
-    ctx.trace[IrError, CTerm](s"reducing", s"${yellow(t.sourceInfo)} $t", _.toString)(summon[Reducible[CTerm]].reduce(t))
+    ctx.trace[IrError, CTerm](s"reducing", s"${yellow(t.sourceInfo)} $t", tm => s"${yellow(tm.sourceInfo)} ${green(tm)}")(summon[Reducible[CTerm]].reduce(t))
