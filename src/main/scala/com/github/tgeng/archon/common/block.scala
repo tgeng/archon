@@ -1,5 +1,7 @@
 package com.github.tgeng.archon.common
 
+import collection.mutable
+
 trait BlockConverter[T] {
   final def pprint(t: T, widthLimit: Int = 80): String = {
     val sb = StringBuilder()
@@ -7,7 +9,7 @@ trait BlockConverter[T] {
     sb.toString
   }
 
-  def toBlock(t: T) : Block
+  def toBlock(t: T): Block
 }
 
 enum WrapPolicy {
@@ -32,23 +34,40 @@ import IndentPolicy.*
 import WrapPolicy.*
 import DelimitPolicy.*
 
-object Block {
-  def apply(
-    wrapPolicy: WrapPolicy = Wrap,
-    indentPolicy: IndentPolicy = FixedIncrement(0),
-    delimitPolicy: DelimitPolicy = Concat)
-    (blocks: (Block | String)*) = new Block(blocks, wrapPolicy, indentPolicy, delimitPolicy)
-}
+object Block:
+  def apply(objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String)*): Block =
+    var wrapPolicy: WrapPolicy = Wrap
+    var indentPolicy: IndentPolicy = FixedIncrement(0)
+    var delimitPolicy: DelimitPolicy = Concat
+    val blocks = mutable.ArrayBuffer[Block | String]()
+    objects.foreach {
+      case p: WrapPolicy => wrapPolicy = p
+      case p: IndentPolicy => indentPolicy = p
+      case p: DelimitPolicy => delimitPolicy = p
+      case b: (Block | String) => blocks.append(b)
+    }
+    new Block(blocks.toSeq, wrapPolicy, indentPolicy, delimitPolicy)
 
 case class Block(
-    children: Seq[Block | String],
-    wrapPolicy: WrapPolicy,
-    indentPolicy: IndentPolicy,
-    delimitPolicy: DelimitPolicy,
-  ) {
+  children: Seq[Block | String],
+  wrapPolicy: WrapPolicy,
+  indentPolicy: IndentPolicy,
+  delimitPolicy: DelimitPolicy,
+) {
 
-  def ++ (more: Iterable[Block | String]) = Block(children ++ more, wrapPolicy, indentPolicy, delimitPolicy)
-  def + (oneMore: Block | String) = Block(children :+ oneMore, wrapPolicy, indentPolicy, delimitPolicy)
+  def ++(more: Iterable[Block | String]) = Block(
+    children ++ more,
+    wrapPolicy,
+    indentPolicy,
+    delimitPolicy
+  )
+
+  def +(oneMore: Block | String) = Block(
+    children :+ oneMore,
+    wrapPolicy,
+    indentPolicy,
+    delimitPolicy
+  )
 
   override def toString = {
     val sb = StringBuilder()
@@ -56,11 +75,11 @@ case class Block(
     sb.toString
   }
 
-  def print(sb: StringBuilder, widthLimit: Int) : Unit = {
+  def print(sb: StringBuilder, widthLimit: Int): Unit = {
     print(using PrintContext.from(sb, widthLimit))
   }
 
-  def print(using ctx: PrintContext) : Unit = {
+  def print(using ctx: PrintContext): Unit = {
     ctx.withIndent(indentPolicy) {
       val canFit = !width(ctx.widthLeft).isEmpty
       var first = true
@@ -116,14 +135,21 @@ case class Block(
       case s: String => ctx.append(s)
     }
 
-    private def delimitInParagraph (using ctx: PrintContext) : Unit = if (!Set(',', '.', '!', '?', ';').contains(b.peek)) ctx.delimitWithSpace
+    private def delimitInParagraph(using ctx: PrintContext): Unit = if (!Set(
+      ',',
+      '.',
+      '!',
+      '?',
+      ';'
+    ).contains(b.peek)) ctx.delimitWithSpace
 
-    private def peek : Char = b match {
+    private def peek: Char = b match {
       case b: Block => b.children.headOption.map(_.peek).getOrElse(' ')
       case s: String => s.headOption.getOrElse(' ')
     }
 
-    private def width(widthLeft: Int, onlyMeasureFirstLine: Boolean = false)(using ctx: PrintContext) : Option[Int] = b match {
+    private def width(widthLeft: Int, onlyMeasureFirstLine: Boolean = false)
+      (using ctx: PrintContext): Option[Int] = b match {
       case s: String => if (s.size <= widthLeft) Some(s.size) else None
       case b@Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
         if (onlyMeasureFirstLine) {
@@ -199,7 +225,7 @@ class PrintContext(
 
   def delimitWithNewline = {
     sb.append('\n')
-    for(_ <- 0 until indent) {
+    for (_ <- 0 until indent) {
       sb.append(' ')
     }
     width = indent
@@ -219,12 +245,12 @@ class PrintContext(
 }
 
 object PrintContext {
-  def from(sb: StringBuilder, widthLimit : Int = 80) = {
+  def from(sb: StringBuilder, widthLimit: Int = 80) = {
     val lineStart = sb.lastIndexOf('\n') + 1
     val width = sb.length - lineStart
     var indent = 0
     var i = lineStart
-    while(i < sb.length && sb.charAt(i) == ' ') {
+    while (i < sb.length && sb.charAt(i) == ' ') {
       indent += 1
       i += 1
     }

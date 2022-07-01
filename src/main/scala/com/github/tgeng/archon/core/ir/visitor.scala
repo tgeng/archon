@@ -10,6 +10,8 @@ import CoPattern.*
 
 trait Visitor[C, R]:
 
+  def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
+
   def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
     (using ctx: C)
     (using Σ: Signature): R =
@@ -34,8 +36,6 @@ trait Visitor[C, R]:
 
   def visitCTerms(tms: Seq[CTerm])(using ctx: C)(using Σ: Signature): R =
     combine(tms.map(visitCTerm): _*)
-
-  def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
   def offsetContext(ctx: C, bindingNames: => List[Name]): C = ctx
 
@@ -154,14 +154,18 @@ trait Visitor[C, R]:
 
   def visitRefl(refl: Refl)(using ctx: C)(using Σ: Signature): R = combine()
 
-  def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.EffectsQn)
+  def visitEffectsType(effectsType: EffectsType)
+    (using ctx: C)
+    (using Σ: Signature): R = visitQualifiedName(Builtins.EffectsQn)
 
   def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
     combine(
       (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVar)).toSeq: _*
     )
 
-  def visitLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.LevelQn)
+  def visitLevelType(levelType: LevelType)
+    (using ctx: C)
+    (using Σ: Signature): R = visitQualifiedName(Builtins.LevelQn)
 
   def visitLevel(level: Level)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -170,7 +174,9 @@ trait Visitor[C, R]:
       }.toSeq: _*
     )
 
-  def visitHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(Builtins.HeapQn)
+  def visitHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): R = visitQualifiedName(
+    Builtins.HeapQn
+  )
 
   def visitHeap(heap: Heap)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -357,7 +363,9 @@ trait Transformer[C]:
       transformVTerm(ty.upperBound)
     )(using ty.sourceInfo)
 
-  def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(transformULevel(top.ul))(using top.sourceInfo)
+  def transformTop(top: Top)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = Top(transformULevel(top.ul))(using top.sourceInfo)
 
   def transformPure(pure: Pure)
     (using ctx: C)
@@ -369,13 +377,18 @@ trait Transformer[C]:
     (using ctx: C)
     (using Σ: Signature): VTerm = Collapse(transformCTerm(collapse.cTm))(using collapse.sourceInfo)
 
-  def transformU(u: U)(using ctx: C)(using Σ: Signature): VTerm = U(transformCTerm(u.cTy))(using u.sourceInfo)
+  def transformU(u: U)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = U(transformCTerm(u.cTy))(using u.sourceInfo)
 
   def transformThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature): VTerm =
     Thunk(transformCTerm(thunk.c))(using thunk.sourceInfo)
 
   def transformDataType(dataType: DataType)(using ctx: C)(using Σ: Signature): VTerm =
-    DataType(transformQualifiedName(dataType.qn), dataType.args.map(transformVTerm))(using dataType.sourceInfo)
+    DataType(
+      transformQualifiedName(dataType.qn),
+      dataType.args.map(transformVTerm)
+    )(using dataType.sourceInfo)
 
   def transformCon(con: Con)(using ctx: C)(using Σ: Signature): VTerm =
     Con(transformName(con.name), con.args.map(transformVTerm))(using con.sourceInfo)
@@ -389,7 +402,9 @@ trait Transformer[C]:
 
   def transformRefl(refl: Refl)(using ctx: C)(using Σ: Signature): VTerm = refl
 
-  def transformEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): VTerm = effectsType
+  def transformEffectsType(effectsType: EffectsType)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = effectsType
 
   def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm
 
