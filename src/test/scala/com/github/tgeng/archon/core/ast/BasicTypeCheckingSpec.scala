@@ -46,7 +46,9 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"Cell L0 h Effects" hasType t"Type L0"
     t"UCell L0 h Effects" hasType t"Type L0"
 
+    debug {
     t"Equality L0 Effects <> <>" hasType t"Type L0"
+    }
     t"Equality L0 Heap h global" hasType t"Type L0"
     t"Refl L0 Effects <>" hasType t"Equality L0 Effects <> <>"
     t"Refl L0 Heap h" doesNotHaveType t"Equality L0 Effects h global"

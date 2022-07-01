@@ -30,7 +30,8 @@ enum QualifiedName extends Comparable[QualifiedName] :
         case r => r
 
   override def toString: String = this match
-    case Root => ""
+    case Root => "<root>"
+    case Node(Root, name) => s"$name"
     case Node(parent, name) => s"$parent.$name"
 
   infix def /(name: Name): QualifiedName = Node(this, name)

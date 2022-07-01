@@ -156,10 +156,9 @@ trait Signature:
   import CTerm.*
   import CoPattern.*
   import QualifiedName.*
+  given SourceInfo = SiEmpty
 
   def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    given SourceInfo = SiDerived(qn)
-
     for
       data <- getDataOption(qn)
     yield Definition(qn)(
@@ -172,8 +171,6 @@ trait Signature:
     )
 
   def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    given SourceInfo = SiDerived(qn)
-
     for
       data <- getDataOption(qn)
     yield {
@@ -189,8 +186,6 @@ trait Signature:
     }
 
   def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    given SourceInfo = SiDerived(qn)
-
     qn match
       case Node(dataQn, conName) =>
         for
@@ -216,8 +211,6 @@ trait Signature:
 
 
   def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    given SourceInfo = SiDerived(qn)
-
     qn match
       case Node(dataQn, conName) =>
         for
@@ -238,8 +231,6 @@ trait Signature:
       case _ => None
 
   def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    given SourceInfo = SiDerived(qn)
-
     for
       record <- getRecordOption(qn)
     yield Definition(qn)(
@@ -252,8 +243,6 @@ trait Signature:
     )
 
   def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    given SourceInfo = SiDerived(qn)
-
     for
       record <- getRecordOption(qn)
     yield {
@@ -269,8 +258,6 @@ trait Signature:
     }
 
   def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    given SourceInfo = SiDerived(qn)
-
     qn match
       case Node(recordQn, fieldName) =>
         for
@@ -290,8 +277,6 @@ trait Signature:
       case _ => None
 
   def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    given SourceInfo = SiDerived(qn)
-
     qn match
       case Node(recordQn, fieldName) =>
         for
@@ -315,8 +300,6 @@ trait Signature:
       case _ => None
 
   def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    given SourceInfo = SiDerived(qn)
-
     for
       effect <- getEffectOption(qn)
     yield Definition(qn)(
@@ -326,8 +309,6 @@ trait Signature:
     )
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    given SourceInfo = SiDerived(qn)
-
     for
       effect <- getEffectOption(qn)
     yield {
@@ -343,8 +324,6 @@ trait Signature:
     }
 
   def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    given SourceInfo = SiDerived(qn)
-
     qn match
       case Node(effectQn, opName) =>
         for
@@ -366,8 +345,6 @@ trait Signature:
       case _ => None
 
   def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    given SourceInfo = SiDerived(qn)
-
     qn match
       case Node(effectQn, opName) =>
         for

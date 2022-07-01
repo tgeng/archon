@@ -265,8 +265,6 @@ def inferType(tm: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, VTerm] =
-  given SourceInfo = SiTypeOf(tm.sourceInfo)
-
   debugInfer(
     tm, tm match
       case Type(ul, upperBound) =>
@@ -381,8 +379,6 @@ def inferType(tm: CTerm)
   (using Σ: Signature)
   (using ctx: TypingContext)
 : Either[IrError, CTerm] =
-  given SourceInfo = SiTypeOf(tm.sourceInfo)
-
   debugInfer(
     tm, tm match
       case Hole => throw IllegalArgumentException("hole should only be present during reduction")
@@ -558,7 +554,10 @@ def inferType(tm: CTerm)
                                         U(
                                           FunctionType(
                                             Binding(opResultTy)(gn"output"),
-                                            F(outputType.weaken(opParamTys.size + 1, 0), otherEffects),
+                                            F(
+                                              outputType.weaken(opParamTys.size + 1, 0),
+                                              otherEffects
+                                            ),
                                             otherEffects
                                           )
                                         )
@@ -1104,7 +1103,7 @@ def reduceCType(cTy: CTerm)
 
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
-                case Return(vty) => Right(F(vty))
+                case Return(vty) => Right(F(vty)(using cTy.sourceInfo))
                 case Let(t, ctx) => reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
                 case c => throw IllegalStateException(s"type checking has bugs: $c should be of form `Return(...)`")
 
@@ -1148,21 +1147,28 @@ extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
 private inline def debugCheck[L, R](
-  tm: SourceInfoOwner,
-  ty: SourceInfoOwner,
+  tm: SourceInfoOwner[?],
+  ty: SourceInfoOwner[?],
   result: => Either[L, R]
 )
   (using Context)(using ctx: TypingContext): Either[L, R] =
   ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} $ty")(result)
 
-private inline def debugInfer[L, R <: SourceInfoOwner](tm: SourceInfoOwner, result: => Either[L, R])
+private inline def debugInfer[L, R <: SourceInfoOwner[?]](
+  tm: SourceInfoOwner[?],
+  result: => Either[L, R]
+)
   (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace[L, R](s"inferring type", s"${yellow(tm.sourceInfo)} $tm", ty => s"${yellow(ty.sourceInfo)} ${green(ty)}")(result)
+  ctx.trace[L, R](
+    s"inferring type",
+    s"${yellow(tm.sourceInfo)} $tm",
+    ty => s"${yellow(ty.sourceInfo)} ${green(ty)}"
+  )(result.map(_.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R]))
 
 private inline def debugSubsumption[L, R](
-  rawSub: SourceInfoOwner,
-  rawSup: SourceInfoOwner,
-  rawTy: Option[SourceInfoOwner],
+  rawSub: SourceInfoOwner[?],
+  rawSup: SourceInfoOwner[?],
+  rawTy: Option[SourceInfoOwner[?]],
   result: => Either[L, R]
 )
   (using mode: CheckSubsumptionMode)
@@ -1175,6 +1181,6 @@ private inline def debugSubsumption[L, R](
   ctx.trace(
     s"deciding",
     s"${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} $rawSup\n:\n${
-      rawTy.map(_.sourceInfo).getOrElse(SiEmpty)
+      yellow(rawTy.map(_.sourceInfo).getOrElse(SiEmpty))
     } $rawTy"
   )(result)

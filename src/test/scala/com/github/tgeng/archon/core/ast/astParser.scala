@@ -375,17 +375,6 @@ object AstParser:
       endIndex <- P.info { (_, endIndex) => endIndex }
     yield f(using SiText(input.mkString, Range(startIndex, endIndex)))(t)
 
-  private def siMerge(sis: SourceInfo*): SourceInfo = sis.fold(SiEmpty) {
-    (_, _) match
-      case (SiEmpty, si2) => si2
-      case (si1, SiEmpty) => si1
-      case (SiText(input1, range1), SiText(input2, range2)) if input1 == input2 => SiText(
-        input1,
-        range1 + range2
-      )
-      case _ => throw IllegalArgumentException()
-  }
-
 extension (ctx: StringContext)
   def t(args: String*): AstTerm = (P.whitespaces >> AstParser.term << P.whitespaces).parseOrThrow(
     ctx.s(args: _*)

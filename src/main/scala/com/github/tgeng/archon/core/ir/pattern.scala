@@ -5,7 +5,7 @@ import com.github.tgeng.archon.core.common.*
 
 import SourceInfo.*
 
-enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner :
+enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern] :
   case PVar(idx: Nat)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PRefl()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
@@ -27,6 +27,18 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner :
     (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PForced(term: VTerm)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PAbsurd()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): Pattern =
+    given SourceInfo = sourceInfo
+    this match
+      case PVar(idx) => PVar(idx)
+      case PRefl() => PRefl()
+      case PDataType(qn, args) => PDataType(qn, args)
+      case PForcedDataType(qn, args) => PForcedDataType(qn, args)
+      case PConstructor(name, args) => PConstructor(name, args)
+      case PForcedConstructor(name, args) => PForcedConstructor(name, args)
+      case PForced(term) => PForced(term)
+      case PAbsurd() => PAbsurd()
 
 import Pattern.*
 import VTerm.*
@@ -53,18 +65,30 @@ extension (p: Pattern)
       case PForced(t) => Some(t)
       case PAbsurd() => None
 
-enum CoPattern(val sourceInfo: SourceInfo) extends SourceInfoOwner :
+enum CoPattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[CoPattern] :
   case CPattern(pattern: Pattern) extends CoPattern(pattern.sourceInfo)
   case CProjection(name: Name)(using sourceInfo: SourceInfo) extends CoPattern(sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): CoPattern =
+    given SourceInfo = sourceInfo
+    this match
+      case CPattern(pattern) => CPattern(pattern)
+      case CProjection(name) => CProjection(name)
 
 object CoPattern:
   def pVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] = firstIndex
     .to(lastIndex, -1)
     .map(i => CPattern(Pattern.PVar(i)(using SiEmpty))).toList
 
-enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner :
+enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]] :
   case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
   case EProj(n: Name)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): Elimination[T] =
+    given SourceInfo = sourceInfo
+    this match
+      case ETerm(v) => ETerm(v)
+      case EProj(n) => EProj(n)
 
 import CoPattern.*
 import Elimination.*

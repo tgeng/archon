@@ -245,8 +245,8 @@ def astToIr(ast: AstTerm)
           ) { (terms, offset) =>
             terms.foldLeft(head.weaken(offset, 0)) { (c, e) =>
               e match
-                case ETerm(v) => Application(c, v)(using v.sourceInfo)
-                case EProj(n) => Projection(c, n)(using e.sourceInfo)
+                case ETerm(v) => Application(c, v)(using siMerge(c.sourceInfo, e.sourceInfo))
+                case EProj(n) => Projection(c, n)(using siMerge(c.sourceInfo, e.sourceInfo))
             }
           }
       yield r
@@ -384,7 +384,6 @@ private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
   (block: TestSignature ?=> (T[VTerm], /* number of non-trivial computations bound */ Int) => CTerm)
   (using NameContext)
   (using TestSignature): Either[AstError, CTerm] =
-  given SourceInfo = SiEmpty
 
   for r <- {
     // Step 1. Count the number of non-trivial computations present in the computation args.
@@ -405,11 +404,11 @@ private def chain[T[_] : EitherFunctor](ts: T[(Name, CTerm)])
       case (n, c) =>
         boundComputations.addOne((n, c.weaken(index, 0)))
         index += 1
-        Right(Var(nonTrivialComputations - index))
+        Right(Var(nonTrivialComputations - index)(using SiEmpty))
     }
     yield boundComputations.foldRight(block(vTs, nonTrivialComputations)) { (elem, ctx) =>
       elem match
-        case (n, t) => Let(t, ctx)(n)
+        case (n, t) => Let(t, ctx)(n)(using siMerge(elem._2.sourceInfo, ctx.sourceInfo))
     }
   }
   yield r

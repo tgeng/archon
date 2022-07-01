@@ -33,9 +33,17 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 extension (eff: Eff)
   def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
-enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner:
+enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel]:
   case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)
   case UωLevel(layer: Nat)(using sourceInfo: SourceInfo) extends ULevel(sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): ULevel =
+    given SourceInfo = sourceInfo
+
+    this match
+      case USimpleLevel(level) => USimpleLevel(level)
+      case UωLevel(layer) => UωLevel(layer)
+
 
 object ULevel:
   extension (u: ULevel)
@@ -69,7 +77,7 @@ enum CellStatus extends Comparable[CellStatus] :
     else if this == CellStatus.Initialized then -1
     else 1
 
-enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
+enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
   case Top(ul: ULevel)
@@ -138,6 +146,30 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
    * Internal only, created by [[CTerm.AllocOp]]
    */
   case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): VTerm =
+    given SourceInfo = sourceInfo
+
+    this match
+      case Type(ul, upperBound) => Type(ul, upperBound)
+      case Top(ul) => Top(ul)
+      case Pure(ul) => Pure(ul)
+      case Var(index) => Var(index)
+      case Collapse(cTm) => Collapse(cTm)
+      case U(cTy) => U(cTy)
+      case Thunk(c) => Thunk(c)
+      case DataType(qn, args) => DataType(qn, args)
+      case Con(name, args) => Con(name, args)
+      case EqualityType(ty, left, right) => EqualityType(ty, left, right)
+      case Refl() => Refl()
+      case EffectsType() => EffectsType()
+      case Effects(literal, unionOperands) => Effects(literal, unionOperands)
+      case LevelType() => LevelType()
+      case Level(literal, maxOperands) => Level(literal, maxOperands)
+      case HeapType() => HeapType()
+      case Heap(key) => Heap(key)
+      case CellType(heap, ty, status) => CellType(heap, ty, status)
+      case Cell(heapKey, index) => Cell(heapKey, index)
 
   def visitWith[C, R](visitor: Visitor[C, R])
     (using ctx: C)
@@ -219,7 +251,7 @@ object VTerm:
 sealed trait IType:
   def effects: VTerm
 
-enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
+enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   /**
    * Used in stack machine to represent the computations above the computation term containing
    * this. For example, `f a b` converted to the stack machine becomes
@@ -337,6 +369,31 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner:
      */
     /* binding offset + 1 */ input: CTerm,
   )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
+    given SourceInfo = sourceInfo
+
+    this match
+      case Hole => Hole
+      case CType(ul, upperbound, effects) => CType(ul, upperbound, effects)
+      case CTop(ul, effects) => CTop(ul, effects)
+      case Def(qn) => Def(qn)
+      case Force(v) => Force(v)
+      case F(vTy, effects) => F(vTy, effects)
+      case Return(v) => Return(v)
+      case l@Let(t, ctx) => Let(t, ctx)(l.boundName)
+      case FunctionType(binding, bodyTy, effects) => FunctionType(binding, bodyTy, effects)
+      case Application(fun, args) => Application(fun, args)
+      case RecordType(qn, args, effects) => RecordType(qn, args, effects)
+      case Projection(rec, name) => Projection(rec, name)
+      case OperatorCall(eff, name, args) => OperatorCall(eff, name, args)
+      case c: Continuation => c
+      case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+        Handler(eff, otherEffects, outputType, transform, handlers, input)
+      case AllocOp(heap, ty) => AllocOp(heap, ty)
+      case SetOp(cell, value) => SetOp(cell, value)
+      case GetOp(cell) => GetOp(cell)
+      case HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(otherEffects, key, heapContent, input)
 
   // TODO: support array operations on heap
   // TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not

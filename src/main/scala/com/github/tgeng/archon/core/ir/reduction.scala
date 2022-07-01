@@ -69,8 +69,6 @@ private final class StackMachine(
     (using Σ: Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
-    given SourceInfo = pc.sourceInfo
-
     pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -399,7 +397,7 @@ given Reducible[CTerm] with
   : Either[IrError, CTerm] = StackMachine(
     mutable.ArrayBuffer(),
     signature
-  ).run(t)
+  ).run(t).map(_.withSourceInfo(t.sourceInfo))
 
 object Reducible:
   def reduce(t: CTerm)
