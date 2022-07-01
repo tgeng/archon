@@ -1,7 +1,7 @@
-package io.github.tgeng.archon.common.ir
+package com.github.tgeng.archon.common.ir
 
-import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.core.ir.*
+import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core.ir.*
 import ULevel.*
 import VTerm.*
 import CTerm.*

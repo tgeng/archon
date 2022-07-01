@@ -25,7 +25,7 @@ val GlobalHeapKey = new HeapKey :
 
 type Eff = (QualifiedName, Arguments)
 
-import Builtins._
+import Builtins.*
 
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName

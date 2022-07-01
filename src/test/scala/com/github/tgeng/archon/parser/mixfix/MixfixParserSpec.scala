@@ -15,7 +15,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
     import MixfixParserSpec.*
     import QualifiedName.*
     import PrecedenceGraphBuilder.*
-    val expected = file.read()
+    val expected = file.readText()
     val parts = expected.split2("\n====\n")
     assert(parts.size == 2)
     val rules = rulesParser.parse(parts(0)).asRight
@@ -79,7 +79,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
 
     val actual = parts(0) + "\n====\n" + actualParts.mkString("\n\n")
     if expected != actual then
-      file.write(actual)
+      file.writeText(actual)
       fail(s"Test comparison failed for ${file.getName}. Test data has been updated.")
 
 

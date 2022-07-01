@@ -1,8 +1,8 @@
-package io.github.tgeng.archon.core.ir
+package com.github.tgeng.archon.core.ir
 
-import io.github.tgeng.archon.common.*
-import io.github.tgeng.archon.common.ir.*
-import io.github.tgeng.archon.common.ir.TermBuilders.{*, given}
+import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.ir.*
+import com.github.tgeng.archon.common.ir.TermBuilders.{*, given}
 import VTerm.*
 import CTerm.*
 import ULevel.*

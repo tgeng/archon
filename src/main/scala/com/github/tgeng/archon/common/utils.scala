@@ -8,9 +8,12 @@ import scala.collection.mutable
 import scala.math.max
 
 extension[T] (t: T | Null)
-  def !! : T =
+  inline def !! : T =
     assert(t != null)
-    t
+    t.asInstanceOf[T]
+
+  inline def ifNullUse(default: T) = if (t == null) default else t
+  inline def ifNotNull[R](fn: T => R) = if (t == null) null else fn(t)
 
 def indexToLineColumn(input: IndexedSeq[Char], index: Int): (Int, Int) =
   var line = 0
@@ -23,32 +26,31 @@ def indexToLineColumn(input: IndexedSeq[Char], index: Int): (Int, Int) =
   (line, column)
 
 extension[T <: AutoCloseable] (t: T)
-  def use[S](block:T => S) : S =
+  def use[S](block: T => S): S =
     try
       block(t)
     finally
       t.close()
 
-extension (f: File)
-  infix def / (subPath: String) = new File(f, subPath)
-  def read() = String.join("\n", Files.readAllLines(f.toPath, StandardCharsets.UTF_8)).!!
-  def write(text: String) = new BufferedWriter(FileWriter(f)).use { writer => writer.write(text) }
-
 extension[E] (startingNodes: IterableOnce[E])
-  def bfs(getNeighbors: E => IterableOnce[E], seen: mutable.Set[E] = mutable.Set[E]()) : IterableOnce[E] =
-      val queue = mutable.Queue(startingNodes.iterator.toSeq : _*)
-      seen.addAll(queue)
-      new Iterator[E]:
-        def hasNext: Boolean = queue.nonEmpty
-        def next(): E =
-          val e = queue.dequeue()
-          queue.enqueueAll(getNeighbors(e).iterator.filter(e => seen.add(e)))
-          e
+  def bfs(
+    getNeighbors: E => IterableOnce[E],
+    seen: mutable.Set[E] = mutable.Set[E]()
+  ): IterableOnce[E] =
+    val queue = mutable.Queue(startingNodes.iterator.toSeq: _*)
+    seen.addAll(queue)
+    new Iterator[E] :
+      def hasNext: Boolean = queue.nonEmpty
+
+      def next(): E =
+        val e = queue.dequeue()
+        queue.enqueueAll(getNeighbors(e).iterator.filter(e => seen.add(e)))
+        e
 
 /** [[nodes]] may or may not contain every single nodes in the graph. */
 extension[E] (nodes: IterableOnce[E])
   def detectLoop(getNeighbors: E => IterableOnce[E]): Option[Seq[E]] =
-    val stack = mutable.Stack[(E, Int)](nodes.iterator.map(n => (n, 0)).toSeq : _*)
+    val stack = mutable.Stack[(E, Int)](nodes.iterator.map(n => (n, 0)).toSeq: _*)
     val parents = mutable.LinkedHashSet[E]()
     val safeNodes = mutable.Set[E]()
     while stack.nonEmpty do
@@ -70,13 +72,16 @@ extension[E] (allNodes: IterableOnce[E])
         inDegree(neighbor) += 1
       if !inDegree.contains(node) then inDegree(node) = 0
     val maxIncomingPathLengths = mutable.Map[E, Int]().withDefaultValue(0)
-    val queue = mutable.Queue(inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq : _*)
+    val queue = mutable.Queue(inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq: _*)
     assert(queue.nonEmpty)
     val maxDegreeForDag = inDegree.size * (inDegree.size - 1)
     while queue.nonEmpty do
       val node = queue.dequeue()
       for neighbor <- getNeighbors(node) do
-        maxIncomingPathLengths(neighbor) = max(maxIncomingPathLengths(node) + 1, maxIncomingPathLengths(neighbor))
+        maxIncomingPathLengths(neighbor) = max(
+          maxIncomingPathLengths(node) + 1,
+          maxIncomingPathLengths(neighbor)
+        )
         if maxIncomingPathLengths(neighbor) > maxDegreeForDag then throw IllegalArgumentException()
         queue.enqueue(neighbor)
     maxIncomingPathLengths.toMap.withDefaultValue(0)
@@ -111,7 +116,7 @@ extension[T] (elems: IterableOnce[T])
         case _ =>
     None
 
-  def getFirstOrDefault(predicate:T => Boolean, default: =>T) : T =
+  def getFirstOrDefault(predicate: T => Boolean, default: => T): T =
     for elem <- elems do
       if predicate(elem) then return elem
     default
@@ -128,7 +133,7 @@ extension[T] (elems: IterableOnce[T])
       result(keyExtractor(elem)) = valueExtractor(elem)
     result.toMap
 
-def swap[A, B](t: (A, B)) : (B, A) = t match
+def swap[A, B](t: (A, B)): (B, A) = t match
   case (a, b) => (b, a)
 
 def transpose[A](l: List[Option[A]]): Option[List[A]] = l match
@@ -149,12 +154,16 @@ def transpose[L, R](l: ListSet[Either[L, R]]): Either[L, ListSet[R]] =
   transpose(l.toList).map(ListSet(_: _*))
 
 def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
-  transpose(m.toList.map { (k, v) => v match
-    case Right(r) => Right((k, r))
-    case Left(l) => Left(l)
-  }).map(Map.from)
+  transpose(
+    m.toList.map { (k, v) =>
+      v match
+        case Right(r) => Right((k, r))
+        case Left(l) => Left(l)
+    }
+  ).map(Map.from)
 
-def topologicalSort[T](ts: Seq[T])(getDeps: T => Seq[T]): Either[/* cycle */Seq[T], /* sorted */ Seq[T]] =
+def topologicalSort[T](ts: Seq[T])
+  (getDeps: T => Seq[T]): Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
   object CycleException extends Exception
   val visited = mutable.ArrayBuffer[T]()
   val visitedSet = mutable.Set[T]()
@@ -163,7 +172,7 @@ def topologicalSort[T](ts: Seq[T])(getDeps: T => Seq[T]): Either[/* cycle */Seq[
 
   def dfs(t: T): Unit =
     if visitedSet(t) then return
-    if visitingSet(t) then throw CycleException
+      if visitingSet(t) then throw CycleException
     visiting.addOne(t)
     visitedSet.add(t)
     val deps = getDeps(t)

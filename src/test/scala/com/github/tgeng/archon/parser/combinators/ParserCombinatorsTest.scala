@@ -151,12 +151,12 @@ class ParserCombinatorsTest extends AnyFreeSpec :
         parserName in {
           val testDataFile = TestDataConstants.testResourcesRoot / s"parser/combinators/$parserName.txt"
           if !testDataFile.exists() then
-            testDataFile.write("TODO: add test data")
+            testDataFile.writeText("TODO: add test data")
             fail(s"No test data for $parserName. Created placeholder file.")
           val (expected, actual) = testParser(parser, testDataFile)
           if expected != actual then
             if updateTestData then
-              testDataFile.write(actual)
+              testDataFile.writeText(actual)
               fail(s"Test comparison failed for $parserName. Test data has been updated.")
             else
               assert(expected == actual)
