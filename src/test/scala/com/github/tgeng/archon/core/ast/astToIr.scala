@@ -88,7 +88,7 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
     }
     case AstRecord(name, tParamTys, ty, fields) => astToIr(tParamTys) {
       for ty <- astToIr(ty)
-          fields <- bind(n"self") {
+          fields <- bind(sn"self") {
             transpose(
               fields.map { field =>
                 astToIr(field.ty)
@@ -216,7 +216,7 @@ def astToIr(ast: AstTerm)
         yield Return(Thunk(c))
     case AstLevelLiteral(level) => Right(Return(LevelLiteral(level)))
     case AstForce(v) => chainAst(gn"v", v)(Force(_))
-    case AstF(vTy, effects) => chainAst((gn"vTy", vTy), (gn"eff", effects)) {
+    case AstF(vTy, effects) => chainAst((gn"T", vTy), (gn"e", effects)) {
       case vTy :: effects :: Nil => F(vTy, effects)
       case _ => throw IllegalStateException()
     }
@@ -228,7 +228,7 @@ def astToIr(ast: AstTerm)
           bodyTy <- bind(argName) {
             astToIr(bodyTy)
           }
-          r <- chain((gn"argTy", argTy), (gn"eff", effects)) {
+          r <- chain((gn"T", argTy), (gn"e", effects)) {
             case (argTy :: effects :: Nil, n) => FunctionType(
               Binding(argTy)(argName),
               bodyTy.weaken(n, 1),
@@ -240,7 +240,7 @@ def astToIr(ast: AstTerm)
     case AstRedux(head, elims) =>
       for head <- astToIr(head)
           r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](
-            gn"arg",
+            gn"a",
             elims
           ) { (terms, offset) =>
             terms.foldLeft(head.weaken(offset, 0)) { (c, e) =>
@@ -259,7 +259,7 @@ def astToIr(ast: AstTerm)
           case STerm(astTerm) :: Nil => astToIr(astTerm)
           case SBinding(_, astTerm) :: Nil => astToIr(astTerm)
           case STerm(t) :: rest =>
-            val name = gn"_"
+            val name = Name.Unreferenced
             for
               t <- astToIr(t)
               ctx <- bind(name) {
@@ -296,7 +296,7 @@ def astToIr(ast: AstTerm)
                 )
                 input <- foldSequence(rest)
                 r <- chain[[X] =>> List[List[X]]](
-                  effArgs.map((gn"effArg", _)) :: List((gn"otherEff", otherEffects)) :: List((gn"outputType", outputType)) :: Nil
+                  effArgs.map((gn"a", _)) :: List((gn"e", otherEffects)) :: List((gn"R", outputType)) :: Nil
                 ) {
                   case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
                     Handler(
@@ -318,7 +318,7 @@ def astToIr(ast: AstTerm)
                 input <- bind(heapVarName) {
                   foldSequence(rest)
                 }
-                r <- chain(gn"otherEff", otherEffects) {
+                r <- chain(gn"e", otherEffects) {
                   case (otherEffects, n) => HeapHandler(
                     otherEffects,
                     None,

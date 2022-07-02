@@ -95,7 +95,7 @@ object AstParser:
   private def tParamTys: StrParser[AstTTelescope] = P {
     val variance = (P.from("+").as(Variance.COVARIANT) || P.from("-").as(Variance.CONTRAVARIANT))
       .??.map(_.getOrElse(Variance.INVARIANT))
-    val unnamedBinding = atom.map(Binding(_)(n"_"))
+    val unnamedBinding = atom.map(Binding(_)(Name.Unreferenced))
     val namedBinding =
       for
         name <- P.from("(") >%> name <%< P.from(":") << P.whitespaces
@@ -188,7 +188,7 @@ object AstParser:
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
-      var transformHandler: (Name, AstTerm) = (n"x", AstIdentifier(n"x")(using SiEmpty))
+      var transformHandler: (Name, AstTerm) = (gn"x", AstIdentifier(gn"x")(using SiEmpty))
 
       for (h <- allHandlers) { // Use old syntax here because IntelliJ's formatter keeps messing up indentations
         h match
@@ -229,7 +229,7 @@ object AstParser:
       si(
         for
           eff <- eff.??.map(_.getOrElse(AstDef(Builtins.TotalQn)(using SiEmpty)))
-          argName <- (name <%< P.from(":") << P.whitespaces).??.map(_.getOrElse(gn"_"))
+          argName <- (name <%< P.from(":") << P.whitespaces).??.map(_.getOrElse(Name.Unreferenced))
           argTy <- app
         yield (eff, argName, argTy)
       ) {

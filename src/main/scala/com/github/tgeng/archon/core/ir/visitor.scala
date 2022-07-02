@@ -268,7 +268,7 @@ trait Visitor[C, R]:
           visitCTerm(body)(
             using offsetContext(
               ctx,
-              (gn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse
+              (sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse
             )
           )
         }.toSeq :+
@@ -514,7 +514,7 @@ trait Transformer[C]:
         (name, transformCTerm(body)(
           using offsetContext(
             ctx,
-            (gn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse
+            (sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse
           )
         ))
       },
@@ -542,7 +542,7 @@ trait Transformer[C]:
       heapHandler.key,
       heapHandler.heapContent,
       transformCTerm(heapHandler.input)(using offsetContext(ctx, List(gn"h")))
-    )(using heapHandler.sourceInfo)
+    )(heapHandler.boundName)(using heapHandler.sourceInfo)
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))

@@ -1,18 +1,23 @@
 package com.github.tgeng.archon.core.common
 
 enum Name extends Comparable[Name] :
+  case Special(value: String)
   case Normal(value: String)
   case Generated(value: String)
+  case Unreferenced
 
   override def compareTo(that: Name): Int = (this, that) match
     case _  if this == that => 0
     case (Generated(thisValue), Generated(thatValue)) => thisValue.compareTo(thatValue)
+    case (Special(thisValue), Special(thatValue)) => thisValue.compareTo(thatValue)
     case (Normal(thisValue), Normal(thatValue)) => thisValue.compareTo(thatValue)
     case _ => this.ordinal.compareTo(that.ordinal)
 
   override def toString: String = this match
     case Normal(v) => v
+    case Special(v) => s"<$v>"
     case Generated(v) => s"#$v"
+    case Unreferenced => "_"
 
 import Name.{Generated, *}
 
@@ -53,5 +58,6 @@ object QualifiedName:
 
 extension (ctx: StringContext)
   def qn(args: String*) = QualifiedName.from(ctx.s(args: _*))
-  def gn(args: String*) = Name.Generated(ctx.s(args: _*))
+  def sn(args: String*) = Name.Special(ctx.s(args: _*))
   def n(args: String*) = Name.Normal(ctx.s(args: _*))
+  def gn(args: String*) = Name.Generated(ctx.s(args: _*))

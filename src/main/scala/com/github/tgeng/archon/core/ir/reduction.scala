@@ -232,14 +232,14 @@ private final class StackMachine(
           case Right(Heap(heapKey)) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case HeapHandler(otherEffects, key, heapContent, input) =>
+              case h@HeapHandler(otherEffects, key, heapContent, input) =>
                 val cell = Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
                   otherEffects,
                   key,
                   heapContent :+ None,
                   input
-                )
+                )(h.boundName)
                 run(substHole(stack.pop(), Return(cell)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
@@ -253,13 +253,13 @@ private final class StackMachine(
               case Right(value) =>
                 val heapHandlerIndex = heapKeyIndex(heapKey).top
                 stack(heapHandlerIndex) match
-                  case HeapHandler(otherEffects, key, heapContent, input) =>
+                  case h@HeapHandler(otherEffects, key, heapContent, input) =>
                     stack(heapHandlerIndex) = HeapHandler(
                       otherEffects,
                       key,
                       heapContent.updated(index, Some(value)),
                       input
-                    )
+                    )(h.boundName)
                     run(substHole(stack.pop(), Return(Cell(heapKey, index))))
                   case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
@@ -276,7 +276,7 @@ private final class StackMachine(
                   case Some(value) => run(substHole(stack.pop(), Return(value)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case HeapHandler(otherEffects, currentKey, heapContent, input) =>
+      case h@HeapHandler(otherEffects, currentKey, heapContent, input) =>
         if reduceDown then
           assert(currentKey.nonEmpty)
           heapKeyIndex(currentKey.get).pop()
@@ -285,7 +285,7 @@ private final class StackMachine(
           assert(currentKey.isEmpty) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHeapKeyIndex(key, stack.length)
-          stack.push(HeapHandler(otherEffects, Some(key), heapContent, input))
+          stack.push(HeapHandler(otherEffects, Some(key), heapContent, input)(h.boundName))
           run(input.substLowers(Heap(key)))
 
   private enum MatchingStatus:
@@ -358,7 +358,7 @@ private final class StackMachine(
       case Projection(rec, name) => Projection(c, name)
       case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
         Handler(eff, otherEffects, outputType, transform, handlers, c)
-      case HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)
+      case h@HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)(h.boundName)
       case _ => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =

@@ -178,7 +178,7 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
       Total
     )
   )
-)(gn"self")
+)(sn"self")
 
 def checkDef(definition: Definition)
   (using Σ: Signature)
@@ -432,7 +432,7 @@ def inferType(tm: CTerm)
                         yield r
                       // Otherwise, just add the binding to the context and continue type checking.
                       else
-                        for ctxTy <- inferType(body)(using Γ :+ Binding(ty)(gn"LetVar"))
+                        for ctxTy <- inferType(body)(using Γ :+ Binding(ty)(gn"v"))
                             // Report an error if the type of `body` needs to reference the effectful
                             // computation. User should use a dependent sum type to wrap such
                             // references manually to avoid the leak.
@@ -533,7 +533,7 @@ def inferType(tm: CTerm)
                           for _ <- checkType(
                             transform,
                             outputCType.weakened
-                          )(using Γ :+ Binding(inputTy)(gn""))
+                          )(using Γ :+ Binding(inputTy)(gn"v"))
                               _ <- checkSubsumption(
                                 inputEff,
                                 EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))),
@@ -553,7 +553,7 @@ def inferType(tm: CTerm)
                                       Binding(
                                         U(
                                           FunctionType(
-                                            Binding(opResultTy)(gn"output"),
+                                            Binding(opResultTy)(gn"res"),
                                             F(
                                               outputType.weaken(opParamTys.size + 1, 0),
                                               otherEffects
@@ -561,7 +561,7 @@ def inferType(tm: CTerm)
                                             otherEffects
                                           )
                                         )
-                                      )(gn"resume")
+                                      )(sn"resume")
                                   )
                                 }
                               )
@@ -602,8 +602,8 @@ def inferType(tm: CTerm)
               case _: CellType => Left(UninitializedCell(tm))
               case _ => Left(ExpectCell(cell))
         yield r
-      case HeapHandler(otherEffects, _, _, input) =>
-        val heapVarBinding = Binding[VTerm](HeapType())(gn"heap")
+      case h@HeapHandler(otherEffects, _, _, input) =>
+        val heapVarBinding = Binding[VTerm](HeapType())(h.boundName)
 
         given Context = Γ :+ heapVarBinding
 
@@ -819,7 +819,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                           ctx1,
                           ctx2,
                           ty.map(_.weakened)
-                        )(using mode)(using Γ :+ Binding(t1Ty)(gn"LetVar"))
+                        )(using mode)(using Γ :+ Binding(t1Ty)(gn"v"))
                     yield r
                   case _ => Left(ExpectFType(t1CTy))
             yield r

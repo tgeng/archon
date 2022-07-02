@@ -107,7 +107,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
             )
           )
         ) { (ctx, t) =>
-          Let(t, ctx)(gn"unionOperand")
+          Let(t, ctx)(gn"e")
         }
       )
 
@@ -149,7 +149,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
             )
           )
         ) { (ctx, t) =>
-          Let(t, ctx)(gn"maxOperand")
+          Let(t, ctx)(gn"l")
         }
       )
 

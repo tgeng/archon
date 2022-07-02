@@ -266,7 +266,7 @@ trait Signature:
         yield Definition(qn)(
           record.tParamTys.foldRight[CTerm](
             FunctionType(
-              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(gn"self"),
+              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(sn"self"),
               field.ty
             )
           ) { (bindingAndVariance, bodyTy) =>
@@ -291,7 +291,7 @@ trait Signature:
                   vars(record.tParamTys.size - 1)
                 )
               )
-            )(gn"self"),
+            )(sn"self"),
             pVars(record.tParamTys.size),
             Projection(Force(Var(0)), fieldName),
             field.ty

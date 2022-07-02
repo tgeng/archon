@@ -10,7 +10,7 @@ import SourceInfo.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[+T](ty: T)(val name: Name):
+case class Binding[+T](ty: T)(var name: Name):
   def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
 
 /**
@@ -283,7 +283,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
   case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)
-    (val boundName: Name = gn"_")
+    (var boundName: Name)
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.Function */
@@ -368,7 +368,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
      * flexibility is needed, one should use `GlobalHeapKey` instead.
      */
     /* binding offset + 1 */ input: CTerm,
-  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  )(var boundName: Name)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
     given SourceInfo = sourceInfo
@@ -393,7 +393,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case AllocOp(heap, ty) => AllocOp(heap, ty)
       case SetOp(cell, value) => SetOp(cell, value)
       case GetOp(cell) => GetOp(cell)
-      case HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(otherEffects, key, heapContent, input)
+      case h@HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(otherEffects, key, heapContent, input)(h.boundName)
 
   // TODO: support array operations on heap
   // TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
