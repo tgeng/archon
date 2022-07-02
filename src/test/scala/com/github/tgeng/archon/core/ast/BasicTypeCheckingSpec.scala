@@ -169,7 +169,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
     t"""
        hdl exception{L0 Nat} <> Nat {
-         throw n resume -> n;
+         throw n -> n;
        };
        throw L0 Nat (S Z);
        Z
@@ -195,12 +195,12 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        let n2 = S n1;
        let n3 = S n2;
        hdl dice{n3} <> Nat {
-         roll resume -> plus
-                          (plus
-                            ((frc resume) (FZ n2))
-                            ((frc resume) (FS n2 (FZ n1)))
-                          )
-                          ((frc resume) (FS n2 (FS n1 (FZ Z))));
+         roll -> plus
+                   (plus
+                     ((frc resume) (FZ n2))
+                     ((frc resume) (FS n2 (FZ n1)))
+                   )
+                   ((frc resume) (FS n2 (FS n1 (FZ Z))));
        };
        finToNat n3 (roll n3)
      """ ≡ t"S (S (S Z))"

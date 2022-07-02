@@ -56,11 +56,11 @@ private final class StackMachine(
       updateHeapKeyIndex(heapKey, index)
 
   /**
-   * @param pc         "program counter"
+   * @param pc "program counter"
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
-   *                   This is useful so that the run logic does not spin into infinite loop if the given term has type
-   *                   errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
-   *                   in type checking code.)
+   * This is useful so that the run logic does not spin into infinite loop if the given term has type
+   * errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
+   * in type checking code.)
    * @return
    */
   @tailrec
@@ -162,7 +162,7 @@ private final class StackMachine(
                     while (nextHole == null) {
                       val c = stack.pop()
                       c match
-                        case Handler(
+                        case h@Handler(
                         hEff@(hEffQn, hEffArgs),
                         otherEffects,
                         outputType,
@@ -184,6 +184,9 @@ private final class StackMachine(
                             transform,
                             handlers,
                             Hole
+                          )(
+                            h.transformBoundName,
+                            h.handlersBoundNames
                           ) +: cterms.reverseIterator.toSeq
 
                           val resume = Thunk(Continuation(capturedStack))
@@ -205,7 +208,7 @@ private final class StackMachine(
             refreshHeapKeyIndex(currentStackHeight)
             run(Return(arg))
           case _ => throw IllegalArgumentException("type error")
-      case Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, input) =>
+      case h@Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, input) =>
         if reduceDown then
           input match
             case Return(v) => run(transform.substLowers(v))
@@ -222,7 +225,7 @@ private final class StackMachine(
                   transform,
                   handlers,
                   Hole
-                )
+                )(h.transformBoundName, h.handlersBoundNames)
               )
               run(input)
       case AllocOp(heap, ty) =>
@@ -352,13 +355,19 @@ private final class StackMachine(
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm =
     given SourceInfo = ctx.sourceInfo
+
     ctx match
       case l@Let(t, ctx) => Let(c, ctx)(l.boundName)
       case Application(fun, arg) => Application(c, arg)
       case Projection(rec, name) => Projection(c, name)
-      case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
-        Handler(eff, otherEffects, outputType, transform, handlers, c)
-      case h@HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)(h.boundName)
+      case h@Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+        Handler(eff, otherEffects, outputType, transform, handlers, c)(
+          h.transformBoundName,
+          h.handlersBoundNames
+        )
+      case h@HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)(
+        h.boundName
+      )
       case _ => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
@@ -405,4 +414,8 @@ object Reducible:
     (using Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
-    ctx.trace[IrError, CTerm](s"reducing", s"${yellow(t.sourceInfo)} $t", tm => s"${yellow(tm.sourceInfo)} ${green(tm)}")(summon[Reducible[CTerm]].reduce(t))
+    ctx.trace[IrError, CTerm](
+      s"reducing",
+      s"${yellow(t.sourceInfo)} $t",
+      tm => s"${yellow(tm.sourceInfo)} ${green(tm)}"
+    )(summon[Reducible[CTerm]].reduce(t))

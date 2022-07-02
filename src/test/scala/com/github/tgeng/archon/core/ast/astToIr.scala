@@ -287,9 +287,10 @@ def astToIr(ast: AstTerm)
                 transform <- bind(transformInputName) {
                   astToIr(transform)
                 }
+                handlersBoundNames = handlers.view.mapValues(tuple => mutable.Seq(tuple._1: _*)).toMap
                 handlers <- transposeValues(
-                  handlers.view.mapValues { (argNames, resumeName, astTerm) =>
-                    bind(argNames :+ resumeName) {
+                  handlers.view.mapValues { (argNames, astTerm) =>
+                    bind(argNames :+ sn"resume") {
                       astToIr(astTerm).map((argNames.size + 1, _))
                     }
                   }.toMap
@@ -306,7 +307,7 @@ def astToIr(ast: AstTerm)
                       transform.weaken(n, 1),
                       handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
                       input.weaken(n, 0)
-                    )
+                    )(transformInputName, handlersBoundNames)
                   case _ => throw IllegalStateException()
                 }
             yield r
@@ -324,7 +325,7 @@ def astToIr(ast: AstTerm)
                     None,
                     IndexedSeq(),
                     input.weaken(n, 1)
-                  )
+                  )(heapVarName)
                 }
             yield r
 

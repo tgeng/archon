@@ -50,7 +50,7 @@ enum Statement:
     outputType: AstTerm,
     transformInputName: Name,
     transform: AstTerm,
-    handlers: Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)],
+    handlers: Map[Name, ( /* op args */ List[Name], AstTerm)],
   )
   case SHeapHandler(
     otherEffects: AstTerm,

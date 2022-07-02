@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
-import scala.collection.immutable.{ListMap, ListSet}
+import collection.immutable.{ListMap, ListSet}
+import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import QualifiedName.*
@@ -33,7 +34,7 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 extension (eff: Eff)
   def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
-enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel]:
+enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel] :
   case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)
   case UωLevel(layer: Nat)(using sourceInfo: SourceInfo) extends ULevel(sourceInfo)
 
@@ -77,7 +78,7 @@ enum CellStatus extends Comparable[CellStatus] :
     else if this == CellStatus.Initialized then -1
     else 1
 
-enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
+enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
   case Top(ul: ULevel)
@@ -251,7 +252,7 @@ object VTerm:
 sealed trait IType:
   def effects: VTerm
 
-enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
+enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   /**
    * Used in stack machine to represent the computations above the computation term containing
    * this. For example, `f a b` converted to the stack machine becomes
@@ -346,6 +347,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
      */
     handlers: Map[Name, /* binding offset = paramTys + 1 (for resume) */ CTerm],
     input: CTerm,
+  )(
+    var transformBoundName: Name,
+    val handlersBoundNames: Map[Name, mutable.Seq[Name]]
   )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -388,12 +392,20 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case Projection(rec, name) => Projection(rec, name)
       case OperatorCall(eff, name, args) => OperatorCall(eff, name, args)
       case c: Continuation => c
-      case Handler(eff, otherEffects, outputType, transform, handlers, input) =>
-        Handler(eff, otherEffects, outputType, transform, handlers, input)
+      case h@Handler(eff, otherEffects, outputType, transform, handlers, input) =>
+        Handler(eff, otherEffects, outputType, transform, handlers, input)(
+          h.transformBoundName,
+          h.handlersBoundNames
+        )
       case AllocOp(heap, ty) => AllocOp(heap, ty)
       case SetOp(cell, value) => SetOp(cell, value)
       case GetOp(cell) => GetOp(cell)
-      case h@HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(otherEffects, key, heapContent, input)(h.boundName)
+      case h@HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(
+        otherEffects,
+        key,
+        heapContent,
+        input
+      )(h.boundName)
 
   // TODO: support array operations on heap
   // TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
@@ -418,7 +430,11 @@ private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /
   import VTerm.*
   import CTerm.*
 
-  override def offsetContext(bar: Nat, bindingNames: => List[Name]): Nat = bar + bindingNames.size
+  override def withBindings(bindingNames: => List[Name])
+    (action: Nat ?=> (Set[Nat], Set[Nat]))
+    (using bar: Nat)
+    (using Σ: Signature): (Set[Nat], Set[Nat]) =
+    action(using bar + bindingNames.size)
 
   override def combine(freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
     (using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =

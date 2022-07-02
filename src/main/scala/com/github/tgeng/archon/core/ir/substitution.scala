@@ -19,18 +19,18 @@ import VTerm.*
 import CTerm.*
 
 private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)] :
-  override def offsetContext(
-    ctx: (Int, Int),
-    bindingNames: List[Name]
-  ): (Int, Int) =
-    (ctx._1, ctx._2 + bindingNames.size)
+  override def withBindings[T](bindingNames: => List[Name])
+    (action: ((Int, Int)) ?=> T)
+    (using ctx: (Int, Int))
+    (using Σ: Signature): T =
+    action(using (ctx._1, ctx._2 + bindingNames.size))
 
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
     if v.index >= ctx._2 then Var(v.index + ctx._1)(using v.sourceInfo) else v
 
   override def transformEffects(effects: Effects)(using ctx: (Int, Int))(using Σ: Signature) =
     Effects(
-      effects.literal.map{
+      effects.literal.map {
         case (qn, args) => (qn, args.map(v => transformVTerm(v)))
       },
       effects.unionOperands.map(
@@ -62,10 +62,11 @@ given RaisableTelescope: Raisable[Telescope] with
       binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(telescope, amount, bar + 1)
 
 private object SubstituteTransformer extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)] :
-  override def offsetContext(
-    ctx: (PartialSubstitution[VTerm], Int),
-    bindingNames: List[Name]
-  ): (PartialSubstitution[VTerm], Int) = (ctx._1, ctx._2 + bindingNames.size)
+  override def withBindings[T](bindingNames: => List[Name])
+    (action: ((PartialSubstitution[VTerm], Int)) ?=> T)
+    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using Σ: Signature): T =
+    action(using (ctx._1, ctx._2 + bindingNames.size))
 
   override def transformVar(v: Var)
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
@@ -78,6 +79,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
     given SourceInfo = effects.sourceInfo
+
     val operands = effects.unionOperands.map(transformVar)
     val newLiterals = effects.literal.to(mutable.ArrayBuffer)
     val newOperands = mutable.ArrayBuffer[Var]()
@@ -115,6 +117,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
     given SourceInfo = level.sourceInfo
+
     val operands = level.maxOperands.map { (ref, lOffset) => (transformVar(ref), lOffset) }
     var newLiteral = level.literal
     val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
@@ -216,12 +219,12 @@ extension (v: VTerm)
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
     v
-    // for example, consider substitution happened when applying (4, 5) to the body of function \a,
-    // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
-    // first argument `4` at index `0` should replace `$1`.
-    .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
-    // strengthen the resulted term so that even higher indices are correct.
-    .strengthen(count, 0)
+      // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+      // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+      // first argument `4` at index `0` should replace `$1`.
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+      // strengthen the resulted term so that even higher indices are correct.
+      .strengthen(count, 0)
 
 extension (ul: ULevel)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) = ul.map(
@@ -246,12 +249,12 @@ extension (ul: ULevel)
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
     ul
-    // for example, consider substitution happened when applying (4, 5) to the body of function \a,
-    // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
-    // first argument `4` at index `0` should replace `$1`.
-    .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
-    // strengthen the resulted term so that even higher indices are correct.
-    .strengthen(count, 0)
+      // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+      // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+      // first argument `4` at index `0` should replace `$1`.
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+      // strengthen the resulted term so that even higher indices are correct.
+      .strengthen(count, 0)
 
 extension (telescope: Telescope)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
@@ -277,9 +280,9 @@ extension (telescope: Telescope)
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
     telescope
-    // for example, consider substitution happened when applying (4, 5) to the body of function \a,
-    // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
-    // first argument `4` at index `0` should replace `$1`.
-    .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
-    // strengthen the resulted term so that even higher indices are correct.
-    .strengthen(count, 0)
+      // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+      // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+      // first argument `4` at index `0` should replace `$1`.
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+      // strengthen the resulted term so that even higher indices are correct.
+      .strengthen(count, 0)

@@ -12,6 +12,12 @@ trait Visitor[C, R]:
 
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
+  def withBindings(bindingNames: => List[Name])
+    (action: C ?=> R)
+    (using ctx: C)
+    (using Σ: Signature): R =
+    action(using ctx)
+
   def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
     (using ctx: C)
     (using Σ: Signature): R =
@@ -36,8 +42,6 @@ trait Visitor[C, R]:
 
   def visitCTerms(tms: Seq[CTerm])(using ctx: C)(using Σ: Signature): R =
     combine(tms.map(visitCTerm): _*)
-
-  def offsetContext(ctx: C, bindingNames: => List[Name]): C = ctx
 
   def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R = pattern match
     case pVar: PVar => visitPVar(pVar)
@@ -218,13 +222,17 @@ trait Visitor[C, R]:
   def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitCTerm(let.t),
-      visitCTerm(let.ctx)(using offsetContext(ctx, List(let.boundName)))
+      withBindings(List(let.boundName)) {
+        visitCTerm(let.ctx)
+      }
     )
 
   def visitFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(functionType.binding.ty),
-      visitCTerm(functionType.bodyTy)(using offsetContext(ctx, List(functionType.binding.name))),
+      withBindings(List(functionType.binding.name)) {
+        visitCTerm(functionType.bodyTy)
+      },
       visitVTerm(functionType.effects)
     )
 
@@ -263,14 +271,13 @@ trait Visitor[C, R]:
       visitEff(handler.eff) +:
         visitVTerm(handler.otherEffects) +:
         visitVTerm(handler.outputType) +:
-        visitCTerm(handler.transform)(using offsetContext(ctx, List(gn"x"))) +:
+        withBindings(List(gn"x")) {
+          visitCTerm(handler.transform)
+        } +:
         handler.handlers.map { (name, body) =>
-          visitCTerm(body)(
-            using offsetContext(
-              ctx,
-              (sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse
-            )
-          )
+          withBindings((sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse) {
+            visitCTerm(body)
+          }
         }.toSeq :+
         visitCTerm(handler.input): _*
     )
@@ -293,7 +300,9 @@ trait Visitor[C, R]:
   def visitHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(heapHandler.otherEffects),
-      visitCTerm(heapHandler.input)(using offsetContext(ctx, List(gn"h")))
+      withBindings(List(heapHandler.boundName)) {
+        visitCTerm(heapHandler.input)
+      }
     )
 
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
@@ -334,7 +343,12 @@ trait Visitor[C, R]:
     case heapHandler: HeapHandler => visitHeapHandler(heapHandler)
 
 trait Transformer[C]:
-  def offsetContext(ctx: C, bindingNames: List[Name]): C = ctx
+
+  def withBindings[T](bindingNames: => List[Name])
+    (action: C ?=> T)
+    (using ctx: C)
+    (using Σ: Signature): T =
+    action(using ctx)
 
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm = tm match
     case ty: Type => transformType(ty)
@@ -459,18 +473,17 @@ trait Transformer[C]:
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(
       transformCTerm(let.t),
-      transformCTerm(let.ctx)(using offsetContext(ctx, List(let.boundName)))
+      withBindings(List(let.boundName)) {
+        transformCTerm(let.ctx)
+      },
     )(let.boundName)(using let.sourceInfo)
 
   def transformFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): CTerm =
     FunctionType(
       Binding(transformVTerm(functionType.binding.ty))(functionType.binding.name),
-      transformCTerm(functionType.bodyTy)(
-        using offsetContext(
-          ctx,
-          List(functionType.binding.name)
-        )
-      ),
+      withBindings(List(functionType.binding.name)) {
+        transformCTerm(functionType.bodyTy)
+      },
       transformVTerm(functionType.effects)
     )(using functionType.sourceInfo)
 
@@ -509,16 +522,19 @@ trait Transformer[C]:
       transformEff(handler.eff),
       transformVTerm(handler.otherEffects),
       transformVTerm(handler.outputType),
-      transformCTerm(handler.transform)(using offsetContext(ctx, List(gn"x"))),
+      withBindings(List(gn"x")) {
+        transformCTerm(handler.transform)
+      },
       handler.handlers.map { (name, body) =>
-        (name, transformCTerm(body)(
-          using offsetContext(
-            ctx,
-            (sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse
-          )
-        ))
+        (name,
+          withBindings((sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse) {
+            transformCTerm(body)
+          })
       },
       transformCTerm(handler.input),
+    )(
+      handler.transformBoundName,
+      handler.handlersBoundNames
     )(using handler.sourceInfo)
 
   def transformAllocOp(allocOp: AllocOp)(using ctx: C)(using Σ: Signature): CTerm =
@@ -541,7 +557,9 @@ trait Transformer[C]:
       transformVTerm(heapHandler.otherEffects),
       heapHandler.key,
       heapHandler.heapContent,
-      transformCTerm(heapHandler.input)(using offsetContext(ctx, List(gn"h")))
+      withBindings(List(heapHandler.boundName)) {
+        transformCTerm(heapHandler.input)
+      }
     )(heapHandler.boundName)(using heapHandler.sourceInfo)
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =

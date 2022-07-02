@@ -156,7 +156,7 @@ object AstParser:
 
   private enum Handler:
     case HTransform(varName: Name, body: AstTerm)
-    case HOp(opName: Name, argsName: List[Name], resumeName: Name, body: AstTerm)
+    case HOp(opName: Name, argsName: List[Name], body: AstTerm)
 
   import Handler.*
 
@@ -172,10 +172,10 @@ object AstParser:
     val opHandler: StrParser[Handler] = P {
       for
         handlerName <- name << P.whitespaces
-        argNames <- name sepBy1 P.whitespaces
+        argNames <- name sepBy P.whitespaces
         _ <- P.whitespaces >> P.from("->") << P.whitespaces
         body <- rhs
-      yield HOp(handlerName, argNames.dropRight(1), argNames.last, body)
+      yield HOp(handlerName, argNames, body)
     }
 
     for
@@ -187,12 +187,12 @@ object AstParser:
       allHandlers <- ((transformHandler || opHandler) <%< P.from(";") << P.whitespaces).*
       _ <- P.from("}")
     yield
-      val handlers = mutable.Map[Name, ( /* op args */ List[Name], /* resume */ Name, AstTerm)]()
+      val handlers = mutable.Map[Name, ( /* op args */ List[Name], AstTerm)]()
       var transformHandler: (Name, AstTerm) = (gn"x", AstIdentifier(gn"x")(using SiEmpty))
 
       for (h <- allHandlers) { // Use old syntax here because IntelliJ's formatter keeps messing up indentations
         h match
-          case HOp(name, opArgs, resume, body) => handlers(name) = (opArgs, resume, body)
+          case HOp(name, opArgs, body) => handlers(name) = (opArgs, body)
           case HTransform(name, t) => transformHandler = (name, t)
       }
 
@@ -338,7 +338,11 @@ object AstParser:
     (for headUnderscore <- underscore.orEmptyString
          components <- nameComponent sepBy1 underscore
          tailUnderscore <- underscore.orEmptyString
-    yield Name.Normal(components.mkString(headUnderscore, "_", tailUnderscore))) ||
+    yield components.mkString(headUnderscore, "_", tailUnderscore) match
+      case "resume" => Name.Special("resume")
+      case "self" => Name.Special("self")
+      case n => Name.Normal(n)
+      ) ||
       "`" >> P.stringFrom("[^`]+".r).map(Name.Normal(_)) << "`"
   }
 
