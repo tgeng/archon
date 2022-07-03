@@ -82,8 +82,8 @@ extension[E] (nodes: IterableOnce[E])
 extension[E] (allNodes: IterableOnce[E])
   def getMaxIncomingPathLength(getNeighbors: E => IterableOnce[E]): Map[E, Int] =
     val inDegree = mutable.Map[E, Int]().withDefaultValue(0)
-    for node <- allNodes do
-      for neighbor <- getNeighbors(node) do
+    for node <- allNodes.iterator do
+      for neighbor <- getNeighbors(node).iterator do
         inDegree(neighbor) += 1
       if !inDegree.contains(node) then inDegree(node) = 0
     val maxIncomingPathLengths = mutable.Map[E, Int]().withDefaultValue(0)
@@ -92,7 +92,7 @@ extension[E] (allNodes: IterableOnce[E])
     val maxDegreeForDag = inDegree.size * (inDegree.size - 1)
     while queue.nonEmpty do
       val node = queue.dequeue()
-      for neighbor <- getNeighbors(node) do
+      for neighbor <- getNeighbors(node).iterator do
         maxIncomingPathLengths(neighbor) = max(
           maxIncomingPathLengths(node) + 1,
           maxIncomingPathLengths(neighbor)
@@ -125,26 +125,26 @@ def caching[A, B](f: A => B): A => B =
 
 extension[T] (elems: IterableOnce[T])
   def first[R](f: T => Option[R]): Option[R] =
-    for elem <- elems do
+    for elem <- elems.iterator do
       f(elem) match
         case r: Some[R] => return r
         case _ =>
     None
 
   def getFirstOrDefault(predicate: T => Boolean, default: => T): T =
-    for elem <- elems do
+    for elem <- elems.iterator do
       if predicate(elem) then return elem
     default
 
   def associatedBy[K](keyExtractor: T => K): Map[K, T] =
     val result = mutable.Map[K, T]()
-    for elem <- elems do
+    for elem <- elems.iterator do
       result(keyExtractor(elem)) = elem
     result.toMap
 
   def associatedBy[K, V](keyExtractor: T => K, valueExtractor: T => V): Map[K, V] =
     val result = mutable.Map[K, V]()
-    for elem <- elems do
+    for elem <- elems.iterator do
       result(keyExtractor(elem)) = valueExtractor(elem)
     result.toMap
 

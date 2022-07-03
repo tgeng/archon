@@ -9,7 +9,6 @@ type Id[T] = T
 trait Functor[F[_]]:
   def map[T, S](f: F[T], g: T => S): F[S]
 
-  @deprecated("hack around type check so that Recursive can work")
   def mapAny[T, S](a: Any, g: T => S) = map(a.asInstanceOf[F[T]], g)
 
 object Functor:

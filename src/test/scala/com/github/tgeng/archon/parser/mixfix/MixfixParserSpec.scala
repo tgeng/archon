@@ -1,14 +1,16 @@
 package com.github.tgeng.archon.parser.mixfix
 
+import java.io.File
+import io.Source
+import collection.mutable
+import collection.mutable.ArrayBuffer
+import collection.immutable.ArraySeq
+
 import com.github.tgeng.archon.common.{*, given}
 import com.github.tgeng.archon.core.common.{*, given}
 import com.github.tgeng.archon.parser.combinators.{*, given}
 import com.github.tgeng.archon.parser.mixfix.*
 
-import java.io.File
-import scala.io.Source
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
   override def runTest(file: File, source: Source) =
@@ -68,7 +70,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix") :
           val outputs = parts.tail
           actualPart.append(input)
           actualPart.append("\n----\n")
-          p.doParse(0)(using input.split2("\\s")) match
+          p.doParse(0)(using ArraySeq.unsafeWrapArray(input.split2("\\s"))) match
             case r@ParseResult(results, errors, _) => results match
               case Nil =>
                 actualPart.append(r.mkErrorString(input))
