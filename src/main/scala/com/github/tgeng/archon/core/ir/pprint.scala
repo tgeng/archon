@@ -12,10 +12,13 @@ private class RenamerContext:
 
   val potentiallyConflictingNames = mutable.Map[Ref[Name], mutable.ArrayBuffer[Ref[Name]]]()
 
-object RenamerDetector extends Visitor[RenamerContext, Unit] :
+object Renamer extends Visitor[RenamerContext, Unit] :
 
   def rename(tm: VTerm)(using Γ: Context)(using Σ: Signature): Unit =
     doRename(visitVTerm(tm))
+
+  def rename(tm: CTerm)(using Γ: Context)(using Σ: Signature): Unit =
+    doRename(visitCTerm(tm))
 
   private def createRenamerContext(using Γ: Context) =
     val ctx = RenamerContext()
@@ -31,7 +34,16 @@ object RenamerDetector extends Visitor[RenamerContext, Unit] :
     ctx.allNames.foreach { ref =>
       ref.value match
         case _: Generated if !ctx.allReferencedNames(ref) => ref.value = Unreferenced
-        case _ => ???
+        case _ =>
+    }
+    ctx.allNames.foreach { ref =>
+      ref.value match
+        case Unreferenced =>
+        case n =>
+          ref.value = n.deriveNameWithoutConflicts(
+            ctx.potentiallyConflictingNames(n)
+              .map(_.value).toSet
+          )
     }
 
   override def combine(rs: Unit*)(using ctx: RenamerContext)(using Σ: Signature) = ()
