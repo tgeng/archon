@@ -1,5 +1,7 @@
 package com.github.tgeng.archon.core.common
 
+import com.github.tgeng.archon.common.*
+
 enum Name extends Comparable[Name] :
   case Special(value: String)
   case Normal(value: String)
@@ -7,7 +9,7 @@ enum Name extends Comparable[Name] :
   case Unreferenced
 
   override def compareTo(that: Name): Int = (this, that) match
-    case _  if this == that => 0
+    case _ if this == that => 0
     case (Generated(thisValue), Generated(thatValue)) => thisValue.compareTo(thatValue)
     case (Special(thisValue), Special(thatValue)) => thisValue.compareTo(thatValue)
     case (Normal(thisValue), Normal(thatValue)) => thisValue.compareTo(thatValue)
@@ -18,6 +20,27 @@ enum Name extends Comparable[Name] :
     case Special(v) => s"<$v>"
     case Generated(v) => s"#$v"
     case Unreferenced => "_"
+
+  def deriveNameWithoutConflicts(namesToAvoid: Set[Name]): Name = this match
+    case Unreferenced | Special(_) => throw IllegalArgumentException()
+    case Normal(n) =>
+      val prefixEnd = n.lastIndexWhere(c => !c.isDigit) + 1
+      val prefix = n.substring(0, prefixEnd).!!
+      var suffix = n.substring(prefixEnd, n.length).!!.toIntOption.getOrElse(1)
+      var name = prefix
+      while namesToAvoid(Normal(name)) do
+        name = n + suffix
+        suffix += 1
+      Normal(name)
+    case Generated(n) =>
+      val prefixEnd = n.lastIndexWhere(c => !c.isDigit) + 1
+      val prefix = n.substring(0, prefixEnd).!!
+      var suffix = n.substring(prefixEnd, n.length).!!.toIntOption.getOrElse(1)
+      var name = prefix
+      while namesToAvoid(Generated(name)) do
+        name = n + suffix
+        suffix += 1
+      Generated(name)
 
 import Name.{Generated, *}
 

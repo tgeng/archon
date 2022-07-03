@@ -363,7 +363,7 @@ private final class StackMachine(
       case h@Handler(eff, otherEffects, outputType, transform, handlers, input) =>
         Handler(eff, otherEffects, outputType, transform, handlers, c)(
           h.transformBoundName,
-          h.handlersBoundNames
+          h.handlersBoundNames,
         )
       case h@HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)(
         h.boundName
