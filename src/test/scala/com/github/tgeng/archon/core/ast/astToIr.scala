@@ -21,6 +21,7 @@ import AstDeclaration.*
 import Elimination.*
 import PreDeclaration.*
 import SourceInfo.*
+import Ref.given
 
 type NameContext = (Int, Map[Name, Int])
 
@@ -62,7 +63,7 @@ extension (ctx: NameContext)
   })
 
 object NameContext:
-  def fromContext(ctx: Context): NameContext = emptyNameContext ++ ctx.map(_.name)
+  def fromContext(ctx: Context): NameContext = emptyNameContext ++ ctx.map(_.name.value)
 
 def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
   (using Σ: TestSignature): Either[AstError, PreDeclaration] =
@@ -150,7 +151,7 @@ private def astToIr[T](telescope: AstTelescope)
   case Nil => action.map((Nil, _))
   case binding :: telescope =>
     for ty <- astToIr(binding.ty)
-        r <- bind(binding.name) {
+        r <- bind(binding.name.value) {
           astToIr(telescope)(action)
         }
     yield r match
@@ -287,7 +288,7 @@ def astToIr(ast: AstTerm)
                 transform <- bind(transformInputName) {
                   astToIr(transform)
                 }
-                handlersBoundNames = handlers.view.mapValues(tuple => mutable.Seq(tuple._1: _*)).toMap
+                handlersBoundNames = handlers.view.mapValues(tuple => tuple._1.map(MutableRef(_))).toMap
                 handlers <- transposeValues(
                   handlers.view.mapValues { (argNames, astTerm) =>
                     bind(argNames :+ sn"resume") {

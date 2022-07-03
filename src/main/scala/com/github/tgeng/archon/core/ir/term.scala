@@ -11,7 +11,7 @@ import SourceInfo.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[+T](ty: T)(var name: Name):
+case class Binding[+T](ty: T)(val name: Ref[Name]):
   def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
 
 /**
@@ -284,7 +284,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
   case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)
-    (var boundName: Name)
+    (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.Function */
@@ -348,8 +348,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
     handlers: Map[Name, /* binding offset = paramTys + 1 (for resume) */ CTerm],
     input: CTerm,
   )(
-    var transformBoundName: Name,
-    val handlersBoundNames: Map[Name, mutable.Seq[Name]]
+    val transformBoundName: Ref[Name],
+    val handlersBoundNames: Map[Name, Seq[Ref[Name]]]
   )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -372,7 +372,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
      * flexibility is needed, one should use `GlobalHeapKey` instead.
      */
     /* binding offset + 1 */ input: CTerm,
-  )(var boundName: Name)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  )(val boundName: Ref[Name])(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
     given SourceInfo = sourceInfo

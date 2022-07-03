@@ -7,6 +7,21 @@ import scala.collection.immutable.ListSet
 import scala.collection.mutable
 import scala.math.max
 
+trait Ref[T]:
+  def value: T
+
+  def value_=(t: T): Unit
+
+class MutableRef[T](var value: T) extends Ref[T]
+
+class ImmutableRef[T](val value: T) extends Ref[T] :
+  override def value_=(t: T) = throw UnsupportedOperationException()
+
+object Ref:
+  given[T]: Conversion[T, Ref[T]] = MutableRef(_)
+
+  given[T]: Conversion[Ref[T], T] = _.value
+
 extension[T] (t: T | Null)
   inline def !! : T =
     assert(t != null)

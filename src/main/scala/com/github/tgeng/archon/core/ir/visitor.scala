@@ -12,7 +12,7 @@ trait Visitor[C, R]:
 
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def withBindings(bindingNames: => List[Name])
+  def withBindings(bindingNames: => Seq[Ref[Name]])
     (action: C ?=> R)
     (using ctx: C)
     (using Σ: Signature): R =
@@ -222,7 +222,7 @@ trait Visitor[C, R]:
   def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitCTerm(let.t),
-      withBindings(List(let.boundName)) {
+      withBindings(Seq(let.boundName)) {
         visitCTerm(let.ctx)
       }
     )
@@ -230,7 +230,7 @@ trait Visitor[C, R]:
   def visitFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(functionType.binding.ty),
-      withBindings(List(functionType.binding.name)) {
+      withBindings(Seq(functionType.binding.name)) {
         visitCTerm(functionType.bodyTy)
       },
       visitVTerm(functionType.effects)
@@ -266,16 +266,15 @@ trait Visitor[C, R]:
     combine(continuation.capturedStack.map(visitCTerm): _*)
 
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
-    lazy val operatorsByName = Σ.getOperators(handler.eff._1).associatedBy(_.name)
     combine(
       visitEff(handler.eff) +:
         visitVTerm(handler.otherEffects) +:
         visitVTerm(handler.outputType) +:
-        withBindings(List(gn"x")) {
+        withBindings(Seq(handler.transformBoundName)) {
           visitCTerm(handler.transform)
         } +:
         handler.handlers.map { (name, body) =>
-          withBindings((sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse) {
+          withBindings(handler.handlersBoundNames(name).reverse :+ ImmutableRef(sn"resume")) {
             visitCTerm(body)
           }
         }.toSeq :+
@@ -300,7 +299,7 @@ trait Visitor[C, R]:
   def visitHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(heapHandler.otherEffects),
-      withBindings(List(heapHandler.boundName)) {
+      withBindings(Seq(heapHandler.boundName)) {
         visitCTerm(heapHandler.input)
       }
     )
@@ -344,7 +343,7 @@ trait Visitor[C, R]:
 
 trait Transformer[C]:
 
-  def withBindings[T](bindingNames: => List[Name])
+  def withBindings[T](bindingNames: => Seq[Ref[Name]])
     (action: C ?=> T)
     (using ctx: C)
     (using Σ: Signature): T =
@@ -473,7 +472,7 @@ trait Transformer[C]:
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(
       transformCTerm(let.t),
-      withBindings(List(let.boundName)) {
+      withBindings(Seq(let.boundName)) {
         transformCTerm(let.ctx)
       },
     )(let.boundName)(using let.sourceInfo)
@@ -517,17 +516,16 @@ trait Transformer[C]:
     Continuation(continuation.capturedStack.map(transformCTerm))
 
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): CTerm =
-    val operatorsByName = Σ.getOperators(handler.eff._1).associatedBy(_.name)
     Handler(
       transformEff(handler.eff),
       transformVTerm(handler.otherEffects),
       transformVTerm(handler.outputType),
-      withBindings(List(gn"x")) {
+      withBindings(Seq(handler.transformBoundName)) {
         transformCTerm(handler.transform)
       },
       handler.handlers.map { (name, body) =>
         (name,
-          withBindings((sn"resume" +: operatorsByName(name).paramTys.map(_.name)).reverse) {
+          withBindings(handler.handlersBoundNames(name).toSeq.reverse :+ sn"resume") {
             transformCTerm(body)
           })
       },

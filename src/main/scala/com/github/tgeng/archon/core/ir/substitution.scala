@@ -19,7 +19,7 @@ import VTerm.*
 import CTerm.*
 
 private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)] :
-  override def withBindings[T](bindingNames: => List[Name])
+  override def withBindings[T](bindingNames: => Seq[Ref[Name]])
     (action: ((Int, Int)) ?=> T)
     (using ctx: (Int, Int))
     (using Σ: Signature): T =
@@ -62,7 +62,7 @@ given RaisableTelescope: Raisable[Telescope] with
       binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(telescope, amount, bar + 1)
 
 private object SubstituteTransformer extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)] :
-  override def withBindings[T](bindingNames: => List[Name])
+  override def withBindings[T](bindingNames: => Seq[Ref[Name]])
     (action: ((PartialSubstitution[VTerm], Int)) ?=> T)
     (using ctx: (PartialSubstitution[VTerm], Int))
     (using Σ: Signature): T =

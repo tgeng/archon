@@ -279,7 +279,7 @@ def inferType(tm: VTerm)
         yield Type(ULevelSuc(ul), tm)
       case Pure(ul) => Right(Type(ul, tm))
       case Top(ul) => Right(Type(ul, tm))
-      case r: Var => Right(Γ(r).ty)
+      case r: Var => Right(Γ.resolve(r).ty)
       case Collapse(cTm) =>
         for cTy <- inferType(cTm)
             r <- cTy match
@@ -748,7 +748,7 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
               ))
             yield r
           case (_, Heap(GlobalHeapKey), Some(HeapType())) if mode == SUBSUMPTION => Right(())
-          case (v: Var, ty2, _) if mode == CheckSubsumptionMode.SUBSUMPTION => Γ(v).ty match
+          case (v: Var, ty2, _) if mode == CheckSubsumptionMode.SUBSUMPTION => Γ.resolve(v).ty match
             case Type(_, upperBound) => checkSubsumption(upperBound, ty2, None)
             case _ => Left(NotVSubsumption(sub, sup, ty, mode))
           case (Collapse(c), v, ty) => checkSubsumption(c, Return(v), ty.map(F(_)))

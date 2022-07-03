@@ -11,6 +11,6 @@ type Telescope = List[Binding[VTerm]]
 type Context = collection.IndexedSeq[Binding[VTerm]]
 
 extension (v: collection.IndexedSeq[Binding[VTerm]])
-  def apply(ref: VTerm.Var)(using Signature) : Binding[VTerm] =
+  def resolve(ref: VTerm.Var)(using Signature) : Binding[VTerm] =
     val offset = ref.index + 1
-    v(v.length - offset).map(RaisableVTerm.raise(_, offset))
+    v(v.length - offset).map(RaisableVTerm.raise(_, offset)) 
