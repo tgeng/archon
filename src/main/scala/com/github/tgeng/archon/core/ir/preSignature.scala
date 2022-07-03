@@ -242,7 +242,7 @@ def elaborateBody(preRecord: PreRecord)
     given SourceInfo = SiEmpty
 
     given Context = record.tParamTys.map(_._1).toIndexedSeq :+
-      Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))))(sn"self")
+      Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))))(record.selfName)
 
     transpose(
       preRecord.fields.map { field =>

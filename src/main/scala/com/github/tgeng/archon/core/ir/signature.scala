@@ -31,6 +31,7 @@ enum Declaration:
     (
       val tParamTys: TTelescope = Nil, /* binding + tParamTys */
       val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+      val selfName: Ref[Name] = n"self",
     )
   case Definition(val qn: QualifiedName)
     (
@@ -266,7 +267,7 @@ trait Signature:
         yield Definition(qn)(
           record.tParamTys.foldRight[CTerm](
             FunctionType(
-              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(sn"self"),
+              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(record.selfName),
               field.ty
             )
           ) { (bindingAndVariance, bodyTy) =>
@@ -291,7 +292,7 @@ trait Signature:
                   vars(record.tParamTys.size - 1)
                 )
               )
-            )(sn"self"),
+            )(record.selfName),
             pVars(record.tParamTys.size),
             Projection(Force(Var(0)), fieldName),
             field.ty

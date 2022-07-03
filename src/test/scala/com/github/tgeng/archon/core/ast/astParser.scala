@@ -338,11 +338,7 @@ object AstParser:
     (for headUnderscore <- underscore.orEmptyString
          components <- nameComponent sepBy1 underscore
          tailUnderscore <- underscore.orEmptyString
-    yield components.mkString(headUnderscore, "_", tailUnderscore) match
-      case "resume" => Name.Special("resume")
-      case "self" => Name.Special("self")
-      case n => Name.Normal(n)
-      ) ||
+    yield Name.Normal(components.mkString(headUnderscore, "_", tailUnderscore))) ||
       "`" >> P.stringFrom("[^`]+".r).map(Name.Normal(_)) << "`"
   }
 

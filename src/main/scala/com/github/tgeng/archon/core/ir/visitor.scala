@@ -274,7 +274,8 @@ trait Visitor[C, R]:
           visitCTerm(handler.transform)
         } +:
         handler.handlers.map { (name, body) =>
-          withBindings(handler.handlersBoundNames(name).reverse :+ ImmutableRef(sn"resume")) {
+          val (argNames, resumeName) = handler.handlersBoundNames(name)
+          withBindings(argNames :+ resumeName) {
             visitCTerm(body)
           }
         }.toSeq :+
@@ -524,8 +525,9 @@ trait Transformer[C]:
         transformCTerm(handler.transform)
       },
       handler.handlers.map { (name, body) =>
+        val (argNames, resumeName) = handler.handlersBoundNames(name)
         (name,
-          withBindings(handler.handlersBoundNames(name).toSeq.reverse :+ sn"resume") {
+          withBindings(argNames :+ resumeName) {
             transformCTerm(body)
           })
       },

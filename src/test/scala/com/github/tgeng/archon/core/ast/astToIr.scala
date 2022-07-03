@@ -89,7 +89,7 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)
     }
     case AstRecord(name, tParamTys, ty, fields) => astToIr(tParamTys) {
       for ty <- astToIr(ty)
-          fields <- bind(sn"self") {
+          fields <- bind(n"self") {
             transpose(
               fields.map { field =>
                 astToIr(field.ty)
@@ -288,10 +288,13 @@ def astToIr(ast: AstTerm)
                 transform <- bind(transformInputName) {
                   astToIr(transform)
                 }
-                handlersBoundNames = handlers.view.mapValues(tuple => tuple._1.map(MutableRef(_))).toMap
+                handlersBoundNames = handlers.view.mapValues(
+                  tuple =>
+                    (tuple._1.map(MutableRef(_)), MutableRef(n"resume"))
+                ).toMap
                 handlers <- transposeValues(
                   handlers.view.mapValues { (argNames, astTerm) =>
-                    bind(argNames :+ sn"resume") {
+                    bind(argNames :+ n"resume") {
                       astToIr(astTerm).map((argNames.size + 1, _))
                     }
                   }.toMap

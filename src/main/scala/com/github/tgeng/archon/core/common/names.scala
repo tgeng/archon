@@ -3,7 +3,6 @@ package com.github.tgeng.archon.core.common
 import com.github.tgeng.archon.common.*
 
 enum Name extends Comparable[Name] :
-  case Special(value: String)
   case Normal(value: String)
   case Generated(value: String)
   case Unreferenced
@@ -11,18 +10,16 @@ enum Name extends Comparable[Name] :
   override def compareTo(that: Name): Int = (this, that) match
     case _ if this == that => 0
     case (Generated(thisValue), Generated(thatValue)) => thisValue.compareTo(thatValue)
-    case (Special(thisValue), Special(thatValue)) => thisValue.compareTo(thatValue)
     case (Normal(thisValue), Normal(thatValue)) => thisValue.compareTo(thatValue)
     case _ => this.ordinal.compareTo(that.ordinal)
 
   override def toString: String = this match
     case Normal(v) => v
-    case Special(v) => s"<$v>"
     case Generated(v) => s"#$v"
     case Unreferenced => "_"
 
   def deriveNameWithoutConflicts(namesToAvoid: Set[Name]): Name = this match
-    case Unreferenced | Special(_) => throw IllegalArgumentException()
+    case Unreferenced => throw IllegalArgumentException()
     case Normal(n) =>
       val prefixEnd = n.lastIndexWhere(c => !c.isDigit) + 1
       val prefix = n.substring(0, prefixEnd).!!
@@ -81,6 +78,5 @@ object QualifiedName:
 
 extension (ctx: StringContext)
   def qn(args: String*) = QualifiedName.from(ctx.s(args: _*))
-  def sn(args: String*) = Name.Special(ctx.s(args: _*))
   def n(args: String*) = Name.Normal(ctx.s(args: _*))
   def gn(args: String*) = Name.Generated(ctx.s(args: _*))

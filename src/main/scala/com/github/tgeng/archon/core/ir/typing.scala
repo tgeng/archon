@@ -178,7 +178,7 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
       Total
     )
   )
-)(sn"self")
+)(record.selfName)
 
 def checkDef(definition: Definition)
   (using Σ: Signature)
@@ -507,7 +507,7 @@ def inferType(tm: CTerm)
       case _: Continuation => throw IllegalArgumentException(
         "continuation is only created in reduction and hence should not be type checked."
       )
-      case Handler(
+      case h@Handler(
       eff@(qn, args),
       otherEffects,
       outputType,
@@ -542,7 +542,10 @@ def inferType(tm: CTerm)
                               _ <- allRight(
                                 operators.map { opDecl =>
                                   val handlerBody = handlers(opDecl.name)
-                                  val opParamTys = opDecl.paramTys.substLowers(args: _*)
+                                  val (argNames, resumeName) = h.handlersBoundNames(opDecl.name)                     
+                                  val opParamTys = opDecl.paramTys.substLowers(args: _*).zip(argNames).map {
+                                    case (binding, argName) => Binding(binding.ty)(argName)
+                                  }
                                   val opResultTy = opDecl.resultTy.substLowers(args: _*)
                                   checkType(
                                     handlerBody,
@@ -561,7 +564,7 @@ def inferType(tm: CTerm)
                                             otherEffects
                                           )
                                         )
-                                      )(sn"resume")
+                                      )(resumeName)
                                   )
                                 }
                               )

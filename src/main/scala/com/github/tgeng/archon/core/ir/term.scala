@@ -349,7 +349,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
     input: CTerm,
   )(
     val transformBoundName: Ref[Name],
-    val handlersBoundNames: Map[Name, Seq[Ref[Name]]]
+    val handlersBoundNames: Map[Name, (Seq[Ref[Name]], /* resume name */Ref[Name])]
   )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
