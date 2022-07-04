@@ -35,16 +35,17 @@ import WrapPolicy.*
 import DelimitPolicy.*
 
 object Block:
-  def apply(objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String)*): Block =
+  def apply(objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block])*): Block =
     var wrapPolicy: WrapPolicy = Wrap
     var indentPolicy: IndentPolicy = FixedIncrement(0)
-    var delimitPolicy: DelimitPolicy = Concat
+    var delimitPolicy: DelimitPolicy = Whitespace
     val blocks = mutable.ArrayBuffer[Block | String]()
     objects.foreach {
       case p: WrapPolicy => wrapPolicy = p
       case p: IndentPolicy => indentPolicy = p
       case p: DelimitPolicy => delimitPolicy = p
       case b: (Block | String) => blocks.append(b)
+      case bs: Iterable[?] => blocks.appendAll(bs.asInstanceOf[Iterable[Block]])
     }
     new Block(blocks.toSeq, wrapPolicy, indentPolicy, delimitPolicy)
 

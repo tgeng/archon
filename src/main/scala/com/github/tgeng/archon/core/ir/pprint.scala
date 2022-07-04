@@ -67,6 +67,98 @@ object Renamer extends Visitor[RenamerContext, Unit] :
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
       ctx.potentiallyConflictingNames.getOrElseUpdate(name, mutable.ArrayBuffer()).addOne(refName)
 
-object TermPrettyPrinter extends Visitor[IndexedSeq[Name], Block] :
-  override def combine(blocks: Block*)(using ctx: IndexedSeq[Name])(using Σ: Signature) =
-    Block(blocks: _*)
+type PrettyPrintContext = collection.IndexedSeq[Ref[Name]]
+
+object TermPrettyPrinter extends Visitor[PrettyPrintContext, Block] :
+  def pprint(tm: VTerm)(using Γ: Context)(using Σ: Signature): Block =
+    Renamer.rename(tm)
+    visitVTerm(tm)(using Γ.map(_.name))
+
+  def pprint(tm: CTerm)(using Γ: Context)(using Σ: Signature): Block =
+    Renamer.rename(tm)
+    visitCTerm(tm)(using Γ.map(_.name))
+
+  given(using PrettyPrintContext)(using Signature): Conversion[VTerm, Block] = visitVTerm(_)
+
+  given(using PrettyPrintContext)(using Signature): Conversion[CTerm, Block] = visitCTerm(_)
+
+  given(using PrettyPrintContext)
+    (using Signature): Conversion[Binding[VTerm], Block] = visitBinding(_)
+
+  given(using PrettyPrintContext)
+    (using Signature): Conversion[Ref[Name], Block] = n => Block(n.value.toString)
+
+  given(using PrettyPrintContext)
+    (using Signature): Conversion[Name, Block] = n => Block(n.toString)
+
+  import WrapPolicy.*
+  import IndentPolicy.*
+  import DelimitPolicy.*
+  import Name.*
+  import Variance.*
+
+  override def combine(blocks: Block*)
+    (using ctx: PrettyPrintContext)
+    (using Σ: Signature): Block =
+    if blocks.isEmpty then throw IllegalStateException()
+    else Block(Whitespace, Aligned, Wrap, blocks)
+
+  override def withBindings(bindingNames: => Seq[Ref[Name]])
+    (action: PrettyPrintContext ?=> Block)
+    (using ctx: PrettyPrintContext)
+    (using Σ: Signature): Block =
+    action(using ctx ++ bindingNames)
+
+  override def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
+    (using ctx: PrettyPrintContext)
+    (using Σ: Signature): Block =
+    given(using PrettyPrintContext)
+      (using Signature): Conversion[Binding[CTerm], Block] = visitPreBinding(_)
+
+    bracketAndComma(
+      tTelescope.map {
+        case (binding, INVARIANT) => binding
+        case (binding, COVARIANT) => Block("+", binding)
+        case (binding, CONTRAVARIANT) => Block("-", binding)
+      }
+    )
+
+  override def visitTTelescope(tTelescope: Seq[(Binding[VTerm], Variance)])
+    (using PrettyPrintContext)
+    (using Signature): Block = bracketAndComma(
+    tTelescope.map {
+      case (binding, INVARIANT) => binding
+      case (binding, COVARIANT) => Block("+", binding)
+      case (binding, CONTRAVARIANT) => Block("-", binding)
+    }
+  )
+
+  override def visitPreTelescope(telescope: Seq[Binding[CTerm]])
+    (using ctx: PrettyPrintContext)
+    (using Σ: Signature): Block = bracketAndComma(telescope.map(visitPreBinding))
+
+  override def visitTelescope(telescope: Seq[Binding[VTerm]])
+    (using ctx: PrettyPrintContext)
+    (using Σ: Signature): Block = bracketAndComma(telescope.map(visitBinding))
+
+  override def visitPreBinding(binding: Binding[CTerm])
+    (using PrettyPrintContext)
+    (using Signature): Block = binding.name.value match
+    case Unreferenced => Block(binding.ty)
+    case n => Block(n, ":", binding.ty)
+
+  override def visitBinding(binding: Binding[VTerm])
+    (using PrettyPrintContext)
+    (using Signature): Block = binding.name.value match
+    case Unreferenced => Block(binding.ty)
+    case n => Block(n, ":", binding.ty)
+
+  private def bracketAndComma(blocks: Seq[Block]): Block = Block(
+    Concat, FixedIncrement(2),
+    "{",
+    Block(
+      Whitespace, ChopDown, Aligned,
+      blocks.map(b => Block(NoWrap, Concat, b, ","))
+    ),
+    "}"
+  )

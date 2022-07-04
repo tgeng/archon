@@ -34,14 +34,11 @@ trait Visitor[C, R]:
   def visitTelescope(telescope: Seq[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
     combine(telescope.map(visitBinding): _*)
 
+  def visitPreBinding(binding: Binding[CTerm])(using ctx: C)(using Σ: Signature): R =
+    visitCTerm(binding.ty)
+
   def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
     visitVTerm(binding.ty)
-
-  def visitVTerms(tms: Seq[VTerm])(using ctx: C)(using Σ: Signature): R =
-    combine(tms.map(visitVTerm): _*)
-
-  def visitCTerms(tms: Seq[CTerm])(using ctx: C)(using Σ: Signature): R =
-    combine(tms.map(visitCTerm): _*)
 
   def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R = pattern match
     case pVar: PVar => visitPVar(pVar)
