@@ -19,7 +19,18 @@ case class Binding[+T](ty: T)(val name: Ref[Name]):
  */
 type Arguments = List[VTerm]
 
-class HeapKey
+class HeapKey:
+  private val id = HeapKey.nextId
+
+  override def toString: String = "heap" + id
+
+object HeapKey:
+  private var globalIdCounter = 0
+
+  private def nextId: Int =
+    val r = globalIdCounter
+    globalIdCounter += 1
+    r
 
 val GlobalHeapKey = new HeapKey :
   override def toString = "<globalHeapKey>"
@@ -90,7 +101,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case Pure(ul: ULevel)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(PureQn)
 
-  case Var(index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /**
    * Execute a effect free computation and get the returned value. That is, `cTm` must be of type
@@ -349,7 +360,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
     input: CTerm,
   )(
     val transformBoundName: Ref[Name],
-    val handlersBoundNames: Map[Name, (Seq[Ref[Name]], /* resume name */Ref[Name])]
+    val handlersBoundNames: Map[Name, (Seq[Ref[Name]], /* resume name */ Ref[Name])]
   )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -443,7 +454,7 @@ private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /
   override def visitVar(v: Var)
     (using bar: Nat)
     (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-    if v.index < bar then (Set(), Set()) else (Set(v.index - bar), Set())
+    if v.idx < bar then (Set(), Set()) else (Set(v.idx - bar), Set())
 
   override def visitDataType(dataType: DataType)
     (using bar: Nat)

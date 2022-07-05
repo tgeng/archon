@@ -15,7 +15,7 @@ enum Name extends Comparable[Name] :
 
   override def toString: String = this match
     case Normal(v) => v
-    case Generated(v) => s"#$v"
+    case Generated(v) => "$" + v
     case Unreferenced => "_"
 
   def deriveNameWithoutConflicts(namesToAvoid: Set[Name]): Name = this match
@@ -64,6 +64,10 @@ enum QualifiedName extends Comparable[QualifiedName] :
   infix def /(s: String): QualifiedName = Node(this, Normal(s))
 
   infix def /#(s: String): QualifiedName = Node(this, Generated(s))
+
+  def shortName: Name = this match
+    case Root => throw IllegalArgumentException()
+    case Node(_, name) => name
 
 import QualifiedName.*
 

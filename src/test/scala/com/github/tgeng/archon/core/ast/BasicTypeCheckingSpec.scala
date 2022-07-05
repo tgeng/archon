@@ -13,8 +13,11 @@ class BasicTypeCheckingSpec extends SignatureSpec {
   given TestSignature = TestSignature()
 
   "built-ins" in scope {
+    debug {
+
     +b"h: Heap"
     +b"l: Level"
+    }
 
     t"L0" hasType t"Level"
     t"L0" doesNotHaveType t"Effects"

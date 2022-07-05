@@ -13,6 +13,7 @@ import Elimination.*
 import SourceInfo.*
 
 import scala.annotation.tailrec
+import PrettyPrinter.pprint
 
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
@@ -922,8 +923,8 @@ private def simplifyLet(t: CTerm)
   (using ctx: TypingContext)
 : Either[IrError, CTerm] = ctx.trace[IrError, CTerm](
   s"simplify",
-  s"${yellow(t.sourceInfo)} $t",
-  successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(tm)}"
+  s"${yellow(t.sourceInfo)} ${pprint(t)}",
+  successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}"
 ) {
   t match
     case Let(t, ctx) =>
@@ -1150,32 +1151,33 @@ extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
 private inline def debugCheck[L, R](
-  tm: SourceInfoOwner[?],
-  ty: SourceInfoOwner[?],
+  tm: CTerm | VTerm,
+  ty: CTerm | VTerm,
   result: => Either[L, R]
 )
-  (using Context)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} $ty")(result)
+  (using Context)(using Signature)(using ctx: TypingContext): Either[L, R] =
+  ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} ${pprint(ty)}")(result)
 
-private inline def debugInfer[L, R <: SourceInfoOwner[?]](
-  tm: SourceInfoOwner[?],
+private inline def debugInfer[L, R <: (CTerm | VTerm)](
+  tm: CTerm | VTerm,
   result: => Either[L, R]
 )
-  (using Context)(using ctx: TypingContext): Either[L, R] =
+  (using Context)(using Signature)(using ctx: TypingContext): Either[L, R] =
   ctx.trace[L, R](
     s"inferring type",
-    s"${yellow(tm.sourceInfo)} $tm",
-    ty => s"${yellow(ty.sourceInfo)} ${green(ty)}"
+    s"${yellow(tm.sourceInfo)} ${pprint(tm)}",
+    ty => s"${yellow(ty.sourceInfo)} ${green(pprint(ty))}"
   )(result.map(_.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R]))
 
 private inline def debugSubsumption[L, R](
-  rawSub: SourceInfoOwner[?],
-  rawSup: SourceInfoOwner[?],
-  rawTy: Option[SourceInfoOwner[?]],
+  rawSub: CTerm | VTerm,
+  rawSup: CTerm | VTerm,
+  rawTy: Option[CTerm | VTerm],
   result: => Either[L, R]
 )
   (using mode: CheckSubsumptionMode)
   (using Context)
+  (using Signature)
   (using ctx: TypingContext)
 : Either[L, R] =
   val modeString = mode match
@@ -1183,7 +1185,7 @@ private inline def debugSubsumption[L, R](
     case CheckSubsumptionMode.CONVERSION => "≡"
   ctx.trace(
     s"deciding",
-    s"${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} $rawSup\n:\n${
+    s"${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} ${pprint(rawSup)}\n:\n${
       yellow(rawTy.map(_.sourceInfo).getOrElse(SiEmpty))
-    } $rawTy"
+    } ${rawTy.map(pprint)}"
   )(result)

@@ -173,7 +173,7 @@ object Builtins:
     ),
 
     /**
-     * SubTypeOf : (level : LevelType) -> (upperBound : Type(level, Top(level))) -> Type(level + 1, Type(level, upperBound))
+     * SubtypeOf : (level : LevelType) -> (upperBound : Type(level, Top(level))) -> Type(level + 1, Type(level, upperBound))
      * {level : LevelType, upperBound: Type(level, Top(level))} |- level upperBound := .return Type(level, upperBound)
      */
     b(
@@ -335,7 +335,7 @@ object Builtins:
     ),
 
     /**
-     * CSubTypeOf : (level : LevelType) -> (effects: EffectsType) -> (upperBound : U(CType(level, CTop(level, effects)))) -> CType(level + 1, .force upperBound, Total)
+     * CSubtypeOf : (level : LevelType) -> (effects: EffectsType) -> (upperBound : U(CType(level, CTop(level, effects)))) -> CType(level + 1, .force upperBound, Total)
      * {level : LevelType, effects: Effects, upperBound: U(CType(level + 1, CTop(level, effects)))} |- level effects upperBound := CType(level, .force upperBound, effects)
      */
     b(

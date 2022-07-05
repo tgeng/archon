@@ -10,6 +10,7 @@ import VTerm.*
 import Pattern.*
 import CoPattern.*
 import com.github.tgeng.archon.core.ir.IrError.MissingDeclaration
+import PrettyPrinter.pprint
 
 trait Reducible[T]:
   def reduce(t: T)
@@ -417,5 +418,5 @@ object Reducible:
     ctx.trace[IrError, CTerm](
       s"reducing",
       s"${yellow(t.sourceInfo)} $t",
-      tm => s"${yellow(tm.sourceInfo)} ${green(tm)}"
+      tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}"
     )(summon[Reducible[CTerm]].reduce(t))

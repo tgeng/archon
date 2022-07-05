@@ -35,7 +35,7 @@ import WrapPolicy.*
 import DelimitPolicy.*
 
 object Block:
-  def apply(objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block])*): Block =
+  def apply(objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[String | Block])*): Block =
     var wrapPolicy: WrapPolicy = Wrap
     var indentPolicy: IndentPolicy = FixedIncrement(0)
     var delimitPolicy: DelimitPolicy = Whitespace
@@ -45,7 +45,7 @@ object Block:
       case p: IndentPolicy => indentPolicy = p
       case p: DelimitPolicy => delimitPolicy = p
       case b: (Block | String) => blocks.append(b)
-      case bs: Iterable[?] => blocks.appendAll(bs.asInstanceOf[Iterable[Block]])
+      case bs: Iterable[?] => blocks.appendAll(bs.asInstanceOf[Iterable[String | Block]])
     }
     new Block(blocks.toSeq, wrapPolicy, indentPolicy, delimitPolicy)
 

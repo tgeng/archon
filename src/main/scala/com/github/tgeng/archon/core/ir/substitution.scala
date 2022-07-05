@@ -26,7 +26,7 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
     action(using (ctx._1, ctx._2 + bindingNames.size))
 
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
-    if v.index >= ctx._2 then Var(v.index + ctx._1)(using v.sourceInfo) else v
+    if v.idx >= ctx._2 then Var(v.idx + ctx._1)(using v.sourceInfo) else v
 
   override def transformEffects(effects: Effects)(using ctx: (Int, Int))(using Σ: Signature) =
     Effects(
@@ -71,7 +71,7 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
   override def transformVar(v: Var)
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
     (using Σ: Signature) =
-    ctx._1(v.index - ctx._2) match
+    ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _ => v
 
