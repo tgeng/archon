@@ -1156,7 +1156,7 @@ private inline def debugCheck[L, R](
   result: => Either[L, R]
 )
   (using Context)(using Signature)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} $tm\n:\n${yellow(ty.sourceInfo)} ${pprint(ty)}")(result)
+  ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} ${pprint(tm)}\n:\n${yellow(ty.sourceInfo)} ${pprint(ty)}")(result)
 
 private inline def debugInfer[L, R <: (CTerm | VTerm)](
   tm: CTerm | VTerm,
@@ -1185,7 +1185,7 @@ private inline def debugSubsumption[L, R](
     case CheckSubsumptionMode.CONVERSION => "≡"
   ctx.trace(
     s"deciding",
-    s"${yellow(rawSub.sourceInfo)} $rawSub\n$modeString\n${yellow(rawSup.sourceInfo)} ${pprint(rawSup)}\n:\n${
+    s"${yellow(rawSub.sourceInfo)} ${pprint(rawSub)}\n$modeString\n${yellow(rawSup.sourceInfo)} ${pprint(rawSup)}\n:\n${
       yellow(rawTy.map(_.sourceInfo).getOrElse(SiEmpty))
     } ${rawTy.map(pprint)}"
   )(result)

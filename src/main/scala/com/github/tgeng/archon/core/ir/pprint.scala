@@ -297,24 +297,34 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using Σ: Signature): Block = Block("Refl{}")
 
   override def visitEffects(effects: Effects)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    ctx.withPrecedence(PPEffOp) {
-      (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVar)) sepBy "|"
-    }
+    if effects.literal.isEmpty && effects.unionOperands.isEmpty then
+      Block("total")
+    else
+      ctx.withPrecedence(PPEffOp) {
+        (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVar)) sepBy "|"
+      }
 
   override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    def toBlock(varAndOffset: (VTerm.Var, Nat)): Block = varAndOffset match
+      case (v, 0) => v
+      case (v, offset) =>
+        ctx.withPrecedence(PPLevelOp)(Block(Whitespace, NoWrap, v, "+", offset.toString))
+
     val operands = mutable.ArrayBuffer[Block]()
     if level.maxOperands.values.forall(_ < level.literal) then
       operands.append(Block("L" + level.literal.sub))
-    level.maxOperands.foreach { (v, offset) =>
-      offset match
-        case 0 => operands.append(v)
-        case _ => operands.append(Block(Whitespace, NoWrap, v, "+", offset.toString))
-    }
-    if operands.size == 1 then
+
+    if operands.isEmpty && level.maxOperands.size == 1 then
+      toBlock(level.maxOperands.head)
+    else if operands.nonEmpty && level.maxOperands.isEmpty then
       operands.head
-    else ctx.withPrecedence(PPLevelOp) {
-      operands sepBy "∨"
-    }
+    else
+      ctx.withPrecedence(PPLevelOp) {
+        level.maxOperands.foreach { (v, offset) =>
+          operands.append(toBlock((v, offset)))
+        }
+        operands sepBy "∨"
+      }
 
   override def visitHeap(heap: Heap)
     (using ctx: PPrintContext)
@@ -353,6 +363,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
       case USimpleLevel(l) => ctype(cTop.effects, "CTop", l)
       case UωLevel(layer) => ctype(cTop.effects, "CTOP" + layer.sub)
 
+  override def visitDef(d: Def)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    Block(d.qn.toString)
+
   override def visitForce(force: Force)
     (using ctx: PPrintContext)
     (using Σ: Signature): Block = app("frc", force.v)
@@ -365,12 +378,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using Σ: Signature): Block = app("rtn", r.v)
 
   override def visitLet(let: Let)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    val (bindings, body) = unroll[(Name, Block), CTerm](let) {
-      case l@Let(t, body) => Left(((l.boundName, visitCTerm(t)), body, Seq(l.boundName)))
-      case c => Right(visitCTerm(c))
-    }
+    ctx.withPrecedence(PPManualEncapsulation) {
+      val (bindings, body) = unroll[(Name, Block), CTerm](let) {
+        case l@Let(t, body) => Left(((l.boundName, visitCTerm(t)), body, Seq(l.boundName)))
+        case c => Right(visitCTerm(c))
+      }
 
-    ctx.withPrecedence(PPBase) {
       Block(
         AlwaysNewline,
         Aligned,
@@ -393,28 +406,28 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
       case c => Right(visitCTerm(c))
     }
 
-    ctx.withPrecedence(PPFun) {
-      Block(
-        Whitespace,
-        ChopDown,
-        Aligned,
-        bindings.map {
-          case (binding, effects) => ctype(effects, binding, "->")
-        },
-        body
-      )
-    }
+    Block(
+      Whitespace,
+      ChopDown,
+      Aligned,
+      bindings.map {
+        case (binding, effects) => ctype(effects, binding, "->")
+      },
+      body
+    )
   }
 
   override def visitApplication(application: Application)
     (using ctx: PPrintContext)
     (using Σ: Signature): Block =
-    val (args, f) = unroll[Elimination[VTerm], CTerm](application) {
-      case Application(fun, arg) => Left((Elimination.ETerm(arg), fun, Nil))
-      case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
-      case t => Right(visitCTerm(t))
+    ctx.withPrecedence(PPApp) {
+      val (args, f) = unroll[Elimination[VTerm], CTerm](application) {
+        case Application(fun, arg) => Left((Elimination.ETerm(arg), fun, Nil))
+        case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
+        case t => Right(visitCTerm(t))
+      }
+      juxtapose(f, args.reverse.map(visitElim))
     }
-    app(f, args.map(visitElim))
 
   private def visitElim(elim: Elimination[VTerm])
     (using ctx: PPrintContext)
@@ -439,7 +452,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
       case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
       case c => Right(visitCTerm(c))
     }
-    app(f, args.map(visitElim))
+    juxtapose(f, args.reverse.map(visitElim))
 
   override def visitOperatorCall(operatorCall: OperatorCall)
     (using ctx: PPrintContext)
@@ -547,7 +560,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     blocks: (PPrintContext ?=> String | Block | Iterable[Block])*
   )
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPEffOp) {
-    if effTm == Total then
+    if effTm.toString == "total" then // This is a hack, but it's so handy...
       app(blocks: _*)
     else
       Block(
@@ -558,7 +571,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
           }, ">"
         ),
         app(blocks: _*),
-
       )
   }
 
@@ -570,6 +582,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
 
   private def app(blocks: (PPrintContext ?=> String | Block | Iterable[Block])*)
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPApp) {
+    juxtapose(blocks: _*)
+  }
+
+  private def juxtapose(blocks: (PPrintContext ?=> String | Block | Iterable[Block])*)
+    (using ctx: PPrintContext): Block =
     Block(
       Whitespace +:
         FixedIncrement(2) +:
@@ -578,7 +595,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
           _ (using summon[PPrintContext])
         ): _*
     )
-  }
 
   private def bracketAndSpace(head: Block, blocks: PPrintContext ?=> Seq[Block])
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPManualEncapsulation) {

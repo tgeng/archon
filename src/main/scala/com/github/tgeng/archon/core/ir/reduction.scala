@@ -417,6 +417,6 @@ object Reducible:
   : Either[IrError, CTerm] =
     ctx.trace[IrError, CTerm](
       s"reducing",
-      s"${yellow(t.sourceInfo)} $t",
+      s"${yellow(t.sourceInfo)} ${pprint(t)}",
       tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}"
     )(summon[Reducible[CTerm]].reduce(t))

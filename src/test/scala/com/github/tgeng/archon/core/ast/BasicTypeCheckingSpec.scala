@@ -13,11 +13,9 @@ class BasicTypeCheckingSpec extends SignatureSpec {
   given TestSignature = TestSignature()
 
   "built-ins" in scope {
-    debug {
 
     +b"h: Heap"
     +b"l: Level"
-    }
 
     t"L0" hasType t"Level"
     t"L0" doesNotHaveType t"Effects"
@@ -90,12 +88,14 @@ class BasicTypeCheckingSpec extends SignatureSpec {
           }
     }
   }
+  debug {
 
   +d"""
      pure data Nat: Type L0;
        Z: Nat;
        S: Nat -> Nat;
    """
+  }
 
   "nat" in scope {
     t"Z" hasType t"Nat"
