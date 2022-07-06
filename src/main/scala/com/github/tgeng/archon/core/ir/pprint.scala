@@ -40,7 +40,7 @@ object Renamer extends Visitor[RenamerContext, Unit] :
     ctx.allNames.addAll(initialNames)
     ctx
 
-  private def doRename(action: RenamerContext ?=> Unit): Unit =
+  private def doRename(action: RenamerContext ?=> Unit)(using Γ: Context): Unit =
     val ctx: RenamerContext = createRenamerContext
     action(using ctx)
     import Name.*
@@ -76,7 +76,11 @@ object Renamer extends Visitor[RenamerContext, Unit] :
     (using ctx: RenamerContext)
     (using Σ: Signature): Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
-    val refName = ctx.nameStack(stackIndex)
+    val refName = try {
+      ctx.nameStack(stackIndex)
+    } catch {
+      case e => throw e
+    }
     ctx.allReferencedNames.add(refName)
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
       ctx.potentiallyConflictingNames.getOrElseUpdate(name, mutable.ArrayBuffer()).addOne(refName)
@@ -105,6 +109,14 @@ class PPrintContext(
         Block(Concat, Wrap, FixedIncrement(2), "(", b, ")")
     } finally {
       currentPrecedence = oldPrecedence
+    }
+
+  def withBindings[T](bindings: Seq[Ref[Name]])(action: PPrintContext ?=> T): T =
+    names.appendAll(bindings)
+    try {
+      action(using this)
+    } finally {
+      names.remove(names.size - bindings.size, bindings.size)
     }
 
 object PPrintContext:
@@ -146,11 +158,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   override def withBindings(bindingNames: => Seq[Ref[Name]])
     (action: PPrintContext ?=> Block)
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block =
-    ctx.names.appendAll(bindingNames)
-    val r = action(using ctx)
-    ctx.names.remove(ctx.names.size - bindingNames.size, bindingNames.size)
-    r
+    (using Σ: Signature): Block = ctx.withBindings(bindingNames) {
+    action
+  }
 
   override def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
     (using ctx: PPrintContext)
@@ -292,15 +302,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     }
 
   override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    ctx.withPrecedence(PPLevelOp) {
-      val operands = mutable.ArrayBuffer[String | Block]()
-      if level.maxOperands.values.forall(_ < level.literal) then
-        operands.append("L" + level.literal.sub)
-      level.maxOperands.foreach { (v, offset) =>
-        offset match
-          case 0 => operands.append(v)
-          case _ => operands.append(Block(Whitespace, NoWrap, v, "+", offset.toString))
-      }
+    val operands = mutable.ArrayBuffer[Block]()
+    if level.maxOperands.values.forall(_ < level.literal) then
+      operands.append(Block("L" + level.literal.sub))
+    level.maxOperands.foreach { (v, offset) =>
+      offset match
+        case 0 => operands.append(v)
+        case _ => operands.append(Block(Whitespace, NoWrap, v, "+", offset.toString))
+    }
+    if operands.size == 1 then
+      operands.head
+    else ctx.withPrecedence(PPLevelOp) {
       operands sepBy "∨"
     }
 
@@ -353,9 +365,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using Σ: Signature): Block = app("rtn", r.v)
 
   override def visitLet(let: Let)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    val (bindings, body) = unroll[(Name, CTerm), CTerm](let) {
-      case l@Let(t, body) => Some(((l.boundName, t), body))
-      case _ => None
+    val (bindings, body) = unroll[(Name, Block), CTerm](let) {
+      case l@Let(t, body) => Left(((l.boundName, visitCTerm(t)), body, Seq(l.boundName)))
+      case c => Right(visitCTerm(c))
     }
 
     ctx.withPrecedence(PPBase) {
@@ -372,10 +384,13 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   override def visitFunctionType(functionType: FunctionType)
     (using ctx: PPrintContext)
     (using Σ: Signature): Block = ctx.withPrecedence(PPFun) {
-    // TODO: fix binding name look up here.
-    val (bindings, body) = unroll[(Binding[VTerm], VTerm), CTerm](functionType) {
-      case FunctionType(binding, bodyTy, effects) => Some(((binding, effects), bodyTy))
-      case _ => None
+    val (bindings, body) = unroll[(Block, Block), CTerm](functionType) {
+      case FunctionType(
+      binding,
+      bodyTy,
+      effects
+      ) => Left(((visitBinding(binding), visitVTerm(effects)), bodyTy, Seq(binding.name)))
+      case c => Right(visitCTerm(c))
     }
 
     ctx.withPrecedence(PPFun) {
@@ -395,9 +410,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using ctx: PPrintContext)
     (using Σ: Signature): Block =
     val (args, f) = unroll[Elimination[VTerm], CTerm](application) {
-      case Application(fun, arg) => Some((Elimination.ETerm(arg), fun))
-      case Projection(fun, name) => Some((Elimination.EProj(name), fun))
-      case _ => None
+      case Application(fun, arg) => Left((Elimination.ETerm(arg), fun, Nil))
+      case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
+      case t => Right(visitCTerm(t))
     }
     app(f, args.map(visitElim))
 
@@ -420,9 +435,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using Σ: Signature): Block =
 
     val (args, f) = unroll[Elimination[VTerm], CTerm](projection) {
-      case Application(fun, arg) => Some((Elimination.ETerm(arg), fun))
-      case Projection(fun, name) => Some((Elimination.EProj(name), fun))
-      case _ => None
+      case Application(fun, arg) => Left((Elimination.ETerm(arg), fun, Nil))
+      case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
+      case c => Right(visitCTerm(c))
     }
     app(f, args.map(visitElim))
 
@@ -457,28 +472,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   private def visitHandlers(handler: HeapHandler | Handler)
     (using ctx: PPrintContext)
     (using Σ: Signature): Block =
-    val (handlers, input) = unroll[HeapHandler | Handler, CTerm](handler) {
-      case h: Handler => Some((h, h.input))
-      case h: HeapHandler => Some((h, h.input))
-      case _ => None
-    }
-
-    ctx.withPrecedence(PPBase) {
-      Block(
-        AlwaysNewline,
-        Aligned,
-        handlers.map {
-          case h@HeapHandler(otherEffects, key, heapContent, _) => Block(
-            Whitespace, NoWrap,
-            "heap",
-            h.boundName,
-            eff(h.otherEffects),
-          )
-          case h@Handler(effTm, otherEffects, outputType, transform, handlers, _) => Block(
+    val (handlers, input) = unroll[Block, CTerm](handler) {
+      case h@Handler(effTm, otherEffects, outputType, transform, handlers, input) => Left(
+        (
+          Block(
             Whitespace, NoWrap,
             "hdl",
             visitEff(effTm),
-            eff(h.otherEffects),
+            eff(otherEffects),
             outputType,
             bracketAndNewline(
               Block(
@@ -498,8 +499,29 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
                 )
               }
             )
-          )
-        },
+          ),
+          input,
+          Nil)
+      )
+      case h@HeapHandler(otherEffects, _, _, input) => Left(
+        (
+          Block(
+            Whitespace, NoWrap,
+            "heap",
+            h.boundName,
+            eff(otherEffects),
+          ),
+          input,
+          Seq(h.boundName))
+      )
+      case c => Right(visitCTerm(c))
+    }
+
+    ctx.withPrecedence(PPBase) {
+      Block(
+        AlwaysNewline,
+        Aligned,
+        handlers,
         input
       )
     }
@@ -524,13 +546,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     effTm: PPrintContext ?=> Block,
     blocks: (PPrintContext ?=> String | Block | Iterable[Block])*
   )
-    (using ctx: PPrintContext): Block = ctx.withPrecedence(PPApp) {
+    (using ctx: PPrintContext): Block = ctx.withPrecedence(PPEffOp) {
     if effTm == Total then
       app(blocks: _*)
     else
       Block(
         Whitespace, Wrap, FixedIncrement(2),
-        Block(Concat, NoWrap, "<", effTm, ">"),
+        Block(
+          Concat, NoWrap, "<", ctx.withPrecedence(PPManualEncapsulation) {
+            effTm
+          }, ">"
+        ),
         app(blocks: _*),
 
       )
@@ -611,8 +637,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
         blocks.last
       )
 
-private def unroll[E, T](t: T)(destruct: T => Option[(E, T)]): (List[E], T) = destruct(t) match
-  case Some((e, t)) => unroll(t)(destruct) match
-    case (es, t) => (e :: es, t)
-  case None => (Nil, t)
+private def unroll[E, T](t: T)
+  (destruct: PPrintContext ?=> T => Either[(E, T, Seq[Ref[Name]]), Block])
+  (using ctx: PPrintContext): (List[E], Block) = destruct(t) match
+  case Left((e, t, bindings)) => ctx.withBindings(bindings) {
+    unroll(t)(destruct) match
+      case (es, t) => (e :: es, t)
+  }
+  case Right(b) => (Nil, b)
 

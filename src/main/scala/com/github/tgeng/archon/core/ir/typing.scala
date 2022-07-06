@@ -31,8 +31,8 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
   private def indent = "│ " * (traceLevel)
 
   inline def trace[L, R](
-    title: String,
-    description: String = "",
+    title: =>String,
+    description: =>String = "",
     successMsg: R => String = (_: R) => "",
     failureMsg: L => String = (l: L) => l.toString,
   )
