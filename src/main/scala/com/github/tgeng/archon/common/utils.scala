@@ -12,6 +12,8 @@ trait Ref[T]:
 
   def value_=(t: T): Unit
 
+  override def toString: String = s"Ref@${hashCode}=$value"
+
 class MutableRef[T](var value: T) extends Ref[T]
 
 class ImmutableRef[T](val value: T) extends Ref[T] :

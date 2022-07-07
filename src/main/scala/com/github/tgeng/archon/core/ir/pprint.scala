@@ -54,9 +54,9 @@ object Renamer extends Visitor[RenamerContext, Unit] :
         case Unreferenced =>
         case n =>
           ref.value = n.deriveNameWithoutConflicts(
-            ctx.potentiallyConflictingNames.lift(n)
-              .getOrElse(Nil)
-              .map(_.value).toSet
+            ctx.potentiallyConflictingNames.getOrElse(ref, Nil)
+              .map(_.value)
+              .toSet
           )
     }
 
@@ -79,14 +79,14 @@ object Renamer extends Visitor[RenamerContext, Unit] :
     val refName = try {
       ctx.nameStack(stackIndex)
     } catch {
-      case e => throw e
+      case e: Throwable => throw e
     }
     ctx.allReferencedNames.add(refName)
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
       ctx.potentiallyConflictingNames.getOrElseUpdate(name, mutable.ArrayBuffer()).addOne(refName)
 
 enum PPrintPrecedence extends Ordered[PPrintPrecedence] :
-  case PPManualEncapsulation, PPApp, PPLevelOp, PPEffOp, PPFun, PPComma, PPBase
+  case PPManualEncapsulation, PPApp, PPLevelOp, PPEffOp, PPFun, PPComma, PPStatement, PPBase
 
   override def compare(that: PPrintPrecedence): Int = this.ordinal.compareTo(that.ordinal)
 
@@ -364,7 +364,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
       case UωLevel(layer) => ctype(cTop.effects, "CTOP" + layer.sub)
 
   override def visitDef(d: Def)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    Block(d.qn.toString)
+    Block(Concat, NoWrap, "𝑓 ", d.qn.shortName)
 
   override def visitForce(force: Force)
     (using ctx: PPrintContext)
@@ -378,21 +378,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using Σ: Signature): Block = app("rtn", r.v)
 
   override def visitLet(let: Let)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    ctx.withPrecedence(PPManualEncapsulation) {
-      val (bindings, body) = unroll[(Name, Block), CTerm](let) {
-        case l@Let(t, body) => Left(((l.boundName, visitCTerm(t)), body, Seq(l.boundName)))
-        case c => Right(visitCTerm(c))
-      }
-
-      Block(
-        AlwaysNewline,
-        Aligned,
-        bindings.map {
-          case (boundName, t) => Block("let", boundName, "=", t)
-        },
-        body
-      )
-    }
+    visitStatements(let)
 
   override def visitFunctionType(functionType: FunctionType)
     (using ctx: PPrintContext)
@@ -467,7 +453,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
 
   override def visitHandler(handler: Handler)
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block = visitHandlers(handler)
+    (using Σ: Signature): Block = visitStatements(handler)
 
   override def visitAllocOp(allocOp: AllocOp)(using ctx: PPrintContext)(using Σ: Signature): Block =
     app("alloc", allocOp.heap, allocOp.ty)
@@ -480,12 +466,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
 
   override def visitHeapHandler(heapHandler: HeapHandler)
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block = visitHandlers(heapHandler)
+    (using Σ: Signature): Block = visitStatements(heapHandler)
 
-  private def visitHandlers(handler: HeapHandler | Handler)
+  private def visitStatements(handler: HeapHandler | Handler | Let)
     (using ctx: PPrintContext)
     (using Σ: Signature): Block =
-    val (handlers, input) = unroll[Block, CTerm](handler) {
+    val (statements, input) = unroll[Block, CTerm](handler) {
       case h@Handler(effTm, otherEffects, outputType, transform, handlers, input) => Left(
         (
           Block(
@@ -498,7 +484,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
               Block(
                 Whitespace, Wrap, FixedIncrement(2),
                 Block(Whitespace, NoWrap, "rtn", h.transformBoundName, "->"),
-                transform
+                withBindings(Seq(h.transformBoundName)) {
+                  transform
+                }
               ) +: handlers.keys.toSeq.map { name =>
                 val (paramNames, resumeName) = h.handlersBoundNames(name)
                 val body = handlers(name)
@@ -508,7 +496,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
                     Whitespace, NoWrap,
                     name, paramNames.map(r => visitName(r.value)), resumeName, "->",
                   ),
-                  body
+                  withBindings(paramNames :+ resumeName) {
+                    body
+                  }
                 )
               }
             )
@@ -527,14 +517,15 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
           input,
           Seq(h.boundName))
       )
+      case l@Let(t, body) => Left(Block("let", l.boundName, "=", visitCTerm(t)), body, Seq(l.boundName))
       case c => Right(visitCTerm(c))
     }
 
-    ctx.withPrecedence(PPBase) {
+    ctx.withPrecedence(PPStatement) {
       Block(
         AlwaysNewline,
         Aligned,
-        handlers,
+        statements,
         input
       )
     }
@@ -599,12 +590,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   private def bracketAndSpace(head: Block, blocks: PPrintContext ?=> Seq[Block])
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
-      Concat, FixedIncrement(2),
+      NoWrap, Concat, FixedIncrement(2),
       head,
       "{",
       ctx.withPrecedence(PPComma) {
         Block(
-          Whitespace, ChopDown, Aligned,
+          Whitespace, NoWrap, Aligned,
           blocks(using ctx)
         )
       },
@@ -615,7 +606,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   private def bracketAndComma(blocks: PPrintContext ?=> Seq[Block])
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
-      Concat, FixedIncrement(2),
+      Concat, ChopDown,
       "{",
       ctx.withPrecedence(PPComma) {
         Block(
@@ -630,11 +621,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   private def bracketAndNewline(blocks: PPrintContext ?=> Seq[Block])
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
-      Concat, FixedIncrement(2),
+      Concat,
       "{",
       ctx.withPrecedence(PPComma) {
         Block(
-          Whitespace, AlwaysNewline, Aligned,
+          Concat, AlwaysNewline, FixedIncrement(2),
           blocks(using ctx)
         )
       },

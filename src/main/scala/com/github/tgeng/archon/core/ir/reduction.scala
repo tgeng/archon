@@ -11,6 +11,9 @@ import Pattern.*
 import CoPattern.*
 import com.github.tgeng.archon.core.ir.IrError.MissingDeclaration
 import PrettyPrinter.pprint
+import WrapPolicy.*
+import IndentPolicy.*
+import DelimitPolicy.*
 
 trait Reducible[T]:
   def reduce(t: T)
@@ -417,6 +420,6 @@ object Reducible:
   : Either[IrError, CTerm] =
     ctx.trace[IrError, CTerm](
       s"reducing",
-      s"${yellow(t.sourceInfo)} ${pprint(t)}",
-      tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}"
+      Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
+      tm => Block(ChopDown, Aligned, yellow(tm.sourceInfo), green(pprint(tm)))
     )(summon[Reducible[CTerm]].reduce(t))

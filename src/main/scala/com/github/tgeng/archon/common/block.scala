@@ -3,7 +3,7 @@ package com.github.tgeng.archon.common
 import collection.mutable
 
 trait BlockConverter[T] {
-  final def pprint(t: T, widthLimit: Int = 80): String = {
+  final def pprint(t: T, widthLimit: Int = 120): String = {
     val sb = StringBuilder()
     toBlock(t).print(sb, widthLimit)
     sb.toString

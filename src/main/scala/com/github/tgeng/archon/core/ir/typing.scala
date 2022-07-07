@@ -14,6 +14,9 @@ import SourceInfo.*
 
 import scala.annotation.tailrec
 import PrettyPrinter.pprint
+import WrapPolicy.*
+import IndentPolicy.*
+import DelimitPolicy.*
 
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
@@ -28,37 +31,54 @@ def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
-  private def indent = "│ " * (traceLevel)
 
   inline def trace[L, R](
-    title: =>String,
-    description: =>String = "",
-    successMsg: R => String = (_: R) => "",
-    failureMsg: L => String = (l: L) => l.toString,
+    title: => String,
+    description: => Block | String = "",
+    successMsg: R => Block | String = (_: R) => "",
+    failureMsg: L => Block | String = (l: L) => l.toString,
   )
-    (action: => Either[L, R])(using Γ: Context): Either[L, R] =
+    (action: => Either[L, R])(using Γ: Context)(using Signature): Either[L, R] =
+    val indent = "│ " * traceLevel
     lazy val result: Either[L, R] = action
     if enableDebugging then
       println(indent)
       println(
-        indent + "   " + ANSI_BLUE + Γ.zipWithIndex.map { (binding, i) =>
-          s"${Γ.size - 1 - i}: ${binding.ty}"
-        }.mkString("{", ", ", "}") + ANSI_RESET
+        indent + "   " + ANSI_BLUE + Block(
+          Concat, NoWrap, "{", Γ.zipWithIndex.map { (binding, i) =>
+            Block(NoWrap, Whitespace, binding.name.value.toString, ":", pprint(binding.ty))
+          } sepBy ",", "}"
+        ).toString.replaceAll("\n", "\n" + indent + "   ") + ANSI_RESET
       )
       val stacktrace = Thread.currentThread().!!.getStackTrace.!!
       println(indent + "┌─ " + title + " " + ANSI_WHITE + "@" + stacktrace(2).toString + ANSI_RESET)
-      if description.nonEmpty then
-        println(indent + "│  " + description.replaceAll("\n", "\n" + indent + "│  "))
+      if description != "" then
+        println((indent + "│  " + description).replaceAll("\n", "\n" + indent + "│  "))
       traceLevel += 1
       val endMessage = result match
-        case Right(r) => "✅ " + ANSI_GREEN + successMsg(r)
-        case Left(l) => "❌ " + ANSI_RED + failureMsg(l)
+        case Right(r) => "✅ " + (ANSI_GREEN + successMsg(r)).replaceAll(
+          "\n",
+          "\n" + indent + "     "
+        )
+        case Left(l) => "❌ " + (ANSI_RED + failureMsg(l)).replaceAll("\n", "\n" + indent + "     ")
       traceLevel -= 1
       println(indent + "└─ " + endMessage + ANSI_RESET)
     result
 
+  extension (blocks: Iterable[String | Block])
+    def sepBy(delimiter: String | Block): Block =
+      if blocks.isEmpty then Block()
+      else Block(
+        Whitespace,
+        ChopDown,
+        Aligned,
+        blocks.init.map(Block(Concat, NoWrap, _, delimiter)),
+        blocks.last
+      )
+
   inline def debug[T](inline t: T): T =
     if enableDebugging then
+      val indent = "│ " * traceLevel
       println(indent + " " + ANSI_CYAN + stringify(t) + " = " + t + ANSI_RESET)
     t
 
@@ -543,8 +563,10 @@ def inferType(tm: CTerm)
                               _ <- allRight(
                                 operators.map { opDecl =>
                                   val handlerBody = handlers(opDecl.name)
-                                  val (argNames, resumeName) = h.handlersBoundNames(opDecl.name)                     
-                                  val opParamTys = opDecl.paramTys.substLowers(args: _*).zip(argNames).map {
+                                  val (argNames, resumeName) = h.handlersBoundNames(opDecl.name)
+                                  val opParamTys = opDecl.paramTys.substLowers(args: _*).zip(
+                                    argNames
+                                  ).map {
                                     case (binding, argName) => Binding(binding.ty)(argName)
                                   }
                                   val opResultTy = opDecl.resultTy.substLowers(args: _*)
@@ -1150,13 +1172,26 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
 extension[L, R1] (e1: Either[L, R1])
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] = e1.flatMap(_ => e2)
 
-private inline def debugCheck[L, R](
+private def debugCheck[L, R](
   tm: CTerm | VTerm,
   ty: CTerm | VTerm,
   result: => Either[L, R]
 )
   (using Context)(using Signature)(using ctx: TypingContext): Either[L, R] =
-  ctx.trace(s"checking", s"${yellow(tm.sourceInfo)} ${pprint(tm)}\n:\n${yellow(ty.sourceInfo)} ${pprint(ty)}")(result)
+  ctx.trace(
+    s"checking",
+    Block(
+      ChopDown,
+      Aligned,
+      yellow(tm.sourceInfo),
+      pprint(tm),
+      ":",
+      yellow(ty.sourceInfo),
+      pprint(ty)
+    )
+  )(
+    result
+  )
 
 private inline def debugInfer[L, R <: (CTerm | VTerm)](
   tm: CTerm | VTerm,
@@ -1165,8 +1200,8 @@ private inline def debugInfer[L, R <: (CTerm | VTerm)](
   (using Context)(using Signature)(using ctx: TypingContext): Either[L, R] =
   ctx.trace[L, R](
     s"inferring type",
-    s"${yellow(tm.sourceInfo)} ${pprint(tm)}",
-    ty => s"${yellow(ty.sourceInfo)} ${green(pprint(ty))}"
+    Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
+    ty => Block(ChopDown, Aligned, yellow(ty.sourceInfo), green(pprint(ty)))
   )(result.map(_.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R]))
 
 private inline def debugSubsumption[L, R](
@@ -1185,7 +1220,15 @@ private inline def debugSubsumption[L, R](
     case CheckSubsumptionMode.CONVERSION => "≡"
   ctx.trace(
     s"deciding",
-    s"${yellow(rawSub.sourceInfo)} ${pprint(rawSub)}\n$modeString\n${yellow(rawSup.sourceInfo)} ${pprint(rawSup)}\n:\n${
-      yellow(rawTy.map(_.sourceInfo).getOrElse(SiEmpty))
-    } ${rawTy.map(pprint)}"
+    Block(
+      ChopDown, Aligned,
+      yellow(rawSub.sourceInfo),
+      pprint(rawSub),
+      modeString,
+      yellow(rawSup.sourceInfo),
+      pprint(rawSup),
+      ":",
+      yellow(rawTy.map(_.sourceInfo).getOrElse(SiEmpty)),
+      rawTy.map(pprint)
+    )
   )(result)

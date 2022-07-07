@@ -88,14 +88,12 @@ class BasicTypeCheckingSpec extends SignatureSpec {
           }
     }
   }
-  debug {
 
   +d"""
      pure data Nat: Type L0;
        Z: Nat;
        S: Nat -> Nat;
    """
-  }
 
   "nat" in scope {
     t"Z" hasType t"Nat"
@@ -126,6 +124,8 @@ class BasicTypeCheckingSpec extends SignatureSpec {
           {n: Nat} n = S n : Nat;
      """
   }
+  debug {
+
   +d"""
     def plus: Nat -> Nat -> Nat;
       {n: Nat} Z{} n = n : Nat;
@@ -135,6 +135,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
       {n: Nat, v_n: Vector l A n} Z{} n Nil{} v_n = v_n : Vector l A n;
       {a: A, m: Nat, n: Nat, v_m: Vector l A m, v_n: Vector l A n} S{m} n Cons{m a v_m} v_n = Cons l A (plus m n) a (concat l A m n v_m v_n) : Vector l A (S (plus m n));
   """
+  }
 
   "nat ops" in scope {
     t"plus Z Z" ≡ t"Z"

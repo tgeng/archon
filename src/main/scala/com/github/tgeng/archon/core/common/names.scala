@@ -26,7 +26,7 @@ enum Name extends Comparable[Name] :
       var suffix = n.substring(prefixEnd, n.length).!!.toIntOption.getOrElse(1)
       var name = prefix
       while namesToAvoid(Normal(name)) do
-        name = n + suffix
+        name = prefix + suffix
         suffix += 1
       Normal(name)
     case Generated(n) =>
@@ -35,7 +35,7 @@ enum Name extends Comparable[Name] :
       var suffix = n.substring(prefixEnd, n.length).!!.toIntOption.getOrElse(1)
       var name = prefix
       while namesToAvoid(Generated(name)) do
-        name = n + suffix
+        name = prefix + suffix
         suffix += 1
       Generated(name)
 
