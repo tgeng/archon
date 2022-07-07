@@ -18,21 +18,47 @@ trait Visitor[C, R]:
     (using Σ: Signature): R =
     action(using ctx)
 
-  def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
+  def visitPreTTelescope(tTelescope: List[(Binding[CTerm], Variance)])
     (using ctx: C)
-    (using Σ: Signature): R =
-    combine(tTelescope.map(e => visitCTerm(e._1.ty)): _*)
+    (using Σ: Signature): R = tTelescope match
+    case Nil => combine()
+    case (binding, _) :: rest => combine(
+      visitPreBinding(binding),
+      withBindings(Seq(binding.name)) {
+        visitPreTTelescope(rest)
+      }
+    )
 
-  def visitTTelescope(tTelescope: Seq[(Binding[VTerm], Variance)])
+  def visitTTelescope(tTelescope: List[(Binding[VTerm], Variance)])
     (using ctx: C)
-    (using Σ: Signature): R =
-    combine(tTelescope.map(e => visitBinding(e._1)): _*)
+    (using Σ: Signature): R = tTelescope match
+    case Nil => combine()
+    case (binding, _) :: rest => combine(
+      visitBinding(binding),
+      withBindings(Seq(binding.name)) {
+        visitTTelescope(rest)
+      }
+    )
 
-  def visitPreTelescope(telescope: Seq[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
-    combine(telescope.map(b => visitCTerm(b.ty)): _*)
+  def visitPreTelescope(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
+    telescope match
+      case Nil => combine()
+      case binding :: rest => combine(
+        visitPreBinding(binding),
+        withBindings(Seq(binding.name)) {
+          visitPreTelescope(rest)
+        }
+      )
 
-  def visitTelescope(telescope: Seq[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
-    combine(telescope.map(visitBinding): _*)
+  def visitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
+    telescope match
+      case Nil => combine()
+      case binding :: rest => combine(
+        visitBinding(binding),
+        withBindings(Seq(binding.name)) {
+          visitTelescope(rest)
+        }
+      )
 
   def visitPreBinding(binding: Binding[CTerm])(using ctx: C)(using Σ: Signature): R =
     visitCTerm(binding.ty)

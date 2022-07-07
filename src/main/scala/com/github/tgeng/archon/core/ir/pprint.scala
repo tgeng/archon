@@ -33,6 +33,9 @@ object Renamer extends Visitor[RenamerContext, Unit] :
   def rename(tm: CTerm)(using Γ: Context)(using Σ: Signature): Unit =
     doRename(visitCTerm(tm))
 
+  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit =
+    doRename(visitTelescope(t))
+
   private def createRenamerContext(using Γ: Context) =
     val ctx = RenamerContext()
     val initialNames = Γ.map(_.name)
@@ -76,11 +79,7 @@ object Renamer extends Visitor[RenamerContext, Unit] :
     (using ctx: RenamerContext)
     (using Σ: Signature): Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
-    val refName = try {
-      ctx.nameStack(stackIndex)
-    } catch {
-      case e: Throwable => throw e
-    }
+    val refName = ctx.nameStack(stackIndex)
     ctx.allReferencedNames.add(refName)
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
       ctx.potentiallyConflictingNames.getOrElseUpdate(name, mutable.ArrayBuffer()).addOne(refName)
@@ -123,13 +122,20 @@ object PPrintContext:
   def apply(ctx: Context) = new PPrintContext(ctx.map(_.name).to(mutable.ArrayBuffer))
 
 object PrettyPrinter extends Visitor[PPrintContext, Block] :
-  def pprint(tm: VTerm | CTerm)(using Γ: Context)(using Σ: Signature): Block = tm match
+  def pprint(tm: VTerm | CTerm | List[Binding[VTerm]])
+    (using Γ: Context)
+    (using Σ: Signature): Block = tm match
     case tm: VTerm =>
       Renamer.rename(tm)
       visitVTerm(tm)(using PPrintContext(Γ))
     case tm: CTerm =>
       Renamer.rename(tm)
       visitCTerm(tm)(using PPrintContext(Γ))
+    case _: List[?] =>
+      val t = tm.asInstanceOf[List[Binding[VTerm]]]
+      Renamer.rename(t)
+      visitTelescope(t)(using PPrintContext(Γ))
+
 
   given(using PPrintContext)(using Signature): Conversion[VTerm, Block] = visitVTerm(_)
 
@@ -162,37 +168,50 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     action
   }
 
-  override def visitPreTTelescope(tTelescope: Seq[(Binding[CTerm], Variance)])
+  override def visitPreTTelescope(tTelescope: List[(Binding[CTerm], Variance)])
     (using ctx: PPrintContext)
     (using Σ: Signature): Block =
     given(using PPrintContext)
       (using Signature): Conversion[Binding[CTerm], Block] = visitPreBinding(_)
 
     bracketAndComma(
-      tTelescope.map {
+      telescopeToBlock(tTelescope, _._1.name) {
         case (binding, INVARIANT) => binding
         case (binding, COVARIANT) => Block("+", binding)
         case (binding, CONTRAVARIANT) => Block("-", binding)
       }
     )
 
-  override def visitTTelescope(tTelescope: Seq[(Binding[VTerm], Variance)])
+  override def visitTTelescope(tTelescope: List[(Binding[VTerm], Variance)])
     (using PPrintContext)
     (using Signature): Block = bracketAndComma(
-    tTelescope.map {
+    telescopeToBlock(tTelescope, _._1.name) {
       case (binding, INVARIANT) => binding
       case (binding, COVARIANT) => Block("+", binding)
       case (binding, CONTRAVARIANT) => Block("-", binding)
     }
   )
 
-  override def visitPreTelescope(telescope: Seq[Binding[CTerm]])
+  override def visitPreTelescope(telescope: List[Binding[CTerm]])
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block = bracketAndComma(telescope.map(visitPreBinding))
+    (using Σ: Signature): Block = bracketAndComma(
+    telescopeToBlock(telescope, _.name)(visitPreBinding)
+  )
 
-  override def visitTelescope(telescope: Seq[Binding[VTerm]])
+  override def visitTelescope(telescope: List[Binding[VTerm]])
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block = bracketAndComma(telescope.map(visitBinding))
+    (using Σ: Signature): Block = bracketAndComma(
+    telescopeToBlock(telescope, _.name)(visitBinding)
+  )
+
+  private def telescopeToBlock[T](telescope: List[T], nameExtractor: T => Ref[Name])
+    (toBlock: PPrintContext ?=> T => Block)
+    (using ctx: PPrintContext)
+    (using Σ: Signature): List[Block] = telescope match
+    case Nil => Nil
+    case t :: rest => toBlock(t) :: ctx.withBindings(Seq(nameExtractor(t))) {
+      telescopeToBlock(rest, nameExtractor)(toBlock)
+    }
 
   override def visitPreBinding(binding: Binding[CTerm])
     (using PPrintContext)
@@ -517,7 +536,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
           input,
           Seq(h.boundName))
       )
-      case l@Let(t, body) => Left(Block("let", l.boundName, "=", visitCTerm(t)), body, Seq(l.boundName))
+      case l@Let(t, body) => Left(
+        Block("let", l.boundName, "=", visitCTerm(t)),
+        body,
+        Seq(l.boundName)
+      )
       case c => Right(visitCTerm(c))
     }
 
@@ -609,10 +632,15 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
       Concat, ChopDown,
       "{",
       ctx.withPrecedence(PPComma) {
-        Block(
-          Whitespace, ChopDown, Aligned,
-          blocks(using ctx).map(b => Block(NoWrap, Concat, b, ","))
-        )
+        val bs = blocks(using ctx)
+        if bs.isEmpty then
+          Block()
+        else
+          Block(
+            Whitespace, ChopDown, Aligned,
+            bs.init.map(b => Block(NoWrap, Concat, b, ",")),
+            bs.last
+          )
       },
       "}"
     )

@@ -44,11 +44,7 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     if enableDebugging then
       println(indent)
       println(
-        indent + "   " + ANSI_BLUE + Block(
-          Concat, NoWrap, "{", Γ.zipWithIndex.map { (binding, i) =>
-            Block(NoWrap, Whitespace, binding.name.value.toString, ":", pprint(binding.ty))
-          } sepBy ",", "}"
-        ).toString.replaceAll("\n", "\n" + indent + "   ") + ANSI_RESET
+        indent + "   " + ANSI_BLUE + pprint(Γ.toList)(using IndexedSeq[Binding[VTerm]]()).toString.replaceAll("\n", "\n" + indent + "   ") + ANSI_RESET
       )
       val stacktrace = Thread.currentThread().!!.getStackTrace.!!
       println(indent + "┌─ " + title + " " + ANSI_WHITE + "@" + stacktrace(2).toString + ANSI_RESET)
@@ -64,17 +60,6 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
       traceLevel -= 1
       println(indent + "└─ " + endMessage + ANSI_RESET)
     result
-
-  extension (blocks: Iterable[String | Block])
-    def sepBy(delimiter: String | Block): Block =
-      if blocks.isEmpty then Block()
-      else Block(
-        Whitespace,
-        ChopDown,
-        Aligned,
-        blocks.init.map(Block(Concat, NoWrap, _, delimiter)),
-        blocks.last
-      )
 
   inline def debug[T](inline t: T): T =
     if enableDebugging then
