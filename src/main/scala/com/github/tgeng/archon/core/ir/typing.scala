@@ -460,11 +460,13 @@ def inferType(tm: CTerm)
                 for bodyTyTy <- inferType(bodyTy)(using Γ :+ binding)
                     r <- bodyTyTy match
                       case CType(ul2, _, eff) if eff == Total =>
-                        Right(CType(ULevelMax(ul1, ul2.weakened), tm, Total))
+                        // strengthen is safe here because if it references the binding, then the
+                        // binding must be at level ω and hence ULevelMax would return big type.
+                        Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total))
                       // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
                       // inference.
                       case F(Type(ul2, _), eff) if eff == Total =>
-                        Right(CType(ULevelMax(ul1, ul2.weakened), tm, Total))
+                        Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total))
                       case CType(_, _, _) | F(Type(_, _), _) =>
                         Left(EffectfulCTermAsType(bodyTy))
                       case _ => Left(NotCTypeError(bodyTy))
@@ -1083,7 +1085,7 @@ def reduceVType(vTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, VTerm] = ctx.trace("reduce V type") {
+: Either[IrError, VTerm] = ctx.trace("reduce V type", Block(yellow(vTy.sourceInfo), pprint(vTy))) {
   for tyTy <- inferType(vTy)
       r <- tyTy match
         case F(Type(_, _), effect) if effect == Total =>
@@ -1103,7 +1105,7 @@ def reduceCType(cTy: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, CTerm] = ctx.trace("reduce C type") {
+: Either[IrError, CTerm] = ctx.trace("reduce C type", Block(yellow(cTy.sourceInfo), pprint(cTy))) {
   cTy match
     case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop => Right(cTy)
     case _ =>

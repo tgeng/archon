@@ -629,7 +629,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   private def bracketAndComma(blocks: PPrintContext ?=> Seq[Block])
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
-      Concat, ChopDown,
+      Concat,
       "{",
       ctx.withPrecedence(PPComma) {
         val bs = blocks(using ctx)
@@ -637,7 +637,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
           Block()
         else
           Block(
-            Whitespace, ChopDown, Aligned,
+            Whitespace, ChopDown, FixedIncrement(2),
             bs.init.map(b => Block(NoWrap, Concat, b, ",")),
             bs.last
           )
