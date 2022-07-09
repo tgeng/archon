@@ -67,13 +67,13 @@ private final class StackMachine(
    * in type checking code.)
    * @return
    */
-  @tailrec
+//  @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false)
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
   : Either[IrError, CTerm] =
-    pc match
+    val r = pc match
       case Hole => throw IllegalStateException()
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
@@ -247,7 +247,7 @@ private final class StackMachine(
                   heapContent :+ None,
                   input
                 )(h.boundName)
-                run(substHole(stack.pop(), Return(cell)))
+                run(Return(cell))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case SetOp(cell, value) =>
@@ -267,7 +267,7 @@ private final class StackMachine(
                       heapContent.updated(index, Some(value)),
                       input
                     )(h.boundName)
-                    run(substHole(stack.pop(), Return(Cell(heapKey, index))))
+                    run(Return(Cell(heapKey, index)))
                   case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case GetOp(cell) =>
@@ -280,7 +280,7 @@ private final class StackMachine(
               case HeapHandler(_, _, heapContent, _) =>
                 heapContent(index) match
                   case None => Left(IrError.UninitializedCell(reconstructTermFromStack(pc)))
-                  case Some(value) => run(substHole(stack.pop(), Return(value)))
+                  case Some(value) => run(Return(value))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case h@HeapHandler(otherEffects, currentKey, heapContent, input) =>
@@ -294,6 +294,7 @@ private final class StackMachine(
           updateHeapKeyIndex(key, stack.length)
           stack.push(HeapHandler(otherEffects, Some(key), heapContent, input)(h.boundName))
           run(input.substLowers(Heap(key)))
+    r
 
   private enum MatchingStatus:
     case Matched, Stuck, Mismatch
