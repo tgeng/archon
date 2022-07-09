@@ -78,52 +78,6 @@ object Builtins:
         Constructor(n"Refl", Nil, Var(3) :: Var(2) :: Var(1) :: Var(1) :: Nil)
       ))
     ),
-    b(
-      Builtins.CellQn, (
-        /* tParamTys*/
-        (Binding(LevelType())(n"level"), Variance.COVARIANT) ::
-          (Binding(HeapType())(n"h"), Variance.COVARIANT) ::
-          (Binding(
-            Type(
-              USimpleLevel(Var(1)),
-              Top(USimpleLevel(Var(1)))
-            )
-          )(n"A"), Variance.INVARIANT) ::
-          Nil,
-        /* ul */ USimpleLevel(Var(2)),
-        /* numParams */ 3,
-        /* isPure */ true,
-        /* constructors */ IndexedSeq(
-        Constructor(
-          n"MkCell",
-          Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"delegate") :: Nil,
-          Var(3) :: Var(2) :: Var(1) :: Nil
-        )
-      ))
-    ),
-    b(
-      Builtins.UCellQn, (
-        /* tParamTys*/
-        (Binding(LevelType())(n"level"), Variance.COVARIANT) ::
-          (Binding(HeapType())(n"h"), Variance.COVARIANT) ::
-          (Binding(
-            Type(
-              USimpleLevel(Var(1)),
-              Top(USimpleLevel(Var(1)))
-            )
-          )(n"A"), Variance.INVARIANT) ::
-          Nil,
-        /* ul */ USimpleLevel(Var(2)),
-        /* numParams */ 3,
-        /* isPure */ true,
-        /* constructors */ IndexedSeq(
-        Constructor(
-          n"MkUCell",
-          Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"delegate") :: Nil,
-          Var(3) :: Var(2) :: Var(1) :: Nil
-        )
-      ))
-    ),
   ).map {
     case (qn, (tParamTys, ul, numParams, isPure, constructors)) =>
       (qn, (new Data(qn)(tParamTys, ul, numParams, isPure), constructors))
@@ -480,7 +434,70 @@ object Builtins:
         )
       )
     ),
-
+    b(
+      Builtins.CellQn, (
+        FunctionType(
+          Binding(LevelType())(n"level"),
+          FunctionType(
+            Binding(HeapType())(n"h"),
+            FunctionType(
+              Binding(
+                Type(
+                  USimpleLevel(Var(1)),
+                  Top(USimpleLevel(Var(1)))
+                )
+              )(n"A"),
+              F(Type(USimpleLevel(Var(2)), CellType(Var(1), Var(0), CellStatus.Initialized)))
+            )
+          )
+        ),
+        IndexedSeq(
+          Clause(
+            Binding(LevelType())(n"level") :: Binding(HeapType())(n"h") :: Binding(
+              Type(
+                USimpleLevel(Var(1)),
+                Top(USimpleLevel(Var(1)))
+              )
+            )(n"A") :: Nil,
+            CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+            Return(CellType(Var(1), Var(0), CellStatus.Initialized)),
+            F(Type(USimpleLevel(Var(2)), CellType(Var(1), Var(0), CellStatus.Initialized)))
+          )
+        )
+      )
+    ),
+    b(
+      Builtins.UCellQn, (
+        FunctionType(
+          Binding(LevelType())(n"level"),
+          FunctionType(
+            Binding(HeapType())(n"h"),
+            FunctionType(
+              Binding(
+                Type(
+                  USimpleLevel(Var(1)),
+                  Top(USimpleLevel(Var(1)))
+                )
+              )(n"A"),
+              F(Type(USimpleLevel(Var(2)), CellType(Var(1), Var(0), CellStatus.Uninitialized)))
+            )
+          )
+        ),
+        IndexedSeq(
+          Clause(
+            Binding(LevelType())(n"level") :: Binding(HeapType())(n"h") :: Binding(
+              Type(
+                USimpleLevel(Var(1)),
+                Top(USimpleLevel(Var(1)))
+              )
+            )(n"A") :: Nil,
+            CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
+            Return(CellType(Var(1), Var(0), CellStatus.Uninitialized)),
+            F(Type(USimpleLevel(Var(2)), CellType(Var(1), Var(0), CellStatus.Uninitialized)))
+          )
+        )
+      )
+    ),
     b(
       Builtins.AllocOpQn, (
         FunctionType(
@@ -490,7 +507,7 @@ object Builtins:
             FunctionType(
               Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
               F(
-                DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil),
+                CellType(Var(1), Var(0), CellStatus.Uninitialized),
                 EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(1) :: Nil)))
               )
             )
@@ -503,23 +520,9 @@ object Builtins:
               Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
               Nil,
             CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
-            Let(
-              AllocOp(Var(1), Var(0)),
-              Application(
-                Application(
-                  Application(
-                    Application(
-                      Def(Builtins.UCellQn / n"MkUCell"), Var(3)
-                    ),
-                    Var(2)
-                  ),
-                  Var(1)
-                ),
-                Var(0)
-              )
-            )(n"cell"),
+            AllocOp(Var(1), Var(0)),
             F(
-              DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil),
+              CellType(Var(1), Var(0), CellStatus.Uninitialized),
               EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(1) :: Nil)))
             )
           )
@@ -535,7 +538,7 @@ object Builtins:
             FunctionType(
               Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
               FunctionType(
-                Binding(DataType(Builtins.CellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell"),
+                Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"cell"),
                 F(
                   Var(1),
                   EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
@@ -554,7 +557,7 @@ object Builtins:
             CPattern(PVar(3)) ::
               CPattern(PVar(2)) ::
               CPattern(PVar(1)) ::
-              CPattern(PConstructor(n"MkCell", PVar(0) :: Nil)) ::
+              CPattern(PVar(0)) ::
               Nil,
             GetOp(Var(0)),
             F(
@@ -574,16 +577,15 @@ object Builtins:
             FunctionType(
               Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
               FunctionType(
-                Binding(DataType(Builtins.UCellQn, Var(2) :: Var(1) :: Var(0) :: Nil))(n"cell"),
+                Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"cell"),
                 FunctionType(
                   Binding(Var(1))(n"value"),
                   F(
-                    DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
+                    CellType(Var(3), Var(2), CellStatus.Initialized),
                     EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
                   )
                 )
               )
-
             )
           )
         ),
@@ -598,25 +600,11 @@ object Builtins:
             CPattern(PVar(4)) ::
               CPattern(PVar(3)) ::
               CPattern(PVar(2)) ::
-              CPattern(PConstructor(n"MkUCell", PVar(1) :: Nil)) ::
+              CPattern(PVar(1)) ::
               CPattern(PVar(0)) :: Nil,
-            Let(
-              SetOp(Var(1), Var(0)),
-              Application(
-                Application(
-                  Application(
-                    Application(
-                      Def(Builtins.CellQn / n"MkCell"), Var(5)
-                    ),
-                    Var(4)
-                  ),
-                  Var(3)
-                ),
-                Var(0)
-              )
-            )(n"cell"),
+            SetOp(Var(1), Var(0)),
             F(
-              DataType(Builtins.CellQn, Var(4) :: Var(3) :: Var(2) :: Nil),
+              CellType(Var(3), Var(2), CellStatus.Initialized),
               EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
             )
           )

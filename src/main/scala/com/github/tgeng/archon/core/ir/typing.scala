@@ -340,11 +340,11 @@ def inferType(tm: VTerm)
         allRight(maxOperands.map { (ref, _) => checkType(ref, LevelType()) }) >> Right(LevelType())
       case HeapType() => Right(Type(USimpleLevel(LevelLiteral(0)), HeapType()))
       case _: Heap => Right(HeapType())
-      case CellType(heap, ty, _) =>
+      case cellType@CellType(heap, ty, _) =>
         for _ <- checkType(heap, HeapType())
             tyTy <- inferType(ty)
             r <- tyTy match
-              case _: Type => Right(tyTy)
+              case Type(ul, _) => Right(Type(ul, cellType))
               case _ => Left(NotTypeError(ty))
         yield r
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type")

@@ -49,7 +49,7 @@ object Renamer extends Visitor[RenamerContext, Unit] :
     import Name.*
     ctx.allNames.foreach { ref =>
       ref.value match
-        case _: Generated if !ctx.allReferencedNames(ref) => ref.value = Unreferenced
+        case Unreferenced if ctx.allReferencedNames(ref) => ref.value = gn"v"
         case _ =>
     }
     ctx.allNames.foreach { ref =>
