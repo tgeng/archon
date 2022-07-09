@@ -756,7 +756,9 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
           case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _) =>
             for r <- checkSubsumption(heap1, heap2, Some(HeapType())) >>
               checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
-              (if status1 == status2 || status1 == CellStatus.Initialized then Right(()) else Left(
+              (if status1 == status2 || status1 == CellStatus.Initialized then
+                Right(())
+              else Left(
                 NotVSubsumption(sub, sup, ty, mode)
               ))
             yield r
@@ -820,7 +822,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
             for _ <- checkEffSubsumption(eff1, eff2)
                 r <- checkSubsumption(vTy1, vTy2, None)
             yield r
-          case (Return(v1), Return(v2), Some(F(_, ty))) => checkSubsumption(v1, v2, Some(ty))
+          case (Return(v1), Return(v2), Some(F(ty, _))) => checkSubsumption(v1, v2, Some(ty))
           case (Let(t1, ctx1), Let(t2, ctx2), ty) =>
             for t1CTy <- inferType(t1)
                 r <- t1CTy match

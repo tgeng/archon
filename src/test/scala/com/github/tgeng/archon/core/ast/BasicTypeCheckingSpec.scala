@@ -46,6 +46,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
     t"Cell L0 h Effects" hasType t"Type L0"
     t"UCell L0 h Effects" hasType t"Type L0"
+    t"Cell L0 h Effects" ⪯ t"UCell L0 h Effects"
 
     t"Equality L0 Effects <> <>" hasType t"Type L0"
     t"Equality L0 Heap h global" hasType t"Type L0"
@@ -205,5 +206,45 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        };
        finToNat n3 (roll n3)
      """ ≡ t"S (S (S Z))"
+
+//    t"""
+//       let n1 = S Z;
+//       let n2 = S n1;
+//       let n3 = S n2;
+//       hpv a <>;
+//       hdl dice{n3} <> Nat {
+//         roll -> plus
+//                   (plus
+//                     ((frc resume) (FZ n2))
+//                     ((frc resume) (FS n2 (FZ n1)))
+//                   )
+//                   ((frc resume) (FS n2 (FS n1 (FZ Z))));
+//       };
+//       let v = alloc L0 a Nat;
+//       let v = set L0 a Nat v Z;
+//       let r = finToNat n3 (roll n3);
+//       set L0 a Nat v (plus (get L0 a Nat v) r);
+//       get L0 a Nat v
+//     """ ≡ t"S (S (S (S Z)))"
+
+//     t"""
+//        let n1 = S Z;
+//        let n2 = S n1;
+//        let n3 = S n2;
+//        hdl dice{n3} <> Nat {
+//          roll -> plus
+//                    (plus
+//                      ((frc resume) (FZ n2))
+//                      ((frc resume) (FS n2 (FZ n1)))
+//                    )
+//                    ((frc resume) (FS n2 (FS n1 (FZ Z))));
+//        };
+//        hpv a <>;
+//        let v = alloc L0 a Nat;
+//        let v = set L0 a Nat v Z;
+//        let r = finToNat n3 (roll n3);
+//        set L0 a Nat v (plus (get L0 a Nat v) r);
+//        get L0 a Nat v
+//      """ ≡ t"S (S (S Z))"
   }
 }

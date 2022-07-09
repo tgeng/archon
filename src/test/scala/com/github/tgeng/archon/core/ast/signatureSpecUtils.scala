@@ -60,7 +60,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm))
+    val cTy = assertRight(inferType(cTm2))
     assertRight(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION))
 
   infix def ⋠(tm2: AstTerm): Unit =
@@ -68,7 +68,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm))
+    val cTy = assertRight(inferType(cTm2))
     assertLeft(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION))
 
   infix def ≡(tm2: AstTerm): Unit =
@@ -76,7 +76,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm))
+    val cTy = assertRight(inferType(cTm2))
     assertRight(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION))
 
   infix def ≢(tm2: AstTerm): Unit =
@@ -84,7 +84,7 @@ extension (using Γ: Context)
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm))
+    val cTy = assertRight(inferType(cTm2))
     assertLeft(checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION))
 
 def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using ctx: TestContext): R =
