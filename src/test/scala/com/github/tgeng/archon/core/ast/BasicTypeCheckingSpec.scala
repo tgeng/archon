@@ -280,7 +280,7 @@ class BasicTypeCheckingSpec extends SignatureSpec {
        let r = finToNat n3 (roll n3);
        set L0 a Nat v (plus (get L0 a Nat v) r);
        get L0 a Nat v
-     """ ≡ t"S (S (S Z))"
+     """ hasType t"Nat"
 
     t"""
         let n1 = S Z;
