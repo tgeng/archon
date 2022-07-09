@@ -569,9 +569,9 @@ def inferType(tm: CTerm)
                                             Binding(opResultTy)(gn"res"),
                                             F(
                                               outputType.weaken(opParamTys.size + 1, 0),
-                                              otherEffects
+                                              otherEffects.weaken(opParamTys.size + 1, 0)
                                             ),
-                                            otherEffects
+                                            Total
                                           )
                                         )
                                       )(resumeName)

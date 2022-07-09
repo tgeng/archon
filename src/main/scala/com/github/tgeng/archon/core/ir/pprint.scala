@@ -223,7 +223,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using PPrintContext)
     (using Signature): Block = binding.name.value match
     case Unreferenced => Block(binding.ty)
-    case n => Block(n, ":", binding.ty)
+    case n => Block(n.toString + ":", binding.ty)
 
   override def visitPVar(pVar: PVar)
     (using ctx: PPrintContext)
@@ -555,7 +555,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
 
   override def visitEff(eff: (QualifiedName, Arguments))
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block = bracketAndSpace(eff._1, eff._2.map(visitVTerm))
+    (using Σ: Signature): Block = bracketAndSpace(Block(NoWrap, Concat, "𝑒 " + eff._1.shortName), eff._2.map(visitVTerm))
 
   override def visitBigLevel(layer: Nat)
     (using ctx: PPrintContext)
@@ -629,7 +629,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   private def bracketAndComma(blocks: PPrintContext ?=> Seq[Block])
     (using ctx: PPrintContext): Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
-      Concat,
+      Concat, NoWrap,
       "{",
       ctx.withPrecedence(PPComma) {
         val bs = blocks(using ctx)

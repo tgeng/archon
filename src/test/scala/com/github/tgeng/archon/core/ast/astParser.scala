@@ -181,7 +181,7 @@ object AstParser:
     for
       _ <- P.stringFrom("hdl\\b".r) << P.whitespaces
       eff <- astEff << P.whitespaces
-      otherEffects <- atom << P.whitespaces
+      otherEffects <- effect << P.whitespaces
       outputType <- atom << P.whitespaces
       _ <- P.from("{") << P.whitespaces
       allHandlers <- ((transformHandler || opHandler) <%< P.from(";") << P.whitespaces).*
@@ -210,7 +210,7 @@ object AstParser:
     for
       _ <- P.stringFrom("hpv\\b".r) << P.whitespaces
       heapVarName <- name << P.whitespaces
-      otherEffects <- atom << P.whitespaces
+      otherEffects <- effect << P.whitespaces
     yield SHeapHandler(otherEffects, heapVarName)
   }
 
@@ -228,7 +228,7 @@ object AstParser:
     val argBinding: StrParser[( /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm, SourceInfo)] =
       si(
         for
-          eff <- eff.??.map(_.getOrElse(AstDef(Builtins.TotalQn)(using SiEmpty)))
+          eff <- effect.??.map(_.getOrElse(AstDef(Builtins.TotalQn)(using SiEmpty)))
           argName <- (name <%< P.from(":") << P.whitespaces).??.map(_.getOrElse(Name.Unreferenced))
           argTy <- app
         yield (eff, argName, argTy)
@@ -248,7 +248,7 @@ object AstParser:
     }
   }
 
-  private def eff: StrParser[AstTerm] = P {
+  private def effect: StrParser[AstTerm] = P {
 
     val effUnion: StrParser[AstTerm] = (app sepBy1 (P.whitespaces >> P.from("||") << P.whitespaces))
       .map {
@@ -302,7 +302,7 @@ object AstParser:
       (
         si(
           for
-            eff <- eff
+            eff <- effect
             t <- rhs
           yield (t, eff)
         )(AstF(_, _))
