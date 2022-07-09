@@ -29,8 +29,7 @@ extension[T] (a: mutable.ArrayBuffer[T])
 
 
 private final class StackMachine(
-  val stack: mutable.ArrayBuffer[CTerm],
-  val signature: Signature,
+  val stack: mutable.ArrayBuffer[CTerm]
 ):
 
   // Note: for now this does not seem to be useful because this stack machine is only used for type
@@ -60,14 +59,14 @@ private final class StackMachine(
       updateHeapKeyIndex(heapKey, index)
 
   /**
-   * @param pc "program counter"
+   * @param pc         "program counter"
    * @param reduceDown if true, logic should not try to decompose the [[pc]] and push it's components on to the stack.
-   * This is useful so that the run logic does not spin into infinite loop if the given term has type
-   * errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
-   * in type checking code.)
+   *                   This is useful so that the run logic does not spin into infinite loop if the given term has type
+   *                   errors. (Ideally, input should be type-checked so this should never happen, unless there are bugs
+   *                   in type checking code.)
    * @return
    */
-//  @tailrec
+  //  @tailrec
   def run(pc: CTerm, reduceDown: Boolean = false)
     (using Context)
     (using Σ: Signature)
@@ -408,10 +407,9 @@ given Reducible[CTerm] with
     (using ctx: Context)
     (using signature: Signature)
     (using TypingContext)
-  : Either[IrError, CTerm] = StackMachine(
-    mutable.ArrayBuffer(),
-    signature
-  ).run(t).map(_.withSourceInfo(t.sourceInfo))
+  : Either[IrError, CTerm] = StackMachine(mutable.ArrayBuffer())
+    .run(t)
+    .map(_.withSourceInfo(t.sourceInfo))
 
 object Reducible:
   def reduce(t: CTerm)
