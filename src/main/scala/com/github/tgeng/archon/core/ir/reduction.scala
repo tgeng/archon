@@ -3,7 +3,6 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 
 import scala.annotation.tailrec
-import scala.collection.immutable.ListSet
 import scala.collection.mutable
 import CTerm.*
 import VTerm.*

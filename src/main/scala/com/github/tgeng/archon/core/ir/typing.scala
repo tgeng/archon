@@ -1,6 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
-import scala.collection.immutable.{ListMap, ListSet}
+import scala.collection.immutable.{Map, Set}
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Reducible.reduce
@@ -511,7 +511,7 @@ def inferType(tm: CTerm)
               case None => Left(MissingDefinition(qn))
               case Some(op) => checkTypes(tArgs, effect.tParamTys) >>
                 checkTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
-                Right(F(op.resultTy.substLowers(tArgs ++ args: _*), EffectsLiteral(ListSet(eff))))
+                Right(F(op.resultTy.substLowers(tArgs ++ args: _*), EffectsLiteral(Set(eff))))
       case _: Continuation => throw IllegalArgumentException(
         "continuation is only created in reduction and hence should not be type checked."
       )
@@ -544,7 +544,7 @@ def inferType(tm: CTerm)
                           )(using Γ :+ Binding(inputTy)(gn"v"))
                               _ <- checkSubsumption(
                                 inputEff,
-                                EffectsUnion(otherEffects, EffectsLiteral(ListSet(eff))),
+                                EffectsUnion(otherEffects, EffectsLiteral(Set(eff))),
                                 Some(EffectsType())
                               )
                               _ <- allRight(
@@ -587,7 +587,7 @@ def inferType(tm: CTerm)
           Right(
             F(
               CellType(heap, vTy, CellStatus.Uninitialized),
-              EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
+              EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
             )
           )
       case SetOp(cell, value) =>
@@ -597,7 +597,7 @@ def inferType(tm: CTerm)
                 Right(
                   F(
                     CellType(heap, vTy, CellStatus.Initialized),
-                    EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
+                    EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
                   )
                 )
               case _ => Left(ExpectCell(cell))
@@ -609,7 +609,7 @@ def inferType(tm: CTerm)
                 Right(
                   F(
                     vTy,
-                    EffectsLiteral(ListSet((Builtins.HeapEffQn, heap :: Nil))),
+                    EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
                   )
                 )
               case _: CellType => Left(UninitializedCell(tm))
@@ -627,7 +627,7 @@ def inferType(tm: CTerm)
                   _ <- checkSubsumption(
                     eff,
                     EffectsUnion(
-                      EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(0) :: Nil))),
+                      EffectsLiteral(Set((Builtins.HeapEffQn, Var(0) :: Nil))),
                       otherEffects.weakened
                     ),
                     Some(EffectsType())
@@ -1021,13 +1021,13 @@ private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)
   val ul1Normalized = ul1 match
     case USimpleLevel(v) => v.normalized match
       case Left(e) => return Left(e)
-      case Right(v: Var) => USimpleLevel(Level(0, ListMap(v -> 0)))
+      case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
       case Right(v) => USimpleLevel(v)
     case _ => ul1
   val ul2Normalized = ul2 match
     case USimpleLevel(v) => v.normalized match
       case Left(e) => return Left(e)
-      case Right(v: Var) => USimpleLevel(Level(0, ListMap(v -> 0)))
+      case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
       case Right(v) => USimpleLevel(v)
     case _ => ul2
 

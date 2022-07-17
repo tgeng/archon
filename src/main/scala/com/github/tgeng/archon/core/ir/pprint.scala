@@ -3,7 +3,7 @@ package com.github.tgeng.archon.core.ir
 import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import collection.immutable.{ListMap, ListSet}
+import collection.immutable.{Map, Set}
 
 import WrapPolicy.*
 import IndentPolicy.*

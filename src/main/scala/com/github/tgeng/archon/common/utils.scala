@@ -3,7 +3,6 @@ package com.github.tgeng.archon.common
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import scala.collection.immutable.ListSet
 import scala.collection.mutable
 import scala.math.max
 
@@ -167,8 +166,8 @@ def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
     case Left(l) => Left(l)
     case Right(r) => transpose(l).map(l => r :: l)
 
-def transpose[L, R](l: ListSet[Either[L, R]]): Either[L, ListSet[R]] =
-  transpose(l.toList).map(ListSet(_: _*))
+def transpose[L, R](l: Set[Either[L, R]]): Either[L, Set[R]] =
+  transpose(l.toList).map(Set(_: _*))
 
 def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
   transpose(

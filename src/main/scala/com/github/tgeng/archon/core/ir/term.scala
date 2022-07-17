@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.ir
 
-import collection.immutable.{ListMap, ListSet}
 import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
@@ -129,13 +128,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case EffectsType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     EffectsQn
   )
-  case Effects(literal: ListSet[Eff], unionOperands: ListSet[VTerm.Var])
+  case Effects(literal: Set[Eff], unionOperands: Set[VTerm.Var])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     LevelQn
   )
-  case Level(literal: Nat, maxOperands: ListMap[VTerm.Var, /* level offset */ Nat])
+  case Level(literal: Nat, maxOperands: Map[VTerm.Var, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Heap */
@@ -192,21 +191,21 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
     (using Σ: Signature): VTerm = transformer.transformVTerm(this)
 
 object VTerm:
-  def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level = Level(n, ListMap())
+  def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level = Level(n, Map())
 
   def LevelSuc(t: VTerm): Level = t match
     case Level(literal, maxOperands) => Level(
       literal + 1,
       maxOperands.map { (r, o) => (r, o + 1) }
     )(using SiLevelSuc(t.sourceInfo))
-    case r: Var => Level(1, ListMap((r, 1)))(using SiLevelSuc(t.sourceInfo))
+    case r: Var => Level(1, Map((r, 1)))(using SiLevelSuc(t.sourceInfo))
     case _ => throw IllegalArgumentException("type error")
 
   def LevelMax(t1: VTerm, t2: VTerm): Level = t1 match
     case Level(literal1, maxOperands1) => t2 match
       case Level(literal2, maxOperands2) => Level(
         math.max(literal1, literal2),
-        ListMap.from(
+        Map.from(
           (maxOperands1.toSeq ++ maxOperands2.toSeq)
             .groupBy(_._1)
             .map { (k, vs) => (k, vs.map(_._2).max) }
@@ -218,7 +217,7 @@ object VTerm:
     case r1: Var => t2 match
       case Level(literal2, maxOperands2) =>
         Level(literal2, maxOperands2.updated(r1, 0))(using SiLevelMax(t1.sourceInfo, t2.sourceInfo))
-      case r2: Var => Level(0, ListMap((r1, 0), (r2, 0)))(
+      case r2: Var => Level(0, Map((r1, 0), (r2, 0)))(
         using SiLevelMax(
           t1.sourceInfo,
           t2.sourceInfo
@@ -227,11 +226,11 @@ object VTerm:
       case _ => throw IllegalArgumentException("type error")
     case _ => throw IllegalArgumentException("type error")
 
-  def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(ListSet.empty)
+  def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
-  def EffectsLiteral(effects: ListSet[Eff])(using sourceInfo: SourceInfo): Effects = Effects(
+  def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects = Effects(
     effects,
-    ListSet.empty
+    Set.empty
   )
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
@@ -250,7 +249,7 @@ object VTerm:
           literal2,
           unionOperands2 + r1
         )
-        case r2: Var => Effects(ListSet(), ListSet(r1, r2))
+        case r2: Var => Effects(Set(), Set(r1, r2))
         case _ => throw IllegalArgumentException("type error")
       case _ => throw IllegalArgumentException("type error")
 

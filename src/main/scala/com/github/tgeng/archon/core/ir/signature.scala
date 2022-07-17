@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.ir
 
-import scala.collection.immutable.ListSet
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.ULevel.USimpleLevel
@@ -318,7 +317,7 @@ trait Signature:
         Clause(
           effect.tParamTys,
           pVars(highestDbIndex),
-          Return(EffectsLiteral(ListSet((qn, vars(highestDbIndex))))),
+          Return(EffectsLiteral(Set((qn, vars(highestDbIndex))))),
           F(EffectsType())
         )
       )
@@ -337,7 +336,7 @@ trait Signature:
               .foldRight[CTerm](
                 F(
                   op.resultTy,
-                  EffectsLiteral(ListSet((effectQn, vars(allParamTys.size - 1, op.paramTys.size))))
+                  EffectsLiteral(Set((effectQn, vars(allParamTys.size - 1, op.paramTys.size))))
                 )
               ) { (binding, ty) =>
                 FunctionType(binding, ty)

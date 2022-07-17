@@ -5,7 +5,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.VTerm.Type
 
-import scala.collection.immutable.{ListMap, ListSet}
+import scala.collection.immutable.{Map, Set}
 
 type PartialSubstitution[T] = Int => Option[T]
 
@@ -96,16 +96,16 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
       (qn, args.map(transformVTerm))
     }
     if nonVarOperands.isEmpty then
-      Effects(newLiterals.to(ListSet), newOperands.to(ListSet))
+      Effects(newLiterals.to(Set), newOperands.to(Set))
     else
       Collapse(
         nonVarOperands.foldLeft[CTerm](
           Return(
             Effects(
-              newLiterals.to(ListSet),
+              newLiterals.to(Set),
               (newOperands.map(_.weaken(nonVarOperands.size, 0).asInstanceOf[Var]) ++
                 vars(nonVarOperands.size - 1))
-                .to(ListSet)
+                .to(Set)
             )
           )
         ) { (ctx, t) =>
@@ -137,13 +137,13 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
         case Collapse(c) => nonVarOperands.addOne(c)
         case _ => throw IllegalArgumentException("type error")
     if nonVarOperands.isEmpty then
-      Level(newLiteral, ListMap.from(newOperands))
+      Level(newLiteral, Map.from(newOperands))
     else
       Collapse(
         nonVarOperands.foldLeft[CTerm](
           Return(
             Level(
-              newLiteral, ListMap.from(
+              newLiteral, Map.from(
                 newOperands.map {
                   case (v, offset) => (v.weaken(nonVarOperands.size, 0).asInstanceOf[Var], offset)
                 } ++

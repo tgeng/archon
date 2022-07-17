@@ -9,8 +9,6 @@ import ULevel.*
 import Declaration.*
 import Builtins.*
 
-import scala.collection.immutable.ListSet
-
 class BasicTypeCheckingSpec extends SignatureSpec {
   +Effect(HeapEffQn)(Binding(HeapType)(n"heap") :: Nil)
 

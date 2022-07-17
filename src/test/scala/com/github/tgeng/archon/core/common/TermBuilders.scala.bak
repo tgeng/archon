@@ -7,8 +7,6 @@ import VTerm.*
 import CTerm.*
 import Declaration.*
 
-import scala.collection.immutable.ListSet
-
 object TermBuilders:
 
   given Conversion[Long, ULevel] = i => USimpleLevel(LevelLiteral(i.toInt))
@@ -54,7 +52,7 @@ object TermBuilders:
     case SomeCall(qn, elims) =>
       val args = elims.map(_.asInstanceOf[Arg].v)
       Σ.getDataOption(qn).map(_ => DataType(qn, args)).orElse(
-        Σ.getEffectOption(qn).map(_ => EffectsLiteral(ListSet((qn, args))))
+        Σ.getEffectOption(qn).map(_ => EffectsLiteral(Set((qn, args))))
       ).get
 
   given(using Σ: Signature): Conversion[SomeCall[QualifiedName], Eff] = _ match

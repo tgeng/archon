@@ -1,7 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.core.common.*
-import collection.immutable.ListSet
 
 import QualifiedName.*
 import VTerm.*
@@ -428,7 +427,7 @@ object Builtins:
           Clause(
             Nil,
             Nil,
-            Return(EffectsLiteral(ListSet())),
+            Return(EffectsLiteral(Set())),
             F(EffectsType())
           )
         )
@@ -508,7 +507,7 @@ object Builtins:
               Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
               F(
                 CellType(Var(1), Var(0), CellStatus.Uninitialized),
-                EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(1) :: Nil)))
+                EffectsLiteral(Set((Builtins.HeapEffQn, Var(1) :: Nil)))
               )
             )
           )
@@ -523,7 +522,7 @@ object Builtins:
             AllocOp(Var(1), Var(0)),
             F(
               CellType(Var(1), Var(0), CellStatus.Uninitialized),
-              EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(1) :: Nil)))
+              EffectsLiteral(Set((Builtins.HeapEffQn, Var(1) :: Nil)))
             )
           )
         )
@@ -541,7 +540,7 @@ object Builtins:
                 Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"cell"),
                 F(
                   Var(1),
-                  EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
+                  EffectsLiteral(Set((Builtins.HeapEffQn, Var(2) :: Nil)))
                 )
               )
             )
@@ -562,7 +561,7 @@ object Builtins:
             GetOp(Var(0)),
             F(
               Var(1),
-              EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(2) :: Nil)))
+              EffectsLiteral(Set((Builtins.HeapEffQn, Var(2) :: Nil)))
             )
           )
         )
@@ -582,7 +581,7 @@ object Builtins:
                   Binding(Var(1))(n"value"),
                   F(
                     CellType(Var(3), Var(2), CellStatus.Initialized),
-                    EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
+                    EffectsLiteral(Set((Builtins.HeapEffQn, Var(3) :: Nil)))
                   )
                 )
               )
@@ -605,7 +604,7 @@ object Builtins:
             SetOp(Var(1), Var(0)),
             F(
               CellType(Var(3), Var(2), CellStatus.Initialized),
-              EffectsLiteral(ListSet((Builtins.HeapEffQn, Var(3) :: Nil)))
+              EffectsLiteral(Set((Builtins.HeapEffQn, Var(3) :: Nil)))
             )
           )
         )
