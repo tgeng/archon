@@ -28,22 +28,6 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
     if v.idx >= ctx._2 then Var(v.idx + ctx._1)(using v.sourceInfo) else v
 
-  override def transformEffects(effects: Effects)(using ctx: (Int, Int))(using Σ: Signature) =
-    Effects(
-      effects.literal.map {
-        case (qn, args) => (qn, args.map(v => transformVTerm(v)))
-      },
-      effects.unionOperands.map(
-        transformVar(_).asInstanceOf[VTerm.Var]
-      )
-    )(using effects.sourceInfo)
-
-  override def transformLevel(level: Level)(using ctx: (Int, Int))(using Σ: Signature) =
-    Level(
-      level.literal,
-      level.maxOperands.map { (k, v) => (transformVar(k).asInstanceOf[VTerm.Var], v) }
-    )(using level.sourceInfo)
-
 end RaiseTransformer
 
 given RaisableVTerm: Raisable[VTerm] with
@@ -74,87 +58,6 @@ private object SubstituteTransformer extends Transformer[(PartialSubstitution[VT
     ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _ => v
-
-  override def transformEffects(effects: Effects)
-    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
-    (using Σ: Signature) =
-    given SourceInfo = effects.sourceInfo
-
-    val operands = effects.unionOperands.map(transformVar)
-    val newLiterals = effects.literal.to(mutable.ArrayBuffer)
-    val newOperands = mutable.ArrayBuffer[Var]()
-    val nonVarOperands = mutable.ArrayBuffer[CTerm]()
-    for operand <- operands do
-      operand match
-        case r: Var => newOperands.append(r)
-        case Effects(literal, operands) =>
-          newLiterals.appendAll(literal)
-          newOperands.appendAll(operands)
-        case Collapse(c) => nonVarOperands.addOne(c)
-        case _ => throw IllegalArgumentException("type error")
-    newLiterals.mapInPlace { (qn, args) =>
-      (qn, args.map(transformVTerm))
-    }
-    if nonVarOperands.isEmpty then
-      Effects(newLiterals.to(Set), newOperands.to(Set))
-    else
-      Collapse(
-        nonVarOperands.foldLeft[CTerm](
-          Return(
-            Effects(
-              newLiterals.to(Set),
-              (newOperands.map(_.weaken(nonVarOperands.size, 0).asInstanceOf[Var]) ++
-                vars(nonVarOperands.size - 1))
-                .to(Set)
-            )
-          )
-        ) { (ctx, t) =>
-          Let(t, ctx)(gn"e")
-        }
-      )
-
-  override def transformLevel(level: Level)
-    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
-    (using Σ: Signature) =
-    given SourceInfo = level.sourceInfo
-
-    val operands = level.maxOperands.map { (ref, lOffset) => (transformVar(ref), lOffset) }
-    var newLiteral = level.literal
-    val newOperands = mutable.ArrayBuffer[(Var, Nat)]()
-    val nonVarOperands = mutable.ArrayBuffer[CTerm]()
-    for (t, lOffset) <- operands do
-      t match
-        case r: Var => newOperands.append((r, lOffset))
-        case Level(literal, operands) =>
-          val offsetOperands = operands.map { (r, o) => (r, o + lOffset) }
-          newOperands.addAll(offsetOperands)
-          newLiteral = (Seq(
-            math.max(
-              literal,
-              newLiteral
-            )
-          ) ++ offsetOperands.map { (_, o) => o }).max
-        case Collapse(c) => nonVarOperands.addOne(c)
-        case _ => throw IllegalArgumentException("type error")
-    if nonVarOperands.isEmpty then
-      Level(newLiteral, Map.from(newOperands))
-    else
-      Collapse(
-        nonVarOperands.foldLeft[CTerm](
-          Return(
-            Level(
-              newLiteral, Map.from(
-                newOperands.map {
-                  case (v, offset) => (v.weaken(nonVarOperands.size, 0).asInstanceOf[Var], offset)
-                } ++
-                  vars(nonVarOperands.size - 1).map((_, 0))
-              )
-            )
-          )
-        ) { (ctx, t) =>
-          Let(t, ctx)(gn"l")
-        }
-      )
 
 end SubstituteTransformer
 

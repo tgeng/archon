@@ -389,6 +389,36 @@ extension (v: VTerm)
             case Return(v) => Right(v)
             case stuckC => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
+    case e: Effects =>
+      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[VTerm])] = tm match
+        case Effects(literal, operands) =>
+          for literalsAndOperands: Set[(Set[Eff], Set[VTerm])] <- transpose(operands.map(dfs))
+            yield (literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
+              literalsAndOperands.flatMap { case (_, o) => o }
+            )
+        case c: Collapse => c.normalized.flatMap(dfs)
+        case v => Right((Set(), Set(v)))
+
+      dfs(e).map { case (eff, operands) => Effects(eff, operands) }
+    case l: Level =>
+      def dfs(tm: VTerm): Either[IrError, (Nat, Map[VTerm, Nat])] = tm match
+        case Level(literal, operands) =>
+          for literalsAndOperands: Seq[(Nat, Map[VTerm, Nat])] <- transpose(
+            operands.map { (tm, offset) =>
+              dfs(tm).map {
+                case (l, m) => (l + offset, m.map((tm, l) => (tm, l + offset)))
+              }
+            }.toList
+          )
+          yield ((literalsAndOperands.map(_._1) ++ Seq(literal)).max,
+            literalsAndOperands
+              .flatMap[(VTerm, Nat)](_._2)
+              .groupMap(_._1)(_._2)
+              .map { (tm, offsets) => (tm, offsets.max) })
+        case c: Collapse => c.normalized.flatMap(dfs)
+        case v => Right(0, Map((v, 0)))
+
+      dfs(l).map { case (l, m) => Level(l, m) }
     case _ => Right(v)
 
 extension (vs: List[VTerm])

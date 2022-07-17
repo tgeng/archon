@@ -128,13 +128,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case EffectsType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     EffectsQn
   )
-  case Effects(literal: Set[Eff], unionOperands: Set[VTerm.Var])
+  case Effects(literal: Set[Eff], unionOperands: Set[VTerm])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     LevelQn
   )
-  case Level(literal: Nat, maxOperands: Map[VTerm.Var, /* level offset */ Nat])
+  case Level(literal: Nat, maxOperands: Map[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Heap */

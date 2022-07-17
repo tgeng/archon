@@ -187,7 +187,7 @@ trait Visitor[C, R]:
 
   def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
     combine(
-      (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVar)).toSeq: _*
+      (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVTerm)).toSeq: _*
     )
 
   def visitLevelType(levelType: LevelType)
@@ -443,11 +443,18 @@ trait Transformer[C]:
     (using ctx: C)
     (using Σ: Signature): VTerm = effectsType
 
-  def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm
+  def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm = Effects(
+    effects.literal.map{(qn, args) => (qn, args.map(transformVTerm))},
+    effects.unionOperands.map(transformVTerm)
+  )(using effects.sourceInfo)
 
   def transformLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): VTerm = levelType
 
-  def transformLevel(level: Level)(using ctx: C)(using Σ: Signature): VTerm
+  def transformLevel(level: Level)(using ctx: C)(using Σ: Signature): VTerm =
+    Level(
+      level.literal,
+      level.maxOperands.map((k, v) => (transformVTerm(k), v))
+    )(using level.sourceInfo)
 
   def transformHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): VTerm = heapType
 

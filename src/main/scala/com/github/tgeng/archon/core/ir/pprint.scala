@@ -320,11 +320,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
       Block("total")
     else
       ctx.withPrecedence(PPEffOp) {
-        (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVar)) sepBy "|"
+        (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVTerm)) sepBy "|"
       }
 
   override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    def toBlock(varAndOffset: (VTerm.Var, Nat)): Block = varAndOffset match
+    def toBlock(varAndOffset: (VTerm, Nat)): Block = varAndOffset match
       case (v, 0) => v
       case (v, offset) =>
         ctx.withPrecedence(PPLevelOp)(Block(Whitespace, NoWrap, v, "+", offset.toString))
