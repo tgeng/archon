@@ -89,18 +89,22 @@ def uLubSum[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
 
 def uLubJoin[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(lubs.flatten.toSet)
 
-private def uLubNormalize[T](lub: ULub[T]): ULub[T] = lub.map {
-  _.partitionMap { prod =>
-    if prod.isEmpty then Right(Usage.U1)
-    else if prod.size == 1 && prod.head.isInstanceOf[Usage] then Right(prod.head.asInstanceOf[Usage])
-    else Left(prod)
+private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
+  val r = lub.map {
+    _.partitionMap { prod =>
+      if prod.isEmpty then Right(Usage.U1)
+      else if prod.size == 1 && prod.head.isInstanceOf[Usage] then Right(prod.head.asInstanceOf[Usage])
+      else Left(prod)
+    }
+  }.groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U0)(_ + _))(_ | _)
+    .toSet
+    .map { (sum, literal) =>
+      if literal == Usage.U0 then sum.multiToSeq
+      else sum.multiToSeq ++ uSumFromLiteral(literal)
   }
-}.groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U0)(_ + _))(_ | _)
-  .toSet
-  .map { (sum, literal) =>
-    if literal == Usage.U0 then sum.multiToSeq
-    else sum.multiToSeq ++ uSumFromLiteral(literal)
-  }
+  // UAny is an absorbing element for |
+  if r.contains(uLubFromLiteral(Usage.UAny)) then uLubFromLiteral(Usage.UAny)
+  else r
 
 private def uSumFromLiteral[T](usage: Usage): USum[T] = Seq(Seq(usage))
 
