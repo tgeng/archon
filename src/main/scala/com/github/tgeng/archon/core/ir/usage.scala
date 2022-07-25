@@ -87,7 +87,7 @@ def uLubSum[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
   }
 )
 
-def uLubJoin[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(lubs.flatten.toSet)
+def uLubJoin[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(lubs.flatten.map(uSumNormalize).toSet)
 
 private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
   val r = lub.map {
@@ -103,7 +103,7 @@ private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
       else sum.multiToSeq ++ uSumFromLiteral(literal)
   }
   // UAny is an absorbing element for |
-  if r.contains(uLubFromLiteral(Usage.UAny)) then uLubFromLiteral(Usage.UAny)
+  if r.contains(uSumFromLiteral(Usage.UAny)) then uLubFromLiteral(Usage.UAny)
   else r
 
 private def uSumFromLiteral[T](usage: Usage): USum[T] = Seq(Seq(usage))
