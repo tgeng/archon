@@ -16,6 +16,8 @@ object Builtins:
   val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
   val CTopQn = BuiltinType / "CTop"
 
+  val UsageQn = BuiltinType / "Usage"
+
   val EqualityQn = BuiltinType / "Equality"
   val CellQn = BuiltinType / "Cell"
   val UCellQn = BuiltinType / "UCell"

@@ -88,6 +88,9 @@ enum CellStatus extends Comparable[CellStatus] :
     else if this == CellStatus.Initialized then -1
     else 1
 
+enum UsageOperator:
+  case USum, UProd, UJoin
+
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
@@ -125,6 +128,11 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   )(using sourceInfo: SourceInfo) extends VTerm(sourceInfo) //, QualifiedNameOwner(EqualityQn)
   case Refl()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  case UsageType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case UsageCompound(operator: UsageOperator, operands: Multiset[VTerm])
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+
   case EffectsType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     EffectsQn
   )
@@ -158,6 +166,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
    */
   case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  this match
+    case UsageCompound(UsageOperator.UJoin, operands) if operands.isEmpty =>
+      throw IllegalArgumentException(
+        "empty operands not allowed for join because join does not have an identity"
+      )
+    case _ =>
+
   override def withSourceInfo(sourceInfo: SourceInfo): VTerm =
     given SourceInfo = sourceInfo
 
@@ -173,6 +188,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
       case Con(name, args) => Con(name, args)
       case EqualityType(ty, left, right) => EqualityType(ty, left, right)
       case Refl() => Refl()
+      case UsageType() => UsageType()
+      case UsageLiteral(u) => UsageLiteral(u)
+      case UsageCompound(op, operands) => UsageCompound(op, operands)
       case EffectsType() => EffectsType()
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
       case LevelType() => LevelType()
@@ -191,6 +209,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
     (using Σ: Signature): VTerm = transformer.transformVTerm(this)
 
 object VTerm:
+  def UsageSum(operands: VTerm*) = UsageCompound(UsageOperator.USum, operands.toMultiset)
+  def UsageProd(operands: VTerm*) = UsageCompound(UsageOperator.UProd, operands.toMultiset)
+  def UsageJoin(operands: VTerm*) = UsageCompound(UsageOperator.UJoin, operands.toMultiset)
+
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level = Level(n, Map())
 
   def LevelSuc(t: VTerm): Level = t match
@@ -433,7 +455,7 @@ def getFreeVars(tele: Telescope)
   (using bar: Nat)
   (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
   case Nil => (Set(), Set())
-  case binding :: rest => getFreeVars(binding.ty) | getFreeVars(rest)(using bar + 1) - 1
+  case binding :: rest => union(getFreeVars(binding.ty), getFreeVars(rest)(using bar + 1) - 1)
 
 private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
 
@@ -448,7 +470,7 @@ private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /
 
   override def combine(freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
     (using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-    freeVars.fold((Set(), Set())) { (a, b) => a | b }
+    freeVars.fold((Set(), Set()))(union)
 
   override def visitVar(v: Var)
     (using bar: Nat)
@@ -520,21 +542,21 @@ def getFreeVars(ul: ULevel)
 def getFreeVars(eff: Eff)
   (using bar: Nat)
   (using Σ: Signature)
-: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2.map(getFreeVars).reduceOption(_ | _)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2.map(getFreeVars).reduceOption(union)
   .getOrElse((Set.empty, Set.empty))
 
 def getFreeVars(args: Iterable[VTerm])
   (using bar: Nat)
   (using Σ: Signature)
 : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = args.map(getFreeVars)
-  .reduceOption(_ | _)
+  .reduceOption(union)
   .getOrElse((Set.empty, Set.empty))
 
-extension (freeVars1: (Set[Nat], Set[Nat]))
-  def |(freeVars2: (Set[Nat], Set[Nat])): (Set[Nat], Set[Nat]) =
-    (freeVars1._1 | freeVars2._1, freeVars1._2 | freeVars2._2)
+private def union(freeVars1: (Set[Nat], Set[Nat]), freeVars2: (Set[Nat], Set[Nat])): (Set[Nat], Set[Nat]) =
+  (freeVars1._1 | freeVars2._1, freeVars1._2 | freeVars2._2)
 
-  def -(offset: Nat): (Set[Nat], Set[Nat]) = (freeVars1._1.map(_ - offset), freeVars1._2.map(_ - offset))
+extension (freeVars1: (Set[Nat], Set[Nat]))
+  private def -(offset: Nat): (Set[Nat], Set[Nat]) = (freeVars1._1.map(_ - offset), freeVars1._2.map(_ - offset))
 
 def mix(freeVars: (Set[Nat], Set[Nat])) =
   val r = freeVars._1 | freeVars._2

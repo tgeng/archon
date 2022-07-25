@@ -210,3 +210,17 @@ def topologicalSort[T](ts: Seq[T])
  * Non negative int. Note that this is only a visual hint and nothing actually checks this.
  */
 type Nat = Int
+
+type Multiset[T] = Map[T, Nat]
+
+extension[T] (ts: Iterable[T])
+  def toMultiset: Multiset[T] = ts.groupMapReduce(t => t)(_ => 1)(_ + _)
+
+extension[T] (ms: Multiset[T])
+  def multiMap[R](f: T => R): Multiset[R] = ms.map((k, v) => (f(k), v))
+  def multiToSeq: Seq[T] = ms.toSeq.flatMap((t, count) => Seq.fill(count)(t))
+
+def flattenMultisets[T](ms: Iterable[Multiset[T]]): Multiset[T] =
+  ms.flatten.groupMapReduce(_._1)(_._2)(_ + _)
+
+def multisetOf[T](ts: T*): Multiset[T] = ts.groupMapReduce(t => t)(_ => 1)(_ + _)

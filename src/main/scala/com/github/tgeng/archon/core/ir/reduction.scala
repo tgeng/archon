@@ -13,6 +13,7 @@ import PrettyPrinter.pprint
 import WrapPolicy.*
 import IndentPolicy.*
 import DelimitPolicy.*
+import Usage.*
 
 trait Reducible[T]:
   def reduce(t: T)
@@ -338,6 +339,8 @@ private final class StackMachine(
           //     (CPattern(leftP), ETerm(left)) ::
           //     (CPattern(rightP), ETerm(right)) ::
           //     elims
+
+          // TODO: matching usage does not seem very useful. But it can be added if needed.
           case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CPattern(PForcedDataType(_, pArgs)), ETerm(DataType(qn2, args))) =>
@@ -389,6 +392,32 @@ extension (v: VTerm)
             case Return(v) => Right(v)
             case stuckC => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
+    case u: UsageCompound =>
+      def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match
+        case UsageLiteral(u) => Right(uLubFromLiteral(u))
+        case UsageCompound(operator, operands) =>
+          transpose(operands.multiToSeq.toList.map(dfs)).map { operands =>
+            operator match
+              case UsageOperator.UProd => uLubProd(operands)
+              case UsageOperator.USum => uLubSum(operands)
+              case UsageOperator.UJoin => uLubJoin(operands)
+          }
+        case c: Collapse => c.normalized.flatMap(dfs)
+        case v: Var => Right(uLubFromT(v))
+        case _ => throw IllegalStateException(s"expect to be of Usage type: $tm")
+
+      def lubToTerm(lub: ULub[Var]): VTerm = ???
+      //        if lub.isEmpty then
+      //          throw IllegalStateException("lub cannot be empty")
+      //        else if lub.size == 1 then
+      //          val (sum, usage) = lub.head
+      //          sumToTerm(sum, usage)
+      //        else
+      //          UsageCompound(UsageOperator.UJoin, multisetOf(lub.map(sumToTerm).toSeq: _*))
+
+      def sumToTerm(sum: USum[Var], usage: Usage): VTerm = ???
+
+      dfs(u).map(lubToTerm)
     case e: Effects =>
       def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[VTerm])] = tm match
         case Effects(literal, operands) =>
@@ -397,7 +426,8 @@ extension (v: VTerm)
               literalsAndOperands.flatMap { case (_, o) => o }
             )
         case c: Collapse => c.normalized.flatMap(dfs)
-        case v => Right((Set(), Set(v)))
+        case v: Var => Right((Set(), Set(v)))
+        case _ => throw IllegalStateException(s"expect to be of Effects type: $tm")
 
       dfs(e).map { case (eff, operands) => Effects(eff, operands) }
     case l: Level =>
@@ -416,7 +446,8 @@ extension (v: VTerm)
               .groupMap(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) })
         case c: Collapse => c.normalized.flatMap(dfs)
-        case v => Right(0, Map((v, 0)))
+        case v: Var => Right(0, Map((v, 0)))
+        case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
       dfs(l).map { case (l, m) => Level(l, m) }
     case _ => Right(v)

@@ -131,6 +131,9 @@ trait Visitor[C, R]:
     case con: Con => visitCon(con)
     case equalityType: EqualityType => visitEqualityType(equalityType)
     case refl: Refl => visitRefl(refl)
+    case usageType: UsageType => visitUsageType(usageType)
+    case usageLiteral: UsageLiteral => visitUsageLiteral(usageLiteral)
+    case usageCompound: UsageCompound => visitUsageCompound(usageCompound)
     case effectsType: EffectsType => visitEffectsType(effectsType)
     case effects: Effects => visitEffects(effects)
     case levelType: LevelType => visitLevelType(levelType)
@@ -180,6 +183,18 @@ trait Visitor[C, R]:
     )
 
   def visitRefl(refl: Refl)(using ctx: C)(using Σ: Signature): R = combine()
+
+  def visitUsageType(usageType: UsageType)
+    (using ctx: C)
+    (using Σ: Signature): R = visitQualifiedName(Builtins.UsageQn)
+
+  def visitUsageLiteral(usageLiteral: UsageLiteral)
+    (using ctx: C)
+    (using Σ: Signature): R = combine()
+
+  def visitUsageCompound(usageCompound: UsageCompound)
+    (using ctx: C)
+    (using Σ: Signature): R = combine(usageCompound.operands.multiMap(visitVTerm).multiToSeq: _*)
 
   def visitEffectsType(effectsType: EffectsType)
     (using ctx: C)
@@ -439,12 +454,27 @@ trait Transformer[C]:
 
   def transformRefl(refl: Refl)(using ctx: C)(using Σ: Signature): VTerm = refl
 
+  def transformUsageType(usageType: UsageType)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = usageType
+
+  def transformUsageLiteral(usageLiteral: UsageLiteral)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = usageLiteral
+
+  def transformUsageCompound(usageCompound: UsageCompound)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = UsageCompound(
+    usageCompound.operator,
+    usageCompound.operands.multiMap(transformVTerm)
+  )
+
   def transformEffectsType(effectsType: EffectsType)
     (using ctx: C)
     (using Σ: Signature): VTerm = effectsType
 
   def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm = Effects(
-    effects.literal.map{(qn, args) => (qn, args.map(transformVTerm))},
+    effects.literal.map { (qn, args) => (qn, args.map(transformVTerm)) },
     effects.unionOperands.map(transformVTerm)
   )(using effects.sourceInfo)
 
