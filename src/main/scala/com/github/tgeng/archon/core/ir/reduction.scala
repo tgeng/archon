@@ -406,16 +406,33 @@ extension (v: VTerm)
         case v: Var => Right(uLubFromT(v))
         case _ => throw IllegalStateException(s"expect to be of Usage type: $tm")
 
-      def lubToTerm(lub: ULub[Var]): VTerm = ???
-      //        if lub.isEmpty then
-      //          throw IllegalStateException("lub cannot be empty")
-      //        else if lub.size == 1 then
-      //          val (sum, usage) = lub.head
-      //          sumToTerm(sum, usage)
-      //        else
-      //          UsageCompound(UsageOperator.UJoin, multisetOf(lub.map(sumToTerm).toSeq: _*))
+      def lubToTerm(lub: ULub[Var]): VTerm =
+        if lub.isEmpty then
+          throw IllegalStateException("lub cannot be empty")
+        else if lub.size == 1 then
+          sumToTerm(lub.head)
+        else
+          UsageCompound(UsageOperator.UJoin, lub.map(sumToTerm).toMultiset)
 
-      def sumToTerm(sum: USum[Var], usage: Usage): VTerm = ???
+      def sumToTerm(sum: USum[Var]): VTerm =
+        if sum.isEmpty then
+          UsageLiteral(Usage.U0)
+        else if sum.size == 1 then
+          prodToTerm(sum.head)
+        else
+          UsageCompound(UsageOperator.USum, sum.map(prodToTerm).toMultiset)
+
+      def prodToTerm(prod: UProd[Var]): VTerm =
+        if prod.isEmpty then
+          UsageLiteral(Usage.U1)
+        else if prod.size == 1 then
+          varOrUsageToTerm(prod.head)
+        else
+          UsageCompound(UsageOperator.UProd, prod.map(varOrUsageToTerm).toMultiset)
+
+      def varOrUsageToTerm(t: Var | Usage): VTerm = t match
+        case v: Var => v
+        case u: Usage => UsageLiteral(u)
 
       dfs(u).map(lubToTerm)
     case e: Effects =>
