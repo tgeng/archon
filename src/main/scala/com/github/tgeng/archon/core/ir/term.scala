@@ -319,6 +319,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
+  // TODO: add CLet that carries out a computation and capture the resulted computation as a thunk
+  //  For example,
+  //    clet plus_1 = plus 1
+  //    force plus_1 1
+  //  The point of this construct is to be able to perform side effects in middle of a function type
+  //  For example, consider `foo : Int -> <print> Int -> Int`. This is a function that performs
+  //  `print` side effect when given the first argument. It's total when given the second argument.
+  //  Without `CLet`, it's impossible to capture the function after applying the first argument as
+  //  a total function `Int -> Int` because `thunk foo 1` would delay all side effects and the
+  //  resulted function would have type `<print> Int -> Int`.
+
   /** archon.builtin.Function */
   case FunctionType(
     binding: Binding[VTerm], // effects that needed for getting the function of this type. The effects caused
