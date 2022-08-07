@@ -10,27 +10,8 @@ import SourceInfo.*
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-// phantom usage is like rust's borrow. For pure values, this is like reading value's internal
-// states without consuming it. All bindings to constructor args are also bound as phantom usage.
-// When computing usage during type checking, phantom usage does not count as a usage but requires
-// the given usage to be greater than 1 in the usage semiring. If a var is bound to a phantom thunk
-// one won't be able to force but only able to pass it to another function that accepts a phantom.
-// However, this renders the a phantom thunk basically useless.
-//
-// TODO: consider allow field to mark self as phantom so that one can still access some fields with
-//  phantom bindings. Then I need to think about what constraints this means when on the
-//  implementation side of a record instance.
-//  Difference between phantom binding and rust's readonly reference:
-//   1. a phantom binding is only allowed at bindings; it cannot be returned, nor be stored inside
-//      values. That is, phantom binding is not a first-class usage like U0, U1, UAff, URel, and
-//      UAny
-//   2. a phantom binding of a pure value can be duplicated (reified) freely, if it's cloneable:
-//      a value is cloneable if
-//      i. it's pure
-//      ii. (if not pure) all linear sub values are cloneable. Specifically presence of linear
-//         non-pure sub values make it not cloneable
-case class Binding[+T](ty: T, usage: T, phantomUsage: Boolean)(val name: Ref[Name]):
-  def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
+case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
+  def map[S](f: T => S): Binding[S] = Binding(f(ty), usage.map(f))(name)
 
 /**
  * Head is on the left, e.g. Z :: S Z :: []
