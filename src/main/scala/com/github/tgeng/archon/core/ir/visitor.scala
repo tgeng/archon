@@ -61,10 +61,10 @@ trait Visitor[C, R]:
       )
 
   def visitPreBinding(binding: Binding[CTerm])(using ctx: C)(using Σ: Signature): R =
-    visitCTerm(binding.ty)
+    combine(visitCTerm(binding.ty), visitCTerm(binding.usage))
 
   def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
-    visitVTerm(binding.ty)
+    combine(visitVTerm(binding.ty), visitVTerm(binding.usage))
 
   def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R = pattern match
     case pVar: PVar => visitPVar(pVar)

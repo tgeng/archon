@@ -320,7 +320,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  // TODO: add CLet that carries out a computation and capture the resulted computation as a thunk
+  // TODO: consider adding CLet that carries out a computation and capture the resulted computation
+  //  as a thunk
   //  For example,
   //    clet plus_1 = plus 1
   //    force plus_1 1
@@ -330,6 +331,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   //  Without `CLet`, it's impossible to capture the function after applying the first argument as
   //  a total function `Int -> Int` because `thunk foo 1` would delay all side effects and the
   //  resulted function would have type `<print> Int -> Int`.
+  //  However, such a construct is not without problems:
+  //  1. it encourages people to avoid using `thunk` to capture computations that they would like to
+  //     return. Since computations are always linear, this means clet has little flexibility in
+  //     terms of resource counting. For example, `plus_1` can only be linear. 
 
   /** archon.builtin.Function */
   case FunctionType(

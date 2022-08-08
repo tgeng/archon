@@ -12,8 +12,8 @@ import scala.annotation.{tailrec, targetName}
  * Usage forms a join-semilattice bounded by UAny.
  *
  * UAny
- * /   \
- * UAff  URel
+ * |   \
+ * UAff URel
  * |  \ |
  * U0  U1
  */
@@ -51,6 +51,13 @@ enum Usage extends PartiallyOrdered[Usage] :
     case (UAff, URel | UAny) => UAny
     case (URel | UAny, UAny) => UAny
     case (u1, u2) => u2 | u1
+
+  final infix def isSubUsageOf(that: Usage): Boolean = (this, that) match
+    case (u1, u2) if u1 == u2 => true
+    case (U0, _) | (_, URel | UAny) => true
+    case (U1, UAff) => true
+    case (UAff, U1) => true
+    case _ => false
 
   override def tryCompareTo[B >: Usage : AsPartiallyOrdered](that: B): Option[Int] = (this, that) match
     case (u1, u2) if u1 == u2 => Some(0)
