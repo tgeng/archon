@@ -13,6 +13,12 @@ import SourceInfo.*
 case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
   def map[S](f: T => S): Binding[S] = Binding(f(ty), usage.map(f))(name)
 
+object Binding:
+  def apply[T](ty: T, usage: T)(name: Ref[Name]): Binding[T] = new Binding(ty, usage)(name)
+
+  def apply(ty: VTerm, usage: Usage)(name: Ref[Name]): Binding[VTerm] =
+    new Binding(ty, VTerm.UsageLiteral(usage))(name)
+
 /**
  * Head is on the left, e.g. Z :: S Z :: []
  */
