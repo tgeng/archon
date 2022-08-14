@@ -111,6 +111,16 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   // Unrestricted
   // |
   // Indexable
+  //
+  // The idea is that by default all usage declarations in bindings and `F` are 1 (linear) and types
+  // determines how they can be used: strict linear types (for example thunks or user declared
+  // resources like file descriptors) can only be used linearly, while simple data types can be
+  // used in an unrestricted manner. That is, the effective usage count is the declared usage in
+  // binding multiplied by the natural allowed usages of the type. This also generalizes to the case
+  // where the usage declaration from the binding is not 1. This way, users only need to worry about
+  // linearity for linear types. Also, 0 usage still effectively erases compile-only terms. In
+  // addition, some transparent optimization (like in-place update, proactive free, etc) can be done
+  // on unrestricted types that are used linearly.
   case Top(ul: ULevel)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
