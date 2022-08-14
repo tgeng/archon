@@ -9,7 +9,10 @@ import SourceInfo.*
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
 
-type TTelescope = List[(Binding[VTerm], Variance)]
+enum Essentiality:
+  case ESSENTIAL, AUXILIARY
+
+type TTelescope = List[(Binding[VTerm], Variance, Essentiality)]
 
 given SourceInfo = SiEmpty
 

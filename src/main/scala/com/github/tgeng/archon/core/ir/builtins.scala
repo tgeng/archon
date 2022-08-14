@@ -506,16 +506,14 @@ object Builtins:
         )
       )
     ),
-    // return UAny, since cells are either in global heap, which is managed by GC anyway, or in
-    // some heap handler, which is freed when the handler is returned
     b(
       Builtins.AllocOpQn, (
         FunctionType(
-          Binding(LevelType())(n"level"),
+          Binding(LevelType(), U0)(n"level"),
           FunctionType(
-            Binding(HeapType())(n"h"),
+            Binding(HeapType(), U1)(n"h"),
             FunctionType(
-              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
+              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))), U0)(n"A"),
               F(
                 CellType(Var(1), Var(0), CellStatus.Uninitialized),
                 EffectsLiteral(Set((Builtins.HeapEffQn, Var(1) :: Nil)))
@@ -525,9 +523,9 @@ object Builtins:
         ),
         IndexedSeq(
           Clause(
-            Binding(LevelType())(n"level") ::
-              Binding(HeapType())(n"h") ::
-              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
+            Binding(LevelType(), U0)(n"level") ::
+              Binding(HeapType(), U1)(n"h") ::
+              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))), U0)(n"A") ::
               Nil,
             CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
             AllocOp(Var(1), Var(0)),
@@ -543,13 +541,13 @@ object Builtins:
     b(
       Builtins.GetOpQn, (
         FunctionType(
-          Binding(LevelType())(n"level"),
+          Binding(LevelType(), U0)(n"level"),
           FunctionType(
-            Binding(HeapType())(n"h"),
+            Binding(HeapType(), U0)(n"h"),
             FunctionType(
-              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
+              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))), U0)(n"A"),
               FunctionType(
-                Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"cell"),
+                Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(n"cell"),
                 F(
                   Var(1),
                   EffectsLiteral(Set((Builtins.HeapEffQn, Var(2) :: Nil)))
@@ -560,10 +558,10 @@ object Builtins:
         ),
         IndexedSeq(
           Clause(
-            Binding(LevelType())(n"level") ::
-              Binding(HeapType())(n"h") ::
-              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
-              Binding(CellType(Var(1), Var(0), CellStatus.Initialized))(n"cell") ::
+            Binding(LevelType(), U0)(n"level") ::
+              Binding(HeapType(), U0)(n"h") ::
+              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))), U0)(n"A") ::
+              Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(n"cell") ::
               Nil,
             CPattern(PVar(3)) ::
               CPattern(PVar(2)) ::
@@ -583,15 +581,15 @@ object Builtins:
     b(
       Builtins.SetOpQn, (
         FunctionType(
-          Binding(LevelType())(n"level"),
+          Binding(LevelType(), U0)(n"level"),
           FunctionType(
-            Binding(HeapType())(n"h"),
+            Binding(HeapType(), U0)(n"h"),
             FunctionType(
-              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A"),
+              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))), U0)(n"A"),
               FunctionType(
-                Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"cell"),
+                Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized), U1)(n"cell"),
                 FunctionType(
-                  Binding(Var(1))(n"value"),
+                  Binding(Var(1), U1)(n"value"),
                   F(
                     CellType(Var(3), Var(2), CellStatus.Initialized),
                     EffectsLiteral(Set((Builtins.HeapEffQn, Var(3) :: Nil)))
@@ -603,11 +601,11 @@ object Builtins:
         ),
         IndexedSeq(
           Clause(
-            Binding(LevelType())(n"level") ::
-              Binding(HeapType())(n"h") ::
-              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))))(n"A") ::
-              Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized))(n"cell") ::
-              Binding(Var(1))(n"value") ::
+            Binding(LevelType(), U0)(n"level") ::
+              Binding(HeapType(), U0)(n"h") ::
+              Binding(Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))), U0)(n"A") ::
+              Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized), U1)(n"cell") ::
+              Binding(Var(1), U1)(n"value") ::
               Nil,
             CPattern(PVar(4)) ::
               CPattern(PVar(3)) ::
@@ -677,7 +675,7 @@ object Builtins:
   val builtinEffects: Map[QualifiedName, (Effect, IndexedSeq[Operator])] = Seq(
     b(
       Builtins.HeapEffQn, (
-        /* tParamTys*/ Binding(HeapType())(n"h") :: Nil,
+        /* tParamTys*/ Binding(HeapType(), U0)(n"h") :: Nil,
         /* operators */ IndexedSeq(
         // Note: we declare no operations here because operations of heap effect is represented
         // specially in CTerm. Instead, the derived definitions for these operations (alloc, set, get)
