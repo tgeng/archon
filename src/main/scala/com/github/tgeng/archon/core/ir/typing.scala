@@ -94,8 +94,10 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
 
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
           _ <-
-            if data.isPure then
-              allRight(con.paramTys.map(binding => checkIsPure(binding.ty)(using Γ.size)))
+            if data.isIndexable then
+              // TODO: use essentiality to guide this check here. Also think about additional
+              // requirements for indexable types on top of unrestricted types.
+              allRight(con.paramTys.map(binding => checkIsIndexable(binding.ty)(using Γ.size)))
             else
               Right(())
           _ <- {
@@ -226,7 +228,7 @@ def checkEffect(effect: Effect)
 : Either[IrError, Unit] = ctx.trace(s"checking effect signature ${effect.qn}") {
   given Context = IndexedSeq()
 
-  checkParameterTypeDeclarations(effect.tParamTys) >> checkArePureTypes(effect.tParamTys)
+  checkParameterTypeDeclarations(effect.tParamTys) >> checkAreIndexableTypes(effect.tParamTys)
 }
 
 def checkOperator(qn: QualifiedName, operator: Operator)
@@ -283,7 +285,7 @@ def inferType(tm: VTerm)
               )(using CheckSubsumptionMode.CONVERSION)
               case _ => Left(ExpectVType(upperBound))
         yield Type(ULevelSuc(ul), tm)
-      case Pure(ul) => Right(Type(ul, tm))
+      case Indexable(ul) => Right(Type(ul, tm))
       case Top(ul) => Right(Type(ul, tm))
       case r: Var => Right(Γ.resolve(r).ty)
       case Collapse(cTm) =>
@@ -691,10 +693,10 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
                   case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
                   case _ => Left(NotTypeError(sub))
             yield r
-          case (ty, Pure(ul2), _) =>
+          case (ty, Indexable(ul2), _) =>
             for tyTy <- inferType(ty)
                 r <- tyTy match
-                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsPure(ty)(using 0)
+                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsIndexable(ty)(using 0)
                   case _ => Left(NotTypeError(sub))
             yield r
           case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
@@ -951,44 +953,46 @@ private def simplifyLet(t: CTerm)
     case _ => Right(t)
 }
 
-private def checkArePureTypes(telescope: Telescope)
+private def checkAreIndexableTypes(telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
-  case binding :: telescope => checkIsPure(binding.ty)(using 0) >> checkArePureTypes(telescope)(
+  case binding :: telescope => checkIsIndexable(binding.ty)(using 0) >> checkAreIndexableTypes(telescope)(
     using Γ :+ binding
   )
 
-private def checkIsPure(tm: VTerm)
+private def checkIsIndexable(tm: VTerm)
   (using numDataTParams: Nat)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = tm match
-  // Here we check if upper bound is pure because otherwise, the this Type type does not admit a
+  // Here we check if upper bound is indexable because otherwise, the this Type type does not admit a
   // normalized representation.
-  case Type(_, upperBound) => checkIsPure(upperBound)
+  case Type(_, upperBound) => checkIsIndexable(upperBound)
+
   case DataType(qn, tArgs) => Σ.getDataOption(qn) match
     case None => Left(MissingDeclaration(qn))
     case Some(data) =>
-      if data.isPure then
-        allRight(tArgs.map(checkIsPure))
+      if data.isIndexable then
+        // TODO: use essentiality as a guide to determine which args need to be checked
+        allRight(tArgs.map(checkIsIndexable))
       else
-        Left(NotPureType(tm))
-  case _: U => Left(NotPureType(tm))
-  case _: Top | _: Pure | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
+        Left(NotIndexableType(tm))
+  case _: U => Left(NotIndexableType(tm))
+  case _: Top | _: Indexable | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
     Right(())
-  // Treat data type tParams as pure automatically when checking purity of a data type declaration.
+  // Treat data type tParams as indexable automatically when checking purity of a data type declaration.
   // This along with the above `DataType` branch works together to delay rejecting something as
-  // impure at data type instantiation time.
+  // imindexable at data type instantiation time.
   case Var(idx) if Γ.size - idx <= numDataTParams => Right(())
   case _: Var | _: Collapse =>
     for ty <- inferType(tm)
         r <- ty match
-          case Type(ul, upperBound) => checkSubsumption(upperBound, Pure(ul), None)
+          case Type(ul, upperBound) => checkSubsumption(upperBound, Indexable(ul), None)
           case _ => Right(())
     yield r
-  // Any non-type values are considered pure because the only place that we would invoke this
+  // Any non-type values are considered indexable because the only place that we would invoke this
   // function with non-type value is when checking data type args, where any non-type values would
   // not affect the normalized forms of values created by constructors of this data type.
   case _: Thunk | _: Con | Refl() | _: Effects | _: Level | _: Heap | _: Cell => Right(())

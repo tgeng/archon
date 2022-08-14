@@ -104,10 +104,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
   /**
-   * Top type of pure value types.
+   * Top type of indexable value types.
    */
-  case Pure(ul: ULevel)
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(PureQn)
+  case Indexable(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(IndexableQn)
 
   case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -186,7 +186,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
     this match
       case Type(ul, upperBound) => Type(ul, upperBound)
       case Top(ul) => Top(ul)
-      case Pure(ul) => Pure(ul)
+      case Indexable(ul) => Indexable(ul)
       case Var(index) => Var(index)
       case Collapse(cTm) => Collapse(cTm)
       case U(cTy) => U(cTy)
@@ -463,7 +463,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
       )(h.boundName)
 
   // TODO: support array operations on heap
-  // TODO: consider adding builtin set (aka map pure keys) with decidable equality because we do not
+  // TODO: consider adding builtin set (aka map indexable keys) with decidable equality because we do not
   //  support quotient type and set semantic is very common in software engineering.
 
   def visitWith[C, R](visitor: Visitor[C, R])

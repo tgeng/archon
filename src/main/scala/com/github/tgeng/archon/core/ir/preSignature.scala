@@ -13,12 +13,12 @@ enum PreDeclaration:
   case PreData(val qn: QualifiedName)
     (
       val tParamTys: PreTTelescope,
-      // This could be a pure function type that ends with `F Type` for indexed families. In this
+      // This could be a indexable function type that ends with `F Type` for indexed families. In this
       // case, during elaboration, all constructors are weakened by the number of args in the
       // declared function type. That is, indexed families are converted to parameterized inductive
       // types with equality types representing the constraints.
       val ty: CTerm,
-      val isPure: Boolean,
+      val isIndexable: Boolean,
       val constructors: List[PreConstructor]
     )
   case PreRecord(val qn: QualifiedName)
@@ -176,7 +176,7 @@ def elaborateSignature(data: PreData)
       tParamTys <- elaborateTTelescope(data.tParamTys)
       elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
     yield elaboratedTy match
-      case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, data.isPure)
+      case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, data.isIndexable)
   }
 
 def elaborateBody(preData: PreData)

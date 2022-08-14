@@ -11,7 +11,7 @@ object Builtins:
   val TypeQn = BuiltinType / "Type"
   val SubtypeOfQn = BuiltinType / "SubtypeOf"
   val TopQn = BuiltinType / "Top"
-  val PureQn = BuiltinType / "Pure"
+  val IndexableQn = BuiltinType / "Indexable"
   val CTypeQn = BuiltinType / "CType"
   val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
   val CTopQn = BuiltinType / "CTop"
@@ -55,7 +55,7 @@ object Builtins:
         /* tParamTys*/ Nil,
         /* ul */ USimpleLevel(LevelLiteral(0)),
         /* numParams */ 0,
-        /* isPure */ true,
+        /* isIndexable */ true,
         /* constructors */ IndexedSeq(
         Constructor(n"MkUnit", Nil, Nil)
       ))
@@ -76,14 +76,14 @@ object Builtins:
           Nil,
         /* ul */ USimpleLevel(Var(3)),
         /* numParams */ 3,
-        /* isPure */ true,
+        /* isIndexable */ true,
         /* constructors */ IndexedSeq(
         Constructor(n"Refl", Nil, Var(3) :: Var(2) :: Var(1) :: Var(1) :: Nil)
       ))
     ),
   ).map {
-    case (qn, (tParamTys, ul, numParams, isPure, constructors)) =>
-      (qn, (new Data(qn)(tParamTys, ul, numParams, isPure), constructors))
+    case (qn, (tParamTys, ul, numParams, isIndexable, constructors)) =>
+      (qn, (new Data(qn)(tParamTys, ul, numParams, isIndexable), constructors))
   }.toMap
 
   val builtinRecords: Map[QualifiedName, (Record, IndexedSeq[Field])] = Seq(
@@ -189,21 +189,21 @@ object Builtins:
     ),
 
     /**
-     * Pure : (level : LevelType) -> Type(level, Pure(level))
-     * {level : LevelType} |- level := .return Pure(level)
+     * Indexable : (level : LevelType) -> Type(level, Indexable(level))
+     * {level : LevelType} |- level := .return Indexable(level)
      */
     b(
-      Builtins.PureQn, (
+      Builtins.IndexableQn, (
         FunctionType(
           Binding(LevelType(), U0)(n"level"),
-          F(Type(USimpleLevel(Var(0)), Pure(USimpleLevel(Var(0)))))
+          F(Type(USimpleLevel(Var(0)), Indexable(USimpleLevel(Var(0)))))
         ),
         IndexedSeq(
           Clause(
             Binding(LevelType(), U0)(n"level") :: Nil,
             CPattern(PVar(0)) :: Nil,
-            Return(Pure(USimpleLevel(Var(0)))),
-            F(Type(USimpleLevel(Var(0)), Pure(USimpleLevel(Var(0)))))
+            Return(Indexable(USimpleLevel(Var(0)))),
+            F(Type(USimpleLevel(Var(0)), Indexable(USimpleLevel(Var(0)))))
           )
         )
       )

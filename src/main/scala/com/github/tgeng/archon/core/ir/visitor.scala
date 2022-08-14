@@ -122,7 +122,7 @@ trait Visitor[C, R]:
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type => visitType(ty)
     case top: Top => visitTop(top)
-    case pure: Pure => visitPure(pure)
+    case indexable: Indexable => visitIndexable(indexable)
     case v: Var => visitVar(v)
     case collapse: Collapse => visitCollapse(collapse)
     case u: U => visitU(u)
@@ -151,7 +151,7 @@ trait Visitor[C, R]:
 
   def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = visitULevel(top.ul)
 
-  def visitPure(pure: Pure)(using ctx: C)(using Σ: Signature): R = visitULevel(pure.ul)
+  def visitIndexable(indexable: Indexable)(using ctx: C)(using Σ: Signature): R = visitULevel(indexable.ul)
 
   def visitVar(v: Var)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -391,7 +391,7 @@ trait Transformer[C]:
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm = tm match
     case ty: Type => transformType(ty)
     case top: Top => transformTop(top)
-    case pure: Pure => transformPure(pure)
+    case indexable: Indexable => transformIndexable(indexable)
     case v: Var => transformVar(v)
     case collapse: Collapse => transformCollapse(collapse)
     case u: U => transformU(u)
@@ -419,9 +419,9 @@ trait Transformer[C]:
     (using ctx: C)
     (using Σ: Signature): VTerm = Top(transformULevel(top.ul))(using top.sourceInfo)
 
-  def transformPure(pure: Pure)
+  def transformIndexable(indexable: Indexable)
     (using ctx: C)
-    (using Σ: Signature): VTerm = Pure(transformULevel(pure.ul))(using pure.sourceInfo)
+    (using Σ: Signature): VTerm = Indexable(transformULevel(indexable.ul))(using indexable.sourceInfo)
 
   def transformVar(v: Var)(using ctx: C)(using Σ: Signature): VTerm = v
 

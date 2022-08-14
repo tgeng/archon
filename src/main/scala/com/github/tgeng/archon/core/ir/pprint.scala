@@ -275,12 +275,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     case USimpleLevel(l) => app("Top", l)
     case UωLevel(layer) => Block("TOP" + layer.sub)
 
-  override def visitPure(pure: Pure)
+  override def visitIndexable(indexable: Indexable)
     (using ctx: PPrintContext)
-    (using Σ: Signature): Block = pure.ul match
-    case USimpleLevel(Level(l, operands)) if operands.isEmpty => Block("Pure" + l.sub)
-    case USimpleLevel(l) => app("Pure", l)
-    case UωLevel(layer) => Block("PURE" + layer.sub)
+    (using Σ: Signature): Block = indexable.ul match
+    case USimpleLevel(Level(l, operands)) if operands.isEmpty => Block("Indexable" + l.sub)
+    case USimpleLevel(l) => app("Indexable", l)
+    case UωLevel(layer) => Block("INDEXABLE" + layer.sub)
 
   override def visitVar(v: Var)(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block(ctx.resolve(v.idx).value.toString)
