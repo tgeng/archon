@@ -5,6 +5,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import QualifiedName.*
 import SourceInfo.*
+import com.github.tgeng.archon.core.ir.VTerm.Unrestricted
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -100,12 +101,40 @@ enum UsageOperator:
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
+
+  // Top
+  // |
+  // Linear
+  // |     \
+  // Affine Relevant
+  // |      /
+  // Unrestricted
+  // |
+  // Indexable
   case Top(ul: ULevel)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
+  /** Super type of all types whose inhabitants can be used linearly. */
+  case Linear(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(LinearQn)
+
+  /** Super type of all types whose inhabitants can be used 0 or 1 times. */
+  case Affine(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(AffineQn)
+
+  /** Super type of all types whose inhabitants can be used 1 or more times. */
+  case Relevant(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(RelevantQn)
+
+  /** Super type of all types whose inhabitants can be used 0, 1, or more times. */
+  case Unrestricted(ul: ULevel)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(UnrestrictedQn)
+
   /**
-   * Top type of indexable value types.
-   */
+   * Super type of all types whose inhabitants can be used 0, 1, or more times. Additionally, the
+   * the identity of inhabitants can be determined efficiently at runtime so that they can be used
+   * as arguments to effect constructors.
+   **/
   case Indexable(ul: ULevel)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(IndexableQn)
 
