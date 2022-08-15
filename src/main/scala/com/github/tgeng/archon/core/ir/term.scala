@@ -160,6 +160,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
    */
   case Collapse(cTm: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  // When checking usages, vars in cTy should be multiplied by UUnres so that type U is Unrestricted
   case U(cTy: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)

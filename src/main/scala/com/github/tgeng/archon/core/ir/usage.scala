@@ -17,25 +17,25 @@ extension (us1: Usages)
  * Here we do not do the full generalization that allows user to define custom semirings for
  * grading. Instead, we use a specialized semiring that only accounts for counting usages.
  *
- * Usage forms a join-semilattice bounded by UAny.
+ * Usage forms a join-semilattice bounded by UUnres.
  *
- * UAny
+ * UUnres
  * |   \
  * UAff URel
  * |  \ |
  * U0  U1
  */
 enum Usage extends PartiallyOrdered[Usage] :
-  case U0, U1, UAff, URel, UAny
+  case U0, U1, UAff, URel, UUnres
 
   @tailrec
   final infix def +(that: Usage): Usage = (this, that) match
     case (U0, u) => u
-    case (U1, U1 | UAff | URel | UAny) => URel
+    case (U1, U1 | UAff | URel | UUnres) => URel
     case (UAff, URel) => URel
-    case (UAff, UAff | UAny) => UAny
-    case (URel, URel | UAny) => URel
-    case (UAny, UAny) => UAny
+    case (UAff, UAff | UUnres) => UUnres
+    case (URel, URel | UUnres) => URel
+    case (UUnres, UUnres) => UUnres
     case (u1, u2) => u2 + u1
 
   @tailrec
@@ -43,9 +43,9 @@ enum Usage extends PartiallyOrdered[Usage] :
     case (U0, _) => U0
     case (U1, u) => u
     case (UAff, UAff) => UAff
-    case (UAff, URel | UAny) => UAny
+    case (UAff, URel | UUnres) => UUnres
     case (URel, URel) => URel
-    case (URel | UAny, UAny) => UAny
+    case (URel | UUnres, UUnres) => UUnres
     case (u1, u2) => u2 * u1
 
   final infix def *(usages: Usages): Usages = usages match
@@ -56,28 +56,28 @@ enum Usage extends PartiallyOrdered[Usage] :
   final infix def |(that: Usage): Usage = (this, that) match
     case (u1, u2) if u1 == u2 => u1
     case (U0, U1 | UAff) => UAff
-    case (U0, URel | UAny) => UAny
+    case (U0, URel | UUnres) => UUnres
     case (U1, UAff) => UAff
     case (U1, URel) => URel
-    case (U1, UAny) => UAny
-    case (UAff, URel | UAny) => UAny
-    case (URel | UAny, UAny) => UAny
+    case (U1, UUnres) => UUnres
+    case (UAff, URel | UUnres) => UUnres
+    case (URel | UUnres, UUnres) => UUnres
     case (u1, u2) => u2 | u1
 
   final infix def isSubUsageOf(that: Usage): Boolean = (this, that) match
     case (u1, u2) if u1 == u2 => true
-    case (U0, _) | (_, URel | UAny) => true
+    case (U0, _) | (_, URel | UUnres) => true
     case (U1, UAff) => true
     case (UAff, U1) => true
     case _ => false
 
   override def tryCompareTo[B >: Usage : AsPartiallyOrdered](that: B): Option[Int] = (this, that) match
     case (u1, u2) if u1 == u2 => Some(0)
-    case (U0, UAff | UAny) => Some(-1)
-    case (U1, UAff | URel | UAny) => Some(-1)
-    case (UAff, UAny) => Some(-1)
-    case (URel, UAny) => Some(-1)
-    case (UAny, _) => Some(1)
+    case (U0, UAff | UUnres) => Some(-1)
+    case (U1, UAff | URel | UUnres) => Some(-1)
+    case (UAff, UUnres) => Some(-1)
+    case (URel, UUnres) => Some(-1)
+    case (UUnres, _) => Some(1)
     case (URel, U1) => Some(1)
     case (UAff, U0 | U1) => Some(1)
     case _ => None
@@ -121,8 +121,8 @@ private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
       if literal == Usage.U0 then sum.multiToSeq
       else sum.multiToSeq ++ uSumFromLiteral(literal)
   }
-  // UAny is an absorbing element for |
-  if r.contains(uSumFromLiteral(Usage.UAny)) then uLubFromLiteral(Usage.UAny)
+  // UUnres is an absorbing element for |
+  if r.contains(uSumFromLiteral(Usage.UUnres)) then uLubFromLiteral(Usage.UUnres)
   else r
 
 private def uSumFromLiteral[T](usage: Usage): USum[T] = Seq(Seq(usage))

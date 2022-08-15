@@ -542,7 +542,7 @@ object Builtins:
         )
       )
     ),
-    // return UAny?
+    // return UUnres?
     b(
       Builtins.GetOpQn, (
         FunctionType(

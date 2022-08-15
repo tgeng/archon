@@ -962,6 +962,27 @@ private def checkAreIndexableTypes(telescope: Telescope)
     using Γ :+ binding
   )
 
+// All VTypes should be freeable
+private def checkIsFreeable(tm: VTerm)
+  (using numDataTParams: Nat)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, Unit] = tm match
+  case _ => ???
+
+// All VTypes should be cloneable
+private def checkIsCloneable(tm: VTerm)
+  (using numDataTParams: Nat)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, Unit] = tm match
+  case _ => ???
+
+// TODO: reconsider how this should be implemented. Basically it needs to:
+//  1. disallow nested thunks
+//  2. satisfy checkIsFreeable and checkIsCloneable
+//  3. runtime available information is sufficient to determine identity
+//     a. U0 params must be referenced in types with non-U0 usage, for example Vect is indexable
 private def checkIsIndexable(tm: VTerm)
   (using numDataTParams: Nat)
   (using Γ: Context)
