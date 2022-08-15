@@ -102,15 +102,15 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
 
-  // Top
-  // |
-  // Linear
-  // |     \
-  // Affine Relevant
-  // |      /
+  // Top (linear)
+  // |        \         \        \
+  // Affine   Relevant  (U ...)  FileDescriptor ...
+  // |        /
   // Unrestricted
   // |
   // Indexable
+  // |
+  // Most user types
   //
   // The idea is that by default all usage declarations in bindings and `F` are 1 (linear) and types
   // determines how they can be used: strict linear types (for example thunks or user declared
@@ -123,10 +123,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   // on unrestricted types that are used linearly.
   case Top(ul: ULevel)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
-
-  /** Super type of all types whose inhabitants can be used linearly. */
-  case Linear(ul: ULevel)
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(LinearQn)
 
   /** Super type of all types whose inhabitants can be used 0 or 1 times. */
   case Affine(ul: ULevel)
@@ -143,7 +139,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   /**
    * Super type of all types whose inhabitants can be used 0, 1, or more times. Additionally, the
    * the identity of inhabitants can be determined efficiently at runtime so that they can be used
-   * as arguments to effect constructors.
+   * as arguments to effect constructors. This can be tricky with constructors taking U0 parameters.
+   * Some care is needed here. For example, the U0 parameter must be referenced in some types.
+   *
+   * Note that user can't do any additional operations on values of indexable types like comparing
+   * them. This is because the comparing may not be total (for example comparing heap variables has
+   * heap effect). Instead, comparison operations will be modeled by type classes like `DecEq` in
+   * idris, with an additional effect parameter.
    **/
   case Indexable(ul: ULevel)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(IndexableQn)
