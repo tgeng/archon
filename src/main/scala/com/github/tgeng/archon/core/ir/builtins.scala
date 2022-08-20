@@ -4,6 +4,7 @@ import com.github.tgeng.archon.core.common.*
 
 import QualifiedName.*
 import VTerm.*
+import Essentiality.*
 
 object Builtins:
   val BuiltinType = Builtin / "type"
@@ -68,16 +69,16 @@ object Builtins:
     b(
       Builtins.EqualityQn, (
         /* tParamTys*/
-        (Binding(LevelType(), U0)(n"level"), Variance.COVARIANT) ::
+        (Binding(LevelType(), U0)(n"level"), Variance.COVARIANT, AUXILIARY) ::
           (Binding(
             Type(
               USimpleLevel(Var(0)),
               Top(USimpleLevel(Var(0)))
             ),
             U1
-          )(n"A"), Variance.COVARIANT) ::
-          (Binding(Var(0), U1)(n"x"), Variance.COVARIANT) ::
-          (Binding(Var(1), U1)(n"y"), Variance.COVARIANT) ::
+          )(n"A"), Variance.COVARIANT, AUXILIARY) ::
+          (Binding(Var(0), U1)(n"x"), Variance.COVARIANT, AUXILIARY) ::
+          (Binding(Var(1), U1)(n"y"), Variance.COVARIANT, AUXILIARY) ::
           Nil,
         /* ul */ USimpleLevel(Var(3)),
         /* numParams */ 3,

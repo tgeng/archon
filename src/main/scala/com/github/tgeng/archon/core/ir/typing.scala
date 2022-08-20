@@ -958,32 +958,40 @@ private def checkAreIndexableTypes(telescope: Telescope)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
-  case binding :: telescope => checkIsIndexable(binding.ty)(using 0) >> checkAreIndexableTypes(telescope)(
+  case binding :: telescope => checkIsIndexable(binding.ty)(using 0) >> checkAreIndexableTypes(
+    telescope
+  )(
     using Γ :+ binding
   )
 
-// All VTypes should be freeable
-private def checkIsFreeable(tm: VTerm)
-  (using numDataTParams: Nat)
-  (using Γ: Context)
+private def checkDataUsage(
+  d: Data,
+  constructors: Seq[Constructor],
+  usage: Usage
+)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = tm match
-  case _ => ???
+  (using ctx: TypingContext): Either[IrError, Unit] = ???
 
-// All VTypes should be cloneable
-private def checkIsCloneable(tm: VTerm)
-  (using numDataTParams: Nat)
+private def deriveTypeInherentUsage(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = tm match
-  case _ => ???
+  (using ctx: TypingContext): Either[IrError, Usage] = ???
+
+private def checkDataIsIndexable(
+  tm: VTerm,
+  constructors: Seq[Constructor],
+  usage: Usage
+)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, Unit] = ???
+
 
 // TODO: reconsider how this should be implemented. Basically it needs to:
 //  1. disallow nested thunks
-//  2. satisfy checkIsFreeable and checkIsCloneable
+//  2. inherent usage is unrestricted
 //  3. runtime available information is sufficient to determine identity
 //     a. U0 params must be referenced in types with non-U0 usage, for example Vect is indexable
-private def checkIsIndexable(tm: VTerm)
+private def checkTypeIsIndexable(ty: VTerm)
   (using numDataTParams: Nat)
   (using Γ: Context)
   (using Σ: Signature)
