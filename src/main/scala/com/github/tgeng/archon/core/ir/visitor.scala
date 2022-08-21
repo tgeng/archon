@@ -149,9 +149,14 @@ trait Visitor[C, R]:
       visitVTerm(ty.upperBound)
     )
 
-  def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = visitULevel(top.ul)
+  def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
+    visitULevel(top.ul),
+    visitVTerm(top.usage),
+  )
 
-  def visitIndexable(indexable: Indexable)(using ctx: C)(using Σ: Signature): R = visitULevel(indexable.ul)
+  def visitIndexable(indexable: Indexable)(using ctx: C)(using Σ: Signature): R = visitULevel(
+    indexable.ul
+  )
 
   def visitVar(v: Var)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -252,7 +257,8 @@ trait Visitor[C, R]:
   def visitF(f: F)(using ctx: C)(using Σ: Signature) =
     combine(
       visitVTerm(f.vTy),
-      visitVTerm(f.effects)
+      visitVTerm(f.effects),
+      visitVTerm(f.usage),
     )
 
   def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R = visitVTerm(r.v)
@@ -400,6 +406,9 @@ trait Transformer[C]:
     case con: Con => transformCon(con)
     case equalityType: EqualityType => transformEqualityType(equalityType)
     case refl: Refl => transformRefl(refl)
+    case usageLiteral: UsageLiteral => transformUsageLiteral(usageLiteral)
+    case usageCompound: UsageCompound => transformUsageCompound(usageCompound)
+    case usageType: UsageType => transformUsageType(usageType)
     case effectsType: EffectsType => transformEffectsType(effectsType)
     case effects: Effects => transformEffects(effects)
     case levelType: LevelType => transformLevelType(levelType)
@@ -417,7 +426,10 @@ trait Transformer[C]:
 
   def transformTop(top: Top)
     (using ctx: C)
-    (using Σ: Signature): VTerm = Top(transformULevel(top.ul))(using top.sourceInfo)
+    (using Σ: Signature): VTerm = Top(
+    transformULevel(top.ul),
+    transformVTerm(top.usage)
+  )(using top.sourceInfo)
 
   def transformIndexable(indexable: Indexable)
     (using ctx: C)
@@ -524,7 +536,8 @@ trait Transformer[C]:
   def transformF(f: F)(using ctx: C)(using Σ: Signature) =
     F(
       transformVTerm(f.vTy),
-      transformVTerm(f.effects)
+      transformVTerm(f.effects),
+      transformVTerm(f.usage),
     )(using f.sourceInfo)
 
   def transformReturn(r: Return)(using ctx: C)(using Σ: Signature): CTerm =
@@ -540,7 +553,8 @@ trait Transformer[C]:
 
   def transformFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): CTerm =
     FunctionType(
-      Binding(transformVTerm(functionType.binding.ty))(functionType.binding.name),
+      Binding(transformVTerm(functionType.binding.ty), transformVTerm(functionType.binding.usage))
+      (functionType.binding.name),
       withBindings(List(functionType.binding.name)) {
         transformCTerm(functionType.bodyTy)
       },

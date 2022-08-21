@@ -5,7 +5,6 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import QualifiedName.*
 import SourceInfo.*
-import com.github.tgeng.archon.core.ir.VTerm.Unrestricted
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side

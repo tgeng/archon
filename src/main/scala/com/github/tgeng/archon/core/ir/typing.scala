@@ -275,14 +275,12 @@ def inferType(tm: VTerm)
         for _ <- checkULevel(ul)
             upperBoundTy <- inferType(upperBound)
             _ <- upperBoundTy match
-              case Type(ul2, _) => checkULevelSubsumption(
-                ul,
-                ul2
-              )(using CheckSubsumptionMode.CONVERSION)
+              case Type(ul2, _) =>
+                checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
               case _ => Left(ExpectVType(upperBound))
         yield Type(ULevelSuc(ul), tm)
       case Indexable(ul) => Right(Type(ul, tm))
-      case Top(ul, u) => checkType(u, UsageType()(using SiEmpty)) >> Right(Type(ul, tm))
+      case Top(ul, u) => checkType(u, UsageType()) >> Right(Type(ul, tm))
       case r: Var => Right(Γ.resolve(r).ty)
       case Collapse(cTm) =>
         for cTy <- inferType(cTm)
@@ -322,7 +320,11 @@ def inferType(tm: VTerm)
               case _ => Left(NotTypeError(ty))
         yield r
       case Refl() => throw IllegalArgumentException("cannot infer type")
-      case EffectsType() => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), EffectsType()))
+      case _: UsageLiteral => Right(UsageType())
+      case UsageCompound(_, operands) =>
+        allRight(operands.multiToSeq.map(o => checkType(o, UsageType()))) >> Right(UsageType())
+      case u: UsageType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), u))
+      case e: EffectsType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), e))
       case Effects(literal, unionOperands) =>
         allRight(
           literal.map { (qn, args) =>
