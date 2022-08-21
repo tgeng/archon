@@ -94,13 +94,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
       given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <-
-            if data.isIndexable then
-              // TODO: use essentiality to guide this check here. Also think about additional
-              // requirements for indexable types on top of unrestricted types.
-              allRight(con.paramTys.map(binding => checkIsIndexable(binding.ty)(using Γ.size)))
-            else
-              Right(())
+          _ <- checkIsIndexable(data, con)
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
 
@@ -186,7 +180,8 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
       (record.tParamTys.size - 1).to(0, -1).map(Var(_)).toList,
       Total
     )
-  )
+  ),
+  U1
 )(record.selfName)
 
 def checkDef(definition: Definition)
@@ -287,13 +282,13 @@ def inferType(tm: VTerm)
               case _ => Left(ExpectVType(upperBound))
         yield Type(ULevelSuc(ul), tm)
       case Indexable(ul) => Right(Type(ul, tm))
-      case Top(ul) => Right(Type(ul, tm))
+      case Top(ul, u) => checkType(u, UsageType()(using SiEmpty)) >> Right(Type(ul, tm))
       case r: Var => Right(Γ.resolve(r).ty)
       case Collapse(cTm) =>
         for cTy <- inferType(cTm)
             r <- cTy match
-              case F(vTy, eff) if eff == Total => Right(vTy)
-              case F(_, _) => Left(CollapsingEffectfulTerm(cTm))
+              case F(vTy, eff, _) if eff == Total => Right(vTy)
+              case F(_, _, _) => Left(CollapsingEffectfulTerm(cTm))
               case _ => Left(NotCollapsable(cTm))
         yield r
       case U(cty) =>
@@ -301,8 +296,8 @@ def inferType(tm: VTerm)
             r <- ctyTy match
               case CType(ul, _, eff) if eff == Total => Right(Type(ul, tm))
               // Automatically promote SomeVType to F(SomeVType)
-              case F(Type(ul, _), eff) if eff == Total => Right(Type(ul, tm))
-              case CType(_, _, _) | F(Type(_, _), _) => Left(EffectfulCTermAsType(cty))
+              case F(Type(ul, _), eff, _) if eff == Total => Right(Type(ul, tm))
+              case CType(_, _, _) | F(Type(_, _), _, _) => Left(EffectfulCTermAsType(cty))
               case _ => Left(NotTypeError(tm))
         yield r
       case Thunk(c) =>
@@ -415,7 +410,7 @@ def inferType(tm: CTerm)
               case U(cty) => Right(cty)
               case _ => Left(ExpectUType(vTy))
         yield r
-      case F(vTy, effects) =>
+      case F(vTy, effects, _) =>
         for _ <- checkType(effects, EffectsType())
             vTyTy <- inferType(vTy)
             r <- vTyTy match
@@ -428,7 +423,7 @@ def inferType(tm: CTerm)
       case Let(t, body) =>
         for tTy <- inferType(t)
             r <- tTy match
-              case F(ty, effects) =>
+              case F(ty, effects, _) =>
                 for ctxTy <-
                       if effects == Total then
                       // Do the reduction onsite so that type checking in sub terms can leverage the
@@ -441,7 +436,7 @@ def inferType(tm: CTerm)
                         yield r
                       // Otherwise, just add the binding to the context and continue type checking.
                       else
-                        for ctxTy <- inferType(body)(using Γ :+ Binding(ty)(gn"v"))
+                        for ctxTy <- inferType(body)(using Γ :+ Binding(ty, ???)(gn"v"))
                             // Report an error if the type of `body` needs to reference the effectful
                             // computation. User should use a dependent sum type to wrap such
                             // references manually to avoid the leak.
@@ -468,9 +463,9 @@ def inferType(tm: CTerm)
                         Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total))
                       // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
                       // inference.
-                      case F(Type(ul2, _), eff) if eff == Total =>
+                      case F(Type(ul2, _), eff, _) if eff == Total =>
                         Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total))
-                      case CType(_, _, _) | F(Type(_, _), _) =>
+                      case CType(_, _, _) | F(Type(_, _), _, _) =>
                         Left(EffectfulCTermAsType(bodyTy))
                       case _ => Left(NotCTypeError(bodyTy))
                 yield r
@@ -540,11 +535,11 @@ def inferType(tm: CTerm)
                   for _ <- checkTypes(args, effect.tParamTys)
                       inputCTy <- inferType(input)
                       r <- inputCTy match
-                        case F(inputTy, inputEff) =>
+                        case F(inputTy, inputEff, _) =>
                           for _ <- checkType(
                             transform,
                             outputCType.weakened
-                          )(using Γ :+ Binding(inputTy)(gn"v"))
+                          )(using Γ :+ Binding(inputTy, ???)(gn"v"))
                               _ <- checkSubsumption(
                                 inputEff,
                                 EffectsUnion(otherEffects, EffectsLiteral(Set(eff))),
@@ -557,7 +552,7 @@ def inferType(tm: CTerm)
                                   val opParamTys = opDecl.paramTys.substLowers(args: _*).zip(
                                     argNames
                                   ).map {
-                                    case (binding, argName) => Binding(binding.ty)(argName)
+                                    case (binding, argName) => Binding(binding.ty, ???)(argName)
                                   }
                                   val opResultTy = opDecl.resultTy.substLowers(args: _*)
                                   checkType(
@@ -569,14 +564,15 @@ def inferType(tm: CTerm)
                                       Binding(
                                         U(
                                           FunctionType(
-                                            Binding(opResultTy)(gn"res"),
+                                            Binding(opResultTy, ???)(gn"res"),
                                             F(
                                               outputType.weaken(opParamTys.size + 1, 0),
                                               otherEffects.weaken(opParamTys.size + 1, 0)
                                             ),
                                             Total
                                           )
-                                        )
+                                        ),
+                                        ???
                                       )(resumeName)
                                   )
                                 }
@@ -619,13 +615,13 @@ def inferType(tm: CTerm)
               case _ => Left(ExpectCell(cell))
         yield r
       case h@HeapHandler(otherEffects, _, _, input) =>
-        val heapVarBinding = Binding[VTerm](HeapType())(h.boundName)
+        val heapVarBinding = Binding[VTerm](HeapType(), ???)(h.boundName)
 
         given Context = Γ :+ heapVarBinding
 
         for inputCTy <- inferType(input)
             r <- inputCTy match
-              case F(inputTy, eff) =>
+              case F(inputTy, eff, _) =>
                 for
                   _ <- checkSubsumption(
                     eff,
@@ -688,7 +684,9 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
           case (_, _, Some(EffectsType())) => checkEffSubsumption(sub, sup)
           case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
             checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
-          case (ty, Top(ul2), _) =>
+          // TODO: check usage subsumption.
+          // TODO: extend Top subsumption checking to also consider usage
+          case (ty, Top(ul2, _), _) =>
             for tyTy <- inferType(ty)
                 r <- tyTy match
                   case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
@@ -697,7 +695,10 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
           case (ty, Indexable(ul2), _) =>
             for tyTy <- inferType(ty)
                 r <- tyTy match
-                  case Type(ul1, _) => checkULevelSubsumption(ul1, ul2) >> checkIsIndexable(ty)(using 0)
+                  case Type(ul1, _) => checkULevelSubsumption(
+                    ul1,
+                    ul2
+                  ) >> checkTypeIsIndexable(ty)(using 0)
                   case _ => Left(NotTypeError(sub))
             yield r
           case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
@@ -821,15 +822,16 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                     checkULevelSubsumption(ul1, ul2)
                   case _ => Left(NotCTypeError(sub))
             yield r
-          case (F(vTy1, eff1), F(vTy2, eff2), _) =>
+          case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
+            // TODO: check usage subsumption
             for _ <- checkEffSubsumption(eff1, eff2)
                 r <- checkSubsumption(vTy1, vTy2, None)
             yield r
-          case (Return(v1), Return(v2), Some(F(ty, _))) => checkSubsumption(v1, v2, Some(ty))
+          case (Return(v1), Return(v2), Some(F(ty, _, _))) => checkSubsumption(v1, v2, Some(ty))
           case (Let(t1, ctx1), Let(t2, ctx2), ty) =>
             for t1CTy <- inferType(t1)
                 r <- t1CTy match
-                  case F(t1Ty, _) =>
+                  case F(t1Ty, _, _) =>
                     for t2CTy <- inferType(t2)
                         _ <- checkSubsumption(t1CTy, t2CTy, None)
                         _ <- checkSubsumption(t1, t2, Some(t2CTy))
@@ -837,7 +839,7 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                           ctx1,
                           ctx2,
                           ty.map(_.weakened)
-                        )(using mode)(using Γ :+ Binding(t1Ty)(gn"v"))
+                        )(using mode)(using Γ :+ Binding(t1Ty, ???)(gn"v"))
                     yield r
                   case _ => Left(ExpectFType(t1CTy))
             yield r
@@ -945,10 +947,8 @@ private def simplifyLet(t: CTerm)
       for
         tTy <- inferType(t)
         r <- tTy match
-          case F(
-          _,
-          eff
-          ) if eff == Total => simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
+          case F(_, eff, _) if eff == Total =>
+            simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
           case _ => Right(t)
       yield r
     case _ => Right(t)
@@ -965,21 +965,38 @@ private def checkAreIndexableTypes(telescope: Telescope)
     using Γ :+ binding
   )
 
-private def checkDataUsage(
-  d: Data,
+private def checkInherentUsage(
+  data: Data,
   constructors: Seq[Constructor],
-  usage: Usage
 )
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = ???
+  (using ctx: TypingContext): Either[IrError, Unit] = data.inherentUsage match
+  case UsageLiteral(U1) => Right(())
+  case _ =>
+    given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+
+    def checkTelescope(telescope: Telescope, dataInherentUsage: VTerm)(using Γ: Context): Either[IrError, Unit] = telescope match
+      case Nil => Right(())
+      case (b@Binding(ty, declaredUsage)) :: telescope =>
+        for inherentUsage <- deriveTypeInherentUsage(ty)
+            providedUsage = UsageProd(inherentUsage, declaredUsage)
+            consumedUsage = UsageProd(inherentUsage, declaredUsage, dataInherentUsage)
+            _ <- checkSubsumption(providedUsage, consumedUsage, Some(UsageType()(using SiEmpty)))(using SUBSUMPTION)
+            _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
+        yield ()
+
+    end checkTelescope
+      allRight(constructors.map(c => checkTelescope(c.paramTys, data.inherentUsage)))
+end checkInherentUsage
 
 private def deriveTypeInherentUsage(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Usage] = ty match
-  case _: Type | _: Indexable | _: EqualityType | _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
-    Right(UUnres)
-  case _: U => Right(U1)
+  (using ctx: TypingContext): Either[IrError, VTerm] = ty match
+  case _: Type | _: Indexable |  _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+    Right(UsageLiteral(UUnres))
+  case _: EqualityType => Right(UsageLiteral(U0))
+  case _: U => Right(UsageLiteral(U1))
   case Top(_, u) => Right(u)
   case _: Var | _: Collapse =>
     for tyTy <- inferType(ty)
@@ -988,15 +1005,14 @@ private def deriveTypeInherentUsage(ty: VTerm)
           case _ => Left(ExpectVType(ty))
     yield r
   case d: DataType => Σ.getDataOption(d.qn) match
-    case Some(d) => Right(d.inherentUsage)
+    case Some(data) => Right(data.inherentUsage.substLowers(d.args: _*))
     case _ => Left(MissingDeclaration(d.qn))
   case _ => Left(ExpectVType(ty))
 end deriveTypeInherentUsage
 
-private def checkDataIsIndexable(
-  tm: VTerm,
-  constructors: Seq[Constructor],
-  usage: Usage
+private def checkIsIndexable(
+  d: Data,
+  constructor: Constructor,
 )
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = ???
@@ -1011,36 +1027,37 @@ private def checkTypeIsIndexable(ty: VTerm)
   (using numDataTParams: Nat)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = tm match
-  // Here we check if upper bound is indexable because otherwise, the this Type type does not admit a
-  // normalized representation.
-  case Type(_, upperBound) => checkTypeIsIndexable(upperBound)
-
-  case DataType(qn, tArgs) => Σ.getDataOption(qn) match
-    case None => Left(MissingDeclaration(qn))
-    case Some(data) =>
-      if data.isIndexable then
-        // TODO: use essentiality as a guide to determine which args need to be checked
-        allRight(tArgs.map(checkIsIndexable))
-      else
-        Left(NotIndexableType(tm))
-  case _: U => Left(NotIndexableType(tm))
-  case _: Top | _: Indexable | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
-    Right(())
-  // Treat data type tParams as indexable automatically when checking purity of a data type declaration.
-  // This along with the above `DataType` branch works together to delay rejecting something as
-  // imindexable at data type instantiation time.
-  case Var(idx) if Γ.size - idx <= numDataTParams => Right(())
-  case _: Var | _: Collapse =>
-    for ty <- inferType(tm)
-        r <- ty match
-          case Type(ul, upperBound) => checkSubsumption(upperBound, Indexable(ul), None)
-          case _ => Right(())
-    yield r
-  // Any non-type values are considered indexable because the only place that we would invoke this
-  // function with non-type value is when checking data type args, where any non-type values would
-  // not affect the normalized forms of values created by constructors of this data type.
-  case _: Thunk | _: Con | Refl() | _: Effects | _: Level | _: Heap | _: Cell => Right(())
+  (using ctx: TypingContext): Either[IrError, Unit] = ???
+//  tm match
+//  // Here we check if upper bound is indexable because otherwise, the this Type type does not admit a
+//  // normalized representation.
+//  case Type(_, upperBound) => checkTypeIsIndexable(upperBound)
+//
+//  case DataType(qn, tArgs) => Σ.getDataOption(qn) match
+//    case None => Left(MissingDeclaration(qn))
+//    case Some(data) =>
+//      if data.isIndexable then
+//        // TODO: use essentiality as a guide to determine which args need to be checked
+//        allRight(tArgs.map(checkIsIndexable))
+//      else
+//        Left(NotIndexableType(tm))
+//  case _: U => Left(NotIndexableType(tm))
+//  case _: Top | _: Indexable | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
+//    Right(())
+//  // Treat data type tParams as indexable automatically when checking purity of a data type declaration.
+//  // This along with the above `DataType` branch works together to delay rejecting something as
+//  // imindexable at data type instantiation time.
+//  case Var(idx) if Γ.size - idx <= numDataTParams => Right(())
+//  case _: Var | _: Collapse =>
+//    for ty <- inferType(tm)
+//        r <- ty match
+//          case Type(ul, upperBound) => checkSubsumption(upperBound, Indexable(ul), None)
+//          case _ => Right(())
+//    yield r
+//  // Any non-type values are considered indexable because the only place that we would invoke this
+//  // function with non-type value is when checking data type args, where any non-type values would
+//  // not affect the normalized forms of values created by constructors of this data type.
+//  case _: Thunk | _: Con | Refl() | _: Effects | _: Level | _: Heap | _: Cell => Right(())
 
 private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode)
@@ -1139,7 +1156,7 @@ def reduceVType(vTy: CTerm)
 : Either[IrError, VTerm] = ctx.trace("reduce V type", Block(yellow(vTy.sourceInfo), pprint(vTy))) {
   for tyTy <- inferType(vTy)
       r <- tyTy match
-        case F(Type(_, _), effect) if effect == Total =>
+        case F(Type(_, _), effect, _) if effect == Total =>
           for reducedTy <- reduce(vTy)
               r <- reducedTy match
                 case Return(vTy) => Right(vTy)
@@ -1147,7 +1164,7 @@ def reduceVType(vTy: CTerm)
                   "type checking has bugs: reduced value of type `F ...` must be `Return ...`."
                 )
           yield r
-        case F(_, _) => Left(EffectfulCTermAsType(vTy))
+        case F(_, _, _) => Left(EffectfulCTermAsType(vTy))
         case _ => Left(ExpectFType(vTy))
   yield r
 }
@@ -1163,7 +1180,7 @@ def reduceCType(cTy: CTerm)
       for cTyTy <- inferType(cTy)
           r <- cTyTy match
             case CType(_, _, eff) if eff == Total => reduce(cTy)
-            case F(_, eff) if eff == Total =>
+            case F(_, eff, _) if eff == Total =>
 
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
@@ -1180,7 +1197,7 @@ def reduceCType(cTy: CTerm)
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   case CType(ul, upperBound, effects) => CType(ul, upperBound, EffectsUnion(eff, effects))
   case CTop(ul, effects) => CTop(ul, EffectsUnion(eff, effects))
-  case F(vTy, effects) => F(vTy, EffectsUnion(eff, effects))
+  case F(vTy, effects, usage) => F(vTy, EffectsUnion(eff, effects), usage)
   case FunctionType(binding, bodyTy, effects) => FunctionType(
     binding,
     bodyTy,

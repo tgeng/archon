@@ -262,9 +262,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
   override def visitType(ty: Type)
     (using ctx: PPrintContext)
     (using Σ: Signature): Block = ty match
-    case Type(USimpleLevel(Level(l, operands)), Top(_)) if operands.isEmpty => Block("Type" + l.sub)
-    case Type(USimpleLevel(l), Top(_)) => app("Type", l)
-    case Type(UωLevel(layer), Top(_)) => Block("TYPE" + layer.sub)
+    case Type(USimpleLevel(Level(l, operands)), Top(_, _)) if operands.isEmpty => Block("Type" + l.sub)
+    case Type(USimpleLevel(l), Top(_, _)) => app("Type", l)
+    case Type(UωLevel(layer), Top(_, _)) => Block("TYPE" + layer.sub)
     case Type(USimpleLevel(l), upperbound) => app("SubtypeOf", l, upperbound)
     case Type(UωLevel(layer), upperbound) => Block("SUBTYPEOF", layer.toString, upperbound)
 

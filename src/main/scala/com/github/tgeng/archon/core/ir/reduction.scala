@@ -345,7 +345,7 @@ private final class StackMachine(
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CPattern(PForcedDataType(_, pArgs)), ETerm(DataType(qn2, args))) =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (CPattern(PConstructor(pName, pArgs)), ETerm(Con(name, args))) if pName == name =>
+          case (CPattern(PConstructor(pName, pArgs, _)), ETerm(Con(name, args))) if pName == name =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CPattern(PForcedDataType(pName, pArgs)), ETerm(Con(name, args))) =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims

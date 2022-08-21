@@ -61,6 +61,7 @@ object Builtins:
         /* tParamTys*/ Nil,
         /* ul */ USimpleLevel(LevelLiteral(0)),
         /* numParams */ 0,
+        /* inherentUsage */ UsageLiteral(UUnres),
         /* isIndexable */ true,
         /* constructors */ IndexedSeq(
         Constructor(n"MkUnit", Nil, Nil)
@@ -69,27 +70,28 @@ object Builtins:
     b(
       Builtins.EqualityQn, (
         /* tParamTys*/
-        (Binding(LevelType(), U0)(n"level"), Variance.COVARIANT, AUXILIARY) ::
+        (Binding(LevelType(), U0)(n"level"), Variance.COVARIANT) ::
           (Binding(
             Type(
               USimpleLevel(Var(0)),
               Top(USimpleLevel(Var(0)))
             ),
             U1
-          )(n"A"), Variance.COVARIANT, AUXILIARY) ::
-          (Binding(Var(0), U1)(n"x"), Variance.COVARIANT, AUXILIARY) ::
-          (Binding(Var(1), U1)(n"y"), Variance.COVARIANT, AUXILIARY) ::
+          )(n"A"), Variance.COVARIANT) ::
+          (Binding(Var(0), U1)(n"x"), Variance.COVARIANT) ::
+          (Binding(Var(1), U1)(n"y"), Variance.COVARIANT) ::
           Nil,
         /* ul */ USimpleLevel(Var(3)),
         /* numParams */ 3,
+        /* inherentUsage */ UsageLiteral(U0),
         /* isIndexable */ true,
         /* constructors */ IndexedSeq(
         Constructor(n"Refl", Nil, Var(3) :: Var(2) :: Var(1) :: Var(1) :: Nil)
       ))
     ),
   ).map {
-    case (qn, (tParamTys, ul, numParams, isIndexable, constructors)) =>
-      (qn, (new Data(qn)(tParamTys, ul, numParams, isIndexable), constructors))
+    case (qn, (tParamTys, ul, numParams, inherentUsage, isIndexable, constructors)) =>
+      (qn, (new Data(qn)(tParamTys, ul, numParams, inherentUsage, isIndexable), constructors))
   }.toMap
 
   val builtinRecords: Map[QualifiedName, (Record, IndexedSeq[Field])] = Seq(

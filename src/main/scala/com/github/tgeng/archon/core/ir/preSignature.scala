@@ -164,8 +164,8 @@ def elaborateSignature(data: PreData)
             // Here and below we do not care the declared effect types because data type constructors
             // are always total. Declaring non-total signature is not necessary (nor desirable) but
             // acceptable.
-            case F(Type(ul, _), _) => Right((Nil, ul))
-            case F(t, _) => Left(ExpectVType(t))
+            case F(Type(ul, _), _, _) => Right((Nil, ul))
+            case F(t, _, _) => Left(ExpectVType(t))
             case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
               case (telescope, ul) => ((binding, INVARIANT) :: telescope, ul)
             }
@@ -176,7 +176,7 @@ def elaborateSignature(data: PreData)
       tParamTys <- elaborateTTelescope(data.tParamTys)
       elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
     yield elaboratedTy match
-      case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, data.isIndexable)
+      case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, ???, data.isIndexable)
   }
 
 def elaborateBody(preData: PreData)
@@ -194,9 +194,9 @@ def elaborateBody(preData: PreData)
             // Here and below we do not care the declared effect types because data type constructors
             // are always total. Declaring non-total signature is not necessary (nor desirable) but
             // acceptable.
-            case F(DataType(qn, args), _) if qn == data.qn && args.size == data.tParamTys.size =>
+            case F(DataType(qn, args), _, _) if qn == data.qn && args.size == data.tParamTys.size =>
               Right((Nil, args))
-            case F(t, _) => Left(ExpectDataType(t, Some(data.qn)))
+            case F(t, _, _) => Left(ExpectDataType(t, Some(data.qn)))
             case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
               case (telescope, ul) => (binding :: telescope, ul)
             }
@@ -242,7 +242,7 @@ def elaborateBody(preRecord: PreRecord)
     given SourceInfo = SiEmpty
 
     given Context = record.tParamTys.map(_._1).toIndexedSeq :+
-      Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))))(record.selfName)
+      Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))), ???)(record.selfName)
 
     transpose(
       preRecord.fields.map { field =>
@@ -328,7 +328,7 @@ def elaborateBody(preEffect: PreEffect)
             // Here and below we do not care the declared effect types because data type constructors
             // are always total. Declaring non-total signature is not necessary (nor desirable) but
             // acceptable.
-            case F(ty, _) => Right((Nil, ty))
+            case F(ty, _, _) => Right((Nil, ty))
             case FunctionType(binding, bodyTy, _) => elaborateTy(bodyTy)(using Γ :+ binding).map {
               case (telescope, ul) => (binding :: telescope, ul)
             }
@@ -360,7 +360,7 @@ private def elaborateTelescope(telescope: PreTelescope)
   case binding :: telescope =>
     ctx.trace("elaborating telescope") {
       for ty <- reduceVType(binding.ty)
-          newBinding = Binding(ty)(binding.name)
+          newBinding = Binding(ty, ???)(binding.name)
           telescope <- elaborateTelescope(telescope)(using Γ :+ newBinding)
       yield newBinding :: telescope
     }

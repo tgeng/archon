@@ -35,8 +35,8 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern] :
       case PRefl() => PRefl()
       case PDataType(qn, args) => PDataType(qn, args)
       case PForcedDataType(qn, args) => PForcedDataType(qn, args)
-      case PConstructor(name, args) => PConstructor(name, args)
-      case PForcedConstructor(name, args) => PForcedConstructor(name, args)
+      case PConstructor(name, args, isZeroUsage) => PConstructor(name, args, isZeroUsage)
+      case PForcedConstructor(name, args, isZeroUsage) => PForcedConstructor(name, args, isZeroUsage)
       case PForced(term) => PForced(term)
       case PAbsurd() => PAbsurd()
 
@@ -56,10 +56,10 @@ extension (p: Pattern)
       case PForcedDataType(qn, args) =>
         for args <- transpose(args.map(_.toTerm))
           yield DataType(qn, args)
-      case PConstructor(name, args) =>
+      case PConstructor(name, args, _) =>
         for args <- transpose(args.map(_.toTerm))
           yield Con(name, args)
-      case PForcedConstructor(name, args) =>
+      case PForcedConstructor(name, args, _) =>
         for args <- transpose(args.map(_.toTerm))
           yield Con(name, args)
       case PForced(t) => Some(t)

@@ -111,7 +111,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   // linearity for linear types. Also, 0 usage still effectively erases compile-only terms. In
   // addition, some transparent optimization (like in-place update, proactive free, etc) can be done
   // on unrestricted types that are used linearly.
-  case Top(ul: ULevel, usage: Usage)
+  case Top(ul: ULevel, usage: VTerm = UsageLiteral(Usage.U1))
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
   /**
@@ -336,7 +336,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   case Force(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.F */
-  case F(vTy: VTerm, effects: VTerm = VTerm.Total(using SiEmpty), usage: Usage = Usage.U1)
+  case F(vTy: VTerm, effects: VTerm = VTerm.Total(using SiEmpty), usage: VTerm = VTerm.UsageLiteral(Usage.U1))
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
   case Return(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate

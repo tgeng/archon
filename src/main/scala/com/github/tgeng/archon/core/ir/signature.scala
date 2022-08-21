@@ -27,7 +27,7 @@ enum Declaration:
        * affects how many arguments should be present in the derived constructor function.
        */
       val numParams: Nat,
-      val inherentUsage: Usage,
+      val inherentUsage: VTerm,
       val isIndexable: Boolean = true,
     )
   case Record(val qn: QualifiedName)
@@ -55,6 +55,7 @@ enum Declaration:
   def qn: QualifiedName
 
 import Declaration.*
+import Usage.*
 
 case class Constructor(
   name: Name,
@@ -270,7 +271,7 @@ trait Signature:
         yield Definition(qn)(
           record.tParamTys.foldRight[CTerm](
             FunctionType(
-              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))))(record.selfName),
+              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))), UsageLiteral(U1))(record.selfName),
               field.ty
             )
           ) { (bindingAndVariance, bodyTy) =>
@@ -294,7 +295,8 @@ trait Signature:
                   recordQn,
                   vars(record.tParamTys.size - 1)
                 )
-              )
+              ),
+              UsageLiteral(U1)
             )(record.selfName),
             pVars(record.tParamTys.size),
             Projection(Force(Var(0)), fieldName),
