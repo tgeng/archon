@@ -12,7 +12,7 @@ enum Variance:
 enum Essentiality:
   case ESSENTIAL, AUXILIARY
 
-type TTelescope = List[(Binding[VTerm], Variance, Essentiality)]
+type TTelescope = List[(Binding[VTerm], Variance)]
 
 given SourceInfo = SiEmpty
 
@@ -27,6 +27,7 @@ enum Declaration:
        * affects how many arguments should be present in the derived constructor function.
        */
       val numParams: Nat,
+      val inherentUsage: Usage,
       val isIndexable: Boolean = true,
     )
   case Record(val qn: QualifiedName)
@@ -47,7 +48,7 @@ enum Declaration:
    * would make it very difficult to implement dynamic handlers efficiently. Also note that this
    * means we also need to conservatively reject `tParamTys` like `[A: Type, a: A]` because
    * there is no way to statically know if `A` could be `U`. In addition, this also rules out any
-   * data type that wraps imindexable computation inside.
+   * data type that wraps non-indexable computation inside.
    */
   case Effect(val qn: QualifiedName)(val tParamTys: Telescope = Nil)
 

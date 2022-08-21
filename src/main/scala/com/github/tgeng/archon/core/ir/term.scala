@@ -12,7 +12,7 @@ import com.github.tgeng.archon.core.ir.VTerm.Unrestricted
 // effects would not reduce during type checking.
 
 case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
-  def map[S](f: T => S): Binding[S] = Binding(f(ty), usage.map(f))(name)
+  def map[S](f: T => S): Binding[S] = Binding(f(ty), f(usage))(name)
 
 object Binding:
   def apply[T](ty: T, usage: T)(name: Ref[Name]): Binding[T] = new Binding(ty, usage)(name)
@@ -102,16 +102,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case Type(ul: ULevel, upperBound: VTerm)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
 
-  // Top (linear)
-  // |        \         \        \
-  // Affine   Relevant  (U ...)  FileDescriptor ...
-  // |        /
-  // Unrestricted
-  // |
-  // Indexable
-  // |
-  // Most user types
-  //
   // The idea is that by default all usage declarations in bindings and `F` are 1 (linear) and types
   // determines how they can be used: strict linear types (for example thunks or user declared
   // resources like file descriptors) can only be used linearly, while simple data types can be
@@ -121,20 +111,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   // linearity for linear types. Also, 0 usage still effectively erases compile-only terms. In
   // addition, some transparent optimization (like in-place update, proactive free, etc) can be done
   // on unrestricted types that are used linearly.
-  case Top(ul: ULevel)
+  case Top(ul: ULevel, usage: Usage)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
-
-  /** Super type of all types whose inhabitants can be used 0 or 1 times. */
-  case Affine(ul: ULevel)
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(AffineQn)
-
-  /** Super type of all types whose inhabitants can be used 1 or more times. */
-  case Relevant(ul: ULevel)
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(RelevantQn)
-
-  /** Super type of all types whose inhabitants can be used 0, 1, or more times. */
-  case Unrestricted(ul: ULevel)
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(UnrestrictedQn)
 
   /**
    * Super type of all types whose inhabitants can be used 0, 1, or more times. Additionally, the
@@ -227,7 +205,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
 
     this match
       case Type(ul, upperBound) => Type(ul, upperBound)
-      case Top(ul) => Top(ul)
+      case Top(ul, u) => Top(ul, u)
       case Indexable(ul) => Indexable(ul)
       case Var(index) => Var(index)
       case Collapse(cTm) => Collapse(cTm)
@@ -480,7 +458,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
       case CTop(ul, effects) => CTop(ul, effects)
       case Def(qn) => Def(qn)
       case Force(v) => Force(v)
-      case F(vTy, effects) => F(vTy, effects)
+      case F(vTy, effects, u) => F(vTy, effects, u)
       case Return(v) => Return(v)
       case l@Let(t, ctx) => Let(t, ctx)(l.boundName)
       case FunctionType(binding, bodyTy, effects) => FunctionType(binding, bodyTy, effects)

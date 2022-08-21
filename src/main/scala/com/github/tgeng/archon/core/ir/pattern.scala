@@ -20,10 +20,10 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern] :
     (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   // Note that we do not allow matching specific values of level, effect, and heap because there are no corresponding
   // eliminators. All these can only be matched with a pattern variable.
-  case PConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo) extends Pattern(
+  case PConstructor(name: Name, args: List[Pattern], isZeroUsage: Boolean = false)(using sourceInfo: SourceInfo) extends Pattern(
     sourceInfo
   )
-  case PForcedConstructor(name: Name, args: List[Pattern])
+  case PForcedConstructor(name: Name, args: List[Pattern], isZeroUsage: Boolean = false)
     (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PForced(term: VTerm)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PAbsurd()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)

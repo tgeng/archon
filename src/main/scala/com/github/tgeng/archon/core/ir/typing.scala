@@ -11,6 +11,7 @@ import IrError.*
 import Declaration.*
 import Elimination.*
 import SourceInfo.*
+import Usage.*
 
 import scala.annotation.tailrec
 import PrettyPrinter.pprint
@@ -958,7 +959,7 @@ private def checkAreIndexableTypes(telescope: Telescope)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
-  case binding :: telescope => checkIsIndexable(binding.ty)(using 0) >> checkAreIndexableTypes(
+  case binding :: telescope => checkTypeIsIndexable(binding.ty)(using 0) >> checkAreIndexableTypes(
     telescope
   )(
     using Γ :+ binding
@@ -975,7 +976,22 @@ private def checkDataUsage(
 private def deriveTypeInherentUsage(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Usage] = ???
+  (using ctx: TypingContext): Either[IrError, Usage] = ty match
+  case _: Type | _: Indexable | _: EqualityType | _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+    Right(UUnres)
+  case _: U => Right(U1)
+  case Top(_, u) => Right(u)
+  case _: Var | _: Collapse =>
+    for tyTy <- inferType(ty)
+        r <- tyTy match
+          case Type(_, upperBound) => deriveTypeInherentUsage(upperBound)
+          case _ => Left(ExpectVType(ty))
+    yield r
+  case d: DataType => Σ.getDataOption(d.qn) match
+    case Some(d) => Right(d.inherentUsage)
+    case _ => Left(MissingDeclaration(d.qn))
+  case _ => Left(ExpectVType(ty))
+end deriveTypeInherentUsage
 
 private def checkDataIsIndexable(
   tm: VTerm,
@@ -998,7 +1014,7 @@ private def checkTypeIsIndexable(ty: VTerm)
   (using ctx: TypingContext): Either[IrError, Unit] = tm match
   // Here we check if upper bound is indexable because otherwise, the this Type type does not admit a
   // normalized representation.
-  case Type(_, upperBound) => checkIsIndexable(upperBound)
+  case Type(_, upperBound) => checkTypeIsIndexable(upperBound)
 
   case DataType(qn, tArgs) => Σ.getDataOption(qn) match
     case None => Left(MissingDeclaration(qn))

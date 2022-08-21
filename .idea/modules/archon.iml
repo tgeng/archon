@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<module external.linked.project.id="root [file:/Users/tgeng/dev/scala/archon/]" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="SBT" type="JAVA_MODULE" version="4">
+<module external.linked.project.id="root [file:/Users/tgeng/dev/archon/]" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="SBT" type="JAVA_MODULE" version="4">
   <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_17">
     <output url="file://$MODULE_DIR$/../../target/scala-3.1.2/classes" />
     <output-test url="file://$MODULE_DIR$/../../target/scala-3.1.2/test-classes" />
@@ -32,6 +32,5 @@
     <orderEntry type="library" scope="TEST" name="sbt: org.scalatest:scalatest-shouldmatchers_3:3.2.12:jar" level="project" />
     <orderEntry type="library" scope="TEST" name="sbt: org.scalatest:scalatest-wordspec_3:3.2.12:jar" level="project" />
     <orderEntry type="library" scope="TEST" name="sbt: org.scalatest:scalatest_3:3.2.12:jar" level="project" />
-    <orderEntry type="library" name="scala-sdk-3.1.2" level="application" />
   </component>
 </module>
