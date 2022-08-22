@@ -122,7 +122,6 @@ trait Visitor[C, R]:
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type => visitType(ty)
     case top: Top => visitTop(top)
-    case indexable: Indexable => visitIndexable(indexable)
     case v: Var => visitVar(v)
     case collapse: Collapse => visitCollapse(collapse)
     case u: U => visitU(u)
@@ -134,6 +133,10 @@ trait Visitor[C, R]:
     case usageType: UsageType => visitUsageType(usageType)
     case usageLiteral: UsageLiteral => visitUsageLiteral(usageLiteral)
     case usageCompound: UsageCompound => visitUsageCompound(usageCompound)
+    case eqDecidabilityType: EqDecidabilityType => visitEqDecidabilityType(eqDecidabilityType)
+    case eqDecidabilityLiteral: EqDecidabilityLiteral => visitEqDecidabilityLiteral(
+      eqDecidabilityLiteral
+    )
     case effectsType: EffectsType => visitEffectsType(effectsType)
     case effects: Effects => visitEffects(effects)
     case levelType: LevelType => visitLevelType(levelType)
@@ -152,10 +155,7 @@ trait Visitor[C, R]:
   def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
     visitULevel(top.ul),
     visitVTerm(top.usage),
-  )
-
-  def visitIndexable(indexable: Indexable)(using ctx: C)(using Σ: Signature): R = visitULevel(
-    indexable.ul
+    visitVTerm(top.eqDecidability),
   )
 
   def visitVar(v: Var)(using ctx: C)(using Σ: Signature): R = combine()
@@ -200,6 +200,14 @@ trait Visitor[C, R]:
   def visitUsageCompound(usageCompound: UsageCompound)
     (using ctx: C)
     (using Σ: Signature): R = combine(usageCompound.operands.multiMap(visitVTerm).multiToSeq: _*)
+
+  def visitEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)
+    (using ctx: C)
+    (using Σ: Signature): R = combine()
+
+  def visitEqDecidabilityLiteral(eqDecidabilityLiteral: EqDecidabilityLiteral)
+    (using ctx: C)
+    (using Σ: Signature): R = combine()
 
   def visitEffectsType(effectsType: EffectsType)
     (using ctx: C)
@@ -397,7 +405,6 @@ trait Transformer[C]:
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm = tm match
     case ty: Type => transformType(ty)
     case top: Top => transformTop(top)
-    case indexable: Indexable => transformIndexable(indexable)
     case v: Var => transformVar(v)
     case collapse: Collapse => transformCollapse(collapse)
     case u: U => transformU(u)
@@ -409,6 +416,10 @@ trait Transformer[C]:
     case usageLiteral: UsageLiteral => transformUsageLiteral(usageLiteral)
     case usageCompound: UsageCompound => transformUsageCompound(usageCompound)
     case usageType: UsageType => transformUsageType(usageType)
+    case eqDecidabilityType: EqDecidabilityType => transformEqDecidabilityType(eqDecidabilityType)
+    case eqDecidabilityLiteral: EqDecidabilityLiteral => transformEqDecidabilityLiteral(
+      eqDecidabilityLiteral
+    )
     case effectsType: EffectsType => transformEffectsType(effectsType)
     case effects: Effects => transformEffects(effects)
     case levelType: LevelType => transformLevelType(levelType)
@@ -428,12 +439,9 @@ trait Transformer[C]:
     (using ctx: C)
     (using Σ: Signature): VTerm = Top(
     transformULevel(top.ul),
-    transformVTerm(top.usage)
+    transformVTerm(top.usage),
+    transformVTerm(top.eqDecidability),
   )(using top.sourceInfo)
-
-  def transformIndexable(indexable: Indexable)
-    (using ctx: C)
-    (using Σ: Signature): VTerm = Indexable(transformULevel(indexable.ul))(using indexable.sourceInfo)
 
   def transformVar(v: Var)(using ctx: C)(using Σ: Signature): VTerm = v
 
@@ -480,6 +488,14 @@ trait Transformer[C]:
     usageCompound.operator,
     usageCompound.operands.multiMap(transformVTerm)
   )
+
+  def transformEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = eqDecidabilityType
+
+  def transformEqDecidabilityLiteral(eqDecidabilityLiteral: EqDecidabilityLiteral)
+    (using ctx: C)
+    (using Σ: Signature): VTerm = eqDecidabilityLiteral
 
   def transformEffectsType(effectsType: EffectsType)
     (using ctx: C)

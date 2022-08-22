@@ -279,8 +279,9 @@ def inferType(tm: VTerm)
                 checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
               case _ => Left(ExpectVType(upperBound))
         yield Type(ULevelSuc(ul), tm)
-      case Indexable(ul) => Right(Type(ul, tm))
-      case Top(ul, u) => checkType(u, UsageType()) >> Right(Type(ul, tm))
+      case Top(ul, u, eqD) => checkType(u, UsageType()) >>
+        checkType(eqD, EqDecidabilityType()) >>
+        Right(Type(ul, tm))
       case r: Var => Right(Γ.resolve(r).ty)
       case Collapse(cTm) =>
         for cTy <- inferType(cTm)
@@ -324,6 +325,8 @@ def inferType(tm: VTerm)
       case UsageCompound(_, operands) =>
         allRight(operands.multiToSeq.map(o => checkType(o, UsageType()))) >> Right(UsageType())
       case u: UsageType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), u))
+      case eqD: EqDecidabilityType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), eqD))
+      case eqD: EqDecidabilityLiteral => Right(EqDecidabilityType())
       case e: EffectsType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), e))
       case Effects(literal, unionOperands) =>
         allRight(
@@ -686,21 +689,13 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
           case (_, _, Some(EffectsType())) => checkEffSubsumption(sub, sup)
           case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
             checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
+          // TODO: check eaDecidability subsumption.
           // TODO: check usage subsumption.
-          // TODO: extend Top subsumption checking to also consider usage
-          case (ty, Top(ul2, _), _) =>
+          // TODO: extend Top subsumption checking to also consider usage and eqDecidability
+          case (ty, Top(ul2, _, _), _) =>
             for tyTy <- inferType(ty)
                 r <- tyTy match
                   case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
-                  case _ => Left(NotTypeError(sub))
-            yield r
-          case (ty, Indexable(ul2), _) =>
-            for tyTy <- inferType(ty)
-                r <- tyTy match
-                  case Type(ul1, _) => checkULevelSubsumption(
-                    ul1,
-                    ul2
-                  ) >> checkTypeIsIndexable(ty)(using 0)
                   case _ => Left(NotTypeError(sub))
             yield r
           case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
@@ -995,11 +990,11 @@ private def deriveTypeInherentUsage(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, VTerm] = ty match
-  case _: Type | _: Indexable |  _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+  case _: Type |  _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
     Right(UsageLiteral(UUnres))
   case _: EqualityType => Right(UsageLiteral(U0))
   case _: U => Right(UsageLiteral(U1))
-  case Top(_, u) => Right(u)
+  case Top(_, u, _) => Right(u)
   case _: Var | _: Collapse =>
     for tyTy <- inferType(ty)
         r <- tyTy match

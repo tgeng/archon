@@ -176,7 +176,7 @@ def elaborateSignature(data: PreData)
       tParamTys <- elaborateTTelescope(data.tParamTys)
       elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
     yield elaboratedTy match
-      case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, ???, data.isIndexable)
+      case (tIndices, ul) => Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, ???, ???)
   }
 
 def elaborateBody(preData: PreData)

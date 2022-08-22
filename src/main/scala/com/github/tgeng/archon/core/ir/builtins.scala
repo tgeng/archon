@@ -17,7 +17,6 @@ object Builtins:
   val AffineQn = BuiltinType / "Affine"
   val RelevantQn = BuiltinType / "RelevantQn"
   val UnrestrictedQn = BuiltinType / "Unrestricted"
-  val IndexableQn = BuiltinType / "Indexable"
   val CTypeQn = BuiltinType / "CType"
   val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
   val CTopQn = BuiltinType / "CTop"
@@ -54,6 +53,7 @@ object Builtins:
   import CoPattern.*
   import Pattern.*
   import Usage.*
+  import EqDecidability.*
 
   val builtinData: Map[QualifiedName, (Data, IndexedSeq[Constructor])] = Seq(
     b(
@@ -62,7 +62,7 @@ object Builtins:
         /* ul */ USimpleLevel(LevelLiteral(0)),
         /* numParams */ 0,
         /* inherentUsage */ UsageLiteral(UUnres),
-        /* isIndexable */ true,
+        /* inherentEqDecidability */ EqDecidabilityLiteral(EqDecidable),
         /* constructors */ IndexedSeq(
         Constructor(n"MkUnit", Nil, Nil)
       ))
@@ -84,14 +84,14 @@ object Builtins:
         /* ul */ USimpleLevel(Var(3)),
         /* numParams */ 3,
         /* inherentUsage */ UsageLiteral(U0),
-        /* isIndexable */ true,
+        /* inherentEqDecidability */ EqDecidabilityLiteral(EqDecidable),
         /* constructors */ IndexedSeq(
         Constructor(n"Refl", Nil, Var(3) :: Var(2) :: Var(1) :: Var(1) :: Nil)
       ))
     ),
   ).map {
-    case (qn, (tParamTys, ul, numParams, inherentUsage, isIndexable, constructors)) =>
-      (qn, (new Data(qn)(tParamTys, ul, numParams, inherentUsage, isIndexable), constructors))
+    case (qn, (tParamTys, ul, numParams, inherentUsage, inherentEqDecidability, constructors)) =>
+      (qn, (new Data(qn)(tParamTys, ul, numParams, inherentUsage, inherentEqDecidability), constructors))
   }.toMap
 
   val builtinRecords: Map[QualifiedName, (Record, IndexedSeq[Field])] = Seq(
@@ -191,27 +191,6 @@ object Builtins:
             CPattern(PVar(0)) :: Nil,
             Return(Top(USimpleLevel(Var(0)))),
             F(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))
-          )
-        )
-      )
-    ),
-
-    /**
-     * Indexable : (level : LevelType) -> Type(level, Indexable(level))
-     * {level : LevelType} |- level := .return Indexable(level)
-     */
-    b(
-      Builtins.IndexableQn, (
-        FunctionType(
-          Binding(LevelType(), U1)(n"level"),
-          F(Type(USimpleLevel(Var(0)), Indexable(USimpleLevel(Var(0)))))
-        ),
-        IndexedSeq(
-          Clause(
-            Binding(LevelType(), U1)(n"level") :: Nil,
-            CPattern(PVar(0)) :: Nil,
-            Return(Indexable(USimpleLevel(Var(0)))),
-            F(Type(USimpleLevel(Var(0)), Indexable(USimpleLevel(Var(0)))))
           )
         )
       )

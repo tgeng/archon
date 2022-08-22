@@ -28,7 +28,7 @@ enum Declaration:
        */
       val numParams: Nat,
       val inherentUsage: VTerm,
-      val isIndexable: Boolean = true,
+      val inherentEqDecidability: VTerm,
     )
   case Record(val qn: QualifiedName)
     (
