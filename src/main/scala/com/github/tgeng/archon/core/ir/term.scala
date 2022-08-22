@@ -5,6 +5,8 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import QualifiedName.*
 import SourceInfo.*
+import Reifiability.*
+import Usage.*
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -110,22 +112,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   // linearity for linear types. Also, 0 usage still effectively erases compile-only terms. In
   // addition, some transparent optimization (like in-place update, proactive free, etc) can be done
   // on unrestricted types that are used linearly.
-  case Top(ul: ULevel, usage: VTerm = UsageLiteral(Usage.U1))
+  case Top(ul: ULevel, usage: VTerm = UsageLiteral(Usage.U1), reifiability: VTerm = ReifiabilityLiteral(RUnres))
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
-
-  /**
-   * Super type of all types whose inhabitants can be used 0, 1, or more times. Additionally, the
-   * the identity of inhabitants can be determined efficiently at runtime so that they can be used
-   * as arguments to effect constructors. This can be tricky with constructors taking U0 parameters.
-   * Some care is needed here. For example, the U0 parameter must be referenced in some types.
-   *
-   * Note that user can't do any additional operations on values of indexable types like comparing
-   * them. This is because the comparing may not be total (for example comparing heap variables has
-   * heap effect). Instead, comparison operations will be modeled by type classes like `DecEq` in
-   * idris, with an additional effect parameter.
-   **/
-  case Indexable(ul: ULevel)
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(IndexableQn)
 
   case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -158,6 +146,11 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageCompound(operator: UsageOperator, operands: Multiset[VTerm])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+
+  case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case EqDecidabilityLiteral(reifiability: Reifiability)(using sourceInfo: SourceInfo) extends VTerm(
+    sourceInfo
+  )
 
   case EffectsType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     EffectsQn
