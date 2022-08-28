@@ -51,7 +51,7 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
 
 extension (eff: Eff)
-  def map[S](f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
+  def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
 enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel] :
   case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)

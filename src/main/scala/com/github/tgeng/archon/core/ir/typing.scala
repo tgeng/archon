@@ -94,7 +94,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
       given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <- checkIsIndexable(data, con)
+          _ <- checkIsEqDecidable(data, con)
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
 
@@ -224,7 +224,7 @@ def checkEffect(effect: Effect)
 : Either[IrError, Unit] = ctx.trace(s"checking effect signature ${effect.qn}") {
   given Context = IndexedSeq()
 
-  checkParameterTypeDeclarations(effect.tParamTys) >> checkAreIndexableTypes(effect.tParamTys)
+  checkParameterTypeDeclarations(effect.tParamTys) >> checkAreEqDecidableTypes(effect.tParamTys)
 }
 
 def checkOperator(qn: QualifiedName, operator: Operator)
@@ -951,12 +951,12 @@ private def simplifyLet(t: CTerm)
     case _ => Right(t)
 }
 
-private def checkAreIndexableTypes(telescope: Telescope)
+private def checkAreEqDecidableTypes(telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = telescope match
   case Nil => Right(())
-  case binding :: telescope => checkTypeIsIndexable(binding.ty)(using 0) >> checkAreIndexableTypes(
+  case binding :: telescope => checkTypeIsEqDecidable(binding.ty)(using 0) >> checkAreEqDecidableTypes(
     telescope
   )(
     using Γ :+ binding
@@ -1007,7 +1007,7 @@ private def deriveTypeInherentUsage(ty: VTerm)
   case _ => Left(ExpectVType(ty))
 end deriveTypeInherentUsage
 
-private def checkIsIndexable(
+private def checkIsEqDecidable(
   d: Data,
   constructor: Constructor,
 )
@@ -1019,39 +1019,39 @@ private def checkIsIndexable(
 //  1. disallow nested thunks
 //  2. inherent usage is unrestricted
 //  3. runtime available information is sufficient to determine identity
-//     a. U0 params must be referenced in types with non-U0 usage, for example Vect is indexable
-private def checkTypeIsIndexable(ty: VTerm)
+//     a. U0 params must be referenced in types with non-U0 usage, for example Vect is eqDecidable
+private def checkTypeIsEqDecidable(ty: VTerm)
   (using numDataTParams: Nat)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = ???
 //  tm match
-//  // Here we check if upper bound is indexable because otherwise, the this Type type does not admit a
+//  // Here we check if upper bound is eqDecidable because otherwise, the this Type type does not admit a
 //  // normalized representation.
-//  case Type(_, upperBound) => checkTypeIsIndexable(upperBound)
+//  case Type(_, upperBound) => checkTypeIsEqDecidable(upperBound)
 //
 //  case DataType(qn, tArgs) => Σ.getDataOption(qn) match
 //    case None => Left(MissingDeclaration(qn))
 //    case Some(data) =>
-//      if data.isIndexable then
+//      if data.isEqDecidable then
 //        // TODO: use essentiality as a guide to determine which args need to be checked
-//        allRight(tArgs.map(checkIsIndexable))
+//        allRight(tArgs.map(checkIsEqDecidable))
 //      else
-//        Left(NotIndexableType(tm))
-//  case _: U => Left(NotIndexableType(tm))
-//  case _: Top | _: Indexable | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
+//        Left(NotEqDecidableType(tm))
+//  case _: U => Left(NotEqDecidableType(tm))
+//  case _: Top | _: EqDecidable | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
 //    Right(())
-//  // Treat data type tParams as indexable automatically when checking purity of a data type declaration.
+//  // Treat data type tParams as eqDecidable automatically when checking purity of a data type declaration.
 //  // This along with the above `DataType` branch works together to delay rejecting something as
-//  // imindexable at data type instantiation time.
+//  // imeqDecidable at data type instantiation time.
 //  case Var(idx) if Γ.size - idx <= numDataTParams => Right(())
 //  case _: Var | _: Collapse =>
 //    for ty <- inferType(tm)
 //        r <- ty match
-//          case Type(ul, upperBound) => checkSubsumption(upperBound, Indexable(ul), None)
+//          case Type(ul, upperBound) => checkSubsumption(upperBound, EqDecidable(ul), None)
 //          case _ => Right(())
 //    yield r
-//  // Any non-type values are considered indexable because the only place that we would invoke this
+//  // Any non-type values are considered eqDecidable because the only place that we would invoke this
 //  // function with non-type value is when checking data type args, where any non-type values would
 //  // not affect the normalized forms of values created by constructors of this data type.
 //  case _: Thunk | _: Con | Refl() | _: Effects | _: Level | _: Heap | _: Cell => Right(())
