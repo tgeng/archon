@@ -12,6 +12,7 @@ import Declaration.*
 import Elimination.*
 import SourceInfo.*
 import Usage.*
+import EqDecidability.*
 
 import scala.annotation.tailrec
 import PrettyPrinter.pprint
@@ -94,7 +95,7 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
       given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <- checkIsEqDecidable(data, con)
+          _ <- checkInherentEqDecidable(data, con)
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
 
@@ -951,17 +952,6 @@ private def simplifyLet(t: CTerm)
     case _ => Right(t)
 }
 
-private def checkAreEqDecidableTypes(telescope: Telescope)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = telescope match
-  case Nil => Right(())
-  case binding :: telescope => checkTypeIsEqDecidable(binding.ty)(using 0) >> checkAreEqDecidableTypes(
-    telescope
-  )(
-    using Γ :+ binding
-  )
-
 private def checkInherentUsage(
   data: Data,
   constructors: Seq[Constructor],
@@ -1007,24 +997,36 @@ private def deriveTypeInherentUsage(ty: VTerm)
   case _ => Left(ExpectVType(ty))
 end deriveTypeInherentUsage
 
-private def checkIsEqDecidable(
+private def checkInherentEqDecidable(
   d: Data,
   constructor: Constructor,
 )
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] = ???
 
-
 // TODO: reconsider how this should be implemented. Basically it needs to:
 //  1. disallow nested thunks
 //  2. inherent usage is unrestricted
 //  3. runtime available information is sufficient to determine identity
 //     a. U0 params must be referenced in types with non-U0 usage, for example Vect is eqDecidable
-private def checkTypeIsEqDecidable(ty: VTerm)
-  (using numDataTParams: Nat)
+private def deriveTypeInherentEqDecidable(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = ???
+  (using ctx: TypingContext): Either[IrError, VTerm] = ty match
+  case _: Type | _: EqualityType | _: UsageType | _: EqDecidabilityType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+    Right(EqDecidabilityLiteral(EqDecidable))
+  case Top(_, _, eqDecidability) => Right(eqDecidability)
+  case _: Var | _: Collapse =>
+    for tyTy <- inferType(ty)
+        r <- tyTy match
+          case Type(_, upperBound) => deriveTypeInherentEqDecidable(upperBound)
+          case _ => Left(ExpectVType(ty))
+    yield r
+  case _: U => Right(EqDecidabilityLiteral(EqUnres))
+  case d: DataType => Σ.getDataOption(d.qn) match
+    case Some(data) => Right(data.inherentEqDecidability.substLowers(d.args: _*))
+    case _ => Left(MissingDeclaration(d.qn))
+  case _ => Left(ExpectVType(ty))
 //  tm match
 //  // Here we check if upper bound is eqDecidable because otherwise, the this Type type does not admit a
 //  // normalized representation.
@@ -1055,6 +1057,21 @@ private def checkTypeIsEqDecidable(ty: VTerm)
 //  // function with non-type value is when checking data type args, where any non-type values would
 //  // not affect the normalized forms of values created by constructors of this data type.
 //  case _: Thunk | _: Con | Refl() | _: Effects | _: Level | _: Heap | _: Cell => Right(())
+
+private def checkAreEqDecidableTypes(telescope: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, Unit] = telescope match
+  case Nil => Right(())
+  case binding :: telescope =>
+    for
+      eqD <- deriveTypeInherentEqDecidable(binding.ty)
+      _ <- checkSubsumption(eqD, EqDecidabilityLiteral(EqDecidable), Some(EqDecidabilityType()))(
+        using CONVERSION
+      )
+      _ <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
+    yield ()
+
 
 private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode)
