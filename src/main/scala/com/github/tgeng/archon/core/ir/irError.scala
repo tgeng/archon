@@ -42,3 +42,4 @@ enum IrError extends HasException:
   case MissingOperator(name: Name, qn: QualifiedName)
   case LeakedReferenceToEffectfulComputationResult(effectfulTerm: CTerm)
   case LeakedReferenceToHeapVariable(leakyTerm: CTerm)
+  case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name)

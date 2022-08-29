@@ -15,7 +15,9 @@ def getFreeVars(tele: Telescope)
   case Nil => (Set(), Set())
   case binding :: rest => union(getFreeVars(binding.ty), getFreeVars(rest)(using bar + 1) - 1)
 
-private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
+private object FreeVarsVisitorObject extends FreeVarsVisitor
+
+trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])] :
 
   import VTerm.*
   import CTerm.*
@@ -79,14 +81,14 @@ private object FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /
 
 def getFreeVars(tm: VTerm)
   (using bar: Nat)
-  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitor.visitVTerm(
+  (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitorObject.visitVTerm(
   tm
 )
 
 def getFreeVars(tm: CTerm)
   (using bar: Nat)
   (using Σ: Signature)
-: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitor.visitCTerm(tm)
+: ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = FreeVarsVisitorObject.visitCTerm(tm)
 
 def getFreeVars(ul: ULevel)
   (using bar: Nat)

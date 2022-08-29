@@ -95,7 +95,6 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)
       given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
       for _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <- checkInherentEqDecidable(data, con)
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
 
@@ -126,7 +125,9 @@ def checkDataConstructors(qn: QualifiedName, constructors: Seq[Constructor])
 : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  allRight(constructors.map { con => checkDataConstructor(qn, con) })
+
+  allRight(constructors.map { con => checkDataConstructor(qn, con) }) >>
+    checkInherentEqDecidable(Σ.getData(qn), constructors)
 
 def checkRecord(record: Record)
   (using Σ: Signature)
@@ -253,9 +254,11 @@ private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Opt
   (using ctx: TypingContext)
 : Either[IrError, Unit] = tParamTys match
   case Nil => Right(())
-  case binding :: rest => checkIsType(binding.ty, levelBound) >> checkParameterTypeDeclarations(
-    rest
-  )(using Γ :+ binding)
+  case binding :: rest =>
+    checkIsType(binding.ty, levelBound) >>
+      checkIsEqDecidableTypes(binding.ty) >>
+      checkSubsumption(binding.usage, UsageLiteral(UUnres), Some(UsageType())) >>
+      checkParameterTypeDeclarations(rest)(using Γ :+ binding)
 
 private def checkULevel(ul: ULevel)
   (using Γ: Context)
@@ -972,7 +975,6 @@ private def checkInherentUsage(
             _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
         yield ()
 
-    end checkTelescope
       allRight(constructors.map(c => checkTelescope(c.paramTys, data.inherentUsage)))
 end checkInherentUsage
 
@@ -998,17 +1000,101 @@ private def deriveTypeInherentUsage(ty: VTerm)
 end deriveTypeInherentUsage
 
 private def checkInherentEqDecidable(
-  d: Data,
-  constructor: Constructor,
+  data: Data,
+  constructors: Seq[Constructor],
 )
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, Unit] = ???
+  (using ctx: TypingContext): Either[IrError, Unit] =
+  given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
-// TODO: reconsider how this should be implemented. Basically it needs to:
-//  1. disallow nested thunks
-//  2. inherent usage is unrestricted
-//  3. runtime available information is sufficient to determine identity
-//     a. U0 params must be referenced in types with non-U0 usage, for example Vect is eqDecidable
+  // 1. check that eqD of component type ⪯ eqD of data
+  def checkComponentTypes(tys: Telescope, dataEqD: VTerm)
+    (using Γ: Context): Either[IrError, Unit] = tys match
+    case Nil => Right(())
+    case binding :: rest =>
+      for
+        eqD <- deriveTypeInherentEqDecidable(binding.ty)
+        _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using SUBSUMPTION)
+        _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
+      yield ()
+
+  // 2. inductively define a set of constructor params and this set must contain all constructor
+  //    params in order for the data to be non-EqUnres
+  //  base: constructor type and component types whose binding has non-0 usage (component usage is
+  //        calculated by product of declared usage in binding and data.inherentUsage).
+  //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
+  def checkComponentUsage(constructor: Constructor) =
+    val numParams = constructor.paramTys.size
+    val inherentUsage = data.inherentUsage.weaken(numParams, 0)
+    // all paramTys and usages are weakened to be in the same context with constructor.tArgs
+    val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] = constructor.paramTys.zipWithIndex
+      .map { (binding, i) =>
+        (numParams - i, (binding.ty.weaken(numParams - i, 0), binding.usage.weaken(
+          numParams - i,
+          0
+        )))
+      }.toMap
+
+    val validatedParams = allParams.filter {
+      case (_, (_, usage)) => checkSubsumption(
+        UsageProd(usage, inherentUsage),
+        UsageLiteral(U1),
+        Some(UsageType())
+      )(
+        using SUBSUMPTION
+      ) match
+        case Right(_) => true
+        case _ => false
+    }
+
+    def getReferencedConstructorArgs(tm: VTerm): Set[Nat] =
+      val (positive, negative) = SkippingCollapseFreeVarsVisitor.visitVTerm(tm)(using 0)
+      (positive ++ negative).filter(_ < numParams)
+
+    val startingValidatedParamIndices: Set[Int] = validatedParams.map(numParams - _._1).to(Set) ++ constructor.tArgs.flatMap(
+      getReferencedConstructorArgs
+    )
+
+    // Note that we do not add usage because the usage of a component is not present at runtime
+    val allValidatedParamIndices = startingValidatedParamIndices.bfs(
+      dbIndex => getReferencedConstructorArgs(
+        allParams(dbIndex)._1
+      )
+    ).iterator.to(Set)
+    if allValidatedParamIndices.size == constructor.paramTys.size then
+      Right(())
+    else
+      Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
+
+  // 3. check that either data.inherentUsage subsumes U1 OR there is zero or one constructor
+  def dataIsPresentAtRuntimeOrThereIsSingleConstructor() =
+    if constructors.size <= 1 then
+      Right(())
+    else
+      checkSubsumption(data.inherentUsage, UsageLiteral(U1), Some(UsageType()))(using SUBSUMPTION)
+
+  checkSubsumption(
+    data.inherentEqDecidability,
+    EqDecidabilityLiteral(EqUnres),
+    Some(EqDecidabilityType())
+  )(using CONVERSION) match
+    // short circuit since there is no need to do any check
+    case Right(_) => Right(())
+    // Call 1, 2, 3
+    case _ => dataIsPresentAtRuntimeOrThereIsSingleConstructor() >>
+      allRight(
+        constructors.map { constructor =>
+          checkComponentTypes(constructor.paramTys, data.inherentEqDecidability) >>
+            checkComponentUsage(constructor)
+        }
+      )
+
+private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor :
+  override def visitCollapse(collapse: Collapse)
+    (using bar: Nat)
+    (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = this.combine()
+
+
 private def deriveTypeInherentEqDecidable(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -1027,36 +1113,17 @@ private def deriveTypeInherentEqDecidable(ty: VTerm)
     case Some(data) => Right(data.inherentEqDecidability.substLowers(d.args: _*))
     case _ => Left(MissingDeclaration(d.qn))
   case _ => Left(ExpectVType(ty))
-//  tm match
-//  // Here we check if upper bound is eqDecidable because otherwise, the this Type type does not admit a
-//  // normalized representation.
-//  case Type(_, upperBound) => checkTypeIsEqDecidable(upperBound)
-//
-//  case DataType(qn, tArgs) => Σ.getDataOption(qn) match
-//    case None => Left(MissingDeclaration(qn))
-//    case Some(data) =>
-//      if data.isEqDecidable then
-//        // TODO: use essentiality as a guide to determine which args need to be checked
-//        allRight(tArgs.map(checkIsEqDecidable))
-//      else
-//        Left(NotEqDecidableType(tm))
-//  case _: U => Left(NotEqDecidableType(tm))
-//  case _: Top | _: EqDecidable | _: EqualityType | EffectsType() | LevelType() | HeapType() | _: CellType =>
-//    Right(())
-//  // Treat data type tParams as eqDecidable automatically when checking purity of a data type declaration.
-//  // This along with the above `DataType` branch works together to delay rejecting something as
-//  // imeqDecidable at data type instantiation time.
-//  case Var(idx) if Γ.size - idx <= numDataTParams => Right(())
-//  case _: Var | _: Collapse =>
-//    for ty <- inferType(tm)
-//        r <- ty match
-//          case Type(ul, upperBound) => checkSubsumption(upperBound, EqDecidable(ul), None)
-//          case _ => Right(())
-//    yield r
-//  // Any non-type values are considered eqDecidable because the only place that we would invoke this
-//  // function with non-type value is when checking data type args, where any non-type values would
-//  // not affect the normalized forms of values created by constructors of this data type.
-//  case _: Thunk | _: Con | Refl() | _: Effects | _: Level | _: Heap | _: Cell => Right(())
+
+private def checkIsEqDecidableTypes(ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, Unit] =
+  for
+    eqD <- deriveTypeInherentEqDecidable(ty)
+    _ <- checkSubsumption(
+      eqD, EqDecidabilityLiteral(EqDecidable), Some(EqDecidabilityType())
+    )(using CONVERSION)
+  yield ()
 
 private def checkAreEqDecidableTypes(telescope: Telescope)
   (using Γ: Context)
@@ -1065,10 +1132,7 @@ private def checkAreEqDecidableTypes(telescope: Telescope)
   case Nil => Right(())
   case binding :: telescope =>
     for
-      eqD <- deriveTypeInherentEqDecidable(binding.ty)
-      _ <- checkSubsumption(eqD, EqDecidabilityLiteral(EqDecidable), Some(EqDecidabilityType()))(
-        using CONVERSION
-      )
+      _ <- checkIsEqDecidableTypes(binding.ty)
       _ <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
     yield ()
 
