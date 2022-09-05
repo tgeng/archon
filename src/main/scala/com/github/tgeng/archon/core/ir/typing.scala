@@ -690,7 +690,6 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
       case (_, Left(e)) => Left(e)
       case (Right(sub), Right(sup)) =>
         (sub, sup, ty) match
-          case (_, _, Some(EffectsType())) => checkEffSubsumption(sub, sup)
           case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
             checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
           // TODO: check eaDecidability subsumption.
