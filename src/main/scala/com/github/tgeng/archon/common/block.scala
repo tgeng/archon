@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.common
 
 import collection.mutable
+import scala.util.control.NonLocalReturns.*
 
 trait BlockConverter[T] {
   final def pprint(t: T, widthLimit: Int = 120): String = {
@@ -176,21 +177,23 @@ case class Block(
         }
         var width = 0
         var widthLeft2 = widthLeft
-        for (child <- children) {
-          var childWidth = child.width(widthLeft2) match {
-            case Some(w) => w
-            case None => return None
+        returning {
+          for (child <- children) {
+            var childWidth = child.width(widthLeft2) match {
+              case Some(w) => w
+              case None => throwReturn[Option[Int]](None)
+            }
+            delimitPolicy match {
+              case Whitespace | Paragraph => childWidth += 1
+              case Concat => ()
+            }
+            width += childWidth
+            widthLeft2 -= childWidth
           }
           delimitPolicy match {
-            case Whitespace | Paragraph => childWidth += 1
-            case Concat => ()
+            case Whitespace | Paragraph => Some(width - 1)
+            case Concat => Some(width)
           }
-          width += childWidth
-          widthLeft2 -= childWidth
-        }
-        delimitPolicy match {
-          case Whitespace | Paragraph => Some(width - 1)
-          case Concat => Some(width)
         }
       }
     }

@@ -5,13 +5,13 @@ import com.github.tgeng.archon.parser.combinators.{*, given}
 
 extension[I, T] (p: Parser[I, T])
   def parse(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], T] =
-    val ParseResult(results, errors, _) = (p << P.eos).doParse(index)(using input)
+    val ParseResult(results, errors, _) = (p << P.eos).doParse(index)(using input) : @unchecked
     results match
       case Nil => Left(errors)
       case first :: _ => Right(first._2)
 
   def parseAll(input: IndexedSeq[I], index: Int = 0, targets: List[String] = Nil): Either[Seq[ParseError], List[T]] =
-    val ParseResult(results, errors, _) = (p << P.eos).doParse(index)(using input)
+    val ParseResult(results, errors, _) = (p << P.eos).doParse(index)(using input) : @unchecked
     results match
       case Nil => Left(errors)
       case _ => Right(results.distinct.map(_._2))

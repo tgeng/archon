@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import scala.collection.mutable
 import scala.math.max
+import scala.util.control.NonLocalReturns.*
 
 trait Ref[T]:
   def value: T
@@ -125,17 +126,19 @@ def caching[A, B](f: A => B): A => B =
   a => cache.getOrElseUpdate(a, f(a))
 
 extension[T] (elems: IterableOnce[T])
-  def first[R](f: T => Option[R]): Option[R] =
+  def first[R](f: T => Option[R]): Option[R] = returning {
     for elem <- elems.iterator do
       f(elem) match
-        case r: Some[R] => return r
+        case r: Some[R] => throwReturn[Option[R]](r)
         case _ =>
     None
+  }
 
-  def getFirstOrDefault(predicate: T => Boolean, default: => T): T =
+  def getFirstOrDefault(predicate: T => Boolean, default: => T): T = returning {
     for elem <- elems.iterator do
-      if predicate(elem) then return elem
+      if predicate(elem) then throwReturn[T](elem)
     default
+  }
 
   def associatedBy[K](keyExtractor: T => K): Map[K, T] =
     val result = mutable.Map[K, T]()

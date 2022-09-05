@@ -89,7 +89,8 @@ extension[I, T, M[+_]](using ap: Applicative[ParserT[I, *, M]])(using mm: Monad[
 extension[I, T, M[+_] : Alternative : Monad](p: ParserT[I, T, M])
   infix def asAtom(description: String) = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
-      val ParseResult(results, errors, committed) = p.parseImpl(index)
+
+      val ParseResult(results, errors, committed) = p.parseImpl(index) : @unchecked
       if results == Alternative.empty then
         failure(Seq(ParseError(index, description)), committed)
       else
@@ -98,7 +99,7 @@ extension[I, T, M[+_] : Alternative : Monad](p: ParserT[I, T, M])
   def unary_! = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
       val parseResult = p.parseImpl(index)
-      val ParseResult(results, errors, committed) = parseResult
+      val ParseResult(results, errors, committed) = parseResult : @unchecked
       if results == Alternative.empty then
         parseResult.commit
       else
@@ -107,7 +108,7 @@ extension[I, T, M[+_] : Alternative : Monad](p: ParserT[I, T, M])
   def ! = new ParserT[I, T, M]:
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
       val parseResult = p.parseImpl(index)
-      val ParseResult(results, errors, committed) = parseResult
+      val ParseResult(results, errors, committed) = parseResult : @unchecked
       if results == Alternative.empty then
         parseResult
       else
@@ -115,7 +116,7 @@ extension[I, T, M[+_] : Alternative : Monad](p: ParserT[I, T, M])
 
   def debugResult = new ParserT[I, T, M] :
     override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
-      val parseResult = p.parseImpl(index)
+      val parseResult = p.parseImpl(index) : @unchecked
       println(parseResult)
       parseResult
 
