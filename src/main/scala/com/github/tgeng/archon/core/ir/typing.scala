@@ -692,11 +692,12 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
         (sub, sup, ty) match
           case (Type(ul1, upperBound1), Type(ul2, upperBound2), _) =>
             checkULevelSubsumption(ul1, ul2) >> checkSubsumption(upperBound1, upperBound2, None)
-          // TODO: check eaDecidability subsumption.
-          // TODO: check usage subsumption.
-          // TODO: extend Top subsumption checking to also consider usage and eqDecidability
-          case (ty, Top(ul2, _, _), _) =>
+          case (ty, Top(ul2, usage2, eqD2), _) =>
             for tyTy <- inferType(ty)
+                usage1 <- deriveTypeInherentUsage(ty)
+                _ <- checkUsageSubsumption(usage1, usage2)
+                eqD1 <- deriveTypeInherentEqDecidability(ty)
+                _ <- checkEqDecidabilitySubsumption(eqD1, eqD2)
                 r <- tyTy match
                   case Type(ul1, _) => checkULevelSubsumption(ul1, ul2)
                   case _ => Left(NotTypeError(sub))
@@ -753,6 +754,9 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
                       r
                   }
                 )
+          case (UsageType(Some(u1)), UsageType(Some(u2)), _) if mode == SUBSUMPTION && u1 >= u2 =>
+            Right(())
+          case (UsageType(Some(_)), UsageType(None), _) if mode == SUBSUMPTION => Right(())
           case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
             checkSubsumption(ty1, ty2, None) >>
               checkSubsumption(a1, a2, Some(ty1)) >>
@@ -823,8 +827,8 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])
                   case _ => Left(NotCTypeError(sub))
             yield r
           case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
-            // TODO: check usage subsumption
             for _ <- checkEffSubsumption(eff1, eff2)
+                _ <- checkUsageSubsumption(u1, u2)
                 r <- checkSubsumption(vTy1, vTy2, None)
             yield r
           case (Return(v1), Return(v2), Some(F(ty, _, _))) => checkSubsumption(v1, v2, Some(ty))
@@ -1012,7 +1016,7 @@ private def checkInherentEqDecidable(
     case Nil => Right(())
     case binding :: rest =>
       for
-        eqD <- deriveTypeInherentEqDecidable(binding.ty)
+        eqD <- deriveTypeInherentEqDecidability(binding.ty)
         _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using SUBSUMPTION)
         _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
       yield ()
@@ -1094,7 +1098,7 @@ private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor :
     (using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = this.combine()
 
 
-private def deriveTypeInherentEqDecidable(ty: VTerm)
+private def deriveTypeInherentEqDecidability(ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, VTerm] = ty match
@@ -1104,7 +1108,7 @@ private def deriveTypeInherentEqDecidable(ty: VTerm)
   case _: Var | _: Collapse =>
     for tyTy <- inferType(ty)
         r <- tyTy match
-          case Type(_, upperBound) => deriveTypeInherentEqDecidable(upperBound)
+          case Type(_, upperBound) => deriveTypeInherentEqDecidability(upperBound)
           case _ => Left(ExpectVType(ty))
     yield r
   case _: U => Right(EqDecidabilityLiteral(EqUnres))
@@ -1118,7 +1122,7 @@ private def checkIsEqDecidableTypes(ty: VTerm)
   (using Σ: Signature)
   (using ctx: TypingContext): Either[IrError, Unit] =
   for
-    eqD <- deriveTypeInherentEqDecidable(ty)
+    eqD <- deriveTypeInherentEqDecidability(ty)
     _ <- checkSubsumption(
       eqD, EqDecidabilityLiteral(EqDecidable), Some(EqDecidabilityType())
     )(using CONVERSION)
