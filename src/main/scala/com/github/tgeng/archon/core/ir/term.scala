@@ -146,7 +146,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
   )(using sourceInfo: SourceInfo) extends VTerm(sourceInfo) //, QualifiedNameOwner(EqualityQn)
   case Refl()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case UsageType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  // Note, `upper` here is in the sense of typing subsumption, not the usage lattice. This is the
+  // lower bound in the usage lattice. Hence Option.None is used to represent unbounded case, as the
+  // lattice is not bounded below.
+  case UsageType(upperBound:Option[Usage])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageCompound(operator: UsageOperator, operands: Multiset[VTerm])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
@@ -210,7 +213,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
       case Con(name, args) => Con(name, args)
       case EqualityType(ty, left, right) => EqualityType(ty, left, right)
       case Refl() => Refl()
-      case UsageType() => UsageType()
+      case UsageType(u) => UsageType(u)
       case UsageLiteral(u) => UsageLiteral(u)
       case UsageCompound(op, operands) => UsageCompound(op, operands)
       case EqDecidabilityType() => EqDecidabilityType()

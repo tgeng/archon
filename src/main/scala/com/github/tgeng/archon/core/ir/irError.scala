@@ -28,6 +28,8 @@ enum IrError extends HasException:
   case NotVSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm], mode: CheckSubsumptionMode)
   case NotCSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm], mode: CheckSubsumptionMode)
   case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
+  case NotEqDecidabilitySubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case NotUsageSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
   case IllegalVarianceInData(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])
   case IllegalVarianceInRecord(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])

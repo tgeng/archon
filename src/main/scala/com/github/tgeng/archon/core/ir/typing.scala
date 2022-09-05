@@ -257,7 +257,7 @@ private def checkParameterTypeDeclarations(tParamTys: Telescope, levelBound: Opt
   case binding :: rest =>
     checkIsType(binding.ty, levelBound) >>
       checkIsEqDecidableTypes(binding.ty) >>
-      checkSubsumption(binding.usage, UsageLiteral(UUnres), Some(UsageType())) >>
+      checkSubsumption(binding.usage, UsageLiteral(UUnres), Some(UsageType(None))) >>
       checkParameterTypeDeclarations(rest)(using Γ :+ binding)
 
 private def checkULevel(ul: ULevel)
@@ -283,7 +283,7 @@ def inferType(tm: VTerm)
                 checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
               case _ => Left(ExpectVType(upperBound))
         yield Type(ULevelSuc(ul), tm)
-      case Top(ul, u, eqD) => checkType(u, UsageType()) >>
+      case Top(ul, u, eqD) => checkType(u, UsageType(None)) >>
         checkType(eqD, EqDecidabilityType()) >>
         Right(Type(ul, tm))
       case r: Var => Right(Γ.resolve(r).ty)
@@ -325,9 +325,9 @@ def inferType(tm: VTerm)
               case _ => Left(NotTypeError(ty))
         yield r
       case Refl() => throw IllegalArgumentException("cannot infer type")
-      case _: UsageLiteral => Right(UsageType())
+      case UsageLiteral(u) => Right(UsageType(Some(u)))
       case UsageCompound(_, operands) =>
-        allRight(operands.multiToSeq.map(o => checkType(o, UsageType()))) >> Right(UsageType())
+        allRight(operands.multiToSeq.map(o => checkType(o, UsageType(None)))) >> Right(UsageType(None))
       case u: UsageType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), u))
       case eqD: EqDecidabilityType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), eqD))
       case eqD: EqDecidabilityLiteral => Right(EqDecidabilityType())
@@ -970,7 +970,7 @@ private def checkInherentUsage(
         for inherentUsage <- deriveTypeInherentUsage(ty)
             providedUsage = UsageProd(inherentUsage, declaredUsage)
             consumedUsage = UsageProd(inherentUsage, declaredUsage, dataInherentUsage)
-            _ <- checkSubsumption(providedUsage, consumedUsage, Some(UsageType()(using SiEmpty)))(using SUBSUMPTION)
+            _ <- checkSubsumption(providedUsage, consumedUsage, Some(UsageType(None)(using SiEmpty)))(using SUBSUMPTION)
             _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
         yield ()
 
@@ -1038,7 +1038,7 @@ private def checkInherentEqDecidable(
       case (_, (_, usage)) => checkSubsumption(
         UsageProd(usage, inherentUsage),
         UsageLiteral(U1),
-        Some(UsageType())
+        Some(UsageType(None))
       )(
         using SUBSUMPTION
       ) match
@@ -1070,7 +1070,7 @@ private def checkInherentEqDecidable(
     if constructors.size <= 1 then
       Right(())
     else
-      checkSubsumption(data.inherentUsage, UsageLiteral(U1), Some(UsageType()))(using SUBSUMPTION)
+      checkSubsumption(data.inherentUsage, UsageLiteral(U1), Some(UsageType(None)))(using SUBSUMPTION)
 
   checkSubsumption(
     data.inherentEqDecidability,
@@ -1135,6 +1135,37 @@ private def checkAreEqDecidableTypes(telescope: Telescope)
       _ <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
     yield ()
 
+
+private def checkEqDecidabilitySubsumption(eqD1: VTerm, eqD2: VTerm)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[IrError, Unit] = (eqD1.normalized, eqD2.normalized) match
+  case (Left(e), _) => Left(e)
+  case (_, Left(e)) => Left(e)
+  case (Right(eqD1), Right(eqD2)) if eqD1 == eqD2 => Right(())
+  case (Right(EqDecidabilityLiteral(EqDecidability.EqDecidable)), _) | (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnres))) if mode == SUBSUMPTION =>
+    Right(())
+  case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
+
+
+private def checkUsageSubsumption(usage1: VTerm, usage2: VTerm)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+: Either[IrError, Unit] = (usage1.normalized, usage2.normalized) match
+  case (Left(e), _) => Left(e)
+  case (_, Left(e)) => Left(e)
+  case (Right(usage1), Right(usage2)) if usage1 == usage2 => Right(())
+  // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
+  case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2))) if u1 >= u2 && mode == SUBSUMPTION => Right(())
+  case (Right(UsageLiteral(UUnres)), _) if mode == SUBSUMPTION => Right(())
+  case (Right(v@Var(_)), Right(UsageLiteral(u2))) if mode == SUBSUMPTION => Γ.resolve(v).ty match
+    case UsageType(Some(u1Bound)) if u1Bound >= u2 => Right(())
+    case _ => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
+  case _ => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
 
 private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)
   (using mode: CheckSubsumptionMode)
