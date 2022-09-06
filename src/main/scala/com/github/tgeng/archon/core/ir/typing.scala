@@ -74,6 +74,24 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
       val i = 1
   }
 
+type Usages = Seq[VTerm]
+
+object Usages:
+  def zero(using Γ: Context): Usages = Seq.fill(Γ.size)(UsageLiteral(Usage.U0))
+
+  def single(v: VTerm.Var, u: VTerm = VTerm.UsageLiteral(Usage.U1))(using Γ: Context): Usages =
+    (Seq.fill(Γ.size - v.idx - 1)(UsageLiteral(Usage.U0)) :+ u)
+      ++ Seq.fill(v.idx)(UsageLiteral(Usage.U0))
+
+extension (us1: Usages)
+  infix def +(us2: Usages): Usages =
+    if us1.size != us2.size then throw IllegalArgumentException("mismatched size")
+    else us1.zip(us2).map { (u1, u2) => UsageSum(u1, u2) }
+
+  infix def *(scalar: VTerm): Usages = us1.map(u => UsageProd(u, scalar))
+  infix def *(scalar: Usage)(using SourceInfo): Usages = us1.map(u => UsageProd(u, UsageLiteral(scalar)))
+
+
 def checkData(data: Data)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -82,7 +100,7 @@ def checkData(data: Data)
 
   val tParams = data.tParamTys.map(_._1)
   checkParameterTypeDeclarations(tParams) >>
-    checkULevel(data.ul)(using tParams.toIndexedSeq)
+    checkULevel(data.ul)(using tParams.toIndexedSeq) >> Right(())
 }
 
 def checkDataConstructor(qn: QualifiedName, con: Constructor)
@@ -137,7 +155,7 @@ def checkRecord(record: Record)
 
   val tParams = record.tParamTys.map(_._1)
   checkParameterTypeDeclarations(tParams) >>
-    checkULevel(record.ul)(using tParams.toIndexedSeq)
+    checkULevel(record.ul)(using tParams.toIndexedSeq) >> Right(())
 }
 
 def checkRecordField(qn: QualifiedName, field: Field)
@@ -211,7 +229,7 @@ def checkClause(qn: QualifiedName, clause: Clause)
     case Some(lhs) =>
       given Context = clause.bindings.toIndexedSeq
 
-      checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty)
+      checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty) >> Right(())
 }
 
 def checkClauses(qn: QualifiedName, clauses: Seq[Clause])
@@ -264,96 +282,108 @@ private def checkULevel(ul: ULevel)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = ul match
+: Either[IrError, Usages] = ul match
   case ULevel.USimpleLevel(l) => checkType(l, LevelType())
-  case _ => Right(())
+  case ULevel.UωLevel(_) => Right(Usages.zero)
 
 def inferType(tm: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, VTerm] =
+: Either[IrError, (VTerm, Usages)] =
   debugInfer(
     tm, tm match
       case Type(ul, upperBound) =>
-        for _ <- checkULevel(ul)
-            upperBoundTy <- inferType(upperBound)
+        for ulUsages <- checkULevel(ul)
+            (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
             _ <- upperBoundTy match
               case Type(ul2, _) =>
                 checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
               case _ => Left(ExpectVType(upperBound))
-        yield Type(ULevelSuc(ul), tm)
-      case Top(ul, u, eqD) => checkType(u, UsageType(None)) >>
-        checkType(eqD, EqDecidabilityType()) >>
-        Right(Type(ul, tm))
-      case r: Var => Right(Γ.resolve(r).ty)
+        yield (Type(ULevelSuc(ul), tm), (ulUsages + upperBoundUsages) * UUnres)
+      case Top(ul, u, eqD) =>
+        for
+          ulUsage <- checkULevel(ul)
+          uUsage <- checkType(u, UsageType(None))
+          eqDUsage <- checkType(eqD, EqDecidabilityType())
+        yield (Type(ul, tm), (ulUsage + uUsage + eqDUsage) * UUnres)
+      case r: Var => Right((Γ.resolve(r).ty), Usages.single(r))
       case Collapse(cTm) =>
-        for cTy <- inferType(cTm)
+        for (cTy, usage) <- inferType(cTm)
             r <- cTy match
               case F(vTy, eff, _) if eff == Total => Right(vTy)
               case F(_, _, _) => Left(CollapsingEffectfulTerm(cTm))
               case _ => Left(NotCollapsable(cTm))
-        yield r
+        yield (r, usage)
       case U(cty) =>
-        for ctyTy <- inferType(cty)
+        for (ctyTy, usage) <- inferType(cty)
             r <- ctyTy match
               case CType(ul, _, eff) if eff == Total => Right(Type(ul, tm))
               // Automatically promote SomeVType to F(SomeVType)
               case F(Type(ul, _), eff, _) if eff == Total => Right(Type(ul, tm))
               case CType(_, _, _) | F(Type(_, _), _, _) => Left(EffectfulCTermAsType(cty))
               case _ => Left(NotTypeError(tm))
-        yield r
+        yield (r, usage * UUnres)
       case Thunk(c) =>
-        for cty <- inferType(c)
-          yield U(cty)
+        for (cty, usage) <- inferType(c)
+          yield (U(cty), usage)
       case DataType(qn, args) =>
         Σ.getDataOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(data) =>
-            checkTypes(
-              args,
-              data.tParamTys.map(_._1)
-            ) >> Right(Type(data.ul.map(_.substLowers(args: _*)), tm))
+            for
+              usage <- checkTypes(args, data.tParamTys.map(_._1))
+            yield (Type(data.ul.map(_.substLowers(args: _*)), tm), usage * UUnres)
       case _: Con => throw IllegalArgumentException("cannot infer type")
       case EqualityType(ty, left, right) =>
-        for tyTy <- inferType(ty)
+        for (tyTy, tyUsage) <- inferType(ty)
             r <- tyTy match
               case Type(ul, _) =>
-                checkType(left, ty) >>
-                  checkType(right, ty) >>
-                  Right(Type(ul, tm))
+                for leftUsage <- checkType(left, ty)
+                    rightUsage <- checkType(right, ty)
+                yield (Type(ul, tm), (tyUsage + leftUsage + rightUsage) * UUnres)
               case _ => Left(NotTypeError(ty))
         yield r
       case Refl() => throw IllegalArgumentException("cannot infer type")
-      case UsageLiteral(u) => Right(UsageType(Some(u)))
+      case UsageLiteral(u) => Right(UsageType(Some(u)), Usages.zero)
       case UsageCompound(_, operands) =>
-        allRight(operands.multiToSeq.map(o => checkType(o, UsageType(None)))) >> Right(UsageType(None))
-      case u: UsageType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), u))
-      case eqD: EqDecidabilityType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), eqD))
-      case eqD: EqDecidabilityLiteral => Right(EqDecidabilityType())
-      case e: EffectsType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), e))
+        for usagesSeq <- transpose(operands.multiToSeq.map(o => checkType(o, UsageType(None))))
+            usages = usagesSeq.reduce(_ + _)
+            bound <- tm.normalized match
+              case Right(UsageLiteral(u)) => Right(Some(u))
+              case _ => Right(None)
+        yield (UsageType(bound), usages)
+      case u: UsageType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), u), Usages.zero)
+      case eqD: EqDecidabilityType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), eqD), Usages.zero)
+      case _: EqDecidabilityLiteral => Right(EqDecidabilityType(), Usages.zero)
+      case e: EffectsType => Right(Type(ULevel.USimpleLevel(LevelLiteral(0)), e), Usages.zero)
       case Effects(literal, unionOperands) =>
-        allRight(
-          literal.map { (qn, args) =>
-            Σ.getEffectOption(qn) match
-              case None => Left(MissingDeclaration(qn))
-              case Some(effect) => checkTypes(args, effect.tParamTys)
-          }
-        ) >> allRight(
-          unionOperands.map { ref => checkType(ref, EffectsType()) }
-        ) >> Right(EffectsType())
-      case LevelType() => Right(Type(UωLevel(0), LevelType()))
+        for
+          literalUsages <- transpose(
+            literal.map { (qn, args) =>
+              Σ.getEffectOption(qn) match
+                case None => Left(MissingDeclaration(qn))
+                case Some(effect) => checkTypes(args, effect.tParamTys)
+            }
+          ).map(_.reduce(_ + _))
+          operandsUsages <- transpose(
+            unionOperands.map { ref => checkType(ref, EffectsType()) }
+          ).map(_.reduce(_ + _))
+        yield (EffectsType(), literalUsages + operandsUsages)
+      case LevelType() => Right((Type(UωLevel(0), LevelType())), Usages.zero)
       case Level(_, maxOperands) =>
-        allRight(maxOperands.map { (ref, _) => checkType(ref, LevelType()) }) >> Right(LevelType())
-      case HeapType() => Right(Type(USimpleLevel(LevelLiteral(0)), HeapType()))
-      case _: Heap => Right(HeapType())
+        for
+          usages <- transpose(maxOperands.map { (ref, _) => checkType(ref, LevelType()) }.toList).map(_.reduce(_ + _))
+        yield (LevelType(), usages)
+      case HeapType() => Right((Type(USimpleLevel(LevelLiteral(0)), HeapType())), Usages.zero)
+      case _: Heap => Right(HeapType(), Usages.zero)
       case cellType@CellType(heap, ty, _) =>
-        for _ <- checkType(heap, HeapType())
-            tyTy <- inferType(ty)
+        for heapUsages <- checkType(heap, HeapType())
+            (tyTy, tyUsages) <- inferType(ty)
             r <- tyTy match
               case Type(ul, _) => Right(Type(ul, cellType))
               case _ => Left(NotTypeError(ty))
-        yield r
+        yield (r, (heapUsages + tyUsages) * UUnres)
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type")
   )
 
@@ -361,7 +391,7 @@ def checkType(tm: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = debugCheck(
+: Either[IrError, Usages] = debugCheck(
   tm, ty, tm match
     case Con(name, args) => ty match
       case DataType(qn, tArgs) =>
@@ -391,7 +421,7 @@ def inferType(tm: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, CTerm] =
+: Either[IrError, (CTerm, Usages)] =
   debugInfer(
     tm, tm match
       case Hole => throw IllegalArgumentException("hole should only be present during reduction")
@@ -654,7 +684,7 @@ def checkType(tm: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = debugCheck(
+: Either[IrError, Usages] = debugCheck(
   tm,
   ty,
   for tmTy <- inferType(tm)
@@ -1223,13 +1253,13 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-: Either[IrError, Unit] = ctx.trace("checking multiple terms") {
+: Either[IrError, Usages] = ctx.trace("checking multiple terms") {
   if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
-  else allRight(
+  else transpose(
     tms.zip(tys).zipWithIndex.map {
       case ((tm, binding), index) => checkType(tm, binding.ty.substLowers(tms.take(index): _*))
     }
-  )
+  ).map(_.reduce(_ + _))
 }
 
 def checkIsType(vTy: VTerm, levelBound: Option[ULevel] = None)
@@ -1360,7 +1390,7 @@ private def debugCheck[L, R](
     result
   )
 
-private inline def debugInfer[L, R <: (CTerm | VTerm)](
+private inline def debugInfer[L, R <: (CTerm | VTerm, ?)](
   tm: CTerm | VTerm,
   result: => Either[L, R]
 )
@@ -1368,8 +1398,8 @@ private inline def debugInfer[L, R <: (CTerm | VTerm)](
   ctx.trace[L, R](
     s"inferring type",
     Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
-    ty => Block(ChopDown, Aligned, yellow(ty.sourceInfo), green(pprint(ty)))
-  )(result.map(_.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R]))
+    ty => Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty)))
+  )(result.map(_._1.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R]))
 
 private inline def debugSubsumption[L, R](
   rawSub: CTerm | VTerm,

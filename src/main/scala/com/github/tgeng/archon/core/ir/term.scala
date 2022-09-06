@@ -236,9 +236,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
     (using Σ: Signature): VTerm = transformer.transformVTerm(this)
 
 object VTerm:
-  def UsageSum(operands: VTerm*) = UsageCompound(UsageOperator.USum, operands.toMultiset)
-  def UsageProd(operands: VTerm*) = UsageCompound(UsageOperator.UProd, operands.toMultiset)
-  def UsageJoin(operands: VTerm*) = UsageCompound(UsageOperator.UJoin, operands.toMultiset)
+  def UsageSum(operands: VTerm*)(using SourceInfo) = UsageCompound(UsageOperator.USum, operands.toMultiset)
+  def UsageProd(operands: VTerm*)(using SourceInfo) = UsageCompound(UsageOperator.UProd, operands.toMultiset)
+  def UsageJoin(operands: VTerm*)(using SourceInfo) = UsageCompound(UsageOperator.UJoin, operands.toMultiset)
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level = Level(n, Map())
 

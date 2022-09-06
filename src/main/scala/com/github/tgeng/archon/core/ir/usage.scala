@@ -5,14 +5,6 @@ import com.github.tgeng.archon.core.ir.Usage.UAff
 
 import scala.annotation.{tailrec, targetName}
 
-type Usages = List[Usage]
-
-extension (us1: Usages)
-  infix def + (us2: Usages): Usages = (us1, us2) match
-    case (Nil, Nil) => Nil
-    case (u1 :: us1, u2 :: us2) => u1 + u2 :: us1 + us2
-    case _ => throw IllegalArgumentException(s"unmatched length:\n  $us1\n  $us2")
-
 /**
  * Here we do not do the full generalization that allows user to define custom semirings for
  * grading. Instead, we use a specialized semiring that only accounts for counting usages.

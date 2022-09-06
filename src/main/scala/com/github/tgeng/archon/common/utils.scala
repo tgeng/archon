@@ -163,11 +163,16 @@ def transpose[A](l: List[Option[A]]): Option[List[A]] = l match
 
 def transpose[A](l: IndexedSeq[Option[A]]): Option[IndexedSeq[A]] = transpose(l.toList).map(_.toIndexedSeq)
 
+def transpose[A](l: Seq[Option[A]]): Option[Seq[A]] = transpose(l.toList).map(_.toSeq)
+
 def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
   case Nil => Right(Nil)
   case e :: l => e match
     case Left(l) => Left(l)
     case Right(r) => transpose(l).map(l => r :: l)
+
+def transpose[L, R](l: Seq[Either[L, R]]): Either[L, Seq[R]] =
+  transpose(l.toList).map(Seq(_: _*))
 
 def transpose[L, R](l: Set[Either[L, R]]): Either[L, Set[R]] =
   transpose(l.toList).map(Set(_: _*))
@@ -227,3 +232,9 @@ def flattenMultisets[T](ms: Iterable[Multiset[T]]): Multiset[T] =
   ms.flatten.groupMapReduce(_._1)(_._2)(_ + _)
 
 def multisetOf[T](ts: T*): Multiset[T] = ts.groupMapReduce(t => t)(_ => 1)(_ + _)
+
+extension[L, R] (e: Either[L, R])
+  inline def withFilter(inline predicate: R => Boolean): Either[L, R] = e match
+    case Right(r) if predicate(r) => e
+    case Right(_) => throw Exception("please use irrefutable pattern with Either")
+    case Left(_) => e
