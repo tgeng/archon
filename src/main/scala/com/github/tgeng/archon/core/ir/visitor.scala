@@ -50,7 +50,7 @@ trait Visitor[C, R]:
         }
       )
 
-  def visitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
+  def cvisitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
     telescope match
       case Nil => combine()
       case binding :: rest => combine(
@@ -269,7 +269,7 @@ trait Visitor[C, R]:
       visitVTerm(f.usage),
     )
 
-  def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R = visitVTerm(r.v)
+  def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R = combine(visitVTerm(r.v), visitVTerm(r.usage))
 
   def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -557,7 +557,7 @@ trait Transformer[C]:
     )(using f.sourceInfo)
 
   def transformReturn(r: Return)(using ctx: C)(using Σ: Signature): CTerm =
-    Return(transformVTerm(r.v))(using r.sourceInfo)
+    Return(transformVTerm(r.v), transformVTerm(r.usage))(using r.sourceInfo)
 
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(

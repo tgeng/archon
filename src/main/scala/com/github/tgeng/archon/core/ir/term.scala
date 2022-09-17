@@ -338,7 +338,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   /** archon.builtin.F */
   case F(vTy: VTerm, effects: VTerm = VTerm.Total(using SiEmpty), usage: VTerm = VTerm.UsageLiteral(Usage.U1))
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
-  case Return(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case Return(v: VTerm, usage: VTerm = VTerm.UsageLiteral(Usage.U1))(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
@@ -360,7 +360,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   //  However, such a construct is not without problems:
   //  1. it encourages people to avoid using `thunk` to capture computations that they would like to
   //     return. Since computations are always linear, this means clet has little flexibility in
-  //     terms of resource counting. For example, `plus_1` can only be linear. 
+  //     terms of resource counting. For example, `plus_1` can only be linear.
 
   /** archon.builtin.Function */
   case FunctionType(
@@ -459,7 +459,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
       case Def(qn) => Def(qn)
       case Force(v) => Force(v)
       case F(vTy, effects, u) => F(vTy, effects, u)
-      case Return(v) => Return(v)
+      case Return(v, u) => Return(v, u)
       case l@Let(t, ctx) => Let(t, ctx)(l.boundName)
       case FunctionType(binding, bodyTy, effects) => FunctionType(binding, bodyTy, effects)
       case Application(fun, args) => Application(fun, args)

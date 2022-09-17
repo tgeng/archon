@@ -400,20 +400,18 @@ def checkType(tm: VTerm, ty: VTerm)
           case Some(con) => checkTypes(args, con.paramTys.substLowers(tArgs: _*))
       case _ => Left(ExpectDataType(ty))
     case Refl() => ty match
-      case EqualityType(ty, left, right) => checkSubsumption(
-        left,
-        right,
-        Some(ty)
-      )(using CONVERSION)
+      case EqualityType(ty, left, right) =>
+        for _ <- checkSubsumption(left, right, Some(ty))(using CONVERSION)
+        yield Usages.zero
       case _ => Left(ExpectEqualityType(ty))
     case Cell(heapKey, _) => ty match
-      case CellType(heap, _, _) if Heap(heapKey) == heap => Right(())
+      case CellType(heap, _, _) if Heap(heapKey) == heap => Right(Usages.zero)
       case _: CellType => Left(ExpectCellTypeWithHeap(heapKey))
       case _ => Left(ExpectCellType(ty))
     case _ =>
-      for inferred <- inferType(tm)
-          r <- checkSubsumption(inferred, ty, None)
-      yield r
+      for (inferred, usages) <- inferType(tm)
+          _ <- checkSubsumption(inferred, ty, None)
+      yield usages
 )
 
 
@@ -426,109 +424,122 @@ def inferType(tm: CTerm)
     tm, tm match
       case Hole => throw IllegalArgumentException("hole should only be present during reduction")
       case CType(ul, upperBound, effects) =>
-        for _ <- checkType(effects, EffectsType())
-            _ <- checkULevel(ul)
-            upperBoundTy <- inferType(upperBound)
+        for effUsages <- checkType(effects, EffectsType())
+            ulUsages <- checkULevel(ul)
+            (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
             _ <- upperBoundTy match
               case CType(ul2, _, _) => checkULevelSubsumption(
                 ul,
                 ul2
               )(using CheckSubsumptionMode.CONVERSION)
               case _ => Left(ExpectCType(upperBound))
-        yield CType(ULevelSuc(ul), tm, Total)
+        yield (CType(ULevelSuc(ul), tm, Total), (effUsages + ulUsages + upperBoundUsages) * UUnres)
       case CTop(ul, effects) =>
-        checkType(effects, EffectsType()) >>
-          checkULevel(ul) >>
-          Right(CType(ul, tm, Total))
+        for uUsages <- checkType(effects, EffectsType())
+            ulUsages <- checkULevel(ul)
+        yield (CType(ul, tm, Total), (uUsages + ulUsages) * UUnres)
       case Def(qn) => Σ.getDefinitionOption(qn) match
         case None => Left(MissingDeclaration(qn))
-        case Some(d) => Right(d.ty)
+        case Some(d) => Right((d.ty, Usages.zero))
       case Force(v) =>
-        for vTy <- inferType(v)
-            r <- vTy match
+        for (vTy, vUsages) <- inferType(v)
+            cTy <- vTy match
               case U(cty) => Right(cty)
               case _ => Left(ExpectUType(vTy))
-        yield r
-      case F(vTy, effects, _) =>
-        for _ <- checkType(effects, EffectsType())
-            vTyTy <- inferType(vTy)
-            r <- vTyTy match
+        yield (cTy, vUsages)
+      case F(vTy, effects, usage) =>
+        for effUsages <- checkType(effects, EffectsType())
+            uUsages <- checkType(usage, UsageType(None))
+            (vTyTy, vTyUsages) <- inferType(vTy)
+            cTyTy <- vTyTy match
               case Type(ul, _) => Right(CType(ul, tm, Total))
               case _ => Left(NotTypeError(vTy))
-        yield r
-      case Return(v) =>
-        for vTy <- inferType(v)
-          yield F(vTy, Total)
+        yield (cTyTy, (effUsages + uUsages + vTyUsages) * UUnres)
+      case Return(v, usage) =>
+        for (vTy, vUsages) <- inferType(v)
+          yield (F(vTy, Total), vUsages * usage)
       case Let(t, body) =>
-        for tTy <- inferType(t)
+        for (tTy, tUsages) <- inferType(t)
             r <- tTy match
-              case F(ty, effects, _) =>
-                for ctxTy <-
-                      if effects == Total then
+              case F(ty, effects, tBindingUsage) =>
+                for 
+                  tyInherentUsage <- deriveTypeInherentUsage(ty)
+                  tyUsage = UsageProd(tyInherentUsage, tBindingUsage)
+                  (bodyTy, usages) <- {
+                      def isTUnrestricted: Boolean =
+                        (for 
+                          _ <- checkUsageSubsumption(tyUsage, UsageLiteral(UUnres))(using SUBSUMPTION)
+                        yield ()) match
+                          case Right(_) => true
+                          case Left(_) => false
+                      if effects == Total && isTUnrestricted then
                       // Do the reduction onsite so that type checking in sub terms can leverage the
                       // more specific type. More importantly, this way we do not need to reference
                       // the result of a computation in the inferred type.
                         for t <- reduce(t)
                             r <- t match
-                              case Return(v) => inferType(body.substLowers(v))
+                              case Return(v, _) => inferType(body.substLowers(v))
                               case c => inferType(body.substLowers(Collapse(c)))
                         yield r
                       // Otherwise, just add the binding to the context and continue type checking.
                       else
-                        for ctxTy <- inferType(body)(using Γ :+ Binding(ty, ???)(gn"v"))
+                        for (bodyTy, bodyUsages) <- inferType(body)(using Γ :+ Binding(ty, tBindingUsage)(gn"v"))
                             // Report an error if the type of `body` needs to reference the effectful
                             // computation. User should use a dependent sum type to wrap such
                             // references manually to avoid the leak.
+                            // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
+                            //  the bound variable
                             _ <- checkVar0Leak(
-                              ctxTy,
+                              bodyTy,
                               LeakedReferenceToEffectfulComputationResult(t)
                             )
-                        yield ctxTy.strengthened
-                yield augmentEffect(effects, ctxTy)
+                            _ <- checkUsageSubsumption(UsageProd(bodyUsages.last, tyInherentUsage), tyUsage)(using SUBSUMPTION)
+                        yield (bodyTy.strengthened, bodyUsages.dropRight(1))
+                }
+                yield (augmentEffect(effects, bodyTy), usages)
               case _ => Left(ExpectFType(tTy))
-        // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
-        //  the bound variable
         yield r
       case FunctionType(binding, bodyTy, effects) =>
-        for _ <- checkType(effects, EffectsType())
-            tyTy <- inferType(binding.ty)
-            r <- tyTy match
+        for effUsages <- checkType(effects, EffectsType())
+            (tyTy, tyUsages) <- inferType(binding.ty)
+            (funTyTy, bodyTyUsages) <- tyTy match
               case Type(ul1, _) =>
-                for bodyTyTy <- inferType(bodyTy)(using Γ :+ binding)
+                for (bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using Γ :+ binding)
                     r <- bodyTyTy match
                       case CType(ul2, _, eff) if eff == Total =>
                         // strengthen is safe here because if it references the binding, then the
                         // binding must be at level ω and hence ULevelMax would return big type.
-                        Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total))
+                        Right((CType(ULevelMax(ul1, ul2.strengthened), tm, Total)), bodyTyUsages.dropRight(1))
                       // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
                       // inference.
                       case F(Type(ul2, _), eff, _) if eff == Total =>
-                        Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total))
+                        Right(CType(ULevelMax(ul1, ul2.strengthened), tm, Total), bodyTyUsages.dropRight(1))
                       case CType(_, _, _) | F(Type(_, _), _, _) =>
                         Left(EffectfulCTermAsType(bodyTy))
                       case _ => Left(NotCTypeError(bodyTy))
                 yield r
               case _ => Left(NotTypeError(binding.ty))
-        yield r
+        yield (funTyTy, (effUsages + tyUsages + bodyTyUsages) * UUnres)
       case Application(fun, arg) =>
-        for funTy <- inferType(fun)
+        for (funTy, funUsages) <- inferType(fun)
             r <- funTy match
               case FunctionType(binding, bodyTy, effects) =>
-                for _ <- checkType(arg, binding.ty)
+                for argUsages <- checkType(arg, binding.ty)
                     bodyTy <- reduceCType(bodyTy.substLowers(arg))
-                yield augmentEffect(effects, bodyTy)
+                yield (augmentEffect(effects, bodyTy), funUsages + argUsages)
               case _ => Left(ExpectFunction(fun))
         yield r
       case RecordType(qn, args, effects) =>
         Σ.getRecordOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(record) =>
-            checkType(effects, EffectsType()) >>
-              checkTypes(args, record.tParamTys.map(_._1)) >>
-              Right(CType(record.ul.map(_.substLowers(args: _*)), tm, Total))
+            for
+              effUsages <- checkType(effects, EffectsType())
+              argsUsages <- checkTypes(args, record.tParamTys.map(_._1))
+            yield (CType(record.ul.map(_.substLowers(args: _*)), tm, Total), (effUsages + argsUsages) * UUnres)
       case Projection(rec, name) =>
-        for recTy <- inferType(rec)
-            r <- recTy match
+        for (recTy, recUsages) <- inferType(rec)
+            ty <- recTy match
               case RecordType(qn, args, effects) =>
                 Σ.getFieldOption(qn, name) match
                   case None => Left(MissingField(name, qn))
@@ -539,16 +550,18 @@ def inferType(tm: CTerm)
                     )
                   )
               case _ => Left(ExpectRecord(rec))
-        yield r
+        yield (ty, recUsages)
       case OperatorCall(eff@(qn, tArgs), name, args) =>
         Σ.getEffectOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(effect) =>
             Σ.getOperatorOption(qn, name) match
               case None => Left(MissingDefinition(qn))
-              case Some(op) => checkTypes(tArgs, effect.tParamTys) >>
-                checkTypes(args, op.paramTys.substLowers(tArgs: _*)) >>
-                Right(F(op.resultTy.substLowers(tArgs ++ args: _*), EffectsLiteral(Set(eff))))
+              case Some(op) => 
+                for
+                  effUsages <- checkTypes(tArgs, effect.tParamTys)
+                  argsUsages <- checkTypes(args, op.paramTys.substLowers(tArgs: _*))
+                yield (F(op.resultTy.substLowers(tArgs ++ args: _*), EffectsLiteral(Set(eff))), effUsages + argsUsages)
       case _: Continuation => throw IllegalArgumentException(
         "continuation is only created in reduction and hence should not be type checked."
       )
