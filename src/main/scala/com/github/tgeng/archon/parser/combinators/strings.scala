@@ -146,21 +146,21 @@ extension[M[+_]]
   def stringFrom(r: Regex): ParserT[Char, String, M] = P.from(r).map(_.matched)
 
 
-given[M[+_] : Alternative : Monad : Applicative]
+given charAsParser [M[+_] : Alternative : Monad : Applicative]
   (using Functor[ParserT[Char, *, M]])
   (using Applicative[ParserT[Char, *, M]])
   (using Monad[ParserT[Char, *, M]])
   (using Alternative[ParserT[Char, *, M]])
   (using Alternative[ParseResult[M, *]])
 : Conversion[Char, ParserT[Char, Char, M]] = P.from(_)
-given[M[+_] : Alternative : Monad : Applicative]
+given stringAsParser [M[+_] : Alternative : Monad : Applicative]
   (using Functor[ParserT[Char, *, M]])
   (using Applicative[ParserT[Char, *, M]])
   (using Monad[ParserT[Char, *, M]])
   (using Alternative[ParserT[Char, *, M]])
   (using Alternative[ParseResult[M, *]])
 : Conversion[String, ParserT[Char, String, M]] = P.from(_)
-given[M[+_] : Alternative : Monad : Applicative]
+given regexAsParser [M[+_] : Alternative : Monad : Applicative]
   (using Functor[ParserT[Char, *, M]])
   (using Applicative[ParserT[Char, *, M]])
   (using Monad[ParserT[Char, *, M]])

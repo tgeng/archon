@@ -150,7 +150,7 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
 
   def foldLeft[L, R](acc: ParserT[I, L, M], op: ParserT[I, (L, R) => L, M], elem: ParserT[I, R, M]) : ParserT[I, L, M] =
     for
-      (acc, opElems) <- P.lift((acc, (op, elem)*))
+      (acc, opElems) <- P.lift((acc, (op, elem).*))
     yield
       opElems.foldLeft(acc) { (acc, opElem) =>
         val (op, elem) = opElem
@@ -240,7 +240,7 @@ extension[I, M[+_] : Alternative : Monad : Applicative]
         op(elem, acc)
       }
 
-given [I, Ps <: Tuple, M[+_]]
+given liftTuple [I, Ps <: Tuple, M[+_]]
   (using Functor[ParserT[I, *, M]])
   (using Applicative[ParserT[I, *, M]])
   (using Monad[ParserT[I, *, M]])

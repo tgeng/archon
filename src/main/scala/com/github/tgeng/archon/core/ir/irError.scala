@@ -6,7 +6,9 @@ import com.github.tgeng.archon.core.ir.*
 
 enum IrError extends HasException:
   case Unknown
-  case EffectfulCTermAsType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
+  case EffectfulCTermAsType(
+    ty: CTerm
+  ) // type of `ty` is some `CType` such that `cty.effects != Total`
   case ExpectCell(tm: VTerm)
   case ExpectCellType(ty: VTerm)
   case ExpectCellTypeWithHeap(heapKey: HeapKey)
@@ -24,15 +26,38 @@ enum IrError extends HasException:
   case ReductionStuck(stuckTerm: CTerm)
   case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case UninitializedCell(stuckTerm: CTerm)
-  case UnmatchedHandlerImplementation(qn: QualifiedName, implementedOperators:Iterable[Name])
-  case NotVSubsumption(sub: VTerm, sup: VTerm, ty: Option[VTerm], mode: CheckSubsumptionMode)
-  case NotCSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm], mode: CheckSubsumptionMode)
+  case UnmatchedHandlerImplementation(
+    qn: QualifiedName,
+    implementedOperators: Iterable[Name]
+  )
+  case NotVSubsumption(
+    sub: VTerm,
+    sup: VTerm,
+    ty: Option[VTerm],
+    mode: CheckSubsumptionMode
+  )
+  case NotCSubsumption(
+    sub: CTerm,
+    sup: CTerm,
+    ty: Option[CTerm],
+    mode: CheckSubsumptionMode
+  )
   case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
-  case NotEqDecidabilitySubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case NotEqDecidabilitySubsumption(
+    sub: VTerm,
+    sup: VTerm,
+    mode: CheckSubsumptionMode
+  )
   case NotUsageSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
-  case IllegalVarianceInData(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])
-  case IllegalVarianceInRecord(qn: QualifiedName, illegallyUsedBindingIndices: List[Nat])
+  case IllegalVarianceInData(
+    qn: QualifiedName,
+    illegallyUsedBindingIndices: List[Nat]
+  )
+  case IllegalVarianceInRecord(
+    qn: QualifiedName,
+    illegallyUsedBindingIndices: List[Nat]
+  )
   case NotEqDecidableType(ty: VTerm)
   case NormalizationError(ctm: CTerm)
   case CollapsingEffectfulTerm(ctm: CTerm)

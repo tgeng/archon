@@ -20,7 +20,8 @@ import AstDeclaration.*
 import SourceInfo.*
 
 object AstParser:
-  def declarations: StrParser[List[AstDeclaration]] = (dataDecl | recordDecl | defDecl | effectDecl) sepBy P.whitespaces
+  def declarations: StrParser[List[AstDeclaration]] =
+    (dataDecl | recordDecl | defDecl | effectDecl) sepBy P.whitespaces
 
   def binding: StrParser[Binding[AstTerm]] =
     for
@@ -93,8 +94,9 @@ object AstParser:
   }
 
   private def tParamTys: StrParser[AstTTelescope] = P {
-    val variance = (P.from("+").as(Variance.COVARIANT) || P.from("-").as(Variance.CONTRAVARIANT))
-      .??.map(_.getOrElse(Variance.INVARIANT))
+    val variance = (P.from("+").as(Variance.COVARIANT) || P
+      .from("-")
+      .as(Variance.CONTRAVARIANT)).??.map(_.getOrElse(Variance.INVARIANT))
     val unnamedBinding = atom.map(Binding(_)(Name.Unreferenced))
     val namedBinding =
       for
@@ -129,8 +131,11 @@ object AstParser:
     val pVar = si(name)(AstPVar(_))
 
     val conParts =
-      for name <- name << P.whitespaces
-          args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from("}")
+      for
+        name <- name << P.whitespaces
+        args <- P.from("{") >%> (pattern sepByGreedy P.whitespaces) <%< P.from(
+          "}"
+        )
       yield (name, args)
     val con = P(si(conParts)(AstPConstructor(_, _)))
     val forcedCon = P(si(P.from(".") >> conParts)(AstPForcedConstructor(_, _)))
@@ -144,9 +149,9 @@ object AstParser:
 
   def term: StrParser[AstTerm] = P {
     si(statement sepByGreedy (P.whitespaces >> P.from(";") << P.whitespaces)) {
-      case STerm(t) :: Nil => t
+      case STerm(t) :: Nil       => t
       case SBinding(_, t) :: Nil => t
-      case statements => AstBlock(statements)
+      case statements            => AstBlock(statements)
     }
   }
 
@@ -164,7 +169,9 @@ object AstParser:
 
     val transformHandler: StrParser[Handler] = P {
       for
-        name <- P.stringFrom("rtn\\b".r) >%> name <%< P.from("->") << P.whitespaces
+        name <- P.stringFrom("rtn\\b".r) >%> name <%< P.from(
+          "->"
+        ) << P.whitespaces
         body <- rhs
       yield HTransform(name, body)
     }
@@ -184,16 +191,19 @@ object AstParser:
       outputEffects <- effect << P.whitespaces
       outputType <- atom << P.whitespaces
       _ <- P.from("{") << P.whitespaces
-      allHandlers <- ((transformHandler || opHandler) <%< P.from(";") << P.whitespaces).*
+      allHandlers <- ((transformHandler || opHandler) <%< P.from(
+        ";"
+      ) << P.whitespaces).*
       _ <- P.from("}")
     yield
       val handlers = mutable.Map[Name, ( /* op args */ List[Name], AstTerm)]()
-      var transformHandler: (Name, AstTerm) = (gn"x", AstIdentifier(gn"x")(using SiEmpty))
+      var transformHandler: (Name, AstTerm) =
+        (gn"x", AstIdentifier(gn"x")(using SiEmpty))
 
       for (h <- allHandlers) { // Use old syntax here because IntelliJ's formatter keeps messing up indentations
         h match
           case HOp(name, opArgs, body) => handlers(name) = (opArgs, body)
-          case HTransform(name, t) => transformHandler = (name, t)
+          case HTransform(name, t)     => transformHandler = (name, t)
       }
 
       SHandler(
@@ -215,8 +225,9 @@ object AstParser:
   }
 
   private def sBinding: StrParser[SBinding] = P {
-    for name <- P.stringFrom("let\\b".r) >%> name <%< P.from("=") << P.whitespaces
-        t <- rhs
+    for
+      name <- P.stringFrom("let\\b".r) >%> name <%< P.from("=") << P.whitespaces
+      t <- rhs
     yield SBinding(name, t)
   }
 
@@ -225,15 +236,24 @@ object AstParser:
   private def app: StrParser[AstTerm] = P(builtins || redux)
 
   private def rhs: StrParser[AstTerm] = P {
-    val argBinding: StrParser[( /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm, SourceInfo)] =
+    val argBinding: StrParser[
+      (
+        /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm,
+        SourceInfo
+      )
+    ] =
       si(
         for
-          eff <- effect.??.map(_.getOrElse(AstDef(Builtins.TotalQn)(using SiEmpty)))
-          argName <- (name <%< P.from(":") << P.whitespaces).??.map(_.getOrElse(Name.Unreferenced))
+          eff <- effect.??.map(
+            _.getOrElse(AstDef(Builtins.TotalQn)(using SiEmpty))
+          )
+          argName <- (name <%< P.from(":") << P.whitespaces).??.map(
+            _.getOrElse(Name.Unreferenced)
+          )
           argTy <- app
         yield (eff, argName, argTy)
-      ) {
-        case (eff, argName, argTy) => (eff, argName, argTy, summon[SourceInfo])
+      ) { case (eff, argName, argTy) =>
+        (eff, argName, argTy, summon[SourceInfo])
       }
 
     for
@@ -250,23 +270,31 @@ object AstParser:
 
   private def effect: StrParser[AstTerm] = P {
 
-    val effUnion: StrParser[AstTerm] = (app sepBy1 (P.whitespaces >> P.from("||") << P.whitespaces))
-      .map {
-        case Nil => throw IllegalStateException()
-        case t :: rest => rest.foldLeft(t) { (a, b) =>
-          AstRedux(
-            AstDef(Builtins.EffectsUnionQn)(using SiEmpty),
-            Elimination.ETerm(a)(using a.sourceInfo) :: Elimination.ETerm(b)(using a.sourceInfo) :: Nil
-          )(using siMerge(a.sourceInfo, b.sourceInfo))
+    val effUnion: StrParser[AstTerm] =
+      (app sepBy1 (P.whitespaces >> P.from("||") << P.whitespaces))
+        .map {
+          case Nil => throw IllegalStateException()
+          case t :: rest =>
+            rest.foldLeft(t) { (a, b) =>
+              AstRedux(
+                AstDef(Builtins.EffectsUnionQn)(using SiEmpty),
+                Elimination.ETerm(a)(using a.sourceInfo) :: Elimination.ETerm(
+                  b
+                )(using a.sourceInfo) :: Nil
+              )(using siMerge(a.sourceInfo, b.sourceInfo))
+            }
         }
-      }
 
-    si(P.from("<") >%> effUnion.?? <%< P.from(">"))(_.getOrElse(AstDef(Builtins.TotalQn))) << P.whitespaces
+    si(P.from("<") >%> effUnion.?? <%< P.from(">"))(
+      _.getOrElse(AstDef(Builtins.TotalQn))
+    ) << P.whitespaces
   }
 
   private def redux: StrParser[AstTerm] = P {
     val elim: StrParser[Elimination[AstTerm]] = P(
-      si(P.from("#") >> name)(Elimination.EProj(_)) || si(atom)(Elimination.ETerm(_))
+      si(P.from("#") >> name)(Elimination.EProj(_)) || si(atom)(
+        Elimination.ETerm(_)
+      )
     )
 
     si(
@@ -276,7 +304,7 @@ object AstParser:
         elims <- elim sepByGreedy P.whitespaces
       yield (head, elims)
     ) {
-      case (head, Nil) => head
+      case (head, Nil)   => head
       case (head, elims) => AstRedux(head, elims)
     }
   }
@@ -293,20 +321,19 @@ object AstParser:
       yield (head, args)
     ) {
       case ("clp", t :: Nil) => AstCollapse(t)
-      case ("U", t :: Nil) => AstU(t)
+      case ("U", t :: Nil)   => AstU(t)
       case ("thk", t :: Nil) => AstThunk(t)
       case ("frc", t :: Nil) => AstForce(t)
-      case _ => throw IllegalStateException()
+      case _                 => throw IllegalStateException()
     }
-      ||
-      (
-        si(
-          for
-            eff <- effect
-            t <- rhs
-          yield (t, eff)
-        )(AstF(_, _))
-        )
+    ||(
+      si(
+        for
+          eff <- effect
+          t <- rhs
+        yield (t, eff)
+      )(AstF(_, _))
+    )
   }
 
   private def atom: StrParser[AstTerm] = P {
@@ -319,14 +346,15 @@ object AstParser:
     val astIdentifier = P(si(name)(AstIdentifier(_)))
 
     astTotal ||
-      astLevelLiteral ||
-      astIdentifier ||
-      P.from("(") >%> term <%< P.from(")")
+    astLevelLiteral ||
+    astIdentifier ||
+    P.from("(") >%> term <%< P.from(")")
   }
 
   private def astEff: StrParser[AstEff] = P {
-    for name <- name
-        args <- P.from("{") >%> (atom sepByGreedy P.whitespaces) <%< P.from("}")
+    for
+      name <- name
+      args <- P.from("{") >%> (atom sepByGreedy P.whitespaces) <%< P.from("}")
     yield (name, args)
   }
 
@@ -335,11 +363,14 @@ object AstParser:
 
     val underscore: StrParser[String] = P.stringFrom("_".r)
 
-    (for headUnderscore <- underscore.orEmptyString
-         components <- nameComponent sepBy1 underscore
-         tailUnderscore <- underscore.orEmptyString
-    yield Name.Normal(components.mkString(headUnderscore, "_", tailUnderscore))) ||
-      "`" >> P.stringFrom("[^`]+".r).map(Name.Normal(_)) << "`"
+    (for
+      headUnderscore <- underscore.orEmptyString
+      components <- nameComponent sepBy1 underscore
+      tailUnderscore <- underscore.orEmptyString
+    yield Name.Normal(
+      components.mkString(headUnderscore, "_", tailUnderscore)
+    )) ||
+    "`" >> P.stringFrom("[^`]+".r).map(Name.Normal(_)) << "`"
   }
 
   private val keyWords = Set(
@@ -352,12 +383,11 @@ object AstParser:
     "U",
     "thk",
     "frc",
-
     "pure",
     "data",
     "record",
     "effect",
-    "def",
+    "def"
   )
 
   private def word: StrParser[String] =
@@ -366,7 +396,8 @@ object AstParser:
   private val reservedSymbols = Set("|", "#", "->", "<", ">", "<>", ":", "=")
 
   private def symbol: StrParser[String] =
-    P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.,;(){}]]+".r).withFilter(!reservedSymbols(_))
+    P.stringFrom("(?U)[\\p{Graph}&&[^\\p{Alnum}_`.,;(){}]]+".r)
+      .withFilter(!reservedSymbols(_))
 
   private def si[T, R](t: => StrParser[T])(f: SiText ?=> T => R): StrParser[R] =
     for
@@ -376,12 +407,15 @@ object AstParser:
     yield f(using SiText(input.mkString, Range(startIndex, endIndex)))(t)
 
 extension (ctx: StringContext)
-  def t(args: String*): AstTerm = (P.whitespaces >> AstParser.term << P.whitespaces).parseOrThrow(
-    ctx.s(args: _*)
-  )
-  def d(args: String*): List[AstDeclaration] = (P.whitespaces >> AstParser.declarations << P.whitespaces).parseOrThrow(
-    ctx.s(args: _*)
-  )
-  def b(args: String*): Binding[AstTerm] = (P.whitespaces >> AstParser.binding << P.whitespaces).parseOrThrow(
-    ctx.s(args: _*)
-  )
+  def t(args: String*): AstTerm =
+    (P.whitespaces >> AstParser.term << P.whitespaces).parseOrThrow(
+      ctx.s(args: _*)
+    )
+  def d(args: String*): List[AstDeclaration] =
+    (P.whitespaces >> AstParser.declarations << P.whitespaces).parseOrThrow(
+      ctx.s(args: _*)
+    )
+  def b(args: String*): Binding[AstTerm] =
+    (P.whitespaces >> AstParser.binding << P.whitespaces).parseOrThrow(
+      ctx.s(args: _*)
+    )

@@ -32,12 +32,12 @@ enum AstDeclaration:
     val tParamTys: AstTelescope,
     val operators: List[AstOperator]
   )
-  
+
   def name: Name
 
 case class AstConstructor(
   name: Name,
-  ty: AstTerm,
+  ty: AstTerm
 )
 
 case class AstField(name: Name, ty: AstTerm)
@@ -46,10 +46,10 @@ case class AstClause(
   bindings: AstTelescope, // TODO: remove `binding` after elaboration is implemented
   lhs: List[AstCoPattern],
   rhs: Option[AstTerm], // `None` for absurd pattern
-  ty: AstTerm, // TODO: remove `ty` after elaboration is implemented
+  ty: AstTerm // TODO: remove `ty` after elaboration is implemented
 )
 
 case class AstOperator(
   name: Name,
-  ty: AstTerm,
+  ty: AstTerm
 )

@@ -4,7 +4,10 @@ import java.io.File
 import scala.io.Source
 import org.scalatest.freespec.AnyFreeSpec
 
-abstract class SingleFileBasedSpec(relativePath: String, fileFilter : File => Boolean = _ => true) extends AnyFreeSpec:
+abstract class SingleFileBasedSpec(
+  relativePath: String,
+  fileFilter: File => Boolean = _ => true
+) extends AnyFreeSpec:
   private val testDataDir = TestDataConstants.testResourcesRoot / relativePath
   for file <- testDataDir.listFiles().!! if fileFilter(file.!!) do
     file.!!.getName.!! in {
@@ -12,4 +15,4 @@ abstract class SingleFileBasedSpec(relativePath: String, fileFilter : File => Bo
         runTest(file.!!, source)
       }
     }
-  def runTest(testData: File, source: Source) : Unit
+  def runTest(testData: File, source: Source): Unit

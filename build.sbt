@@ -12,16 +12,15 @@ lazy val root = (project in file("."))
       "-Xfatal-warnings",
       "-feature",
       "-deprecation",
-      "-language:implicitConversions",
+      "-language:implicitConversions"
     ),
-
     libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % "3.2.13" % "test",
+      "org.scalatest" %% "scalatest" % "3.2.13" % "test"
     ),
     Test / envVars := Map(
-      "TEST_RESOURCES_ROOT" -> file("src/test/resources").getAbsolutePath,
+      "TEST_RESOURCES_ROOT" -> file("src/test/resources").getAbsolutePath
     ),
     Test / testOptions += Tests.Argument("-oF"),
     Test / fork := true,
-    maxErrors := 1,
+    maxErrors := 1
   )

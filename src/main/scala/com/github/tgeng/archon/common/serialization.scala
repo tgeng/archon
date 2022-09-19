@@ -1,6 +1,11 @@
 package com.github.tgeng.archon.common
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import java.io.{
+  ByteArrayInputStream,
+  ByteArrayOutputStream,
+  ObjectInputStream,
+  ObjectOutputStream
+}
 
 extension (value: Any)
   def serialize: Array[Byte] = {

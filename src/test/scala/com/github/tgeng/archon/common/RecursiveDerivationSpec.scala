@@ -21,41 +21,55 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
 
   "recursive tree" in {
     assert(
-      Recursive.transform(Node(Leaf(1), Node(Leaf(2), Leaf(3))), {
-        case Leaf(i) =>
-          if i % 2 == 1 then
-            Some(Leaf(i * 2))
-          else
-            None
-        case _ => None
-      }) == Node(Leaf(2), Node(Leaf(2), Leaf(6)))
+      Recursive.transform(
+        Node(Leaf(1), Node(Leaf(2), Leaf(3))),
+        {
+          case Leaf(i) =>
+            if i % 2 == 1 then Some(Leaf(i * 2))
+            else None
+          case _ => None
+        }
+      ) == Node(Leaf(2), Node(Leaf(2), Leaf(6)))
     )
   }
 
   "recursive tree2" in {
     assert(
-      Recursive.transform(Node2(Leaf2(1), Node(Leaf(2), Leaf(3))), {
-        case Leaf2(i) =>
-          if i % 2 == 1 then
-            Some(Leaf2(i * 2))
-          else
-            None
-        case _ => None
-      }) == Node2(Leaf2(2), Node(Leaf(2), Leaf(3)))
+      Recursive.transform(
+        Node2(Leaf2(1), Node(Leaf(2), Leaf(3))),
+        {
+          case Leaf2(i) =>
+            if i % 2 == 1 then Some(Leaf2(i * 2))
+            else None
+          case _ => None
+        }
+      ) == Node2(Leaf2(2), Node(Leaf(2), Leaf(3)))
     )
   }
 
   "wide tree" in {
-      assert(Recursive.transform(
-        WNode(List(WLeaf(1), WNode(List(WLeaf(2), WLeaf(3))), WTupleNode((1, WLeaf(5))))),
+    assert(
+      Recursive.transform(
+        WNode(
+          List(
+            WLeaf(1),
+            WNode(List(WLeaf(2), WLeaf(3))),
+            WTupleNode((1, WLeaf(5)))
+          )
+        ),
         {
           case WLeaf(i) =>
-            if i % 2 == 1 then
-              Some(WLeaf(i * 2))
-            else
-              None
+            if i % 2 == 1 then Some(WLeaf(i * 2))
+            else None
           case _ => None
-        }) == WNode(List(WLeaf(2), WNode(List(WLeaf(2), WLeaf(6))), WTupleNode((1, WLeaf(10)))))
+        }
+      ) == WNode(
+        List(
+          WLeaf(2),
+          WNode(List(WLeaf(2), WLeaf(6))),
+          WTupleNode((1, WLeaf(10)))
+        )
+      )
     )
   }
 

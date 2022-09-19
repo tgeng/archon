@@ -17,43 +17,43 @@ type TTelescope = List[(Binding[VTerm], Variance)]
 given SourceInfo = SiEmpty
 
 enum Declaration:
-  case Data(val qn: QualifiedName)
-    (
-      val tParamTys: TTelescope = Nil,
-      /* binding + tParamTys */ val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+  case Data(val qn: QualifiedName)(
+    val tParamTys: TTelescope = Nil,
+    /* binding + tParamTys */ val ul: ULevel =
+      ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
 
-      /**
-       * Number of parameters among `tParamTys`, the rest are index arguments. This parameter also
-       * affects how many arguments should be present in the derived constructor function.
-       */
-      val numParams: Nat,
-      val inherentUsage: VTerm,
-      val inherentEqDecidability: VTerm,
-    )
-  case Record(val qn: QualifiedName)
-    (
-      val tParamTys: TTelescope = Nil, /* binding + tParamTys */
-      val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
-      val selfName: Ref[Name] = n"self",
-    )
-  case Definition(val qn: QualifiedName)
-    (
-      val ty: CTerm,
-    )
+    /** Number of parameters among `tParamTys`, the rest are index arguments.
+      * This parameter also affects how many arguments should be present in the
+      * derived constructor function.
+      */
+    val numParams: Nat,
+    val inherentUsage: VTerm,
+    val inherentEqDecidability: VTerm
+  )
+  case Record(val qn: QualifiedName)(
+    val tParamTys: TTelescope = Nil, /* binding + tParamTys */
+    val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+    val selfName: Ref[Name] = n"self"
+  )
+  case Definition(val qn: QualifiedName)(
+    val ty: CTerm
+  )
 
-  /**
-   * Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest `U` are
-   * not allowed. This is necessary because type-based handler matching needs a "simple" way to
-   * efficiently locate the corresponding handler. Arbitrary logic that can happen during conversion
-   * would make it very difficult to implement dynamic handlers efficiently. Also note that this
-   * means we also need to conservatively reject `tParamTys` like `[A: Type, a: A]` because
-   * there is no way to statically know if `A` could be `U`. In addition, this also rules out any
-   * data type that wraps non-eqDecidable computation inside.
-   */
+  /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U`
+    * or types that nest `U` are not allowed. This is necessary because
+    * type-based handler matching needs a "simple" way to efficiently locate the
+    * corresponding handler. Arbitrary logic that can happen during conversion
+    * would make it very difficult to implement dynamic handlers efficiently.
+    * Also note that this means we also need to conservatively reject
+    * `tParamTys` like `[A: Type, a: A]` because there is no way to statically
+    * know if `A` could be `U`. In addition, this also rules out any data type
+    * that wraps non-eqDecidable computation inside.
+    */
   case Effect(val qn: QualifiedName)(
     val tParamTys: Telescope = Nil,
-    /* binding @ tParamTys.size */val continuationUsage: VTerm = VTerm.UsageLiteral(Usage.U1),
-    )
+    /* binding @ tParamTys.size */ val continuationUsage: VTerm =
+      VTerm.UsageLiteral(Usage.U1)
+  )
 
   def qn: QualifiedName
 
@@ -63,16 +63,16 @@ import Usage.*
 case class Constructor(
   name: Name,
   paramTys: Telescope = Nil, /* + tParamTys */
-  /**
-   * Arguments passed to the data type constructor. For non-indexed type this should just be a
-   * sequence of variables referencing the `tParamTys`. For indexed families, the argument here
-   * can be any expressions. For example, for `Vec : (A: Type) -> (n: Nat) -> Type`, this would be
-   * [A, 0] for `Nil` and `[A, n + 1]` for `Cons`.
-   *
-   * Semantically, this is simply adding some equality constraints that requires `tParamTys` to be
-   * convertible to these args.
-   */
-  tArgs: Arguments = Nil, /* + tParamTys + paramTys */
+  /** Arguments passed to the data type constructor. For non-indexed type this
+    * should just be a sequence of variables referencing the `tParamTys`. For
+    * indexed families, the argument here can be any expressions. For example,
+    * for `Vec : (A: Type) -> (n: Nat) -> Type`, this would be [A, 0] for `Nil`
+    * and `[A, n + 1]` for `Cons`.
+    *
+    * Semantically, this is simply adding some equality constraints that
+    * requires `tParamTys` to be convertible to these args.
+    */
+  tArgs: Arguments = Nil /* + tParamTys + paramTys */
 )
 
 case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
@@ -88,7 +88,7 @@ case class Operator(
   name: Name,
   paramTys: Telescope, /* + tParamTys */
   resultTy: VTerm /* + tParamTys + paramTys */,
-  resultUsage: VTerm /* + tParamTys + paramTys */,
+  resultUsage: VTerm /* + tParamTys + paramTys */
 )
 
 trait Signature:
@@ -100,16 +100,19 @@ trait Signature:
 
   def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
 
-  def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] = getConstructorsOption(qn).get
+  def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] =
+    getConstructorsOption(qn).get
 
-  def getConstructorOption(qn: QualifiedName, conName: Name): Option[Constructor] =
+  def getConstructorOption(
+    qn: QualifiedName,
+    conName: Name
+  ): Option[Constructor] =
     for
       constructors <- getConstructorsOption(qn)
       r <- constructors.collectFirst {
         case con if con.name == conName => con
       }
     yield r
-
 
   def getRecordOption(qn: QualifiedName): Option[Record]
 
@@ -127,19 +130,19 @@ trait Signature:
       }
     yield r
 
-
   def getDefinitionOption(qn: QualifiedName): Option[Definition]
 
   def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).get
 
   def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
-  def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(qn).get
+  def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(
+    qn
+  ).get
 
   def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
 
   def getCaseTree(qn: QualifiedName): CaseTree = getCaseTreeOption(qn).get
-
 
   def getEffectOption(qn: QualifiedName): Option[Effect]
 
@@ -147,7 +150,8 @@ trait Signature:
 
   def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
 
-  def getOperators(qn: QualifiedName): IndexedSeq[Operator] = getOperatorsOption(qn).get
+  def getOperators(qn: QualifiedName): IndexedSeq[Operator] =
+    getOperatorsOption(qn).get
 
   def getOperatorOption(qn: QualifiedName, conName: Name): Option[Operator] =
     for
@@ -157,9 +161,11 @@ trait Signature:
       }
     yield r
 
-
   def getOperator(qn: QualifiedName, name: Name): Operator =
-    getOperators(qn).getFirstOrDefault(_.name == name, throw IllegalArgumentException())
+    getOperators(qn).getFirstOrDefault(
+      _.name == name,
+      throw IllegalArgumentException()
+    )
 
   import VTerm.*
   import CTerm.*
@@ -167,9 +173,10 @@ trait Signature:
   import QualifiedName.*
   given SourceInfo = SiEmpty
 
-  def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    for
-      data <- getDataOption(qn)
+  def getDataDerivedDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
+    for data <- getDataOption(qn)
     yield Definition(qn)(
       data.tParamTys.foldRight[CTerm](
         F(Type(data.ul, DataType(qn, vars(data.tParamTys.size - 1))))
@@ -179,9 +186,10 @@ trait Signature:
       }
     )
 
-  def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    for
-      data <- getDataOption(qn)
+  def getDataDerivedClausesOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Clause]] =
+    for data <- getDataOption(qn)
     yield {
       val highestDbIndex = data.tParamTys.size - 1
       IndexedSeq(
@@ -194,7 +202,9 @@ trait Signature:
       )
     }
 
-  def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+  def getDataConDerivedDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
     qn match
       case Node(dataQn, conName) =>
         for
@@ -209,7 +219,9 @@ trait Signature:
                 F(
                   DataType(
                     dataQn,
-                    constructor.tArgs.map(_.strengthen(numIndexArgs, constructor.paramTys.size))
+                    constructor.tArgs.map(
+                      _.strengthen(numIndexArgs, constructor.paramTys.size)
+                    )
                   )
                 )
               ) { (binding, ty) =>
@@ -218,8 +230,9 @@ trait Signature:
           )
       case _ => None
 
-
-  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+  def getDataConDerivedClausesOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Clause]] =
     qn match
       case Node(dataQn, conName) =>
         for
@@ -234,14 +247,20 @@ trait Signature:
               allBindings,
               pVars(allBindings.size - 1),
               Return(Con(conName, vars(constructor.paramTys.size - 1))),
-              F(DataType(dataQn, constructor.tArgs.map(_.strengthen(numIndexArgs, 0))))
+              F(
+                DataType(
+                  dataQn,
+                  constructor.tArgs.map(_.strengthen(numIndexArgs, 0))
+                )
+              )
             )
           )
       case _ => None
 
-  def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    for
-      record <- getRecordOption(qn)
+  def getRecordDerivedDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
+    for record <- getRecordOption(qn)
     yield Definition(qn)(
       record.tParamTys.foldRight[CTerm](
         CType(record.ul, RecordType(qn, vars(record.tParamTys.size - 1)))
@@ -251,9 +270,10 @@ trait Signature:
       }
     )
 
-  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    for
-      record <- getRecordOption(qn)
+  def getRecordDerivedClausesOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Clause]] =
+    for record <- getRecordOption(qn)
     yield {
       val highestDbIndex = record.tParamTys.size - 1
       IndexedSeq(
@@ -266,7 +286,9 @@ trait Signature:
       )
     }
 
-  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+  def getRecordFieldDerivedDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
     qn match
       case Node(recordQn, fieldName) =>
         for
@@ -275,7 +297,10 @@ trait Signature:
         yield Definition(qn)(
           record.tParamTys.foldRight[CTerm](
             FunctionType(
-              Binding(U(RecordType(recordQn, vars(record.tParamTys.size - 1))), UsageLiteral(U1))(record.selfName),
+              Binding(
+                U(RecordType(recordQn, vars(record.tParamTys.size - 1))),
+                UsageLiteral(U1)
+              )(record.selfName),
               field.ty
             )
           ) { (bindingAndVariance, bodyTy) =>
@@ -285,7 +310,9 @@ trait Signature:
         )
       case _ => None
 
-  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+  def getRecordFieldDerivedClausesOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Clause]] =
     qn match
       case Node(recordQn, fieldName) =>
         for
@@ -309,18 +336,20 @@ trait Signature:
         )
       case _ => None
 
-  def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    for
-      effect <- getEffectOption(qn)
+  def getEffectDerivedDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
+    for effect <- getEffectOption(qn)
     yield Definition(qn)(
       effect.tParamTys.foldRight[CTerm](F(EffectsType())) {
         case (binding, bodyTy) => FunctionType(binding, bodyTy)
       }
     )
 
-  def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    for
-      effect <- getEffectOption(qn)
+  def getEffectDerivedClausesOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Clause]] =
+    for effect <- getEffectOption(qn)
     yield {
       val highestDbIndex = effect.tParamTys.size - 1
       IndexedSeq(
@@ -333,7 +362,9 @@ trait Signature:
       )
     }
 
-  def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+  def getEffectOpDerivedDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
     qn match
       case Node(effectQn, opName) =>
         for
@@ -346,7 +377,11 @@ trait Signature:
               .foldRight[CTerm](
                 F(
                   op.resultTy,
-                  EffectsLiteral(Set((effectQn, vars(allParamTys.size - 1, op.paramTys.size))))
+                  EffectsLiteral(
+                    Set(
+                      (effectQn, vars(allParamTys.size - 1, op.paramTys.size))
+                    )
+                  )
                 )
               ) { (binding, ty) =>
                 FunctionType(binding, ty)
@@ -354,7 +389,9 @@ trait Signature:
           )
       case _ => None
 
-  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+  def getEffectOpDerivedClausesOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Clause]] =
     qn match
       case Node(effectQn, opName) =>
         for
@@ -376,35 +413,49 @@ trait Signature:
           )
       case _ => None
 
-trait BuiltinSignature extends Signature :
+trait BuiltinSignature extends Signature:
   override def getDataOption(qn: QualifiedName): Option[Declaration.Data] =
-    Builtins.builtinData.get(qn).map(_._1)
+    Builtins.builtinData
+      .get(qn)
+      .map(_._1)
       .orElse(getUserDataOption(qn))
 
   def getUserDataOption(qn: QualifiedName): Option[Declaration.Data]
 
-  override def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]] =
-    Builtins.builtinData.get(qn).map(_._2)
+  override def getConstructorsOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Constructor]] =
+    Builtins.builtinData
+      .get(qn)
+      .map(_._2)
       .orElse(getUserConstructorsOption(qn))
 
-  def getUserConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
-
+  def getUserConstructorsOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Constructor]]
 
   override def getRecordOption(qn: QualifiedName): Option[Declaration.Record] =
-    Builtins.builtinRecords.get(qn).map(_._1)
+    Builtins.builtinRecords
+      .get(qn)
+      .map(_._1)
       .orElse(getUserRecordOption(qn))
 
   def getUserRecordOption(qn: QualifiedName): Option[Declaration.Record]
 
   override def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]] =
-    Builtins.builtinRecords.get(qn).map(_._2)
+    Builtins.builtinRecords
+      .get(qn)
+      .map(_._2)
       .orElse(getUserFieldsOption(qn))
 
   def getUserFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
 
-
-  override def getDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    Builtins.builtinDefinitions.get(qn).map(_._1)
+  override def getDefinitionOption(
+    qn: QualifiedName
+  ): Option[Declaration.Definition] =
+    Builtins.builtinDefinitions
+      .get(qn)
+      .map(_._1)
       .orElse(getDataDerivedDefinitionOption(qn))
       .orElse(getDataConDerivedDefinitionOption(qn))
       .orElse(getRecordDerivedDefinitionOption(qn))
@@ -417,7 +468,9 @@ trait BuiltinSignature extends Signature :
   def getUserDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
 
   override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    Builtins.builtinDefinitions.get(qn).map(_._2)
+    Builtins.builtinDefinitions
+      .get(qn)
+      .map(_._2)
       .orElse(getDataDerivedClausesOption(qn))
       .orElse(getDataConDerivedClausesOption(qn))
       .orElse(getRecordDerivedClausesOption(qn))
@@ -432,13 +485,19 @@ trait BuiltinSignature extends Signature :
   // TODO: getUserCaseTree...
 
   override def getEffectOption(qn: QualifiedName): Option[Declaration.Effect] =
-    Builtins.builtinEffects.get(qn).map(_._1)
+    Builtins.builtinEffects
+      .get(qn)
+      .map(_._1)
       .orElse(getUserEffectOption(qn))
 
   def getUserEffectOption(qn: QualifiedName): Option[Declaration.Effect]
 
-  override def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]] =
-    Builtins.builtinEffects.get(qn).map(_._2)
+  override def getOperatorsOption(
+    qn: QualifiedName
+  ): Option[IndexedSeq[Operator]] =
+    Builtins.builtinEffects
+      .get(qn)
+      .map(_._2)
       .orElse(getUserOperatorsOption(qn))
 
   def getUserOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
