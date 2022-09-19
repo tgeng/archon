@@ -23,11 +23,13 @@ given DeBruijnPattern: DeBruijn[Pattern] with
   * an extreme, [[nonTrivialMapping]] can have size [[targetContextSize]], in
   * which case all the mappings are explicitly specified.
   */
-class Substitutor[T: DeBruijn](
-  val sourceContextSize: Nat,
-  val targetContextSize: Nat,
-  private var nonTrivialMapping: IndexedSeq[T]
-) extends PartialSubstitution[T]:
+class Substitutor[T: DeBruijn]
+  (
+    val sourceContextSize: Nat,
+    val targetContextSize: Nat,
+    private var nonTrivialMapping: IndexedSeq[T]
+  )
+  extends PartialSubstitution[T]:
 
   assert(sourceContextSize >= 0)
   assert(targetContextSize >= 0)

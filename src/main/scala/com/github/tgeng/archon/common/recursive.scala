@@ -4,12 +4,14 @@ import scala.compiletime.*
 import scala.deriving.*
 
 trait Recursive[T]:
-  def transform[P >: T](
-    recursiveParent: => Recursive[P],
-    isCurrentRecursive: Any => Boolean,
-    t: T,
-    f: P => Option[P]
-  ): P
+  def transform[P >: T]
+    (
+      recursiveParent: => Recursive[P],
+      isCurrentRecursive: Any => Boolean,
+      t: T,
+      f: P => Option[P]
+    )
+    : P
 
 object Recursive:
   inline def transform[T](t: T, f: T => Option[T])(using r: Recursive[T]): T =
@@ -31,16 +33,20 @@ object Recursive:
           summonAllIfPossible[ExtractFunctors[m.MirroredElemTypes], Functor[?]]
         recursiveProduct(p, functorsIfPossible)
 
-  def recursiveSum[T](
-    s: Mirror.SumOf[T],
-    recursives: => List[Recursive[T]]
-  ): Recursive[T] = new Recursive[T]:
-    override def transform[P >: T](
-      recursiveParent: => Recursive[P],
-      isCurrentRecursive: Any => Boolean,
-      t: T,
-      f: P => Option[P]
-    ): P =
+  def recursiveSum[T]
+    (
+      s: Mirror.SumOf[T],
+      recursives: => List[Recursive[T]]
+    )
+    : Recursive[T] = new Recursive[T]:
+    override def transform[P >: T]
+      (
+        recursiveParent: => Recursive[P],
+        isCurrentRecursive: Any => Boolean,
+        t: T,
+        f: P => Option[P]
+      )
+      : P =
       // always start by invoking the caller-specified transformer `f`.
       f(t) match
         case Some(t) => t
@@ -53,16 +59,20 @@ object Recursive:
             f
           )
 
-  def recursiveProduct[T](
-    p: Mirror.ProductOf[T],
-    functors: => List[Option[Functor[?]]]
-  ): Recursive[T] = new Recursive[T]:
-    override def transform[P >: T](
-      recursiveParent: => Recursive[P],
-      isCurrentRecursive: Any => Boolean,
-      t: T,
-      f: P => Option[P]
-    ): P =
+  def recursiveProduct[T]
+    (
+      p: Mirror.ProductOf[T],
+      functors: => List[Option[Functor[?]]]
+    )
+    : Recursive[T] = new Recursive[T]:
+    override def transform[P >: T]
+      (
+        recursiveParent: => Recursive[P],
+        isCurrentRecursive: Any => Boolean,
+        t: T,
+        f: P => Option[P]
+      )
+      : P =
       val transformed =
         t.asInstanceOf[Product].productIterator.zip(functors).map {
           // first, invoke `Recursive.transform`

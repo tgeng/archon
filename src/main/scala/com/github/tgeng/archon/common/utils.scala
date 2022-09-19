@@ -50,10 +50,12 @@ extension [T <: AutoCloseable](t: T)
       t.close()
 
 extension [E](startingNodes: IterableOnce[E])
-  def bfs(
-    getNeighbors: E => IterableOnce[E],
-    seen: mutable.Set[E] = mutable.Set[E]()
-  ): IterableOnce[E] =
+  def bfs
+    (
+      getNeighbors: E => IterableOnce[E],
+      seen: mutable.Set[E] = mutable.Set[E]()
+    )
+    : IterableOnce[E] =
     val queue = mutable.Queue(startingNodes.iterator.toSeq: _*)
     seen.addAll(queue)
     new Iterator[E]:
@@ -84,9 +86,9 @@ extension [E](nodes: IterableOnce[E])
     None
 
 extension [E](allNodes: IterableOnce[E])
-  def getMaxIncomingPathLength(
-    getNeighbors: E => IterableOnce[E]
-  ): Map[E, Int] =
+  def getMaxIncomingPathLength
+    (getNeighbors: E => IterableOnce[E])
+    : Map[E, Int] =
     val inDegree = mutable.Map[E, Int]().withDefaultValue(0)
     for node <- allNodes.iterator do
       for neighbor <- getNeighbors(node).iterator do inDegree(neighbor) += 1
@@ -109,7 +111,7 @@ extension [E](allNodes: IterableOnce[E])
         queue.enqueue(neighbor)
     maxIncomingPathLengths.toMap.withDefaultValue(0)
 
-extension (s: String)
+extension(s: String)
   def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
 
 extension [T](inline t: T)
@@ -150,10 +152,12 @@ extension [T](elems: IterableOnce[T])
     for elem <- elems.iterator do result(keyExtractor(elem)) = elem
     result.toMap
 
-  def associatedBy[K, V](
-    keyExtractor: T => K,
-    valueExtractor: T => V
-  ): Map[K, V] =
+  def associatedBy[K, V]
+    (
+      keyExtractor: T => K,
+      valueExtractor: T => V
+    )
+    : Map[K, V] =
     val result = mutable.Map[K, V]()
     for elem <- elems.iterator do
       result(keyExtractor(elem)) = valueExtractor(elem)
@@ -197,9 +201,10 @@ def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
     }
   ).map(Map.from)
 
-def topologicalSort[T](ts: Seq[T])(
-  getDeps: T => Seq[T]
-): Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
+def topologicalSort[T]
+  (ts: Seq[T])
+  (getDeps: T => Seq[T])
+  : Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
   object CycleException extends Exception
   val visited = mutable.ArrayBuffer[T]()
   val visitedSet = mutable.Set[T]()

@@ -36,10 +36,12 @@ import WrapPolicy.*
 import DelimitPolicy.*
 
 object Block:
-  def apply(
-    objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String |
-      Iterable[String | Block])*
-  ): Block =
+  def apply
+    (
+      objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String |
+        Iterable[String | Block])*
+    )
+    : Block =
     var wrapPolicy: WrapPolicy = Wrap
     var indentPolicy: IndentPolicy = FixedIncrement(0)
     var delimitPolicy: DelimitPolicy = Whitespace
@@ -54,12 +56,13 @@ object Block:
     }
     new Block(blocks.toSeq, wrapPolicy, indentPolicy, delimitPolicy)
 
-case class Block(
-  children: Seq[Block | String],
-  wrapPolicy: WrapPolicy,
-  indentPolicy: IndentPolicy,
-  delimitPolicy: DelimitPolicy
-) {
+case class Block
+  (
+    children: Seq[Block | String],
+    wrapPolicy: WrapPolicy,
+    indentPolicy: IndentPolicy,
+    delimitPolicy: DelimitPolicy
+  ) {
 
   def ++(more: Iterable[Block | String]) = Block(
     children ++ more,
@@ -141,7 +144,7 @@ case class Block(
     }
   }
 
-  extension (b: Block | String)
+  extension(b: Block | String)
     private def printBlockOrString(using ctx: PrintContext) = b match {
       case b: Block  => b.print
       case s: String => ctx.append(s)
@@ -158,9 +161,10 @@ case class Block(
       case s: String => s.headOption.getOrElse(' ')
     }
 
-    private def width(widthLeft: Int, onlyMeasureFirstLine: Boolean = false)(
-      using ctx: PrintContext
-    ): Option[Int] = b match {
+    private def width
+      (widthLeft: Int, onlyMeasureFirstLine: Boolean = false)
+      (using ctx: PrintContext)
+      : Option[Int] = b match {
       case s: String => if (s.size <= widthLeft) Some(s.size) else None
       case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
         if (onlyMeasureFirstLine) {
@@ -211,13 +215,14 @@ case class Block(
     }
 }
 
-class PrintContext(
-  val sb: StringBuilder,
-  private var width: Int,
-  private val widthLimit: Int,
-  private var indent: Int,
-  var nextBlockOnNewLine: Boolean = false
-) {
+class PrintContext
+  (
+    val sb: StringBuilder,
+    private var width: Int,
+    private val widthLimit: Int,
+    private var indent: Int,
+    var nextBlockOnNewLine: Boolean = false
+  ) {
   def widthLeft = widthLimit - width
 
   def append(s: String) = {

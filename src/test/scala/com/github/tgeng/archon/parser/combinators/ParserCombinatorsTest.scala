@@ -22,11 +22,12 @@ enum JValue {
 
 import JValue.*
 
-class Parsers[M[+_]: Alternative: Monad: Applicative: Functor](using
-  Functor[ParserT[Char, *, M]]
-)(using Applicative[ParserT[Char, *, M]])(using Monad[ParserT[Char, *, M]])(
-  using Alternative[ParserT[Char, *, M]]
-)(using Alternative[ParseResult[M, *]]):
+class Parsers[M[+_]: Alternative: Monad: Applicative: Functor]
+  (using Functor[ParserT[Char, *, M]])
+  (using Applicative[ParserT[Char, *, M]])
+  (using Monad[ParserT[Char, *, M]])
+  (using Alternative[ParserT[Char, *, M]])
+  (using Alternative[ParseResult[M, *]]):
   def any = P(P.any << P.eos)
 
   def doubleQuoted = P(P.quoted() << P.eos)
@@ -136,13 +137,13 @@ class Parsers[M[+_]: Alternative: Monad: Applicative: Functor](using
 class ParserCombinatorsTest extends AnyFreeSpec:
   testParsers(true)
 
-  private def testParsers[M[+_]: Alternative: Monad: Applicative: Functor](
-    updateTestData: Boolean
-  )(using Functor[ParserT[Char, *, M]])(using Applicative[ParserT[Char, *, M]])(
-    using Monad[ParserT[Char, *, M]]
-  )(using Alternative[ParserT[Char, *, M]])(using
-    Alternative[ParseResult[M, *]]
-  ) =
+  private def testParsers[M[+_]: Alternative: Monad: Applicative: Functor]
+    (updateTestData: Boolean)
+    (using Functor[ParserT[Char, *, M]])
+    (using Applicative[ParserT[Char, *, M]])
+    (using Monad[ParserT[Char, *, M]])
+    (using Alternative[ParserT[Char, *, M]])
+    (using Alternative[ParseResult[M, *]]) =
     import scala.io.Source
     val obj = Parsers()
     val parsers =
@@ -172,10 +173,9 @@ class ParserCombinatorsTest extends AnyFreeSpec:
       }
 
   @nowarn
-  private def testParser[M[+_]](
-    p: ParserT[Char, Any, M],
-    testDataFile: File
-  ): (String, String) =
+  private def testParser[M[+_]]
+    (p: ParserT[Char, Any, M], testDataFile: File)
+    : (String, String) =
     val testDataString = Source.fromFile(testDataFile).use { source =>
       source.mkString.replace(System.lineSeparator(), "\n").!!
     }

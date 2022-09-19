@@ -756,7 +756,9 @@ object Builtins:
       (qn, (new Definition(qn)(ty), clauses))
     }.toMap
 
-  def getBigType(qn: QualifiedName): Option[(Definition, IndexedSeq[Clause])] =
+  def getBigType
+    (qn: QualifiedName)
+    : Option[(Definition, IndexedSeq[Clause])] =
     // TODO: it seems big SubtypeOf is not that useful so I will skip it for now.
     import Name.*
     import QualifiedName.*

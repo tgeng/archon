@@ -23,15 +23,12 @@ enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
     extends AstTerm(sourceInfo)
   case AstF(vTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo)
     extends AstTerm(sourceInfo)
-  case AstFunctionType(
-    argName: Name,
-    argTy: AstTerm,
-    bodyTy: AstTerm,
-    effects: AstTerm
-  )(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
-  case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])(using
-    sourceInfo: SourceInfo
-  ) extends AstTerm(sourceInfo)
+  case AstFunctionType
+    (argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
+    (using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstRedux
+    (head: AstTerm, elims: List[Elimination[AstTerm]])
+    (using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstBlock(statements: List[Statement])(using sourceInfo: SourceInfo)
     extends AstTerm(
       sourceInfo
@@ -57,15 +54,13 @@ enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
 enum Statement:
   case STerm(term: AstTerm)
   case SBinding(name: Name, term: AstTerm)
-  case SHandler(
-    effect: AstEff,
-    outputEffects: AstTerm,
-    outputType: AstTerm,
-    transformInputName: Name,
-    transform: AstTerm,
-    handlers: Map[Name, ( /* op args */ List[Name], AstTerm)]
-  )
-  case SHeapHandler(
-    outputEffects: AstTerm,
-    heapVarName: Name
-  )
+  case SHandler
+    (
+      effect: AstEff,
+      outputEffects: AstTerm,
+      outputType: AstTerm,
+      transformInputName: Name,
+      transform: AstTerm,
+      handlers: Map[Name, ( /* op args */ List[Name], AstTerm)]
+    )
+  case SHeapHandler(outputEffects: AstTerm, heapVarName: Name)

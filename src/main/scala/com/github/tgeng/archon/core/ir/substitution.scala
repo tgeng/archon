@@ -13,18 +13,22 @@ trait Raisable[T]:
   def raise(t: T, amount: Int, bar: Int = 0)(using Σ: Signature): T
 
 trait Substitutable[S: Raisable, T]:
-  def substitute(s: S, substitution: PartialSubstitution[T], offset: Int = 0)(
-    using Σ: Signature
-  ): S
+  def substitute
+    (s: S, substitution: PartialSubstitution[T], offset: Int = 0)
+    (using Σ: Signature)
+    : S
 
 import VTerm.*
 import CTerm.*
 
 private object RaiseTransformer
   extends Transformer[( /* amount */ Int, /* bar */ Int)]:
-  override def withBindings[T](bindingNames: => Seq[Ref[Name]])(
-    action: ((Int, Int)) ?=> T
-  )(using ctx: (Int, Int))(using Σ: Signature): T =
+  override def withBindings[T]
+    (bindingNames: => Seq[Ref[Name]])
+    (action: ((Int, Int)) ?=> T)
+    (using ctx: (Int, Int))
+    (using Σ: Signature)
+    : T =
     action(using (ctx._1, ctx._2 + bindingNames.size))
 
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
@@ -33,21 +37,24 @@ private object RaiseTransformer
 end RaiseTransformer
 
 given RaisableVTerm: Raisable[VTerm] with
-  override def raise(v: VTerm, amount: Int, bar: Int)(using
-    Σ: Signature
-  ): VTerm =
+  override def raise
+    (v: VTerm, amount: Int, bar: Int)
+    (using Σ: Signature)
+    : VTerm =
     RaiseTransformer.transformVTerm(v)(using (amount, bar))
 
 given RaisableCTerm: Raisable[CTerm] with
-  override def raise(c: CTerm, amount: Int, bar: Int)(using
-    Σ: Signature
-  ): CTerm =
+  override def raise
+    (c: CTerm, amount: Int, bar: Int)
+    (using Σ: Signature)
+    : CTerm =
     RaiseTransformer.transformCTerm(c)(using (amount, bar))
 
 given RaisableTelescope: Raisable[Telescope] with
-  override def raise(telescope: Telescope, amount: Int, bar: Int)(using
-    Σ: Signature
-  ): Telescope = telescope match
+  override def raise
+    (telescope: Telescope, amount: Int, bar: Int)
+    (using Σ: Signature)
+    : Telescope = telescope match
     case Nil => Nil
     case binding :: telescope =>
       binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(
@@ -58,14 +65,18 @@ given RaisableTelescope: Raisable[Telescope] with
 
 private object SubstituteTransformer
   extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)]:
-  override def withBindings[T](bindingNames: => Seq[Ref[Name]])(
-    action: ((PartialSubstitution[VTerm], Int)) ?=> T
-  )(using ctx: (PartialSubstitution[VTerm], Int))(using Σ: Signature): T =
+  override def withBindings[T]
+    (bindingNames: => Seq[Ref[Name]])
+    (action: ((PartialSubstitution[VTerm], Int)) ?=> T)
+    (using ctx: (PartialSubstitution[VTerm], Int))
+    (using Σ: Signature)
+    : T =
     action(using (ctx._1, ctx._2 + bindingNames.size))
 
-  override def transformVar(v: Var)(using
-    ctx: (PartialSubstitution[VTerm], /* offset */ Int)
-  )(using Σ: Signature) =
+  override def transformVar
+    (v: Var)
+    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
+    (using Σ: Signature) =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _       => v
@@ -73,27 +84,36 @@ private object SubstituteTransformer
 end SubstituteTransformer
 
 given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
-  override def substitute(
-    v: VTerm,
-    substitution: PartialSubstitution[VTerm],
-    offset: Int
-  )(using Σ: Signature): VTerm =
+  override def substitute
+    (
+      v: VTerm,
+      substitution: PartialSubstitution[VTerm],
+      offset: Int
+    )
+    (using Σ: Signature)
+    : VTerm =
     SubstituteTransformer.transformVTerm(v)(using (substitution, offset))
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
-  override def substitute(
-    c: CTerm,
-    substitution: PartialSubstitution[VTerm],
-    offset: Int
-  )(using Σ: Signature): CTerm =
+  override def substitute
+    (
+      c: CTerm,
+      substitution: PartialSubstitution[VTerm],
+      offset: Int
+    )
+    (using Σ: Signature)
+    : CTerm =
     SubstituteTransformer.transformCTerm(c)(using (substitution, offset))
 
 given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
-  override def substitute(
-    telescope: Telescope,
-    substitution: PartialSubstitution[VTerm],
-    offset: Int
-  )(using Σ: Signature): Telescope = telescope match
+  override def substitute
+    (
+      telescope: Telescope,
+      substitution: PartialSubstitution[VTerm],
+      offset: Int
+    )
+    (using Σ: Signature)
+    : Telescope = telescope match
     case Nil => Nil
     case binding :: telescope =>
       binding.map(
@@ -104,7 +124,7 @@ given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
         offset + 1
       )
 
-extension (c: CTerm)
+extension(c: CTerm)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableCTerm.substitute(c, substitution)
   def weakened(using Σ: Signature) = c.weaken(1, 0)
@@ -129,7 +149,7 @@ extension (c: CTerm)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension (v: VTerm)
+extension(v: VTerm)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableVTerm.substitute(v, substitution)
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
@@ -154,7 +174,7 @@ extension (v: VTerm)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension (ul: ULevel)
+extension(ul: ULevel)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     ul.map(
       SubstitutableVTerm.substitute(_, substitution)
@@ -186,15 +206,11 @@ extension (ul: ULevel)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension (telescope: Telescope)
+extension(telescope: Telescope)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableTelescope.substitute(telescope, substitution)
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
-    RaisableTelescope.raise(
-      telescope,
-      amount,
-      at
-    )
+    RaisableTelescope.raise(telescope, amount, at)
   def weakened(using Σ: Signature) = telescope.weaken(1, 0)
   def strengthened(using Σ: Signature) = telescope.strengthen(1, 0)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =

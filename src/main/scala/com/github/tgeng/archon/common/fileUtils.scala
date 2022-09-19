@@ -2,7 +2,7 @@ package com.github.tgeng.archon.common
 
 opaque type Timestamp = Long
 
-extension (t1: Timestamp) {
+extension(t1: Timestamp) {
   def <(t2: Timestamp) = t1 < t2
   def >(t2: Timestamp) = t1 > t2
   def <=(t2: Timestamp) = t1 <= t2
@@ -19,7 +19,7 @@ import java.nio.file.{Files, Paths}
 import java.io.IOException
 import scala.collection.immutable.ArraySeq
 
-extension (f: File) {
+extension(f: File) {
 
   def timestamp: Timestamp = f.lastModified
 

@@ -58,9 +58,9 @@ enum Usage extends PartiallyOrdered[Usage]:
     case (UAff, U1)                   => true
     case _                            => false
 
-  override def tryCompareTo[B >: Usage: AsPartiallyOrdered](
-    that: B
-  ): Option[Int] = (this, that) match
+  override def tryCompareTo[B >: Usage: AsPartiallyOrdered]
+    (that: B)
+    : Option[Int] = (this, that) match
     case (u1, u2) if u1 == u2       => Some(0)
     case (U0, UAff | UUnres)        => Some(-1)
     case (U1, UAff | URel | UUnres) => Some(-1)
@@ -132,10 +132,9 @@ private def uSumProd[T](sum1: USum[T], sum2: USum[T]): USum[T] =
     yield uProdProd(prod1, prod2)
   uSumNormalize(prods)
 
-private def uSumSum[T](
-  sum1: USum[T],
-  sum2: USum[T]
-): USum[T] = uSumNormalize(sum1 ++ sum2)
+private def uSumSum[T](sum1: USum[T], sum2: USum[T]): USum[T] = uSumNormalize(
+  sum1 ++ sum2
+)
 
 private def uSumNormalize[T](sum: Iterable[UProd[T]]): USum[T] =
   val r = sum

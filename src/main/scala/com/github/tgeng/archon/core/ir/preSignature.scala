@@ -10,65 +10,71 @@ type PreTTelescope = List[(Binding[CTerm], Variance)]
 type PreTelescope = List[Binding[CTerm]]
 
 enum PreDeclaration:
-  case PreData(val qn: QualifiedName)(
-    val tParamTys: PreTTelescope,
-    // This could be a eqDecidable function type that ends with `F Type` for indexed families. In this
-    // case, during elaboration, all constructors are weakened by the number of args in the
-    // declared function type. That is, indexed families are converted to parameterized inductive
-    // types with equality types representing the constraints.
-    val ty: CTerm,
-    val isEqDecidable: Boolean,
-    val constructors: List[PreConstructor]
-  )
-  case PreRecord(val qn: QualifiedName)(
-    val tParamTys: PreTTelescope,
-    // Unlike data, for record, this `ty` is expected to be a simple computation type.
-    val ty: CTerm,
-    val fields: List[PreField]
-  )
-  case PreDefinition(val qn: QualifiedName)(
-    val paramTys: PreTelescope,
-    val ty: CTerm,
-    val clauses: List[PreClause]
-  )
-  case PreEffect(val qn: QualifiedName)(
-    val tParamTys: PreTelescope,
-    val operators: List[PreOperator]
-  )
+  case PreData
+    (val qn: QualifiedName)
+    (
+      val tParamTys: PreTTelescope,
+      // This could be a eqDecidable function type that ends with `F Type` for indexed families. In this
+      // case, during elaboration, all constructors are weakened by the number of args in the
+      // declared function type. That is, indexed families are converted to parameterized inductive
+      // types with equality types representing the constraints.
+      val ty: CTerm,
+      val isEqDecidable: Boolean,
+      val constructors: List[PreConstructor]
+    )
+  case PreRecord
+    (val qn: QualifiedName)
+    (
+      val tParamTys: PreTTelescope,
+      // Unlike data, for record, this `ty` is expected to be a simple computation type.
+      val ty: CTerm,
+      val fields: List[PreField]
+    )
+  case PreDefinition
+    (val qn: QualifiedName)
+    (
+      val paramTys: PreTelescope,
+      val ty: CTerm,
+      val clauses: List[PreClause]
+    )
+  case PreEffect
+    (val qn: QualifiedName)
+    (
+      val tParamTys: PreTelescope,
+      val operators: List[PreOperator]
+    )
 
   def qn: QualifiedName
 
 import PreDeclaration.*
 
-case class PreConstructor(
-  name: Name,
-  ty: CTerm
-)
+case class PreConstructor(name: Name, ty: CTerm)
 
 type PreField = Field // There is no difference for field
 
-case class PreClause(
-  bindings: PreTelescope, // TODO: remove `binding` after elaboration is implemented
-  lhs: List[CoPattern],
-  rhs: Option[CTerm], // `None` for absurd pattern
-  ty: CTerm // TODO: remove `ty` after elaboration is implemented
-)
+case class PreClause
+  (
+    bindings: PreTelescope, // TODO: remove `binding` after elaboration is implemented
+    lhs: List[CoPattern],
+    rhs: Option[CTerm], // `None` for absurd pattern
+    ty: CTerm // TODO: remove `ty` after elaboration is implemented
+  )
 
-case class PreOperator(
-  name: Name,
-  ty: CTerm
-)
+case class PreOperator(name: Name, ty: CTerm)
 
 enum DeclarationPart:
   case SIGNATURE, BODY
 
 import DeclarationPart.*
 
-def sortPreDeclarations(declarations: Seq[PreDeclaration])(using
-  Σ: Signature
-): Either[ /* cycle */ Seq[(DeclarationPart, PreDeclaration)], /* sorted */ Seq[
-    (DeclarationPart, PreDeclaration)
-  ]] =
+def sortPreDeclarations
+  (declarations: Seq[PreDeclaration])
+  (using Σ: Signature)
+  : Either[ /* cycle */ Seq[
+      (DeclarationPart, PreDeclaration)
+    ], /* sorted */ Seq[
+      (DeclarationPart, PreDeclaration)
+    ]] =
   given Unit = ()
 
   val declByQn = declarations.associatedBy(_.qn)
@@ -154,13 +160,19 @@ def sortPreDeclarations(declarations: Seq[PreDeclaration])(using
 
 private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
 
-  override def combine(rs: Set[QualifiedName]*)(using ctx: Unit)(using
-    Σ: Signature
-  ): Set[QualifiedName] = rs.flatten.toSet
+  override def combine
+    (rs: Set[QualifiedName]*)
+    (using ctx: Unit)
+    (using
+      Σ: Signature
+    )
+    : Set[QualifiedName] = rs.flatten.toSet
 
-  override def visitQualifiedName(qn: QualifiedName)(using ctx: Unit)(using
-    Σ: Signature
-  ): Set[QualifiedName] = Set(qn)
+  override def visitQualifiedName
+    (qn: QualifiedName)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    : Set[QualifiedName] = Set(qn)
 
 end QualifiedNameVisitor
 
@@ -172,13 +184,18 @@ import Variance.*
 
 private given Γ0: Context = IndexedSeq()
 
-def elaborateSignature(
-  data: PreData
-)(using Signature)(using ctx: TypingContext): Either[IrError, Data] =
+def elaborateSignature
+  (data: PreData)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Data] =
   ctx.trace(s"elaborating data signature ${data.qn}") {
-    def elaborateTy(ty: CTerm)(using Γ: Context)(using
-      Signature
-    )(using ctx: TypingContext): Either[IrError, (TTelescope, ULevel)] =
+    def elaborateTy
+      (ty: CTerm)
+      (using Γ: Context)
+      (using Signature)
+      (using ctx: TypingContext)
+      : Either[IrError, (TTelescope, ULevel)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
@@ -202,15 +219,20 @@ def elaborateSignature(
         Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, ???, ???)
   }
 
-def elaborateBody(preData: PreData)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, List[Constructor]] =
+def elaborateBody
+  (preData: PreData)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, List[Constructor]] =
   ctx.trace(s"elaborating data body ${preData.qn}") {
     val data = Σ.getData(preData.qn)
 
-    def elaborateTy(ty: CTerm)(using Γ: Context)(using Signature)(using
-      ctx: TypingContext
-    ): Either[IrError, (Telescope, /* args */ List[VTerm])] =
+    def elaborateTy
+      (ty: CTerm)
+      (using Γ: Context)
+      (using Signature)
+      (using ctx: TypingContext)
+      : Either[IrError, (Telescope, /* args */ List[VTerm])] =
       for
         ty <- reduceCType(ty)
         r <- ty match
@@ -245,9 +267,11 @@ def elaborateBody(preData: PreData)(using
     )
   }
 
-def elaborateSignature(
-  record: PreRecord
-)(using Signature)(using ctx: TypingContext): Either[IrError, Record] =
+def elaborateSignature
+  (record: PreRecord)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Record] =
   ctx.trace(s"elaborating record signature ${record.qn}") {
     for
       tParamTys <- elaborateTTelescope(record.tParamTys)
@@ -258,9 +282,11 @@ def elaborateSignature(
     yield r
   }
 
-def elaborateBody(
-  preRecord: PreRecord
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, List[Field]] =
+def elaborateBody
+  (preRecord: PreRecord)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, List[Field]] =
   ctx.trace(s"elaborating record body ${preRecord.qn}") {
     val record = Σ.getRecord(preRecord.qn)
 
@@ -281,9 +307,11 @@ def elaborateBody(
     )
   }
 
-def elaborateSignature(definition: PreDefinition)(using Signature)(using
-  ctx: TypingContext
-): Either[IrError, Definition] =
+def elaborateSignature
+  (definition: PreDefinition)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Definition] =
   given SourceInfo = SiEmpty
 
   ctx.trace(s"elaborating def signature ${definition.qn}") {
@@ -297,9 +325,11 @@ def elaborateSignature(definition: PreDefinition)(using Signature)(using
     )
   }
 
-def elaborateBody(
-  preDefinition: PreDefinition
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, List[Clause]] =
+def elaborateBody
+  (preDefinition: PreDefinition)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, List[Clause]] =
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
       paramTys <- elaborateTelescope(preDefinition.paramTys)
@@ -335,24 +365,31 @@ def elaborateBody(
     yield r
   }
 
-def elaborateSignature(
-  effect: PreEffect
-)(using Signature)(using ctx: TypingContext): Either[IrError, Effect] =
+def elaborateSignature
+  (effect: PreEffect)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Effect] =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     elaborateTelescope(effect.tParamTys).map(Effect(effect.qn)(_))
   }
 
-def elaborateBody(preEffect: PreEffect)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, List[Operator]] =
+def elaborateBody
+  (preEffect: PreEffect)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, List[Operator]] =
   val effect = Σ.getEffect(preEffect.qn)
 
   given Context = effect.tParamTys.toIndexedSeq
 
   ctx.trace(s"elaborating effect body ${effect.qn}") {
-    def elaborateTy(ty: CTerm)(using Γ: Context)(using Signature)(using
-      ctx: TypingContext
-    ): Either[IrError, (Telescope, /* operator return type */ VTerm)] =
+    def elaborateTy
+      (ty: CTerm)
+      (using Γ: Context)
+      (using Signature)
+      (using ctx: TypingContext)
+      : Either[IrError, (Telescope, /* operator return type */ VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
@@ -378,14 +415,20 @@ def elaborateBody(preEffect: PreEffect)(using Σ: Signature)(using
     )
   }
 
-private def elaborateTTelescope(tTelescope: PreTTelescope)(using Γ: Context)(
-  using Signature
-)(using ctx: TypingContext): Either[IrError, TTelescope] =
+private def elaborateTTelescope
+  (tTelescope: PreTTelescope)
+  (using Γ: Context)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, TTelescope] =
   elaborateTelescope(tTelescope.map(_._1)).map(_.zip(tTelescope.map(_._2)))
 
-private def elaborateTelescope(telescope: PreTelescope)(using Γ: Context)(using
-  Signature
-)(using ctx: TypingContext): Either[IrError, Telescope] = telescope match
+private def elaborateTelescope
+  (telescope: PreTelescope)
+  (using Γ: Context)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Telescope] = telescope match
   case Nil => Right(Nil)
   case binding :: telescope =>
     ctx.trace("elaborating telescope") {

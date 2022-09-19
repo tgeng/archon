@@ -34,12 +34,17 @@ def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
 trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
 
-  inline def trace[L, R](
-    title: => String,
-    description: => Block | String = "",
-    successMsg: R => Block | String = (_: R) => "",
-    failureMsg: L => Block | String = (l: L) => l.toString
-  )(action: => Either[L, R])(using Γ: Context)(using Signature): Either[L, R] =
+  inline def trace[L, R]
+    (
+      title: => String,
+      description: => Block | String = "",
+      successMsg: R => Block | String = (_: R) => "",
+      failureMsg: L => Block | String = (l: L) => l.toString
+    )
+    (action: => Either[L, R])
+    (using Γ: Context)
+    (using Signature)
+    : Either[L, R] =
     val indent = "│ " * traceLevel
     lazy val result: Either[L, R] = action
     if enableDebugging then
@@ -89,13 +94,14 @@ type Usages = Seq[VTerm]
 object Usages:
   def zero(using Γ: Context): Usages = Seq.fill(Γ.size)(UsageLiteral(Usage.U0))
 
-  def single(v: VTerm.Var, u: VTerm = VTerm.UsageLiteral(Usage.U1))(using
-    Γ: Context
-  ): Usages =
+  def single
+    (v: VTerm.Var, u: VTerm = VTerm.UsageLiteral(Usage.U1))
+    (using Γ: Context)
+    : Usages =
     (Seq.fill(Γ.size - v.idx - 1)(UsageLiteral(Usage.U0)) :+ u)
       ++ Seq.fill(v.idx)(UsageLiteral(Usage.U0))
 
-extension (us1: Usages)
+extension(us1: Usages)
   infix def +(us2: Usages): Usages =
     if us1.size != us2.size then
       throw IllegalArgumentException("mismatched size")
@@ -105,9 +111,11 @@ extension (us1: Usages)
   infix def *(scalar: Usage)(using SourceInfo): Usages =
     us1.map(u => UsageProd(u, UsageLiteral(scalar)))
 
-def checkData(data: Data)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] = ctx.trace(s"checking data signature ${data.qn}") {
+def checkData
+  (data: Data)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] = ctx.trace(s"checking data signature ${data.qn}") {
   given Context = IndexedSeq()
 
   val tParams = data.tParamTys.map(_._1)
@@ -115,9 +123,11 @@ def checkData(data: Data)(using Σ: Signature)(using
     checkULevel(data.ul)(using tParams.toIndexedSeq) >> Right(())
 }
 
-def checkDataConstructor(qn: QualifiedName, con: Constructor)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkDataConstructor
+  (qn: QualifiedName, con: Constructor)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace(s"checking data constructor $qn.${con.name}") {
     Σ.getDataOption(qn) match
       case None => Left(MissingDeclaration(qn))
@@ -156,17 +166,21 @@ def checkDataConstructor(qn: QualifiedName, con: Constructor)(using
             )
   }
 
-def checkDataConstructors(qn: QualifiedName, constructors: Seq[Constructor])(
-  using Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkDataConstructors
+  (qn: QualifiedName, constructors: Seq[Constructor])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   allRight(constructors.map { con => checkDataConstructor(qn, con) }) >>
     checkInherentEqDecidable(Σ.getData(qn), constructors)
 
-def checkRecord(
-  record: Record
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkRecord
+  (record: Record)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace(s"checking record signature ${record.qn}") {
     given Context = IndexedSeq()
 
@@ -175,9 +189,11 @@ def checkRecord(
       checkULevel(record.ul)(using tParams.toIndexedSeq) >> Right(())
   }
 
-def checkRecordField(qn: QualifiedName, field: Field)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkRecordField
+  (qn: QualifiedName, field: Field)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace(s"checking record field $qn.${field.name}") {
     Σ.getRecordOption(qn) match
       case None => Left(MissingDeclaration(qn))
@@ -212,9 +228,11 @@ def checkRecordField(qn: QualifiedName, field: Field)(using
             )
   }
 
-def checkRecordFields(qn: QualifiedName, fields: Seq[Field])(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkRecordFields
+  (qn: QualifiedName, fields: Seq[Field])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
   allRight(fields.map { field => checkRecordField(qn, field) })
@@ -230,18 +248,22 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U1
 )(record.selfName)
 
-def checkDef(
-  definition: Definition
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkDef
+  (definition: Definition)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace(s"checking def signature ${definition.qn}") {
     given Context = IndexedSeq()
 
     checkIsCType(definition.ty)
   }
 
-def checkClause(qn: QualifiedName, clause: Clause)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] = ctx.trace(s"checking def clause $qn") {
+def checkClause
+  (qn: QualifiedName, clause: Clause)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] = ctx.trace(s"checking def clause $qn") {
   val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
     case (Some(f), p) =>
       p.toElimination match
@@ -258,14 +280,18 @@ def checkClause(qn: QualifiedName, clause: Clause)(using Σ: Signature)(using
       checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty) >> Right(())
 }
 
-def checkClauses(qn: QualifiedName, clauses: Seq[Clause])(using Σ: Signature)(
-  using ctx: TypingContext
-): Either[IrError, Unit] =
+def checkClauses
+  (qn: QualifiedName, clauses: Seq[Clause])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   allRight(clauses.map { clause => checkClause(qn, clause) })
 
-def checkEffect(
-  effect: Effect
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkEffect
+  (effect: Effect)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace(s"checking effect signature ${effect.qn}") {
     given Context = IndexedSeq()
 
@@ -274,9 +300,11 @@ def checkEffect(
     ) >> checkAreEqDecidableTypes(effect.tParamTys)
   }
 
-def checkOperator(qn: QualifiedName, operator: Operator)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkOperator
+  (qn: QualifiedName, operator: Operator)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace(s"checking effect operator $qn.${operator.name}") {
     Σ.getEffectOption(qn) match
       case None => Left(MissingDeclaration(qn))
@@ -287,17 +315,21 @@ def checkOperator(qn: QualifiedName, operator: Operator)(using
           checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
   }
 
-def checkOperators(qn: QualifiedName, operators: Seq[Operator])(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkOperators
+  (qn: QualifiedName, operators: Seq[Operator])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   allRight(operators.map { operator => checkOperator(qn, operator) })
 
-private def checkParameterTypeDeclarations(
-  tParamTys: Telescope,
-  levelBound: Option[ULevel] = None
-)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] = tParamTys match
+private def checkParameterTypeDeclarations
+  (tParamTys: Telescope, levelBound: Option[ULevel] = None)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using
+    ctx: TypingContext
+  )
+  : Either[IrError, Unit] = tParamTys match
   case Nil => Right(())
   case binding :: rest =>
     checkIsType(binding.ty, levelBound) >>
@@ -309,15 +341,21 @@ private def checkParameterTypeDeclarations(
       ) >>
       checkParameterTypeDeclarations(rest)(using Γ :+ binding)
 
-private def checkULevel(ul: ULevel)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Usages] = ul match
+private def checkULevel
+  (ul: ULevel)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Usages] = ul match
   case ULevel.USimpleLevel(l) => checkType(l, LevelType())
   case ULevel.UωLevel(_)      => Right(Usages.zero)
 
-def inferType(tm: VTerm)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, (VTerm, Usages)] =
+def inferType
+  (tm: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, (VTerm, Usages)] =
   debugInfer(
     tm,
     tm match
@@ -434,9 +472,12 @@ def inferType(tm: VTerm)(using Γ: Context)(using Σ: Signature)(using
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type")
   )
 
-def checkType(tm: VTerm, ty: VTerm)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Usages] = debugCheck(
+def checkType
+  (tm: VTerm, ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Usages] = debugCheck(
   tm,
   ty,
   tm match
@@ -466,9 +507,12 @@ def checkType(tm: VTerm, ty: VTerm)(using Γ: Context)(using Σ: Signature)(usin
       yield usages
 )
 
-def inferType(tm: CTerm)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, (CTerm, Usages)] =
+def inferType
+  (tm: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, (CTerm, Usages)] =
   debugInfer(
     tm,
     tm match
@@ -894,9 +938,12 @@ def inferType(tm: CTerm)(using Γ: Context)(using Σ: Signature)(using
         yield (r, inputUsages)
   )
 
-def checkType(tm: CTerm, ty: CTerm)(using Γ: Context)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Usages] = debugCheck(
+def checkType
+  (tm: CTerm, ty: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Usages] = debugCheck(
   tm,
   ty,
   for
@@ -916,11 +963,15 @@ given CheckSubsumptionMode = SUBSUMPTION
 /** @param ty
   *   can be [[None]] if `a` and `b` are types
   */
-def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])(using
-  mode: CheckSubsumptionMode
-)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] =
+def checkSubsumption
+  (rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using
+    ctx: TypingContext
+  )
+  : Either[IrError, Unit] =
   def impl: Either[IrError, Unit] =
     if rawSub == rawSup then return Right(())
     val ty = rawTy.map(_.normalized) match
@@ -1055,11 +1106,13 @@ def checkSubsumption(rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])(using
 /** @param ty
   *   can be [[None]] if `a` and `b` are types
   */
-def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])(using
-  mode: CheckSubsumptionMode
-)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] = debugSubsumption(
+def checkSubsumption
+  (sub: CTerm, sup: CTerm, ty: Option[CTerm])
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] = debugSubsumption(
   sub,
   sup,
   ty, {
@@ -1244,9 +1297,12 @@ def checkSubsumption(sub: CTerm, sup: CTerm, ty: Option[CTerm])(using
   }
 )
 
-private def simplifyLet(t: CTerm)(using Γ: Context)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, CTerm] = ctx.trace[IrError, CTerm](
+private def simplifyLet
+  (t: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, CTerm] = ctx.trace[IrError, CTerm](
   s"simplify",
   s"${yellow(t.sourceInfo)} ${pprint(t)}",
   successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}"
@@ -1263,18 +1319,23 @@ private def simplifyLet(t: CTerm)(using Γ: Context)(using
     case _ => Right(t)
 }
 
-private def checkInherentUsage(
-  data: Data,
-  constructors: Seq[Constructor]
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+private def checkInherentUsage
+  (
+    data: Data,
+    constructors: Seq[Constructor]
+  )
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   data.inherentUsage match
     case UsageLiteral(U1) => Right(())
     case _ =>
       given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
-      def checkTelescope(telescope: Telescope, dataInherentUsage: VTerm)(using
-        Γ: Context
-      ): Either[IrError, Unit] = telescope match
+      def checkTelescope
+        (telescope: Telescope, dataInherentUsage: VTerm)
+        (using Γ: Context)
+        : Either[IrError, Unit] = telescope match
         case Nil => Right(())
         case (b @ Binding(ty, declaredUsage)) :: telescope =>
           for
@@ -1300,9 +1361,12 @@ private def checkInherentUsage(
       )
 end checkInherentUsage
 
-private def deriveTypeInherentUsage(ty: VTerm)(using Γ: Context)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, VTerm] = ty match
+private def deriveTypeInherentUsage
+  (ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, VTerm] = ty match
   case _: Type | _: UsageType | _: EffectsType | _: LevelType | _: HeapType |
     _: CellType =>
     Right(UsageLiteral(UUnres))
@@ -1323,16 +1387,18 @@ private def deriveTypeInherentUsage(ty: VTerm)(using Γ: Context)(using
   case _ => Left(ExpectVType(ty))
 end deriveTypeInherentUsage
 
-private def checkInherentEqDecidable(
-  data: Data,
-  constructors: Seq[Constructor]
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+private def checkInherentEqDecidable
+  (data: Data, constructors: Seq[Constructor])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
 
   // 1. check that eqD of component type ⪯ eqD of data
-  def checkComponentTypes(tys: Telescope, dataEqD: VTerm)(using
-    Γ: Context
-  ): Either[IrError, Unit] = tys match
+  def checkComponentTypes
+    (tys: Telescope, dataEqD: VTerm)
+    (using Γ: Context)
+    : Either[IrError, Unit] = tys match
     case Nil => Right(())
     case binding :: rest =>
       for
@@ -1433,13 +1499,18 @@ private def checkInherentEqDecidable(
         )
 
 private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor:
-  override def visitCollapse(collapse: Collapse)(using bar: Nat)(using
-    Σ: Signature
-  ): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = this.combine()
+  override def visitCollapse
+    (collapse: Collapse)
+    (using bar: Nat)
+    (using Σ: Signature)
+    : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = this.combine()
 
-private def deriveTypeInherentEqDecidability(ty: VTerm)(using Γ: Context)(using
-  Σ: Signature
-)(using ctx: TypingContext): Either[IrError, VTerm] = ty match
+private def deriveTypeInherentEqDecidability
+  (ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, VTerm] = ty match
   case _: Type | _: EqualityType | _: UsageType | _: EqDecidabilityType |
     _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
     Right(EqDecidabilityLiteral(EqDecidable))
@@ -1459,9 +1530,12 @@ private def deriveTypeInherentEqDecidability(ty: VTerm)(using Γ: Context)(using
       case _ => Left(MissingDeclaration(d.qn))
   case _ => Left(ExpectVType(ty))
 
-private def checkIsEqDecidableTypes(ty: VTerm)(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+private def checkIsEqDecidableTypes
+  (ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   for
     eqD <- deriveTypeInherentEqDecidability(ty)
     _ <- checkSubsumption(
@@ -1471,9 +1545,12 @@ private def checkIsEqDecidableTypes(ty: VTerm)(using
     )(using CONVERSION)
   yield ()
 
-private def checkAreEqDecidableTypes(telescope: Telescope)(using Γ: Context)(
-  using Σ: Signature
-)(using ctx: TypingContext): Either[IrError, Unit] = telescope match
+private def checkAreEqDecidableTypes
+  (telescope: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] = telescope match
   case Nil => Right(())
   case binding :: telescope =>
     for
@@ -1481,11 +1558,15 @@ private def checkAreEqDecidableTypes(telescope: Telescope)(using Γ: Context)(
       _ <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
     yield ()
 
-private def checkEqDecidabilitySubsumption(eqD1: VTerm, eqD2: VTerm)(using
-  mode: CheckSubsumptionMode
-)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] = (eqD1.normalized, eqD2.normalized) match
+private def checkEqDecidabilitySubsumption
+  (eqD1: VTerm, eqD2: VTerm)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using
+    ctx: TypingContext
+  )
+  : Either[IrError, Unit] = (eqD1.normalized, eqD2.normalized) match
   case (Left(e), _)                               => Left(e)
   case (_, Left(e))                               => Left(e)
   case (Right(eqD1), Right(eqD2)) if eqD1 == eqD2 => Right(())
@@ -1496,9 +1577,12 @@ private def checkEqDecidabilitySubsumption(eqD1: VTerm, eqD2: VTerm)(using
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
 
 // usage and binding must be at the same level
-private def checkUsage(usage: VTerm, binding: Binding[VTerm])(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+private def checkUsage
+  (usage: VTerm, binding: Binding[VTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   for
     inherentUsage <- deriveTypeInherentUsage(binding.ty)
     _ <- checkUsageSubsumption(
@@ -1507,17 +1591,23 @@ private def checkUsage(usage: VTerm, binding: Binding[VTerm])(using
     )(using SUBSUMPTION)
   yield ()
 
-private def strengthUsages(
-  usages: Seq[VTerm]
-)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): List[VTerm] =
+private def strengthUsages
+  (usages: Seq[VTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : List[VTerm] =
   usages.zipWithIndex.map { (u, i) =>
     u.strengthen(usages.size - i, 0)
   }.toList
 
 // usages must be at level corresponding to bindings
-private def checkUsages(usages: List[VTerm], bindings: List[Binding[VTerm]])(
-  using Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+private def checkUsages
+  (usages: List[VTerm], bindings: List[Binding[VTerm]])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   (usages, bindings) match
     case (Nil, Nil) => Right(())
     case (usage :: usages, binding :: bindings) =>
@@ -1528,11 +1618,15 @@ private def checkUsages(usages: List[VTerm], bindings: List[Binding[VTerm]])(
     case _ =>
       throw IllegalArgumentException("mismatched usages and binding length")
 
-private def checkUsageSubsumption(usage1: VTerm, usage2: VTerm)(using
-  mode: CheckSubsumptionMode
-)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] = (usage1.normalized, usage2.normalized) match
+private def checkUsageSubsumption
+  (usage1: VTerm, usage2: VTerm)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using
+    ctx: TypingContext
+  )
+  : Either[IrError, Unit] = (usage1.normalized, usage2.normalized) match
   case (Left(e), _)                                       => Left(e)
   case (_, Left(e))                                       => Left(e)
   case (Right(usage1), Right(usage2)) if usage1 == usage2 => Right(())
@@ -1547,11 +1641,15 @@ private def checkUsageSubsumption(usage1: VTerm, usage2: VTerm)(using
       case _ => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
   case _ => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
 
-private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)(using
-  mode: CheckSubsumptionMode
-)(using Γ: Context)(using Σ: Signature)(using
-  ctx: TypingContext
-): Either[IrError, Unit] =
+private def checkEffSubsumption
+  (eff1: VTerm, eff2: VTerm)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using
+    ctx: TypingContext
+  )
+  : Either[IrError, Unit] =
   (eff1.normalized, eff2.normalized) match
     case (Left(e), _)                               => Left(e)
     case (_, Left(e))                               => Left(e)
@@ -1568,11 +1666,15 @@ private def checkEffSubsumption(eff1: VTerm, eff2: VTerm)(using
 
 /** Check that `ul1` is lower or equal to `ul2`.
   */
-private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)(using
-  mode: CheckSubsumptionMode
-)(using Γ: Context)(using Σ: Signature)(using
-  TypingContext
-): Either[IrError, Unit] =
+private def checkULevelSubsumption
+  (ul1: ULevel, ul2: ULevel)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using
+    TypingContext
+  )
+  : Either[IrError, Unit] =
   val ul1Normalized = ul1 match
     case USimpleLevel(v) =>
       v.normalized match
@@ -1605,9 +1707,12 @@ private def checkULevelSubsumption(ul1: ULevel, ul2: ULevel)(using
     case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(())
     case _ => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
 
-def checkTypes(tms: Seq[VTerm], tys: Telescope)(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Usages] =
+def checkTypes
+  (tms: Seq[VTerm], tys: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Usages] =
   ctx.trace("checking multiple terms") {
     if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
     else
@@ -1618,9 +1723,12 @@ def checkTypes(tms: Seq[VTerm], tys: Telescope)(using
       ).map(_.reduce(_ + _))
   }
 
-def checkIsType(vTy: VTerm, levelBound: Option[ULevel] = None)(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkIsType
+  (vTy: VTerm, levelBound: Option[ULevel] = None)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace("checking is type") {
     for
       case (vTyTy, _) <- inferType(vTy)
@@ -1633,9 +1741,12 @@ def checkIsType(vTy: VTerm, levelBound: Option[ULevel] = None)(using
     yield r
   }
 
-def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkIsCType
+  (cTy: CTerm, levelBound: Option[ULevel] = None)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
   ctx.trace("checking is C type") {
     for
       case (cTyTy, _) <- inferType(cTy)
@@ -1649,9 +1760,12 @@ def checkIsCType(cTy: CTerm, levelBound: Option[ULevel] = None)(using
     yield r
   }
 
-def reduceVType(vTy: CTerm)(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, VTerm] =
+def reduceVType
+  (vTy: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, VTerm] =
   ctx.trace("reduce V type", Block(yellow(vTy.sourceInfo), pprint(vTy))) {
     for
       case (tyTy, _) <- inferType(vTy)
@@ -1671,9 +1785,12 @@ def reduceVType(vTy: CTerm)(using
     yield r
   }
 
-def reduceCType(cTy: CTerm)(using
-  Γ: Context
-)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, CTerm] =
+def reduceCType
+  (cTy: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, CTerm] =
   ctx.trace("reduce C type", Block(yellow(cTy.sourceInfo), pprint(cTy))) {
     cTy match
       case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop =>
@@ -1715,9 +1832,10 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
     RecordType(qn, args, EffectsUnion(eff, effects))
   case _ => throw IllegalArgumentException(s"trying to augment $cty with $eff")
 
-private def checkVar0Leak(ty: CTerm | VTerm, error: => IrError)(using
-  Σ: Signature
-): Either[IrError, Unit] =
+private def checkVar0Leak
+  (ty: CTerm | VTerm, error: => IrError)
+  (using Σ: Signature)
+  : Either[IrError, Unit] =
   val (positiveFreeVars, negativeFreeVars) = ty match
     case ty: CTerm => getFreeVars(ty)(using 0)
     case ty: VTerm => getFreeVars(ty)(using 0)
@@ -1736,11 +1854,12 @@ extension [L, R1](e1: Either[L, R1])
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] =
     e1.flatMap(_ => e2)
 
-private def debugCheck[L, R](
-  tm: CTerm | VTerm,
-  ty: CTerm | VTerm,
-  result: => Either[L, R]
-)(using Context)(using Signature)(using ctx: TypingContext): Either[L, R] =
+private def debugCheck[L, R]
+  (tm: CTerm | VTerm, ty: CTerm | VTerm, result: => Either[L, R])
+  (using Context)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[L, R] =
   ctx.trace(
     s"checking",
     Block(
@@ -1756,12 +1875,12 @@ private def debugCheck[L, R](
     result
   )
 
-private inline def debugInfer[L, R <: (CTerm | VTerm)](
-  tm: R,
-  result: => Either[L, (R, Usages)]
-)(using
-  Context
-)(using Signature)(using ctx: TypingContext): Either[L, (R, Usages)] =
+private inline def debugInfer[L, R <: (CTerm | VTerm)]
+  (tm: R, result: => Either[L, (R, Usages)])
+  (using Context)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[L, (R, Usages)] =
   ctx.trace[L, (R, Usages)](
     s"inferring type",
     Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
@@ -1771,14 +1890,18 @@ private inline def debugInfer[L, R <: (CTerm | VTerm)](
     (r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
   })
 
-private inline def debugSubsumption[L, R](
-  rawSub: CTerm | VTerm,
-  rawSup: CTerm | VTerm,
-  rawTy: Option[CTerm | VTerm],
-  result: => Either[L, R]
-)(using mode: CheckSubsumptionMode)(using Context)(using Signature)(using
-  ctx: TypingContext
-): Either[L, R] =
+private inline def debugSubsumption[L, R]
+  (
+    rawSub: CTerm | VTerm,
+    rawSup: CTerm | VTerm,
+    rawTy: Option[CTerm | VTerm],
+    result: => Either[L, R]
+  )
+  (using mode: CheckSubsumptionMode)
+  (using Context)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Either[L, R] =
   val modeString = mode match
     case CheckSubsumptionMode.SUBSUMPTION => "⪯"
     case CheckSubsumptionMode.CONVERSION  => "≡"

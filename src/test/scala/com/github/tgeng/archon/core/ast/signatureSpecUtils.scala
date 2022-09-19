@@ -37,9 +37,12 @@ def debug[T](block: TypingContext ?=> T)(using ctx: TypingContext): T =
     ctx.enableDebugging = false
   }
 
-extension (using Γ: Context)(using TestSignature)(using TypingContext)(using
-  TestContext
-)(tm: AstTerm)
+extension
+  (using Γ: Context)
+  (using TestSignature)
+  (using TypingContext)
+  (using TestContext)
+  (tm: AstTerm)
   infix def hasType(ty: AstTerm): Unit =
     given NameContext = Γ
 
@@ -102,9 +105,11 @@ extension (using Γ: Context)(using TestSignature)(using TypingContext)(using
       )
     )
 
-def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using
-  ctx: TestContext
-): R =
+def assertRight[L, R]
+  (action: => Either[L, R])
+  (using TypingContext)
+  (using ctx: TestContext)
+  : R =
   val r: Either[L, R] =
     try {
       action
@@ -125,9 +130,11 @@ def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using
         else ctx.fail(l.toString)
       }
 
-def assertLeft[L, R](action: => Either[L, R])(using TypingContext)(using
-  ctx: TestContext
-): L =
+def assertLeft[L, R]
+  (action: => Either[L, R])
+  (using TypingContext)
+  (using ctx: TestContext)
+  : L =
   val r: Either[L, R] =
     try {
       action
@@ -146,22 +153,24 @@ def assertLeft[L, R](action: => Either[L, R])(using TypingContext)(using
         ctx.fail("Expect to fail, but succeeded.")
       }
 
-class TestSignature(
-  private val allData: mutable.Map[QualifiedName, Data] = mutable.Map(),
-  private val allConstructors: mutable.Map[QualifiedName, IndexedSeq[
-    Constructor
-  ]] = mutable.Map(),
-  private val allRecords: mutable.Map[QualifiedName, Record] = mutable.Map(),
-  private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]] =
-    mutable.Map(),
-  private val allDefinitions: mutable.Map[QualifiedName, Definition] =
-    mutable.Map(),
-  private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] =
-    mutable.Map(),
-  private val allEffects: mutable.Map[QualifiedName, Effect] = mutable.Map(),
-  private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] =
-    mutable.Map()
-) extends BuiltinSignature:
+class TestSignature
+  (
+    private val allData: mutable.Map[QualifiedName, Data] = mutable.Map(),
+    private val allConstructors: mutable.Map[QualifiedName, IndexedSeq[
+      Constructor
+    ]] = mutable.Map(),
+    private val allRecords: mutable.Map[QualifiedName, Record] = mutable.Map(),
+    private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]] =
+      mutable.Map(),
+    private val allDefinitions: mutable.Map[QualifiedName, Definition] =
+      mutable.Map(),
+    private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] =
+      mutable.Map(),
+    private val allEffects: mutable.Map[QualifiedName, Effect] = mutable.Map(),
+    private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] =
+      mutable.Map()
+  )
+  extends BuiltinSignature:
 
   override def toString: String =
     s"""
@@ -255,9 +264,10 @@ class TestSignature(
     allOperators
   )
 
-  def addDeclarations(astDeclarations: List[AstDeclaration])(using
-    TypingContext
-  )(using tCtx: TestContext) =
+  def addDeclarations
+    (astDeclarations: List[AstDeclaration])
+    (using TypingContext)
+    (using tCtx: TestContext) =
     given TestSignature = this
     import AstDeclaration.*
     import QualifiedName.*
@@ -329,25 +339,27 @@ class TestSignature(
             allOperators(preEffect.qn) = operators.toIndexedSeq
         }
 
-def scope(b: (MutableContext, TestSignature) ?=> Unit)(using Γ: MutableContext)(
-  using Σ: TestSignature
-) =
+def scope
+  (b: (MutableContext, TestSignature) ?=> Unit)
+  (using Γ: MutableContext)
+  (using Σ: TestSignature) =
   val newContext: MutableContext = mutable.ArrayBuffer(Γ.toArray: _*)
   val newSignature: TestSignature = Σ.copy
   b(using newContext, newSignature)
 
 given Conversion[Context, NameContext] = NameContext.fromContext
 
-extension (binding: Binding[AstTerm])
-  def unary_+(using Γ: MutableContext)(using TestSignature)(using
-    TypingContext
-  ) =
+extension(binding: Binding[AstTerm])
+  def unary_+
+    (using Γ: MutableContext)
+    (using TestSignature)
+    (using TypingContext) =
     given NameContext = Γ
 
     val ty = astToIr(binding.ty).asRight
     val vTy = reduceVType(ty).asRight
     Γ.addOne(Binding(vTy)(binding.name))
 
-extension (declarations: List[AstDeclaration])
+extension(declarations: List[AstDeclaration])
   def unary_+(using Σ: TestSignature)(using TypingContext)(using TestContext) =
     Σ.addDeclarations(declarations)

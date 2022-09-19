@@ -27,9 +27,11 @@ type NameContext = (Int, Map[Name, Int])
 
 val emptyNameContext: NameContext = (0, Map.empty)
 
-private def resolve(astVar: AstIdentifier)(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, Either[CTerm, VTerm]] =
+private def resolve
+  (astVar: AstIdentifier)
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, Either[CTerm, VTerm]] =
   given SourceInfo = astVar.sourceInfo
 
   ctx._2.get(astVar.name) match
@@ -39,26 +41,32 @@ private def resolve(astVar: AstIdentifier)(using ctx: NameContext)(using
         case Some(qn) => Right(Left(Def(qn)))
         case None     => Left(UnresolvedIdentifier(astVar))
 
-private def resolve(astPVar: AstPVar)(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, Pattern] =
+private def resolve
+  (astPVar: AstPVar)
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, Pattern] =
   given SourceInfo = astPVar.sourceInfo
 
   ctx._2.get(astPVar.name) match
     case None           => Left(UnresolvedPVar(astPVar))
     case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber - 1))
 
-private def bind[T](name: Name)(block: NameContext ?=> T)(using
-  ctx: NameContext
-): T =
+private def bind[T]
+  (name: Name)
+  (block: NameContext ?=> T)
+  (using ctx: NameContext)
+  : T =
   block(using ctx :+ name)
 
-private def bind[T](names: List[Name])(block: NameContext ?=> T)(using
-  ctx: NameContext
-): T =
+private def bind[T]
+  (names: List[Name])
+  (block: NameContext ?=> T)
+  (using ctx: NameContext)
+  : T =
   block(using ctx ++ names)
 
-extension (ctx: NameContext)
+extension(ctx: NameContext)
   private def :+(name: Name) = (ctx._1 + 1, ctx._2.updated(name, ctx._1))
   private def ++(names: collection.Seq[Name]) = (
     ctx._1 + names.size,
@@ -74,9 +82,10 @@ object NameContext:
   def fromContext(ctx: Context): NameContext =
     emptyNameContext ++ ctx.map(_.name.value)
 
-def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)(using
-  Σ: TestSignature
-): Either[AstError, PreDeclaration] =
+def astToIr
+  (moduleQn: QualifiedName, decl: AstDeclaration)
+  (using Σ: TestSignature)
+  : Either[AstError, PreDeclaration] =
   given NameContext = emptyNameContext
 
   decl match
@@ -151,22 +160,26 @@ def astToIr(moduleQn: QualifiedName, decl: AstDeclaration)(using
       }
 
 @targetName("astToIrTTelescope")
-private def astToIr[T](
-  tTelescope: AstTTelescope
-)(action: NameContext ?=> Either[AstError, T])(using
-  ctx: NameContext
-)(using Σ: TestSignature): Either[AstError, (PreTTelescope, T)] =
+private def astToIr[T]
+  (tTelescope: AstTTelescope)
+  (action: NameContext ?=> Either[AstError, T])
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, (PreTTelescope, T)] =
   astToIr(tTelescope.map(_._1))(action)
     .map { case (telescope, t) =>
       (telescope.zip(tTelescope.map(_._2)), t)
     }
 
 @targetName("astToIrTelescope")
-private def astToIr[T](
-  telescope: AstTelescope
-)(action: NameContext ?=> Either[AstError, T])(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, (PreTelescope, T)] = telescope match
+private def astToIr[T]
+  (telescope: AstTelescope)
+  (action: NameContext ?=> Either[AstError, T])
+  (using ctx: NameContext)
+  (using
+    Σ: TestSignature
+  )
+  : Either[AstError, (PreTelescope, T)] = telescope match
   case Nil => action.map((Nil, _))
   case binding :: telescope =>
     for
@@ -177,9 +190,11 @@ private def astToIr[T](
     yield r match
       case (tys, t) => (Binding(ty)(binding.name) :: tys, t)
 
-def astToIr(ast: AstCoPattern)(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, CoPattern] =
+def astToIr
+  (ast: AstCoPattern)
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, CoPattern] =
   given SourceInfo = ast.sourceInfo
 
   ast match
@@ -188,9 +203,11 @@ def astToIr(ast: AstCoPattern)(using ctx: NameContext)(using
       yield CPattern(p)
     case AstCProjection(name) => Right(CProjection(name))
 
-def astToIr(ast: AstPattern)(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, Pattern] =
+def astToIr
+  (ast: AstPattern)
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, Pattern] =
   given SourceInfo = ast.sourceInfo
 
   ast match
@@ -216,9 +233,11 @@ def astToIr(ast: AstPattern)(using ctx: NameContext)(using
       yield PForced(Collapse(cTerm))
     case AstPAbsurd() => Right(PAbsurd())
 
-def astToIr(ast: AstTerm)(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, CTerm] =
+def astToIr
+  (ast: AstTerm)
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, CTerm] =
   given SourceInfo = ast.sourceInfo
 
   ast match
@@ -281,9 +300,10 @@ def astToIr(ast: AstTerm)(using ctx: NameContext)(using
       yield r
     case AstBlock(statements) =>
       import Statement.*
-      def foldSequence(statements: List[Statement])(using
-        ctx: NameContext
-      ): Either[AstError, CTerm] =
+      def foldSequence
+        (statements: List[Statement])
+        (using ctx: NameContext)
+        : Either[AstError, CTerm] =
         statements match
           case Nil                         => Right(Def(Builtins.UnitQn))
           case STerm(astTerm) :: Nil       => astToIr(astTerm)
@@ -374,65 +394,87 @@ def astToIr(ast: AstTerm)(using ctx: NameContext)(using
 
       foldSequence(statements)
 
-private def astToIr(elim: Elimination[AstTerm])(using ctx: NameContext)(using
-  Σ: TestSignature
-): Either[AstError, Elimination[CTerm]] = elim match
+private def astToIr
+  (elim: Elimination[AstTerm])
+  (using ctx: NameContext)
+  (using Σ: TestSignature)
+  : Either[AstError, Elimination[CTerm]] = elim match
   case ETerm(astTerm) =>
     astToIr(astTerm).map(ETerm(_)(using astTerm.sourceInfo))
   case EProj(name) => Right(EProj(name)(using elim.sourceInfo))
 
-private def chainAst(name: Name, t: AstTerm)(
-  block: TestSignature ?=> VTerm => CTerm
-)(using NameContext)(using TestSignature): Either[AstError, CTerm] =
+private def chainAst
+  (name: Name, t: AstTerm)
+  (block: TestSignature ?=> VTerm => CTerm)
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   chainAst(List((name, t))) {
     case v :: Nil => block(v)
     case _        => throw IllegalStateException()
   }
 
-private def chainAst(ts: (Name, AstTerm)*)(
-  block: TestSignature ?=> List[VTerm] => CTerm
-)(using NameContext)(using TestSignature): Either[AstError, CTerm] =
+private def chainAst
+  (ts: (Name, AstTerm)*)
+  (block: TestSignature ?=> List[VTerm] => CTerm)
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   chainAst(ts.toList)(block)
 
-private def chainAst[T[_]: EitherFunctor](ts: T[(Name, AstTerm)])(
-  block: TestSignature ?=> T[VTerm] => CTerm
-)(using NameContext)(using TestSignature): Either[AstError, CTerm] =
+private def chainAst[T[_]: EitherFunctor]
+  (ts: T[(Name, AstTerm)])
+  (block: TestSignature ?=> T[VTerm] => CTerm)
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   val f = summon[EitherFunctor[T]]
   for
     ts <- f.map(ts) { case (n, t) => astToIr(t).map((n, _)) }
     r <- chain(ts) { (t, _) => block(t) }
   yield r
 
-private def chainAstWithDefaultName[T[_]: EitherFunctor](
-  defaultName: Name,
-  ts: T[AstTerm]
-)(block: TestSignature ?=> (T[VTerm], Nat) => CTerm)(using NameContext)(using
-  TestSignature
-): Either[AstError, CTerm] =
+private def chainAstWithDefaultName[T[_]: EitherFunctor]
+  (defaultName: Name, ts: T[AstTerm])
+  (block: TestSignature ?=> (T[VTerm], Nat) => CTerm)
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   val f = summon[EitherFunctor[T]]
   for
     ts <- f.map(ts) { t => astToIr(t).map((defaultName, _)) }
     r <- chain(ts) { (t, offset) => block(t, offset) }
   yield r
 
-private def chain(name: Name, t: CTerm)(
-  block: TestSignature ?=> (VTerm, Int) => CTerm
-)(using NameContext)(using TestSignature): Either[AstError, CTerm] =
+private def chain
+  (name: Name, t: CTerm)
+  (block: TestSignature ?=> (VTerm, Int) => CTerm)
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   chain(List((name, t))) {
     case (v :: Nil, n) => block(v, n)
     case _             => throw IllegalStateException()
   }
 
-private def chain(ts: (Name, CTerm)*)(
-  block: TestSignature ?=> (List[VTerm], Int) => CTerm
-)(using NameContext)(using TestSignature): Either[AstError, CTerm] =
+private def chain
+  (ts: (Name, CTerm)*)
+  (block: TestSignature ?=> (List[VTerm], Int) => CTerm)
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   chain(ts.toList)(block)
 
-private def chain[T[_]: EitherFunctor](ts: T[(Name, CTerm)])(
-  block: TestSignature ?=> (
-    T[VTerm], /* number of non-trivial computations bound */ Int
-  ) => CTerm
-)(using NameContext)(using TestSignature): Either[AstError, CTerm] =
+private def chain[T[_]: EitherFunctor]
+  (ts: T[(Name, CTerm)])
+  (
+    block: TestSignature ?=> (
+      T[VTerm], /* number of non-trivial computations bound */ Int
+    ) => CTerm
+  )
+  (using NameContext)
+  (using TestSignature)
+  : Either[AstError, CTerm] =
   for r <- {
       // Step 1. Count the number of non-trivial computations present in the computation args.
       // This is used to populate DeBruijn index of let bound variables for these non-trivial
@@ -464,24 +506,27 @@ private def chain[T[_]: EitherFunctor](ts: T[(Name, CTerm)])(
   yield r
 
 given listEitherFunctor: EitherFunctor[List[*]] with
-  override def map[L, T, S](l: List[T])(
-    g: T => Either[L, S]
-  ): Either[L, List[S]] =
+  override def map[L, T, S]
+    (l: List[T])
+    (g: T => Either[L, S])
+    : Either[L, List[S]] =
     transpose(l.map(g))
 
 given effectsEitherFunctor: EitherFunctor[[X] =>> (QualifiedName, List[X])] with
-  override def map[L, T, S](l: (QualifiedName, List[T]))(
-    g: T => Either[L, S]
-  ): Either[L, (QualifiedName, List[S])] =
+  override def map[L, T, S]
+    (l: (QualifiedName, List[T]))
+    (g: T => Either[L, S])
+    : Either[L, (QualifiedName, List[S])] =
     l match
       case (qn, ts) =>
         for ts <- listEitherFunctor.map(ts)(g)
         yield (qn, ts)
 
 given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
-  override def map[L, T, S](
-    l: List[Elimination[T]]
-  )(g: T => Either[L, S]): Either[L, List[Elimination[S]]] =
+  override def map[L, T, S]
+    (l: List[Elimination[T]])
+    (g: T => Either[L, S])
+    : Either[L, List[Elimination[S]]] =
     listEitherFunctor.map(l) {
       _ match
         case e @ ETerm(t) => g(t).map(ETerm(_)(using e.sourceInfo))
@@ -489,9 +534,10 @@ given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
     }
 
 given listListEitherFunctor: EitherFunctor[[X] =>> List[List[X]]] with
-  override def map[L, T, S](
-    l: List[List[T]]
-  )(g: T => Either[L, S]): Either[L, List[List[S]]] =
+  override def map[L, T, S]
+    (l: List[List[T]])
+    (g: T => Either[L, S])
+    : Either[L, List[List[S]]] =
     listEitherFunctor.map(l) {
       listEitherFunctor.map(_)(g)
     }

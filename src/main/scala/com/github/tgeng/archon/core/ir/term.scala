@@ -50,7 +50,7 @@ import Builtins.*
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
 
-extension (eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
+extension(eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
 enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel]:
   case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)
@@ -65,7 +65,7 @@ enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel]:
       case UωLevel(layer)      => UωLevel(layer)
 
 object ULevel:
-  extension (u: ULevel)
+  extension(u: ULevel)
     def map(f: VTerm => VTerm): ULevel = u match
       case USimpleLevel(level) => USimpleLevel(f(level))
       case _: ULevel.UωLevel   => u
@@ -113,11 +113,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // linearity for linear types. Also, 0 usage still effectively erases compile-only terms. In
   // addition, some transparent optimization (like in-place update, proactive free, etc) can be done
   // on unrestricted types that are used linearly.
-  case Top(
-    ul: ULevel,
-    usage: VTerm = UsageLiteral(Usage.U1),
-    eqDecidability: VTerm = EqDecidabilityLiteral(EqUnres)
-  )(using sourceInfo: SourceInfo)
+  case Top
+    (
+      ul: ULevel,
+      usage: VTerm = UsageLiteral(Usage.U1),
+      eqDecidability: VTerm = EqDecidabilityLiteral(EqUnres)
+    )
+    (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(TopQn)
 
@@ -136,17 +138,21 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case DataType(qn: QualifiedName, args: Arguments = Nil)(using
-    sourceInfo: SourceInfo
-  ) extends VTerm(sourceInfo), QualifiedNameOwner(qn)
+  case DataType
+    (qn: QualifiedName, args: Arguments = Nil)
+    (using
+      sourceInfo: SourceInfo
+    ) extends VTerm(sourceInfo), QualifiedNameOwner(qn)
   case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
-  case EqualityType(
-    ty: VTerm,
-    left: VTerm,
-    right: VTerm
-  )(using sourceInfo: SourceInfo)
+  case EqualityType
+    (
+      ty: VTerm,
+      left: VTerm,
+      right: VTerm
+    )
+    (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo) // , QualifiedNameOwner(EqualityQn)
   case Refl()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -157,36 +163,40 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
-  case UsageCompound(operator: UsageOperator, operands: Multiset[VTerm])(using
-    sourceInfo: SourceInfo
-  ) extends VTerm(sourceInfo)
+  case UsageCompound
+    (operator: UsageOperator, operands: Multiset[VTerm])
+    (using
+      sourceInfo: SourceInfo
+    ) extends VTerm(sourceInfo)
 
   case EqDecidabilityType()(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
-  case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using
-    sourceInfo: SourceInfo
-  ) extends VTerm(
+  case EqDecidabilityLiteral
+    (eqDecidability: EqDecidability)
+    (using sourceInfo: SourceInfo)
+    extends VTerm(
       sourceInfo
     )
 
-  case EffectsType(continuationUsage: VTerm = UsageLiteral(UUnres))(using
-    sourceInfo: SourceInfo
-  ) extends VTerm(sourceInfo),
+  case EffectsType
+    (continuationUsage: VTerm = UsageLiteral(UUnres))
+    (using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
     QualifiedNameOwner(
       EffectsQn
     )
-  case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using
-    sourceInfo: SourceInfo
-  ) extends VTerm(sourceInfo)
+  case Effects
+    (literal: Set[Eff], unionOperands: Set[VTerm])
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType()(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
       LevelQn
     )
-  case Level(literal: Nat, maxOperands: Map[VTerm, /* level offset */ Nat])(
-    using sourceInfo: SourceInfo
-  ) extends VTerm(sourceInfo)
+  case Level
+    (literal: Nat, maxOperands: Map[VTerm, /* level offset */ Nat])
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Heap */
   case HeapType()(using sourceInfo: SourceInfo)
@@ -199,11 +209,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     extends VTerm(sourceInfo)
 
   /** archon.builtin.Cell */
-  case CellType(
-    heap: VTerm,
-    ty: VTerm,
-    status: CellStatus
-  )(using sourceInfo: SourceInfo)
+  case CellType
+    (heap: VTerm, ty: VTerm, status: CellStatus)
+    (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo) // , QualifiedNameOwner(CellQn)
 
   /** Internal only, created by [[CTerm.AllocOp]]
@@ -246,13 +254,17 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case CellType(heap, ty, status)      => CellType(heap, ty, status)
       case Cell(heapKey, index)            => Cell(heapKey, index)
 
-  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using
-    Σ: Signature
-  ): R = visitor.visitVTerm(this)
+  def visitWith[C, R]
+    (visitor: Visitor[C, R])
+    (using ctx: C)
+    (using Σ: Signature)
+    : R = visitor.visitVTerm(this)
 
-  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using
-    Σ: Signature
-  ): VTerm = transformer.transformVTerm(this)
+  def transformWith[C]
+    (transformer: Transformer[C])
+    (using ctx: C)
+    (using Σ: Signature)
+    : VTerm = transformer.transformVTerm(this)
 
 object VTerm:
   def UsageSum(operands: VTerm*)(using SourceInfo) =
@@ -359,15 +371,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Hole extends CTerm(SiEmpty)
 
   /** archon.builtin.CType */
-  case CType(
-    ul: ULevel,
-    upperBound: CTerm,
-    effects: VTerm = VTerm.Total(using SiEmpty)
-  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  case CType
+    (
+      ul: ULevel,
+      upperBound: CTerm,
+      effects: VTerm = VTerm.Total(using SiEmpty)
+    )
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case CTop(ul: ULevel, effects: VTerm = VTerm.Total(using SiEmpty))(using
-    sourceInfo: SourceInfo
-  ) extends CTerm(sourceInfo), IType
+  case CTop
+    (ul: ULevel, effects: VTerm = VTerm.Total(using SiEmpty))
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
   case Def(qn: QualifiedName)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
@@ -375,20 +389,23 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Force(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.F */
-  case F(
-    vTy: VTerm,
-    effects: VTerm = VTerm.Total(using SiEmpty),
-    usage: VTerm = VTerm.UsageLiteral(Usage.U1)
-  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
-  case Return(v: VTerm, usage: VTerm = VTerm.UsageLiteral(Usage.U1))(using
-    sourceInfo: SourceInfo
-  ) extends CTerm(sourceInfo)
+  case F
+    (
+      vTy: VTerm,
+      effects: VTerm = VTerm.Total(using SiEmpty),
+      usage: VTerm = VTerm.UsageLiteral(Usage.U1)
+    )
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  case Return
+    (v: VTerm, usage: VTerm = VTerm.UsageLiteral(Usage.U1))
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunk to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
-  case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)(
-    val boundName: Ref[Name]
-  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case Let
+    (t: CTerm, /* binding offset = 1 */ ctx: CTerm)
+    (val boundName: Ref[Name])
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   // TODO: consider adding CLet that carries out a computation and capture the resulted computation
   //  as a thunk
@@ -407,23 +424,27 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   //     terms of resource counting. For example, `plus_1` can only be linear.
 
   /** archon.builtin.Function */
-  case FunctionType(
-    binding: Binding[
-      VTerm
-    ], // effects that needed for getting the function of this type. The effects caused
-    // by function application is tracked by the `bodyTy`.
-    bodyTy: CTerm, /* binding offset = 1 */
-    effects: VTerm = VTerm.Total(using SiEmpty)
-  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  case FunctionType
+    (
+      binding: Binding[
+        VTerm
+      ], // effects that needed for getting the function of this type. The effects caused
+      // by function application is tracked by the `bodyTy`.
+      bodyTy: CTerm, /* binding offset = 1 */
+      effects: VTerm = VTerm.Total(using SiEmpty)
+    )
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
   case Application(fun: CTerm, arg: VTerm)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
 
-  case RecordType(
-    qn: QualifiedName,
-    args: Arguments = Nil,
-    effects: VTerm = VTerm.Total(using SiEmpty)
-  )(using sourceInfo: SourceInfo)
+  case RecordType
+    (
+      qn: QualifiedName,
+      args: Arguments = Nil,
+      effects: VTerm = VTerm.Total(using SiEmpty)
+    )
+    (using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo),
     IType,
     QualifiedNameOwner(qn)
@@ -431,9 +452,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Projection(rec: CTerm, name: Name)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
 
-  case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)(using
-    sourceInfo: SourceInfo
-  ) extends CTerm(sourceInfo)
+  case OperatorCall
+    (eff: Eff, name: Name, args: Arguments = Nil)
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** Internal only. This is only created by reduction.
     *
@@ -450,40 +471,43 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     */
   case Continuation(capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
 
-  case Handler(
-    eff: Eff,
-    outputEffects: VTerm,
-    outputUsage: VTerm,
+  case Handler
+    (
+      eff: Eff,
+      outputEffects: VTerm,
+      outputUsage: VTerm,
 
-    /** This is the output value type. The computation type of this handler is
-      * `F(outputType, outputEffects, outputUsage)`.
-      */
-    outputType: VTerm,
+      /** This is the output value type. The computation type of this handler is
+        * `F(outputType, outputEffects, outputUsage)`.
+        */
+      outputType: VTerm,
 
-    /** The transformer that transforms a var at DeBruijn index 0 of type
-      * `inputBinding.ty` to `outputType`. for cases where `outputType` equals
-      * `F(someEffects, inputBinding.ty)`, a sensible default value is simply
-      * `return (var 0)`
-      */
-    /* binding offset + 1 */ transform: CTerm,
+      /** The transformer that transforms a var at DeBruijn index 0 of type
+        * `inputBinding.ty` to `outputType`. for cases where `outputType` equals
+        * `F(someEffects, inputBinding.ty)`, a sensible default value is simply
+        * `return (var 0)`
+        */
+      /* binding offset + 1 */ transform: CTerm,
 
-    /** All handler implementations declared by the effect. Each handler is
-      * essentially a function body that takes the following arguments
-      *   - all declared parameters
-      *   - a continuation parameter of type `declared operator output type ->
-      *     outputType` and outputs `outputType`
-      */
-    handlers: Map[
-      Name, /* binding offset = paramTys + 1 (for resume) */ CTerm
-    ],
-    input: CTerm
-  )(
-    val transformBoundName: Ref[Name],
-    val handlersBoundNames: Map[
-      Name,
-      (Seq[Ref[Name]], /* resume name */ Ref[Name])
-    ]
-  )(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+      /** All handler implementations declared by the effect. Each handler is
+        * essentially a function body that takes the following arguments
+        *   - all declared parameters
+        *   - a continuation parameter of type `declared operator output type ->
+        *     outputType` and outputs `outputType`
+        */
+      handlers: Map[
+        Name, /* binding offset = paramTys + 1 (for resume) */ CTerm
+      ],
+      input: CTerm
+    )
+    (
+      val transformBoundName: Ref[Name],
+      val handlersBoundNames: Map[
+        Name,
+        (Seq[Ref[Name]], /* resume name */ Ref[Name])
+      ]
+    )
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
@@ -491,24 +515,26 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     extends CTerm(sourceInfo)
   case GetOp(cell: VTerm)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
-  case HeapHandler(
-    outputEffects: VTerm,
+  case HeapHandler
+    (
+      outputEffects: VTerm,
 
-    /** Newly created heap handler should always set this to `None`. This key is
-      * instantiated during reduction to a fresh value.
-      */
-    key: Option[HeapKey],
-    heapContent: IndexedSeq[Option[VTerm]],
+      /** Newly created heap handler should always set this to `None`. This key
+        * is instantiated during reduction to a fresh value.
+        */
+      key: Option[HeapKey],
+      heapContent: IndexedSeq[Option[VTerm]],
 
-    /** Note that the logic here should not expose the heap variable (i.e. `var
-      * 0`) through existential types like (t: Type, x: t) where `t` can be
-      * `HeapType`. A syntax-based check is used to ensure this never happens.
-      * For cases where such flexibility is needed, one should use
-      * `GlobalHeapKey` instead.
-      */
-    /* binding offset + 1 */ input: CTerm
-  )(val boundName: Ref[Name])(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo)
+      /** Note that the logic here should not expose the heap variable (i.e.
+        * `var 0`) through existential types like (t: Type, x: t) where `t` can
+        * be `HeapType`. A syntax-based check is used to ensure this never
+        * happens. For cases where such flexibility is needed, one should use
+        * `GlobalHeapKey` instead.
+        */
+      /* binding offset + 1 */ input: CTerm
+    )
+    (val boundName: Ref[Name])
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
     given SourceInfo = sourceInfo
@@ -565,13 +591,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   // TODO: consider adding builtin set and maps with decidable equality because we do not
   //  support quotient type and set semantic is very common in software engineering.
 
-  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using
-    Σ: Signature
-  ): R = visitor.visitCTerm(this)
+  def visitWith[C, R]
+    (visitor: Visitor[C, R])
+    (using ctx: C)
+    (using Σ: Signature)
+    : R = visitor.visitCTerm(this)
 
-  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using
-    Σ: Signature
-  ): CTerm = transformer.transformCTerm(this)
+  def transformWith[C]
+    (transformer: Transformer[C])
+    (using ctx: C)
+    (using Σ: Signature)
+    : CTerm = transformer.transformCTerm(this)
 
 /* References:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,

@@ -9,9 +9,11 @@ import EqDecidability.*
 import Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 
-def getFreeVars(tele: Telescope)(using bar: Nat)(using
-  Σ: Signature
-): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
+def getFreeVars
+  (tele: Telescope)
+  (using bar: Nat)
+  (using Σ: Signature)
+  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
   case Nil => (Set(), Set())
   case binding :: rest =>
     union(getFreeVars(binding.ty), getFreeVars(rest)(using bar + 1) - 1)
@@ -24,26 +26,33 @@ trait FreeVarsVisitor
   import VTerm.*
   import CTerm.*
 
-  override def withBindings(bindingNames: => List[Name])(
-    action: Nat ?=> (Set[Nat], Set[Nat])
-  )(using bar: Nat)(using Σ: Signature): (Set[Nat], Set[Nat]) =
+  override def withBindings
+    (bindingNames: => List[Name])
+    (action: Nat ?=> (Set[Nat], Set[Nat]))
+    (using bar: Nat)
+    (using Σ: Signature)
+    : (Set[Nat], Set[Nat]) =
     action(using bar + bindingNames.size)
 
-  override def combine(
-    freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*
-  )(using bar: Nat)(using
-    Σ: Signature
-  ): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  override def combine
+    (freeVars: ( /* positive */ Set[Nat], /* negative */ Set[Nat])*)
+    (using bar: Nat)
+    (using Σ: Signature)
+    : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
     freeVars.fold((Set(), Set()))(union)
 
-  override def visitVar(v: Var)(using bar: Nat)(using
-    Σ: Signature
-  ): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  override def visitVar
+    (v: Var)
+    (using bar: Nat)
+    (using Σ: Signature)
+    : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
     if v.idx < bar then (Set(), Set()) else (Set(v.idx - bar), Set())
 
-  override def visitDataType(dataType: DataType)(using bar: Nat)(using
-    Σ: Signature
-  ): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  override def visitDataType
+    (dataType: DataType)
+    (using bar: Nat)
+    (using Σ: Signature)
+    : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
     val data = Σ.getData(dataType.qn)
 
     combine(
@@ -55,16 +64,20 @@ trait FreeVarsVisitor
       }: _*
     )
 
-  override def visitCellType(
-    cellType: CellType
-  )(using ctx: Nat)(using Σ: Signature): (Set[Nat], Set[Nat]) = combine(
+  override def visitCellType
+    (cellType: CellType)
+    (using ctx: Nat)
+    (using Σ: Signature)
+    : (Set[Nat], Set[Nat]) = combine(
     visitVTerm(cellType.heap),
     mix(visitVTerm(cellType.ty))
   )
 
-  override def visitRecordType(recordType: RecordType)(using bar: Nat)(using
-    Σ: Signature
-  ): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  override def visitRecordType
+    (recordType: RecordType)
+    (using bar: Nat)
+    (using Σ: Signature)
+    : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
     val record = Σ.getRecord(recordType.qn)
     combine(
       visitVTerm(recordType.effects) +:
@@ -76,56 +89,67 @@ trait FreeVarsVisitor
         }: _*
     )
 
-  override def visitFunctionType(
-    functionType: CTerm.FunctionType
-  )(using bar: Nat)(using Σ: Signature): (Set[Nat], Set[Nat]) =
+  override def visitFunctionType
+    (functionType: CTerm.FunctionType)
+    (using bar: Nat)
+    (using Σ: Signature)
+    : (Set[Nat], Set[Nat]) =
     combine(
       visitVTerm(functionType.effects),
       swap(visitVTerm(functionType.binding.ty)),
       visitCTerm(functionType.bodyTy)(using bar + 1)
     )
 
-def getFreeVars(tm: VTerm)(using
-  bar: Nat
-)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+def getFreeVars
+  (tm: VTerm)
+  (using bar: Nat)
+  (using Σ: Signature)
+  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   FreeVarsVisitorObject.visitVTerm(
     tm
   )
 
-def getFreeVars(tm: CTerm)(using
-  bar: Nat
-)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+def getFreeVars
+  (tm: CTerm)
+  (using bar: Nat)
+  (using Σ: Signature)
+  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   FreeVarsVisitorObject.visitCTerm(tm)
 
-def getFreeVars(ul: ULevel)(using bar: Nat)(using
-  Σ: Signature
-): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+def getFreeVars
+  (ul: ULevel)
+  (using bar: Nat)
+  (using Σ: Signature)
+  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   import ULevel.*
   ul match
     case USimpleLevel(l) => getFreeVars(l)
     case UωLevel(_)      => (Set(), Set())
 
-def getFreeVars(eff: Eff)(using bar: Nat)(using
-  Σ: Signature
-): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2
+def getFreeVars
+  (eff: Eff)
+  (using bar: Nat)
+  (using Σ: Signature)
+  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2
   .map(getFreeVars)
   .reduceOption(union)
   .getOrElse((Set.empty, Set.empty))
 
-def getFreeVars(args: Iterable[VTerm])(using bar: Nat)(using
-  Σ: Signature
-): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = args
+def getFreeVars
+  (args: Iterable[VTerm])
+  (using bar: Nat)
+  (using Σ: Signature)
+  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = args
   .map(getFreeVars)
   .reduceOption(union)
   .getOrElse((Set.empty, Set.empty))
 
-private def union(
-  freeVars1: (Set[Nat], Set[Nat]),
-  freeVars2: (Set[Nat], Set[Nat])
-): (Set[Nat], Set[Nat]) =
+private def union
+  (freeVars1: (Set[Nat], Set[Nat]), freeVars2: (Set[Nat], Set[Nat]))
+  : (Set[Nat], Set[Nat]) =
   (freeVars1._1 | freeVars2._1, freeVars1._2 | freeVars2._2)
 
-extension (freeVars1: (Set[Nat], Set[Nat]))
+extension(freeVars1: (Set[Nat], Set[Nat]))
   private def -(offset: Nat): (Set[Nat], Set[Nat]) =
     (freeVars1._1.map(_ - offset), freeVars1._2.map(_ - offset))
 

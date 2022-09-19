@@ -22,11 +22,8 @@ enum Fixity:
 
 import com.github.tgeng.archon.parser.mixfix.Fixity.*
 
-case class Operator(
-  namespace: QualifiedName,
-  fixity: Fixity,
-  nameParts: Seq[Seq[String]]
-):
+case class Operator
+  (namespace: QualifiedName, fixity: Fixity, nameParts: Seq[Seq[String]]):
   def operatorName: String =
     val rawName = nameParts.map(_.mkString).mkString("_")
     fixity match
@@ -38,11 +35,9 @@ case class Operator(
   override def toString: String = namespace.toString + "." + operatorName
 
 object Operator:
-  def apply(
-    qualifiedName: QualifiedName,
-    fixity: Fixity,
-    nameParts: Seq[Seq[String]]
-  ): Operator =
+  def apply
+    (qualifiedName: QualifiedName, fixity: Fixity, nameParts: Seq[Seq[String]])
+    : Operator =
     if nameParts.isEmpty then
       throw IllegalArgumentException("nameParts should not be empty")
     if fixity == Closed && nameParts.size == 1 then
@@ -68,11 +63,8 @@ trait NamePart[N]:
   def asString(n: N): String
 
 enum MixfixAst[N, L]:
-  case OperatorCall(
-    operator: Operator,
-    args: List[MixfixAst[N, L]],
-    nameParts: List[List[N]]
-  )
+  case OperatorCall
+    (operator: Operator, args: List[MixfixAst[N, L]], nameParts: List[List[N]])
   case ApplyCall(args: List[MixfixAst[N, L]])
   case Identifier(name: N)
   case Literal(literal: L)
@@ -105,21 +97,25 @@ enum MixfixAst[N, L]:
 
 import com.github.tgeng.archon.parser.mixfix.MixfixAst.*
 
-def createMixfixParser[N, M[+_]: Alternative: Monad: Applicative: Functor, L](
-  g: PrecedenceGraph,
-  literalParser: ParserT[N, L, M]
-)(using Functor[ParserT[N, *, M]])(using Applicative[ParserT[N, *, M]])(using
-  Monad[ParserT[N, *, M]]
-)(using Alternative[ParserT[N, *, M]])(using Alternative[ParseResult[M, *]])(
-  using nn: NamePart[N]
-)(using cache: ParserCache[N, M]): ParserT[N, MixfixAst[N, L], M] =
+def createMixfixParser[N, M[+_]: Alternative: Monad: Applicative: Functor, L]
+  (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
+  (using Functor[ParserT[N, *, M]])
+  (using Applicative[ParserT[N, *, M]])
+  (using Monad[ParserT[N, *, M]])
+  (using Alternative[ParserT[N, *, M]])
+  (using Alternative[ParseResult[M, *]])
+  (using nn: NamePart[N])
+  (using cache: ParserCache[N, M])
+  : ParserT[N, MixfixAst[N, L], M] =
 // Filter out operators that does not appear in the input.
   for
     nameParts <- P.info((input, _) => input.map(n => nn.asString(n)).toSet)
     r <- createMixfixParserImpl(trimGraph(g, nameParts), literalParser)
   yield r
 
-def trimGraph(g: PrecedenceGraph, nameParts: Set[String]): PrecedenceGraph =
+def trimGraph
+  (g: PrecedenceGraph, nameParts: Set[String])
+  : PrecedenceGraph =
   // key is old node, value is new node
   val nodeMap = mutable.Map[PrecedenceNode, PrecedenceNode]()
   val newPrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]()
@@ -152,16 +148,16 @@ def trimGraph(g: PrecedenceGraph, nameParts: Set[String]): PrecedenceGraph =
 
 def createMixfixParserImpl[N, M[
   +_
-]: Alternative: Monad: Applicative: Functor, L](
-  g: PrecedenceGraph,
-  literalParser: ParserT[N, L, M]
-)(using
-  Functor[ParserT[N, *, M]]
-)(using Applicative[ParserT[N, *, M]])(using Monad[ParserT[N, *, M]])(using
-  Alternative[ParserT[N, *, M]]
-)(using Alternative[ParseResult[M, *]])(using nn: NamePart[N])(using
-  cache: ParserCache[N, M]
-): ParserT[N, MixfixAst[N, L], M] =
+]: Alternative: Monad: Applicative: Functor, L]
+  (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
+  (using Functor[ParserT[N, *, M]])
+  (using Applicative[ParserT[N, *, M]])
+  (using Monad[ParserT[N, *, M]])
+  (using Alternative[ParserT[N, *, M]])
+  (using Alternative[ParseResult[M, *]])
+  (using nn: NamePart[N])
+  (using cache: ParserCache[N, M])
+  : ParserT[N, MixfixAst[N, L], M] =
   val illegalIdentifierNames = g
     .flatMap(node =>
       node.operators.values.flatMap(ops =>
@@ -186,7 +182,7 @@ def createMixfixParserImpl[N, M[
     P.cached(g, unionBiased(g.map(pHat)) | closedPlus)
   )
 
-  extension (node: PrecedenceNode)
+  extension(node: PrecedenceNode)
     def pHat: ParserT[N, MixfixAst[N, L], M] =
       P(
         P.cached(
@@ -246,9 +242,9 @@ def createMixfixParserImpl[N, M[
         unionBiased(node.neighbors.map(_.pHat)) | closedPlus
       )
 
-    def op(
-      fix: Fixity
-    ): ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
+    def op
+      (fix: Fixity)
+      : ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
       P.cached(
         (node, fix),
         union(
@@ -298,10 +294,9 @@ def createMixfixParserImpl[N, M[
         ).map(Identifier.apply)
     )
 
-  def between[T](
-    p: => ParserT[N, T, M],
-    nameParts: Seq[Seq[String]]
-  ): ParserT[N, (List[T], List[List[N]]), M] =
+  def between[T]
+    (p: => ParserT[N, T, M], nameParts: Seq[Seq[String]])
+    : ParserT[N, (List[T], List[List[N]]), M] =
     nameParts match
       case Nil => throw IllegalArgumentException()
       case firstName :: names =>

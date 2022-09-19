@@ -236,12 +236,13 @@ object AstParser:
   private def app: StrParser[AstTerm] = P(builtins || redux)
 
   private def rhs: StrParser[AstTerm] = P {
-    val argBinding: StrParser[
-      (
-        /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm,
-        SourceInfo
-      )
-    ] =
+    val argBinding
+      : StrParser[
+        (
+          /* eff */ AstTerm, /* arg name */ Name, /* arg type */ AstTerm,
+          SourceInfo
+        )
+      ] =
       si(
         for
           eff <- effect.??.map(
@@ -406,7 +407,7 @@ object AstParser:
       endIndex <- P.info { (_, endIndex) => endIndex }
     yield f(using SiText(input.mkString, Range(startIndex, endIndex)))(t)
 
-extension (ctx: StringContext)
+extension(ctx: StringContext)
   def t(args: String*): AstTerm =
     (P.whitespaces >> AstParser.term << P.whitespaces).parseOrThrow(
       ctx.s(args: _*)

@@ -22,19 +22,23 @@ object Functor:
       case s: K1Sum[F]     => functorCoproduct(s, functors)
       case p: K1Product[F] => functorProduct(p, functors)
 
-  private def functorCoproduct[F[_]](
-    s: K1Sum[F],
-    functors: => List[Functor[[X] =>> Any]]
-  ): Functor[F] =
+  private def functorCoproduct[F[_]]
+    (
+      s: K1Sum[F],
+      functors: => List[Functor[[X] =>> Any]]
+    )
+    : Functor[F] =
     new Functor[F]:
       override def map[A, B](fa: F[A], f: A => B): F[B] =
         val ord = s.ordinal(fa.asInstanceOf[s.MirroredMonoType])
         functors(ord).map(fa, f).asInstanceOf[F[B]]
 
-  private def functorProduct[F[_], T](
-    p: K1Product[F],
-    functors: => List[Functor[[X] =>> Any]]
-  ): Functor[F] =
+  private def functorProduct[F[_], T]
+    (
+      p: K1Product[F],
+      functors: => List[Functor[[X] =>> Any]]
+    )
+    : Functor[F] =
     new Functor[F]:
       override def map[A, B](fa: F[A], f: A => B): F[B] =
         val mapped =
@@ -87,9 +91,10 @@ object Applicative:
 
   def pure[A[_], S](s: S)(using tc: Applicative[A]): A[S] = tc.pure(s)
 
-  def starApply[A[_], T, S](f: A[T => S], a: A[T])(using
-    tc: Applicative[A]
-  ): A[S] = tc.starApply(f, a)
+  def starApply[A[_], T, S]
+    (f: A[T => S], a: A[T])
+    (using tc: Applicative[A])
+    : A[S] = tc.starApply(f, a)
 
   given Applicative[List] with
     override def pure[T](t: T): List[T] = List(t)
@@ -108,9 +113,10 @@ trait Monad[M[_]: Applicative: Functor]:
   def flatten[T](m: M[M[T]]): M[T] = flatMap(m, t => t)
 
 object Monad:
-  def flatMap[M[_]: Functor, T, S](m: M[T], f: T => M[S])(using
-    tc: Monad[M]
-  ): M[S] = tc.flatten(Functor.map(m, f))
+  def flatMap[M[_]: Functor, T, S]
+    (m: M[T], f: T => M[S])
+    (using tc: Monad[M])
+    : M[S] = tc.flatten(Functor.map(m, f))
   def flatten[M[_], T](m: M[M[T]])(using tc: Monad[M]): M[T] =
     tc.flatMap(m, t => t)
 

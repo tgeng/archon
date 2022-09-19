@@ -8,21 +8,22 @@ import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.PrecedenceKi
 
 import scala.collection.mutable
 
-class PrecedenceGraphBuilder(
-  private val representatives: mutable.Map[Operator, Operator] = mutable.Map(),
+class PrecedenceGraphBuilder
+  (
+    private val representatives: mutable.Map[Operator, Operator] =
+      mutable.Map(),
 
-  /** Maps from a representative operator to the representative of the tighter
-    * node.
-    */
-  private val precedenceMap: mutable.Map[Operator, mutable.ArrayBuffer[
-    Operator
-  ]] = mutable.Map()
-):
+    /** Maps from a representative operator to the representative of the tighter
+      * node.
+      */
+    private val precedenceMap: mutable.Map[Operator, mutable.ArrayBuffer[
+      Operator
+    ]] = mutable.Map()
+  ):
 
-  def add(
-    operator: Operator,
-    precedences: Seq[Precedence]
-  ): Either[PrecedenceGraphError, Unit] =
+  def add
+    (operator: Operator, precedences: Seq[Precedence])
+    : Either[PrecedenceGraphError, Unit] =
     def error(kind: ErrorKind) = Left(PrecedenceGraphError(operator, kind))
 
     if representatives.contains(operator) then return error(AlreadyExist)
@@ -129,11 +130,12 @@ object PrecedenceGraphBuilder:
   enum PrecedenceKind:
     case TighterThan, LooserThan, SameAs
 
-case class PrecedenceRule(
-  fixity: Fixity,
-  operatorNames: Seq[String],
-  precedences: List[(PrecedenceKind, String)]
-)
+case class PrecedenceRule
+  (
+    fixity: Fixity,
+    operatorNames: Seq[String],
+    precedences: List[(PrecedenceKind, String)]
+  )
 
 object PrecedenceRule:
 

@@ -16,18 +16,19 @@ import DelimitPolicy.*
 import Usage.*
 
 trait Reducible[T]:
-  def reduce(t: T)(using ctx: Context)(using signature: Signature)(using
-    TypingContext
-  ): Either[IrError, T]
+  def reduce
+    (t: T)
+    (using ctx: Context)
+    (using signature: Signature)
+    (using TypingContext)
+    : Either[IrError, T]
 
 extension [T](a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
   def push(t: T) = a.addOne(t)
   def pushAll(ts: Iterable[T]) = a.addAll(ts)
 
-private final class StackMachine(
-  val stack: mutable.ArrayBuffer[CTerm]
-):
+private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
 
   // Note: for now this does not seem to be useful because this stack machine is only used for type
   // checking, in which case there are no builtin handlers at all because during type checking all
@@ -67,9 +68,12 @@ private final class StackMachine(
     * @return
     */
   //  @tailrec
-  def run(pc: CTerm, reduceDown: Boolean = false)(using Context)(using
-    Σ: Signature
-  )(using ctx: TypingContext): Either[IrError, CTerm] =
+  def run
+    (pc: CTerm, reduceDown: Boolean = false)
+    (using Context)
+    (using Σ: Signature)
+    (using ctx: TypingContext)
+    : Either[IrError, CTerm] =
     val r = pc match
       case Hole => throw IllegalStateException()
       // terminal cases
@@ -149,11 +153,13 @@ private final class StackMachine(
                 args.normalized match
                   case Left(e) => Left(e)
                   case Right(args) =>
-                    def areEffArgsConvertible(
-                      ts1: List[VTerm],
-                      ts2: List[VTerm],
-                      tys: Telescope
-                    ): Boolean =
+                    def areEffArgsConvertible
+                      (
+                        ts1: List[VTerm],
+                        ts2: List[VTerm],
+                        tys: Telescope
+                      )
+                      : Boolean =
                       (ts1, ts2, tys) match
                         case (Nil, Nil, Nil) => true
                         case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
@@ -340,11 +346,13 @@ private final class StackMachine(
     case Matched, Stuck, Mismatch
 
   @tailrec
-  private def matchPattern(
-    elims: List[(CoPattern, Elimination[VTerm])],
-    mapping: mutable.Map[Nat, VTerm],
-    matchingStatus: MatchingStatus
-  ): MatchingStatus =
+  private def matchPattern
+    (
+      elims: List[(CoPattern, Elimination[VTerm])],
+      mapping: mutable.Map[Nat, VTerm],
+      matchingStatus: MatchingStatus
+    )
+    : MatchingStatus =
     import Elimination.*
     import Builtins.*
     elims match
@@ -454,10 +462,12 @@ private final class StackMachine(
     }
     current
 
-extension (v: VTerm)
-  def normalized(using ctx: Context)(using Σ: Signature)(using
-    TypingContext
-  ): Either[IrError, VTerm] = v match
+extension(v: VTerm)
+  def normalized
+    (using ctx: Context)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Either[IrError, VTerm] = v match
     case Collapse(cTm) =>
       for
         reduced <- Reducible.reduce(cTm)
@@ -548,26 +558,34 @@ extension (v: VTerm)
       dfs(l).map { case (l, m) => Level(l, m) }
     case _ => Right(v)
 
-extension (vs: List[VTerm])
-  def normalized(using ctx: Context)(using Σ: Signature)(using
-    TypingContext
-  ): Either[IrError, List[VTerm]] =
+extension(vs: List[VTerm])
+  def normalized
+    (using ctx: Context)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Either[IrError, List[VTerm]] =
     transpose(vs.map(_.normalized))
 
 given Reducible[CTerm] with
 
   /** It's assumed that `t` is effect-free.
     */
-  override def reduce(t: CTerm)(using ctx: Context)(using signature: Signature)(
-    using TypingContext
-  ): Either[IrError, CTerm] = StackMachine(mutable.ArrayBuffer())
+  override def reduce
+    (t: CTerm)
+    (using ctx: Context)
+    (using signature: Signature)
+    (using TypingContext)
+    : Either[IrError, CTerm] = StackMachine(mutable.ArrayBuffer())
     .run(t)
     .map(_.withSourceInfo(t.sourceInfo))
 
 object Reducible:
-  def reduce(t: CTerm)(using
-    Context
-  )(using Signature)(using ctx: TypingContext): Either[IrError, CTerm] =
+  def reduce
+    (t: CTerm)
+    (using Context)
+    (using Signature)
+    (using ctx: TypingContext)
+    : Either[IrError, CTerm] =
     ctx.trace[IrError, CTerm](
       s"reducing",
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
