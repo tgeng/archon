@@ -50,7 +50,7 @@ trait Visitor[C, R]:
         }
       )
 
-  def cvisitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
+  def visitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
     telescope match
       case Nil => combine()
       case binding :: rest => combine(
@@ -320,7 +320,8 @@ trait Visitor[C, R]:
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitEff(handler.eff) +:
-        visitVTerm(handler.otherEffects) +:
+        visitVTerm(handler.outputEffects) +:
+        visitVTerm(handler.outputUsage) +:
         visitVTerm(handler.outputType) +:
         withBindings(Seq(handler.transformBoundName)) {
           visitCTerm(handler.transform)
@@ -351,7 +352,7 @@ trait Visitor[C, R]:
 
   def visitHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitVTerm(heapHandler.otherEffects),
+      visitVTerm(heapHandler.outputEffects),
       withBindings(Seq(heapHandler.boundName)) {
         visitCTerm(heapHandler.input)
       }
@@ -609,7 +610,8 @@ trait Transformer[C]:
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): CTerm =
     Handler(
       transformEff(handler.eff),
-      transformVTerm(handler.otherEffects),
+      transformVTerm(handler.outputEffects),
+      transformVTerm(handler.outputUsage),
       transformVTerm(handler.outputType),
       withBindings(Seq(handler.transformBoundName)) {
         transformCTerm(handler.transform)
@@ -644,7 +646,7 @@ trait Transformer[C]:
 
   def transformHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): CTerm =
     HeapHandler(
-      transformVTerm(heapHandler.otherEffects),
+      transformVTerm(heapHandler.outputEffects),
       heapHandler.key,
       heapHandler.heapContent,
       withBindings(List(heapHandler.boundName)) {

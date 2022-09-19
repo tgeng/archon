@@ -159,7 +159,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
     sourceInfo
   )
 
-  case EffectsType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
+  case EffectsType(continuationUsage: VTerm = UsageLiteral(UUnres))(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(
     EffectsQn
   )
   case Effects(literal: Set[Eff], unionOperands: Set[VTerm])
@@ -218,7 +218,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm] :
       case UsageCompound(op, operands) => UsageCompound(op, operands)
       case EqDecidabilityType() => EqDecidabilityType()
       case EqDecidabilityLiteral(eqD) => EqDecidabilityLiteral(eqD)
-      case EffectsType() => EffectsType()
+      case EffectsType(continuationUsage) => EffectsType(continuationUsage)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
       case LevelType() => LevelType()
       case Level(literal, maxOperands) => Level(literal, maxOperands)
@@ -339,7 +339,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   case F(vTy: VTerm, effects: VTerm = VTerm.Total(using SiEmpty), usage: VTerm = VTerm.UsageLiteral(Usage.U1))
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
   case Return(v: VTerm, usage: VTerm = VTerm.UsageLiteral(Usage.U1))(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-  // Note that we do not have DLet like [0]. Instead we use inductive type and thunking to simulate
+  // Note that we do not have DLet like [0]. Instead we use inductive type and thunk to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
   case Let(t: CTerm, /* binding offset = 1 */ ctx: CTerm)
@@ -400,10 +400,11 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   case Handler(
     eff: Eff,
 
-    otherEffects: VTerm,
+    outputEffects: VTerm,
+    outputUsage: VTerm,
 
     /**
-     * This is the output value type. The computation type of this handler is `F(outputType, otherEffects)`.
+     * This is the output value type. The computation type of this handler is `F(outputType, outputEffects, outputUsage)`.
      */
     outputType: VTerm,
 
@@ -431,7 +432,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
   case SetOp(cell: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case HeapHandler(
-    otherEffects: VTerm,
+    outputEffects: VTerm,
 
     /**
      * Newly created heap handler should always set this to `None`. This key is instantiated during reduction to a fresh
@@ -454,7 +455,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
 
     this match
       case Hole => Hole
-      case CType(ul, upperbound, effects) => CType(ul, upperbound, effects)
+      case CType(ul, upperBound, effects) => CType(ul, upperBound, effects)
       case CTop(ul, effects) => CTop(ul, effects)
       case Def(qn) => Def(qn)
       case Force(v) => Force(v)
@@ -467,16 +468,16 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm] :
       case Projection(rec, name) => Projection(rec, name)
       case OperatorCall(eff, name, args) => OperatorCall(eff, name, args)
       case c: Continuation => c
-      case h@Handler(eff, otherEffects, outputType, transform, handlers, input) =>
-        Handler(eff, otherEffects, outputType, transform, handlers, input)(
+      case h@Handler(eff, outputEffects, outputUsage, outputType, transform, handlers, input) =>
+        Handler(eff, outputEffects, outputUsage, outputType, transform, handlers, input)(
           h.transformBoundName,
           h.handlersBoundNames
         )
       case AllocOp(heap, ty) => AllocOp(heap, ty)
       case SetOp(cell, value) => SetOp(cell, value)
       case GetOp(cell) => GetOp(cell)
-      case h@HeapHandler(otherEffects, key, heapContent, input) => HeapHandler(
-        otherEffects,
+      case h@HeapHandler(outputEffects, key, heapContent, input) => HeapHandler(
+        outputEffects,
         key,
         heapContent,
         input

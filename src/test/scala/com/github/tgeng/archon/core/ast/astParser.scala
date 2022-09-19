@@ -181,7 +181,7 @@ object AstParser:
     for
       _ <- P.stringFrom("hdl\\b".r) << P.whitespaces
       eff <- astEff << P.whitespaces
-      otherEffects <- effect << P.whitespaces
+      outputEffects <- effect << P.whitespaces
       outputType <- atom << P.whitespaces
       _ <- P.from("{") << P.whitespaces
       allHandlers <- ((transformHandler || opHandler) <%< P.from(";") << P.whitespaces).*
@@ -198,7 +198,7 @@ object AstParser:
 
       SHandler(
         eff,
-        otherEffects,
+        outputEffects,
         outputType,
         transformHandler._1,
         transformHandler._2,
@@ -210,8 +210,8 @@ object AstParser:
     for
       _ <- P.stringFrom("hpv\\b".r) << P.whitespaces
       heapVarName <- name << P.whitespaces
-      otherEffects <- effect << P.whitespaces
-    yield SHeapHandler(otherEffects, heapVarName)
+      outputEffects <- effect << P.whitespaces
+    yield SHeapHandler(outputEffects, heapVarName)
   }
 
   private def sBinding: StrParser[SBinding] = P {

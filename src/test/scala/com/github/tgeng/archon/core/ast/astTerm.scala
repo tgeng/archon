@@ -46,13 +46,13 @@ enum Statement:
   case SBinding(name: Name, term: AstTerm)
   case SHandler(
     effect: AstEff,
-    otherEffects: AstTerm,
+    outputEffects: AstTerm,
     outputType: AstTerm,
     transformInputName: Name,
     transform: AstTerm,
     handlers: Map[Name, ( /* op args */ List[Name], AstTerm)],
   )
   case SHeapHandler(
-    otherEffects: AstTerm,
+    outputEffects: AstTerm,
     heapVarName: Name,
   )

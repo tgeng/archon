@@ -33,8 +33,8 @@ object Renamer extends Visitor[RenamerContext, Unit] :
   def rename(tm: CTerm)(using Γ: Context)(using Σ: Signature): Unit =
     doRename(visitCTerm(tm))
 
-  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit =
-    doRename(visitTelescope(t))
+  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit = ???
+    // doRename(visitTelescope(t))
 
   private def createRenamerContext(using Γ: Context) =
     val ctx = RenamerContext()
@@ -265,8 +265,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     case Type(USimpleLevel(Level(l, operands)), Top(_, _, _)) if operands.isEmpty => Block("Type" + l.sub)
     case Type(USimpleLevel(l), Top(_, _, _)) => app("Type", l)
     case Type(UωLevel(layer), Top(_, _, _)) => Block("TYPE" + layer.sub)
-    case Type(USimpleLevel(l), upperbound) => app("SubtypeOf", l, upperbound)
-    case Type(UωLevel(layer), upperbound) => Block("SUBTYPEOF", layer.toString, upperbound)
+    case Type(USimpleLevel(l), upperBound) => app("SubtypeOf", l, upperBound)
+    case Type(UωLevel(layer), upperBound) => Block("SUBTYPEOF", layer.toString, upperBound)
 
   override def visitTop(top: Top)
     (using ctx: PPrintContext)
@@ -363,9 +363,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     case CType(USimpleLevel(l), CTop(_, tEff), eff) if tEff == Total => ctype(eff, "CType", l)
     case CType(UωLevel(layer), CTop(_, tEff), eff) if tEff == Total =>
       ctype(eff, "CTYPE" + layer.sub)
-    case CType(USimpleLevel(l), upperbound, eff) => ctype(eff, "CSubtypeOf", l, upperbound)
-    case CType(UωLevel(layer), upperbound, eff) =>
-      ctype(eff, "CSUBTYPEOF", layer.toString, upperbound)
+    case CType(USimpleLevel(l), upperBound, eff) => ctype(eff, "CSubtypeOf", l, upperBound)
+    case CType(UωLevel(layer), upperBound, eff) =>
+      ctype(eff, "CSUBTYPEOF", layer.toString, upperBound)
 
 
   override def visitCTop(cTop: CTop)(using ctx: PPrintContext)(using Σ: Signature): Block =
@@ -484,13 +484,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
     (using ctx: PPrintContext)
     (using Σ: Signature): Block =
     val (statements, input) = unroll[Block, CTerm](handler) {
-      case h@Handler(effTm, otherEffects, outputType, transform, handlers, input) => Left(
+      case h@Handler(effTm, outputEffects, outputUsage, outputType, transform, handlers, input) => Left(
         (
           Block(
             Whitespace, NoWrap,
             "hdl",
             visitEff(effTm),
-            eff(otherEffects),
+            eff(outputEffects),
+            // TODO: print outputUsage
             outputType,
             bracketAndNewline(
               Block(
@@ -518,13 +519,13 @@ object PrettyPrinter extends Visitor[PPrintContext, Block] :
           input,
           Nil)
       )
-      case h@HeapHandler(otherEffects, _, _, input) => Left(
+      case h@HeapHandler(outputEffects, _, _, input) => Left(
         (
           Block(
             Whitespace, NoWrap,
             "heap",
             h.boundName,
-            eff(otherEffects),
+            eff(outputEffects),
           ),
           input,
           Seq(h.boundName))
@@ -673,4 +674,3 @@ private def unroll[E, T](t: T)
       case (es, t) => (e :: es, t)
   }
   case Right(b) => (Nil, b)
-

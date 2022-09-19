@@ -40,10 +40,6 @@ enum Usage extends PartiallyOrdered[Usage] :
     case (URel | UUnres, UUnres) => UUnres
     case (u1, u2) => u2 * u1
 
-  final infix def *(usages: Usages): Usages = usages match
-    case Nil => Nil
-    case u :: rest => this * u :: this * rest
-
   @tailrec
   final infix def |(that: Usage): Usage = (this, that) match
     case (u1, u2) if u1 == u2 => u1

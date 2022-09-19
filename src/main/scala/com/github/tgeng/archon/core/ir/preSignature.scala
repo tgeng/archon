@@ -339,7 +339,7 @@ def elaborateBody(preEffect: PreEffect)
       preEffect.operators.map { operator =>
         ctx.trace(s"elaborating operator ${operator.name}") {
           elaborateTy(operator.ty).map {
-            case (paramTys, resultTy) => Operator(operator.name, paramTys, resultTy)
+            case (paramTys, resultTy) => Operator(operator.name, paramTys, resultTy, ???)
           }
         }
       }

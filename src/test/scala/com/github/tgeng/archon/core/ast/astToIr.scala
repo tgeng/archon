@@ -276,14 +276,14 @@ def astToIr(ast: AstTerm)
             yield Let(t, ctx)(name)
           case SHandler(
           (effName, effArgs),
-          otherEffects,
+          outputEffects,
           outputType,
           transformInputName,
           transform,
           handlers,
           ) :: rest =>
             for effArgs <- transpose(effArgs.map(astToIr))
-                otherEffects <- astToIr(otherEffects)
+                outputEffects <- astToIr(outputEffects)
                 outputType <- astToIr(outputType)
                 transform <- bind(transformInputName) {
                   astToIr(transform)
@@ -301,12 +301,12 @@ def astToIr(ast: AstTerm)
                 )
                 input <- foldSequence(rest)
                 r <- chain[[X] =>> List[List[X]]](
-                  effArgs.map((gn"a", _)) :: List((gn"e", otherEffects)) :: List((gn"R", outputType)) :: Nil
+                  effArgs.map((gn"a", _)) :: List((gn"e", outputEffects)) :: List((gn"R", outputType)) :: Nil
                 ) {
-                  case (effArgs :: List(otherEffects) :: List(outputType) :: Nil, n) =>
+                  case (effArgs :: List(outputEffects) :: List(outputType) :: Nil, n) =>
                     Handler(
                       (Σ.resolve(effName), effArgs),
-                      otherEffects,
+                      outputEffects,
                       outputType,
                       transform.weaken(n, 1),
                       handlers.view.mapValues { case (bar, t) => t.weaken(n, bar) }.toMap,
@@ -316,16 +316,16 @@ def astToIr(ast: AstTerm)
                 }
             yield r
           case SHeapHandler(
-          otherEffects,
+          outputEffects,
           heapVarName,
           ) :: rest =>
-            for otherEffects <- astToIr(otherEffects)
+            for outputEffects <- astToIr(outputEffects)
                 input <- bind(heapVarName) {
                   foldSequence(rest)
                 }
-                r <- chain(gn"e", otherEffects) {
-                  case (otherEffects, n) => HeapHandler(
-                    otherEffects,
+                r <- chain(gn"e", outputEffects) {
+                  case (outputEffects, n) => HeapHandler(
+                    outputEffects,
                     None,
                     IndexedSeq(),
                     input.weaken(n, 1)

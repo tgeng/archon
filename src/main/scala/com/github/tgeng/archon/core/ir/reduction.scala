@@ -114,7 +114,7 @@ private final class StackMachine(
         case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
-          case Return(v) => run(ctx.substLowers(v))
+          case Return(v, _) => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -167,7 +167,8 @@ private final class StackMachine(
                       c match
                         case h@Handler(
                         hEff@(hEffQn, hEffArgs),
-                        otherEffects,
+                        outputEffects,
+                        outputUsage,
                         outputType,
                         transform,
                         handlers,
@@ -182,7 +183,8 @@ private final class StackMachine(
                           val handlerBody = handlers(name)
                           val capturedStack = Handler(
                             hEff,
-                            otherEffects,
+                            outputEffects,
+                            outputUsage,
                             outputType,
                             transform,
                             handlers,
@@ -211,10 +213,10 @@ private final class StackMachine(
             refreshHeapKeyIndex(currentStackHeight)
             run(Return(arg))
           case _ => throw IllegalArgumentException("type error")
-      case h@Handler((effQn, effArgs), otherEffects, outputType, transform, handlers, input) =>
+      case h@Handler((effQn, effArgs), outputEffects, outputUsage, outputType, transform, handlers, input) =>
         if reduceDown then
           input match
-            case Return(v) => run(transform.substLowers(v))
+            case Return(v, _) => run(transform.substLowers(v))
             case _ => throw IllegalArgumentException("type error")
         else
           effArgs.normalized match
@@ -223,7 +225,8 @@ private final class StackMachine(
               stack.push(
                 Handler(
                   (effQn, effArgs),
-                  otherEffects,
+                  outputEffects,
+                  outputUsage,
                   outputType,
                   transform,
                   handlers,
@@ -238,10 +241,10 @@ private final class StackMachine(
           case Right(Heap(heapKey)) =>
             val heapHandlerIndex = heapKeyIndex(heapKey).top
             stack(heapHandlerIndex) match
-              case h@HeapHandler(otherEffects, key, heapContent, input) =>
+              case h@HeapHandler(outputEffects, key, heapContent, input) =>
                 val cell = Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
-                  otherEffects,
+                  outputEffects,
                   key,
                   heapContent :+ None,
                   input
@@ -259,9 +262,9 @@ private final class StackMachine(
               case Right(value) =>
                 val heapHandlerIndex = heapKeyIndex(heapKey).top
                 stack(heapHandlerIndex) match
-                  case h@HeapHandler(otherEffects, key, heapContent, input) =>
+                  case h@HeapHandler(outputEffects, key, heapContent, input) =>
                     stack(heapHandlerIndex) = HeapHandler(
-                      otherEffects,
+                      outputEffects,
                       key,
                       heapContent.updated(index, Some(value)),
                       input
@@ -282,7 +285,7 @@ private final class StackMachine(
                   case Some(value) => run(Return(value))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case h@HeapHandler(otherEffects, currentKey, heapContent, input) =>
+      case h@HeapHandler(outputEffects, currentKey, heapContent, input) =>
         if reduceDown then
           assert(currentKey.nonEmpty)
           heapKeyIndex(currentKey.get).pop()
@@ -291,7 +294,7 @@ private final class StackMachine(
           assert(currentKey.isEmpty) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHeapKeyIndex(key, stack.length)
-          stack.push(HeapHandler(otherEffects, Some(key), heapContent, input)(h.boundName))
+          stack.push(HeapHandler(outputEffects, Some(key), heapContent, input)(h.boundName))
           run(input.substLowers(Heap(key)))
     r
 
@@ -314,7 +317,7 @@ private final class StackMachine(
         elim match
           case (CPattern(PVar(idx)), ETerm(v)) => mapping(idx) = v
           case (CPattern(PRefl()), ETerm(Refl())) |
-               (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType())) |
+               (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType(_))) |
                (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType())) |
                (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType())) |
                (CPattern(PForced(_)), ETerm(_)) =>
@@ -366,12 +369,12 @@ private final class StackMachine(
       case l@Let(t, ctx) => Let(c, ctx)(l.boundName)
       case Application(fun, arg) => Application(c, arg)
       case Projection(rec, name) => Projection(c, name)
-      case h@Handler(eff, otherEffects, outputType, transform, handlers, input) =>
-        Handler(eff, otherEffects, outputType, transform, handlers, c)(
+      case h@Handler(eff, outputEffects, outputUsage, outputType, transform, handlers, input) =>
+        Handler(eff, outputEffects, outputUsage, outputType, transform, handlers, c)(
           h.transformBoundName,
           h.handlersBoundNames,
         )
-      case h@HeapHandler(otherEffects, key, heap, input) => HeapHandler(otherEffects, key, heap, c)(
+      case h@HeapHandler(outputEffects, key, heap, input) => HeapHandler(outputEffects, key, heap, c)(
         h.boundName
       )
       case _ => throw IllegalArgumentException("unexpected context")
@@ -389,7 +392,7 @@ extension (v: VTerm)
     case Collapse(cTm) =>
       for reduced <- Reducible.reduce(cTm)
           r <- reduced match
-            case Return(v) => Right(v)
+            case Return(v, _) => Right(v)
             case stuckC => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case u: UsageCompound =>
@@ -436,9 +439,9 @@ extension (v: VTerm)
 
       dfs(u).map(lubToTerm)
     case e: Effects =>
-      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[VTerm])] = tm match
+      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[Var])] = tm match
         case Effects(literal, operands) =>
-          for literalsAndOperands: Set[(Set[Eff], Set[VTerm])] <- transpose(operands.map(dfs))
+          for literalsAndOperands: Set[(Set[Eff], Set[Var])] <- transpose(operands.map(dfs))
             yield (literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
               literalsAndOperands.flatMap { case (_, o) => o }
             )
@@ -446,7 +449,9 @@ extension (v: VTerm)
         case v: Var => Right((Set(), Set(v)))
         case _ => throw IllegalStateException(s"expect to be of Effects type: $tm")
 
-      dfs(e).map { case (eff, operands) => Effects(eff, operands) }
+      dfs(e).map { case (eff, operands) => 
+        // Unfortunately Set in scala is not covariant, though it could be.
+        Effects(eff, operands.asInstanceOf[Set[VTerm]]) }
     case l: Level =>
       def dfs(tm: VTerm): Either[IrError, (Nat, Map[VTerm, Nat])] = tm match
         case Level(literal, operands) =>

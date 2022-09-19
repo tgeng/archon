@@ -50,7 +50,10 @@ enum Declaration:
    * there is no way to statically know if `A` could be `U`. In addition, this also rules out any
    * data type that wraps non-eqDecidable computation inside.
    */
-  case Effect(val qn: QualifiedName)(val tParamTys: Telescope = Nil)
+  case Effect(val qn: QualifiedName)(
+    val tParamTys: Telescope = Nil,
+    /* binding @ tParamTys.size */val continuationUsage: VTerm = VTerm.UsageLiteral(Usage.U1),
+    )
 
   def qn: QualifiedName
 
@@ -84,7 +87,8 @@ case class Clause(
 case class Operator(
   name: Name,
   paramTys: Telescope, /* + tParamTys */
-  resultTy: VTerm /* + tParamTys + paramTys */
+  resultTy: VTerm /* + tParamTys + paramTys */,
+  resultUsage: VTerm /* + tParamTys + paramTys */,
 )
 
 trait Signature:
