@@ -125,10 +125,10 @@ object Builtins:
 
   val builtinRecords: Map[QualifiedName, (Record, IndexedSeq[Field])] = Seq(
     // There does not seem to be any essential records that should included here.
-    //    (???,
-    //      /* tParamTys*/ ???,
-    //      /* ul */ ???,
-    //      /* fields */ ???)
+    //    (?,
+    //      /* tParamTys*/ ?,
+    //      /* ul */ ?,
+    //      /* fields */ ?)
   ).map { case (qn, (tParamTys, ul, fields)) =>
     (qn, (new Record(qn)(tParamTys, ul), fields))
   }.toMap

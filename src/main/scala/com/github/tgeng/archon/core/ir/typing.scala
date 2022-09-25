@@ -1194,11 +1194,9 @@ def checkSubsumption
                   case (t2CTy, _) <- inferType(t2)
                   _ <- checkSubsumption(t1CTy, t2CTy, None)(using CONVERSION)
                   _ <- checkSubsumption(t1, t2, Some(t2CTy))(using CONVERSION)
-                  r <- checkSubsumption(
-                    ctx1,
-                    ctx2,
-                    ty.map(_.weakened)
-                  )(using CONVERSION)(using Γ :+ Binding(t1Ty, ???)(gn"v"))
+                  r <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using CONVERSION)(using
+                    Γ :+ Binding(t1Ty, UsageLiteral(UUnres))(gn"v")
+                  )
                 yield r
               case _ => Left(ExpectFType(t1CTy))
           yield r
