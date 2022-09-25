@@ -283,8 +283,10 @@ def checkClause
       given Context = clause.bindings.toIndexedSeq
 
       for
-        _ <- checkType(lhs, clause.ty)
-        _ <- checkType(clause.rhs, clause.ty)
+        lhsUsages <- checkType(lhs, clause.ty)
+        _ <- checkUsagesSubsumption(lhsUsages, true)
+        rhsUsages <- checkType(clause.rhs, clause.ty)
+        _ <- checkUsagesSubsumption(rhsUsages)
       yield ()
 }
 
@@ -1619,14 +1621,39 @@ private def checkUsages
     case _ =>
       throw IllegalArgumentException("mismatched usages and binding length")
 
+/** @param invert
+  *   useful when checking patterns where the consumed usages are actually provided usages because
+  *   lhs patterns are multiplied by declared usages in function
+  */
+private def checkUsagesSubsumption
+  (usages: Usages, invert: Boolean = false)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
+  assert(usages.size == Γ.size)
+  allRight((0 until Γ.size).map { i =>
+    given Γ2: Context = Γ.take(i)
+    val binding = Γ(i)
+    val providedUsage = binding.usage
+    val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
+    for
+      inherentUsage <- deriveTypeInherentUsage(binding.ty)
+      actualProvidedUsage = UsageProd(providedUsage, inherentUsage)
+      actualConsumedUsage = UsageProd(consumedUsage, inherentUsage)
+      _ <-
+        if invert then
+          checkUsageSubsumption(actualProvidedUsage, actualConsumedUsage)(using SUBSUMPTION)
+        else checkUsageSubsumption(actualConsumedUsage, actualProvidedUsage)(using SUBSUMPTION)
+    yield ()
+  })
+
 private def checkUsageSubsumption
   (usage1: VTerm, usage2: VTerm)
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
-  (using
-    ctx: TypingContext
-  )
+  (using ctx: TypingContext)
   : Either[IrError, Unit] = (usage1.normalized, usage2.normalized) match
   case (Left(e), _)                                       => Left(e)
   case (_, Left(e))                                       => Left(e)
