@@ -754,7 +754,7 @@ object Builtins:
   def getBigType
     (qn: QualifiedName)
     : Option[(Definition, IndexedSeq[Clause])] =
-    // TODO: it seems big SubtypeOf is not that useful so I will skip it for now.
+    // TODO[P3]: it seems big SubtypeOf is not that useful so I will skip it for now.
     import Name.*
     import QualifiedName.*
     for

@@ -657,7 +657,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               "hdl",
               visitEff(effTm),
               eff(outputEffects),
-              // TODO: print outputUsage
+              // TODO[P2]: print outputUsage
               outputType,
               bracketAndNewline(
                 Block(

@@ -453,7 +453,7 @@ trait BuiltinSignature extends Signature:
 
   def getUserClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
-  // TODO: getUserCaseTree...
+  // TODO[P2]: getUserCaseTree...
 
   override def getEffectOption(qn: QualifiedName): Option[Declaration.Effect] =
     Builtins.builtinEffects

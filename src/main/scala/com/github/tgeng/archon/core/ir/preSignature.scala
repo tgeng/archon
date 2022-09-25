@@ -54,10 +54,10 @@ type PreField = Field // There is no difference for field
 
 case class PreClause
   (
-    bindings: PreTelescope, // TODO: remove `binding` after elaboration is implemented
+    bindings: PreTelescope, // TODO[P2]: remove `binding` after elaboration is implemented
     lhs: List[CoPattern],
     rhs: Option[CTerm], // `None` for absurd pattern
-    ty: CTerm // TODO: remove `ty` after elaboration is implemented
+    ty: CTerm // TODO[P2]: remove `ty` after elaboration is implemented
   )
 
 case class PreOperator(name: Name, ty: CTerm)

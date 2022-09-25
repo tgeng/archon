@@ -382,8 +382,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  // TODO: consider adding CLet that carries out a computation and capture the resulted computation
-  //  as a thunk
+  // TODO[P4]: (probably not good idea) consider adding CLet that carries out a computation and 
+  //  capture the resulted computation as a thunk
   //  For example,
   //    clet plus_1 = plus 1
   //    force plus_1 1
@@ -549,8 +549,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           input
         )(h.boundName)
 
-  // TODO: support array operations on heap
-  // TODO: consider adding builtin set and maps with decidable equality because we do not
+  // TODO[P3]: support array operations on heap
+  // TODO[P3]: consider adding builtin set and maps with decidable equality because we do not
   //  support quotient type and set semantic is very common in software engineering.
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =

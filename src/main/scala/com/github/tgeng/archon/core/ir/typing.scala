@@ -633,7 +633,7 @@ def inferType
                       // Report an error if the type of `body` needs to reference the effectful
                       // computation. User should use a dependent sum type to wrap such
                       // references manually to avoid the leak.
-                      // TODO: in case weakened failed, provide better error message: ctxTy cannot depend on
+                      // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
                       //  the bound variable
                       _ <- checkVar0Leak(
                         bodyTy,
@@ -666,7 +666,6 @@ def inferType
                           throw IllegalStateException(
                             s"expect to be of Effects type: $tm"
                           )
-                    // TODO: body usage should be multiplied by join of continuation usages of all effects
                     yield (
                       bodyTy.strengthened,
                       bodyUsages

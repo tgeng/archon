@@ -374,7 +374,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 elims = (CPattern(p), ETerm(l)) :: elims
               case ULevel.UωLevel(_) =>
                 throw IllegalArgumentException("type error")
-          // TODO: matching cell type is probably not a good idea because it's unknown at what
+          // TODO[P4]: matching cell type is probably not a good idea because it's unknown at what
           //  level `tyP` should be. In order to allow this, we need to make each `Cell`
           //  self-contained, just like all declared `Data`. The downside is then the need to carry
           //  a level everywhere with the cell. On the other hand, whether to allow this does not
@@ -384,7 +384,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           // case (CPattern(PDataType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
           //   elims = (CPattern(heapP), ETerm(heap)) :: (CPattern(tyP), ETerm(ty)) :: elims
 
-          // TODO: similarly, we don't allow matching equality type either for the same reason.
+          // TODO[P4]: similarly, we don't allow matching equality type either for the same reason.
           // case (CPattern(PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
           // ETerm(EqualityType(ty, left, right))) =>
           //   elims = (CPattern(tyP), ETerm(ty)) ::
@@ -392,7 +392,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           //     (CPattern(rightP), ETerm(right)) ::
           //     elims
 
-          // TODO: matching usage does not seem very useful. But it can be added if needed.
+          // TODO[P4]: matching usage does not seem very useful. But it can be added if needed.
           case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (

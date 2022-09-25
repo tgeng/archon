@@ -45,10 +45,10 @@ case class AstField(name: Name, ty: AstTerm)
 
 case class AstClause
   (
-    bindings: AstTelescope, // TODO: remove `binding` after elaboration is implemented
+    bindings: AstTelescope, // TODO[P3]: remove `binding` after elaboration is implemented
     lhs: List[AstCoPattern],
     rhs: Option[AstTerm], // `None` for absurd pattern
-    ty: AstTerm // TODO: remove `ty` after elaboration is implemented
+    ty: AstTerm // TODO[P3]: remove `ty` after elaboration is implemented
   )
 
 case class AstOperator(name: Name, ty: AstTerm)
