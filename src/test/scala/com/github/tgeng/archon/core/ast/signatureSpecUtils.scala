@@ -64,9 +64,7 @@ extension
     val cTm2 = astToIr(tm2).asRight
     val cTy = assertRight(inferType(cTm2))
     assertRight(
-      checkSubsumption(cTm, cTm2, Some(cTy))(using
-        CheckSubsumptionMode.SUBSUMPTION
-      )
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION)
     )
 
   infix def ⋠(tm2: AstTerm): Unit =
@@ -76,9 +74,7 @@ extension
     val cTm2 = astToIr(tm2).asRight
     val cTy = assertRight(inferType(cTm2))
     assertLeft(
-      checkSubsumption(cTm, cTm2, Some(cTy))(using
-        CheckSubsumptionMode.SUBSUMPTION
-      )
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION)
     )
 
   infix def ≡(tm2: AstTerm): Unit =
@@ -88,9 +84,7 @@ extension
     val cTm2 = astToIr(tm2).asRight
     val cTy = assertRight(inferType(cTm2))
     assertRight(
-      checkSubsumption(cTm, cTm2, Some(cTy))(using
-        CheckSubsumptionMode.CONVERSION
-      )
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION)
     )
 
   infix def ≢(tm2: AstTerm): Unit =
@@ -100,16 +94,10 @@ extension
     val cTm2 = astToIr(tm2).asRight
     val cTy = assertRight(inferType(cTm2))
     assertLeft(
-      checkSubsumption(cTm, cTm2, Some(cTy))(using
-        CheckSubsumptionMode.CONVERSION
-      )
+      checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION)
     )
 
-def assertRight[L, R]
-  (action: => Either[L, R])
-  (using TypingContext)
-  (using ctx: TestContext)
-  : R =
+def assertRight[L, R](action: => Either[L, R])(using TypingContext)(using ctx: TestContext): R =
   val r: Either[L, R] =
     try {
       action
@@ -130,11 +118,7 @@ def assertRight[L, R]
         else ctx.fail(l.toString)
       }
 
-def assertLeft[L, R]
-  (action: => Either[L, R])
-  (using TypingContext)
-  (using ctx: TestContext)
-  : L =
+def assertLeft[L, R](action: => Either[L, R])(using TypingContext)(using ctx: TestContext): L =
   val r: Either[L, R] =
     try {
       action
@@ -160,15 +144,11 @@ class TestSignature
       Constructor
     ]] = mutable.Map(),
     private val allRecords: mutable.Map[QualifiedName, Record] = mutable.Map(),
-    private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]] =
-      mutable.Map(),
-    private val allDefinitions: mutable.Map[QualifiedName, Definition] =
-      mutable.Map(),
-    private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] =
-      mutable.Map(),
+    private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]] = mutable.Map(),
+    private val allDefinitions: mutable.Map[QualifiedName, Definition] = mutable.Map(),
+    private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] = mutable.Map(),
     private val allEffects: mutable.Map[QualifiedName, Effect] = mutable.Map(),
-    private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] =
-      mutable.Map()
+    private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] = mutable.Map()
   )
   extends BuiltinSignature:
 
@@ -215,14 +195,10 @@ class TestSignature
     constructors.foreach(c => updateQnByName(qn / c.name))
   )
   allRecords.keys.foreach(updateQnByName)
-  allFields.foreach((qn, fields) =>
-    fields.foreach(f => updateQnByName(qn / f.name))
-  )
+  allFields.foreach((qn, fields) => fields.foreach(f => updateQnByName(qn / f.name)))
   allDefinitions.keys.foreach(updateQnByName)
   allEffects.keys.foreach(updateQnByName)
-  allOperators.foreach((qn, operators) =>
-    operators.foreach(o => updateQnByName(qn / o.name))
-  )
+  allOperators.foreach((qn, operators) => operators.foreach(o => updateQnByName(qn / o.name)))
 
   override def getUserDataOption(qn: QualifiedName) = allData.get(qn)
 
@@ -350,10 +326,7 @@ def scope
 given Conversion[Context, NameContext] = NameContext.fromContext
 
 extension(binding: Binding[AstTerm])
-  def unary_+
-    (using Γ: MutableContext)
-    (using TestSignature)
-    (using TypingContext) =
+  def unary_+(using Γ: MutableContext)(using TestSignature)(using TypingContext) =
     given NameContext = Γ
 
     val ty = astToIr(binding.ty).asRight

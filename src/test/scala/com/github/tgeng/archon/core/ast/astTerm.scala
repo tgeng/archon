@@ -7,28 +7,20 @@ import com.github.tgeng.archon.core.ir.*
 type AstEff = (Name, List[AstTerm])
 
 enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
-  case AstDef(qn: QualifiedName)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
-  case AstIdentifier(name: Name)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
-  case AstCollapse(c: AstTerm)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
-  case AstU(cty: AstTerm)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
-  case AstThunk(c: AstTerm)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
-  case AstLevelLiteral(level: Nat)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
-  case AstForce(v: AstTerm)(using sourceInfo: SourceInfo)
-    extends AstTerm(sourceInfo)
+  case AstDef(qn: QualifiedName)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstIdentifier(name: Name)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstCollapse(c: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstU(cty: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstThunk(c: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstLevelLiteral(level: Nat)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstForce(v: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstF(vTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo)
     extends AstTerm(sourceInfo)
   case AstFunctionType
     (argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
     (using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
-  case AstRedux
-    (head: AstTerm, elims: List[Elimination[AstTerm]])
-    (using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])(using sourceInfo: SourceInfo)
+    extends AstTerm(sourceInfo)
   case AstBlock(statements: List[Statement])(using sourceInfo: SourceInfo)
     extends AstTerm(
       sourceInfo

@@ -318,7 +318,7 @@ object AstParser:
         args <- atom sepByGreedy P.whitespaces
         _ <- head match
           case "clp" | "U" | "thk" | "frc" => P.pure(())
-          case _ => P.fail(s"Unexpected number of args for $head")
+          case _                           => P.fail(s"Unexpected number of args for $head")
       yield (head, args)
     ) {
       case ("clp", t :: Nil) => AstCollapse(t)

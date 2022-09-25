@@ -10,20 +10,16 @@ import scala.collection.mutable
 
 class PrecedenceGraphBuilder
   (
-    private val representatives: mutable.Map[Operator, Operator] =
-      mutable.Map(),
+    private val representatives: mutable.Map[Operator, Operator] = mutable.Map(),
 
-    /** Maps from a representative operator to the representative of the tighter
-      * node.
+    /** Maps from a representative operator to the representative of the tighter node.
       */
     private val precedenceMap: mutable.Map[Operator, mutable.ArrayBuffer[
       Operator
     ]] = mutable.Map()
   ):
 
-  def add
-    (operator: Operator, precedences: Seq[Precedence])
-    : Either[PrecedenceGraphError, Unit] =
+  def add(operator: Operator, precedences: Seq[Precedence]): Either[PrecedenceGraphError, Unit] =
     def error(kind: ErrorKind) = Left(PrecedenceGraphError(operator, kind))
 
     if representatives.contains(operator) then return error(AlreadyExist)
@@ -81,9 +77,7 @@ class PrecedenceGraphBuilder
     // Remove unnecessary edges in the graph
     this.precedenceMap.foreach((op, ops) =>
       ops.subtractAll(
-        ops.filter(o =>
-          maxIncomingPathLengths(o) != maxIncomingPathLengths(op) + 1
-        )
+        ops.filter(o => maxIncomingPathLengths(o) != maxIncomingPathLengths(op) + 1)
       )
     )
     val precedenceMap = this.precedenceMap.view.mapValues(_.toSeq).toMap

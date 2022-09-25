@@ -18,8 +18,7 @@ case class Range
   def +(that: Range): Range =
     Range(math.min(this.start, that.start), math.max(this.end, that.end))
 
-extension(s: String)
-  def substring(r: Range): String = s.substring(r.start, r.end).!!
+extension(s: String) def substring(r: Range): String = s.substring(r.start, r.end).!!
 
 enum SourceInfo:
   case SiEmpty
@@ -46,8 +45,7 @@ object SourceInfo:
     (_, _) match
       case (SiEmpty, si2) => si2
       case (si1, SiEmpty) => si1
-      case (SiText(input1, range1), SiText(input2, range2))
-        if input1 == input2 =>
+      case (SiText(input1, range1), SiText(input2, range2)) if input1 == input2 =>
         SiText(
           input1,
           range1 + range2

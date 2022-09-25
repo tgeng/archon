@@ -135,8 +135,8 @@ object Builtins:
 
   val builtinDefinitions: Map[QualifiedName, (Definition, IndexedSeq[Clause])] =
     Seq(
-      /** Type : (level : LevelType) -> Type(level + 1, Type(level, Top(l)))
-        * {level : LevelType} |- level := .return Type(level, Top(l))
+      /** Type : (level : LevelType) -> Type(level + 1, Type(level, Top(l))) {level : LevelType}
+        * \|- level := .return Type(level, Top(l))
         */
       b(
         Builtins.TypeQn,
@@ -166,10 +166,9 @@ object Builtins:
         )
       ),
 
-      /** SubtypeOf : (level : LevelType) -> (upperBound : Type(level,
-        * Top(level))) -> Type(level + 1, Type(level, upperBound)) {level :
-        * LevelType, upperBound: Type(level, Top(level))} |- level upperBound :=
-        * .return Type(level, upperBound)
+      /** SubtypeOf : (level : LevelType) -> (upperBound : Type(level, Top(level))) -> Type(level
+        * + 1, Type(level, upperBound)) {level : LevelType, upperBound: Type(level, Top(level))}
+        * \|- level upperBound := .return Type(level, upperBound)
         */
       b(
         Builtins.SubtypeOfQn,
@@ -216,8 +215,8 @@ object Builtins:
         )
       ),
 
-      /** Top : (level : LevelType) -> Type(level, Top(level)) {level :
-        * LevelType} |- level := .return Top(level)
+      /** Top : (level : LevelType) -> Type(level, Top(level)) {level : LevelType} |- level :=
+        * .return Top(level)
         */
       b(
         Builtins.TopQn,
@@ -288,9 +287,9 @@ object Builtins:
         )
       ),
 
-      /** CType : (level : LevelType) -> (effects: EffectsType) -> CType(level +
-        * 1, CType(level, effects), Total) {level : LevelType, effects :
-        * EffectsType} level effects := CType(level, CTop(level), effects)
+      /** CType : (level : LevelType) -> (effects: EffectsType) -> CType(level + 1, CType(level,
+        * effects), Total) {level : LevelType, effects : EffectsType} level effects :=
+        * CType(level, CTop(level), effects)
         */
       b(
         Builtins.CTypeQn,
@@ -321,11 +320,10 @@ object Builtins:
         )
       ),
 
-      /** CSubtypeOf : (level : LevelType) -> (effects: EffectsType) ->
-        * (upperBound : U(CType(level, CTop(level, effects)))) -> CType(level +
-        * 1, .force upperBound, Total) {level : LevelType, effects: Effects,
-        * upperBound: U(CType(level + 1, CTop(level, effects)))} |- level
-        * effects upperBound := CType(level, .force upperBound, effects)
+      /** CSubtypeOf : (level : LevelType) -> (effects: EffectsType) -> (upperBound :
+        * U(CType(level, CTop(level, effects)))) -> CType(level + 1, .force upperBound, Total)
+        * {level : LevelType, effects: Effects, upperBound: U(CType(level + 1, CTop(level,
+        * effects)))} |- level effects upperBound := CType(level, .force upperBound, effects)
         */
       b(
         Builtins.CSubtypeOfQn,
@@ -378,9 +376,9 @@ object Builtins:
         )
       ),
 
-      /** CTop : (level : LevelType) -> (effects : EffectsType) -> CType(level,
-        * CTop(level, effects)) {level : LevelType, effects : EffectsType} |-
-        * level effects := CTop(level, effects)
+      /** CTop : (level : LevelType) -> (effects : EffectsType) -> CType(level, CTop(level,
+        * effects)) {level : LevelType, effects : EffectsType} |- level effects := CTop(level,
+        * effects)
         */
       b(
         Builtins.CTopQn,
@@ -405,9 +403,8 @@ object Builtins:
         )
       ),
 
-      /** union : (eff1 : EffectsType) -> (eff2 : EffectsType) -> EffectsType
-        * {eff1 : EffectsType, eff2 : EffectsType} |- eff1 eff2 :=
-        * EffectsUnion(eff1, eff2)
+      /** union : (eff1 : EffectsType) -> (eff2 : EffectsType) -> EffectsType {eff1 : EffectsType,
+        * eff2 : EffectsType} |- eff1 eff2 := EffectsUnion(eff1, eff2)
         */
       b(
         Builtins.EffectsUnionQn,
@@ -432,8 +429,7 @@ object Builtins:
         )
       ),
 
-      /** suc : (level : LevelType) -> LevelType {level : LevelType} |- level :=
-        * level + 1
+      /** suc : (level : LevelType) -> LevelType {level : LevelType} |- level := level + 1
         */
       b(
         Builtins.LevelSucQn,
@@ -453,9 +449,8 @@ object Builtins:
         )
       ),
 
-      /** max : (level1 : LevelType) -> (level2 : LevelType) -> LevelType {eff1
-        * : LevelType, eff2 : LevelType} |- eff1 eff2 := EffectsUnion(eff1,
-        * eff2)
+      /** max : (level1 : LevelType) -> (level2 : LevelType) -> LevelType {eff1 : LevelType, eff2
+        * : LevelType} |- eff1 eff2 := EffectsUnion(eff1, eff2)
         */
       b(
         Builtins.LevelMaxQn,
@@ -775,8 +770,7 @@ object Builtins:
       new Definition(qn)(
         if isComputation then
           CType(UωLevel(layer + 1), CType(UωLevel(layer), CTop(UωLevel(layer))))
-        else
-          F(Type(UωLevel(layer + 1), Type(UωLevel(layer), Top(UωLevel(layer)))))
+        else F(Type(UωLevel(layer + 1), Type(UωLevel(layer), Top(UωLevel(layer)))))
       ),
       IndexedSeq(
         Clause(

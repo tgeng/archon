@@ -152,9 +152,7 @@ def sortPreDeclarations
       sigRefQn.get(decl.qn) match
         case Some(qns) =>
           qns.toSeq.sorted.map(qn => (BODY, declByQn(qn))) ++
-            (bodyRefQn(decl.qn) -- qns).toSeq.sorted.map(qn =>
-              (SIGNATURE, declByQn(qn))
-            )
+            (bodyRefQn(decl.qn) -- qns).toSeq.sorted.map(qn => (SIGNATURE, declByQn(qn)))
         case None => Seq()
   }
 
@@ -205,8 +203,8 @@ def elaborateSignature
           case F(Type(ul, _), _, _) => Right((Nil, ul))
           case F(t, _, _)           => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map {
-              case (telescope, ul) => ((binding, INVARIANT) :: telescope, ul)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
+              ((binding, INVARIANT) :: telescope, ul)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -239,13 +237,12 @@ def elaborateBody
           // Here and below we do not care the declared effect types because data type constructors
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
           // acceptable.
-          case F(DataType(qn, args), _, _)
-            if qn == data.qn && args.size == data.tParamTys.size =>
+          case F(DataType(qn, args), _, _) if qn == data.qn && args.size == data.tParamTys.size =>
             Right((Nil, args))
           case F(t, _, _) => Left(ExpectDataType(t, Some(data.qn)))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map {
-              case (telescope, ul) => (binding :: telescope, ul)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
+              (binding :: telescope, ul)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -398,8 +395,8 @@ def elaborateBody
           // acceptable.
           case F(ty, _, _) => Right((Nil, ty))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map {
-              case (telescope, ul) => (binding :: telescope, ul)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
+              (binding :: telescope, ul)
             }
           case _ => Left(ExpectFType(ty))
       yield r

@@ -42,9 +42,8 @@ object Functor:
     new Functor[F]:
       override def map[A, B](fa: F[A], f: A => B): F[B] =
         val mapped =
-          fa.asInstanceOf[Product].productIterator.zip(functors.iterator).map {
-            (fa, F) =>
-              F.map(fa, f)
+          fa.asInstanceOf[Product].productIterator.zip(functors.iterator).map { (fa, F) =>
+            F.map(fa, f)
           }
         p.fromProduct(Tuple.fromArray(mapped.toArray)).asInstanceOf[F[B]]
 
@@ -91,10 +90,8 @@ object Applicative:
 
   def pure[A[_], S](s: S)(using tc: Applicative[A]): A[S] = tc.pure(s)
 
-  def starApply[A[_], T, S]
-    (f: A[T => S], a: A[T])
-    (using tc: Applicative[A])
-    : A[S] = tc.starApply(f, a)
+  def starApply[A[_], T, S](f: A[T => S], a: A[T])(using tc: Applicative[A]): A[S] =
+    tc.starApply(f, a)
 
   given Applicative[List] with
     override def pure[T](t: T): List[T] = List(t)
@@ -113,10 +110,8 @@ trait Monad[M[_]: Applicative: Functor]:
   def flatten[T](m: M[M[T]]): M[T] = flatMap(m, t => t)
 
 object Monad:
-  def flatMap[M[_]: Functor, T, S]
-    (m: M[T], f: T => M[S])
-    (using tc: Monad[M])
-    : M[S] = tc.flatten(Functor.map(m, f))
+  def flatMap[M[_]: Functor, T, S](m: M[T], f: T => M[S])(using tc: Monad[M]): M[S] =
+    tc.flatten(Functor.map(m, f))
   def flatten[M[_], T](m: M[M[T]])(using tc: Monad[M]): M[T] =
     tc.flatMap(m, t => t)
 

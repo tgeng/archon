@@ -20,8 +20,7 @@ def getFreeVars
 
 private object FreeVarsVisitorObject extends FreeVarsVisitor
 
-trait FreeVarsVisitor
-  extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])]:
+trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negative */ Set[Nat])]:
 
   import VTerm.*
   import CTerm.*

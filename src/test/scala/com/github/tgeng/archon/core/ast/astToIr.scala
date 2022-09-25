@@ -52,18 +52,10 @@ private def resolve
     case None           => Left(UnresolvedPVar(astPVar))
     case Some(dbNumber) => Right(PVar(ctx._1 - dbNumber - 1))
 
-private def bind[T]
-  (name: Name)
-  (block: NameContext ?=> T)
-  (using ctx: NameContext)
-  : T =
+private def bind[T](name: Name)(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx :+ name)
 
-private def bind[T]
-  (names: List[Name])
-  (block: NameContext ?=> T)
-  (using ctx: NameContext)
-  : T =
+private def bind[T](names: List[Name])(block: NameContext ?=> T)(using ctx: NameContext): T =
   block(using ctx ++ names)
 
 extension(ctx: NameContext)
@@ -217,7 +209,7 @@ def astToIr
         case Some(qn) =>
           Σ.getDataOption(qn) match
             case Some(_) => transpose(args.map(astToIr)).map(PDataType(qn, _))
-            case _ => transpose(args.map(astToIr)).map(PConstructor(name, _))
+            case _       => transpose(args.map(astToIr)).map(PConstructor(name, _))
         case None => Left(UnresolvedNameInPattern(name))
     case AstPForcedConstructor(name, args) =>
       Σ.resolveOption(name) match
@@ -339,9 +331,7 @@ def astToIr
                 astToIr(transform)
               }
               handlersBoundNames = handlers.view
-                .mapValues(tuple =>
-                  (tuple._1.map(MutableRef(_)), MutableRef(n"resume"))
-                )
+                .mapValues(tuple => (tuple._1.map(MutableRef(_)), MutableRef(n"resume")))
                 .toMap
               handlers <- transposeValues(
                 handlers.view.mapValues { (argNames, astTerm) =>
@@ -496,20 +486,16 @@ private def chain[T[_]: EitherFunctor]
             index += 1
             Right(Var(nonTrivialComputations - index)(using SiEmpty))
         }
-      yield boundComputations.foldRight(block(vTs, nonTrivialComputations)) {
-        (elem, ctx) =>
-          elem match
-            case (n, t) =>
-              Let(t, ctx)(n)(using siMerge(elem._2.sourceInfo, ctx.sourceInfo))
+      yield boundComputations.foldRight(block(vTs, nonTrivialComputations)) { (elem, ctx) =>
+        elem match
+          case (n, t) =>
+            Let(t, ctx)(n)(using siMerge(elem._2.sourceInfo, ctx.sourceInfo))
       }
     }
   yield r
 
 given listEitherFunctor: EitherFunctor[List[*]] with
-  override def map[L, T, S]
-    (l: List[T])
-    (g: T => Either[L, S])
-    : Either[L, List[S]] =
+  override def map[L, T, S](l: List[T])(g: T => Either[L, S]): Either[L, List[S]] =
     transpose(l.map(g))
 
 given effectsEitherFunctor: EitherFunctor[[X] =>> (QualifiedName, List[X])] with
@@ -534,10 +520,7 @@ given elimsEitherFunctor: EitherFunctor[[X] =>> List[Elimination[X]]] with
     }
 
 given listListEitherFunctor: EitherFunctor[[X] =>> List[List[X]]] with
-  override def map[L, T, S]
-    (l: List[List[T]])
-    (g: T => Either[L, S])
-    : Either[L, List[List[S]]] =
+  override def map[L, T, S](l: List[List[T]])(g: T => Either[L, S]): Either[L, List[List[S]]] =
     listEitherFunctor.map(l) {
       listEitherFunctor.map(_)(g)
     }

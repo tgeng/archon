@@ -58,18 +58,17 @@ enum Usage extends PartiallyOrdered[Usage]:
     case (UAff, U1)                   => true
     case _                            => false
 
-  override def tryCompareTo[B >: Usage: AsPartiallyOrdered]
-    (that: B)
-    : Option[Int] = (this, that) match
-    case (u1, u2) if u1 == u2       => Some(0)
-    case (U0, UAff | UUnres)        => Some(-1)
-    case (U1, UAff | URel | UUnres) => Some(-1)
-    case (UAff, UUnres)             => Some(-1)
-    case (URel, UUnres)             => Some(-1)
-    case (UUnres, _)                => Some(1)
-    case (URel, U1)                 => Some(1)
-    case (UAff, U0 | U1)            => Some(1)
-    case _                          => None
+  override def tryCompareTo[B >: Usage: AsPartiallyOrdered](that: B): Option[Int] =
+    (this, that) match
+      case (u1, u2) if u1 == u2       => Some(0)
+      case (U0, UAff | UUnres)        => Some(-1)
+      case (U1, UAff | URel | UUnres) => Some(-1)
+      case (UAff, UUnres)             => Some(-1)
+      case (URel, UUnres)             => Some(-1)
+      case (UUnres, _)                => Some(1)
+      case (URel, U1)                 => Some(1)
+      case (UAff, U0 | U1)            => Some(1)
+      case _                          => None
 
 private type UProd[T] = Seq[T | Usage]
 private type USum[T] = Seq[UProd[T]]
@@ -118,8 +117,7 @@ private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
       else sum.multiToSeq ++ uSumFromLiteral(literal)
     }
   // UUnres is an absorbing element for |
-  if r.contains(uSumFromLiteral(Usage.UUnres)) then
-    uLubFromLiteral(Usage.UUnres)
+  if r.contains(uSumFromLiteral(Usage.UUnres)) then uLubFromLiteral(Usage.UUnres)
   else r
 
 private def uSumFromLiteral[T](usage: Usage): USum[T] = Seq(Seq(usage))

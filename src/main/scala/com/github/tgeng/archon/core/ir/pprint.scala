@@ -33,11 +33,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
   def rename(tm: CTerm)(using Γ: Context)(using Σ: Signature): Unit =
     doRename(visitCTerm(tm))
 
-  def rename
-    (t: List[Binding[VTerm]])
-    (using Γ: Context)
-    (using Σ: Signature)
-    : Unit = ???
+  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit = ???
   // doRename(visitTelescope(t))
 
   private def createRenamerContext(using Γ: Context) =
@@ -47,10 +43,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
     ctx.allNames.addAll(initialNames)
     ctx
 
-  private def doRename
-    (action: RenamerContext ?=> Unit)
-    (using Γ: Context)
-    : Unit =
+  private def doRename(action: RenamerContext ?=> Unit)(using Γ: Context): Unit =
     val ctx: RenamerContext = createRenamerContext
     action(using ctx)
     import Name.*
@@ -71,10 +64,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
           )
     }
 
-  override def combine
-    (rs: Unit*)
-    (using ctx: RenamerContext)
-    (using Σ: Signature) = ()
+  override def combine(rs: Unit*)(using ctx: RenamerContext)(using Σ: Signature) = ()
 
   override def withBindings
     (bindingNames: => Seq[Ref[Name]])
@@ -88,11 +78,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
     action(using ctx)
     ctx.nameStack.remove(ctx.nameStack.size - names.size, names.size)
 
-  override def visitVar
-    (v: VTerm.Var)
-    (using ctx: RenamerContext)
-    (using Σ: Signature)
-    : Unit =
+  override def visitVar(v: VTerm.Var)(using ctx: RenamerContext)(using Σ: Signature): Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
     val refName = ctx.nameStack(stackIndex)
     ctx.allReferencedNames.add(refName)
@@ -117,10 +103,7 @@ class PPrintContext
   ):
   def resolve(dbIndex: Nat): Ref[Name] = names(names.size - 1 - dbIndex)
 
-  def withPrecedence
-    (precedence: PPrintPrecedence)
-    (action: PPrintContext ?=> Block)
-    : Block =
+  def withPrecedence(precedence: PPrintPrecedence)(action: PPrintContext ?=> Block): Block =
     val oldPrecedence = currentPrecedence
     currentPrecedence = precedence
     try {
@@ -132,10 +115,7 @@ class PPrintContext
       currentPrecedence = oldPrecedence
     }
 
-  def withBindings[T]
-    (bindings: Seq[Ref[Name]])
-    (action: PPrintContext ?=> T)
-    : T =
+  def withBindings[T](bindings: Seq[Ref[Name]])(action: PPrintContext ?=> T): T =
     names.appendAll(bindings)
     try {
       action(using this)
@@ -171,28 +151,22 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   given (using PPrintContext)(using Signature): Conversion[CTerm, Block] =
     visitCTerm(_)
 
-  given (using PPrintContext)
-    (using Signature)
-    : Conversion[Binding[VTerm], Block] = visitBinding(_)
+  given (using PPrintContext)(using Signature): Conversion[Binding[VTerm], Block] = visitBinding(
+    _
+  )
 
   given (using PPrintContext)(using Signature): Conversion[Ref[Name], Block] =
     n => Block(n.value.toString)
 
-  given (using PPrintContext)(using Signature): Conversion[Name, Block] = n =>
-    Block(n.toString)
+  given (using PPrintContext)(using Signature): Conversion[Name, Block] = n => Block(n.toString)
 
   given (using PPrintContext)(using Signature): Conversion[ULevel, Block] =
     visitULevel(_)
 
-  given (using PPrintContext)
-    (using Signature)
-    : Conversion[QualifiedName, Block] = visitQualifiedName(_)
+  given (using PPrintContext)(using Signature): Conversion[QualifiedName, Block] =
+    visitQualifiedName(_)
 
-  override def combine
-    (blocks: Block*)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
+  override def combine(blocks: Block*)(using ctx: PPrintContext)(using Σ: Signature): Block =
     if blocks.isEmpty then throw IllegalStateException()
     else Block(Whitespace, Aligned, Wrap, blocks)
 
@@ -211,9 +185,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block =
-    given (using PPrintContext)
-      (using Signature)
-      : Conversion[Binding[CTerm], Block] = visitPreBinding(_)
+    given (using PPrintContext)(using Signature): Conversion[Binding[CTerm], Block] =
+      visitPreBinding(_)
 
     bracketAndComma(
       telescopeToBlock(tTelescope, _._1.name) {
@@ -279,17 +252,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case Unreferenced => Block(binding.ty)
     case n            => Block(n.toString + ":", binding.ty)
 
-  override def visitPVar
-    (pVar: PVar)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = Block(ctx.resolve(pVar.idx).value.toString)
+  override def visitPVar(pVar: PVar)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
+    ctx.resolve(pVar.idx).value.toString
+  )
 
-  override def visitPRefl
-    (PRefl: PRefl)
-    (using gctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = Block("Refl{}")
+  override def visitPRefl(PRefl: PRefl)(using gctx: PPrintContext)(using Σ: Signature): Block =
+    Block("Refl{}")
 
   override def visitPDataType
     (pDataType: PDataType)
@@ -327,13 +295,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block = Block(Concat, "#", p.name)
 
-  override def visitType
-    (ty: Type)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = ty match
-    case Type(USimpleLevel(Level(l, operands)), Top(_, _, _))
-      if operands.isEmpty =>
+  override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
+    case Type(USimpleLevel(Level(l, operands)), Top(_, _, _)) if operands.isEmpty =>
       Block("Type" + l.sub)
     case Type(USimpleLevel(l), Top(_, _, _)) => app("Type", l)
     case Type(UωLevel(layer), Top(_, _, _))  => Block("TYPE" + layer.sub)
@@ -341,21 +304,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case Type(UωLevel(layer), upperBound) =>
       Block("SUBTYPEOF", layer.toString, upperBound)
 
-  override def visitTop
-    (top: Top)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = top.ul match
-    case USimpleLevel(Level(l, operands)) if operands.isEmpty =>
-      Block("Top" + l.sub)
-    case USimpleLevel(l) => app("Top", l)
-    case UωLevel(layer)  => Block("TOP" + layer.sub)
+  override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    top.ul match
+      case USimpleLevel(Level(l, operands)) if operands.isEmpty =>
+        Block("Top" + l.sub)
+      case USimpleLevel(l) => app("Top", l)
+      case UωLevel(layer)  => Block("TOP" + layer.sub)
 
-  override def visitVar
-    (v: Var)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
+  override def visitVar(v: Var)(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block(ctx.resolve(v.idx).value.toString)
 
   override def visitCollapse
@@ -364,17 +320,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block = app("clp", collapse.cTm)
 
-  override def visitU
-    (u: U)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = app("U", u.cTy)
+  override def visitU(u: U)(using ctx: PPrintContext)(using Σ: Signature): Block = app("U", u.cTy)
 
-  override def visitThunk
-    (thunk: Thunk)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = app("thk", thunk.c)
+  override def visitThunk(thunk: Thunk)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    app("thk", thunk.c)
 
   override def visitDataType
     (dataType: DataType)
@@ -382,11 +331,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block = bracketAndSpace(dataType.qn, dataType.args.map(visitVTerm))
 
-  override def visitCon
-    (con: Con)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
+  override def visitCon(con: Con)(using ctx: PPrintContext)(using Σ: Signature): Block =
     bracketAndSpace(con.name, con.args.map(visitVTerm))
 
   override def visitEqualityType
@@ -400,19 +345,16 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     equalityType.right
   )
 
-  override def visitRefl
-    (refl: Refl)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = Block("Refl{}")
+  override def visitRefl(refl: Refl)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
+    "Refl{}"
+  )
 
   override def visitEffects
     (effects: Effects)
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block =
-    if effects.literal.isEmpty && effects.unionOperands.isEmpty then
-      Block("total")
+    if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp) {
         (effects.literal.map(visitEff) ++ effects.unionOperands.map(
@@ -420,11 +362,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         )) sepBy "|"
       }
 
-  override def visitLevel
-    (level: Level)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
+  override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =
     def toBlock(varAndOffset: (VTerm, Nat)): Block = varAndOffset match
       case (v, 0) => v
       case (v, offset) =>
@@ -436,8 +374,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     if level.maxOperands.values.forall(_ < level.literal) then
       operands.append(Block("L" + level.literal.sub))
 
-    if operands.isEmpty && level.maxOperands.size == 1 then
-      toBlock(level.maxOperands.head)
+    if operands.isEmpty && level.maxOperands.size == 1 then toBlock(level.maxOperands.head)
     else if operands.nonEmpty && level.maxOperands.isEmpty then operands.head
     else
       ctx.withPrecedence(PPLevelOp) {
@@ -484,8 +421,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature
     )
     : Block = cType match
-    case CType(USimpleLevel(Level(l, operands)), CTop(_, _), eff)
-      if operands.isEmpty =>
+    case CType(USimpleLevel(Level(l, operands)), CTop(_, _), eff) if operands.isEmpty =>
       Block("CType" + l.sub)
     case CType(USimpleLevel(l), CTop(_, tEff), eff) if tEff == Total =>
       ctype(eff, "CType", l)
@@ -882,8 +818,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         FixedIncrement(2) +:
         Wrap +:
         blocks.map[
-          (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String |
-            Iterable[Block])
+          (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block])
         ](
           _(using summon[PPrintContext])
         ): _*

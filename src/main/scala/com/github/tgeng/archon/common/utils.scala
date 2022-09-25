@@ -86,9 +86,7 @@ extension [E](nodes: IterableOnce[E])
     None
 
 extension [E](allNodes: IterableOnce[E])
-  def getMaxIncomingPathLength
-    (getNeighbors: E => IterableOnce[E])
-    : Map[E, Int] =
+  def getMaxIncomingPathLength(getNeighbors: E => IterableOnce[E]): Map[E, Int] =
     val inDegree = mutable.Map[E, Int]().withDefaultValue(0)
     for node <- allNodes.iterator do
       for neighbor <- getNeighbors(node).iterator do inDegree(neighbor) += 1
@@ -111,8 +109,7 @@ extension [E](allNodes: IterableOnce[E])
         queue.enqueue(neighbor)
     maxIncomingPathLengths.toMap.withDefaultValue(0)
 
-extension(s: String)
-  def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
+extension(s: String) def split2(regex: String) = s.split(regex).asInstanceOf[Array[String]]
 
 extension [T](inline t: T)
   inline def show: T =
@@ -159,8 +156,7 @@ extension [T](elems: IterableOnce[T])
     )
     : Map[K, V] =
     val result = mutable.Map[K, V]()
-    for elem <- elems.iterator do
-      result(keyExtractor(elem)) = valueExtractor(elem)
+    for elem <- elems.iterator do result(keyExtractor(elem)) = valueExtractor(elem)
     result.toMap
 
 def swap[A, B](t: (A, B)): (B, A) = t match
@@ -229,8 +225,7 @@ def topologicalSort[T]
     case _: CycleException.type => Left(visiting.toSeq)
   }
 
-/** Non negative int. Note that this is only a visual hint and nothing actually
-  * checks this.
+/** Non negative int. Note that this is only a visual hint and nothing actually checks this.
   */
 type Nat = Int
 

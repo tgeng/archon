@@ -21,8 +21,7 @@ trait Substitutable[S: Raisable, T]:
 import VTerm.*
 import CTerm.*
 
-private object RaiseTransformer
-  extends Transformer[( /* amount */ Int, /* bar */ Int)]:
+private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)]:
   override def withBindings[T]
     (bindingNames: => Seq[Ref[Name]])
     (action: ((Int, Int)) ?=> T)
@@ -37,31 +36,23 @@ private object RaiseTransformer
 end RaiseTransformer
 
 given RaisableVTerm: Raisable[VTerm] with
-  override def raise
-    (v: VTerm, amount: Int, bar: Int)
-    (using Σ: Signature)
-    : VTerm =
+  override def raise(v: VTerm, amount: Int, bar: Int)(using Σ: Signature): VTerm =
     RaiseTransformer.transformVTerm(v)(using (amount, bar))
 
 given RaisableCTerm: Raisable[CTerm] with
-  override def raise
-    (c: CTerm, amount: Int, bar: Int)
-    (using Σ: Signature)
-    : CTerm =
+  override def raise(c: CTerm, amount: Int, bar: Int)(using Σ: Signature): CTerm =
     RaiseTransformer.transformCTerm(c)(using (amount, bar))
 
 given RaisableTelescope: Raisable[Telescope] with
-  override def raise
-    (telescope: Telescope, amount: Int, bar: Int)
-    (using Σ: Signature)
-    : Telescope = telescope match
-    case Nil => Nil
-    case binding :: telescope =>
-      binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(
-        telescope,
-        amount,
-        bar + 1
-      )
+  override def raise(telescope: Telescope, amount: Int, bar: Int)(using Σ: Signature): Telescope =
+    telescope match
+      case Nil => Nil
+      case binding :: telescope =>
+        binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(
+          telescope,
+          amount,
+          bar + 1
+        )
 
 private object SubstituteTransformer
   extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)]:
@@ -134,10 +125,9 @@ extension(c: CTerm)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableCTerm.raise(c, -amount, at)
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term
-    * substitutes the highest index with the last substitutes 0. Then the result
-    * is raised so that the substituted indices are taken by other (deeper)
-    * indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
@@ -159,10 +149,9 @@ extension(v: VTerm)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableVTerm.raise(v, -amount, at)
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term
-    * substitutes the highest index with the last substitutes 0. Then the result
-    * is raised so that the substituted indices are taken by other (deeper)
-    * indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
@@ -191,10 +180,9 @@ extension(ul: ULevel)
     )
   )
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term
-    * substitutes the highest index with the last substitutes 0. Then the result
-    * is raised so that the substituted indices are taken by other (deeper)
-    * indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
@@ -220,10 +208,9 @@ extension(telescope: Telescope)
       at
     )
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term
-    * substitutes the highest index with the last substitutes 0. Then the result
-    * is raised so that the substituted indices are taken by other (deeper)
-    * indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length

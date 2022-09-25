@@ -173,9 +173,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
       }
 
   @nowarn
-  private def testParser[M[+_]]
-    (p: ParserT[Char, Any, M], testDataFile: File)
-    : (String, String) =
+  private def testParser[M[+_]](p: ParserT[Char, Any, M], testDataFile: File): (String, String) =
     val testDataString = Source.fromFile(testDataFile).use { source =>
       source.mkString.replace(System.lineSeparator(), "\n").!!
     }

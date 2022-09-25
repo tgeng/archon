@@ -60,11 +60,10 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
   /** @param pc
     *   "program counter"
     * @param reduceDown
-    *   if true, logic should not try to decompose the [[pc]] and push it's
-    *   components on to the stack. This is useful so that the run logic does
-    *   not spin into infinite loop if the given term has type errors. (Ideally,
-    *   input should be type-checked so this should never happen, unless there
-    *   are bugs in type checking code.)
+    *   if true, logic should not try to decompose the [[pc]] and push it's components on to the
+    *   stack. This is useful so that the run logic does not spin into infinite loop if the given
+    *   term has type errors. (Ideally, input should be type-checked so this should never happen,
+    *   unless there are bugs in type checking code.)
     * @return
     */
   //  @tailrec
@@ -77,8 +76,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     val r = pc match
       case Hole => throw IllegalStateException()
       // terminal cases
-      case _: CType | _: F | _: Return | _: FunctionType | _: RecordType |
-        _: CTop =>
+      case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.isEmpty then Right(pc)
         else run(substHole(stack.pop(), pc), true)
       case Def(qn) =>
@@ -395,8 +393,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           //     elims
 
           // TODO: matching usage does not seem very useful. But it can be added if needed.
-          case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args)))
-            if pQn == qn =>
+          case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (
               CPattern(PForcedDataType(_, pArgs)),
@@ -412,8 +409,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             ) =>
             elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
           case (CProjection(n1), EProj(n2)) if n1 == n2 =>
-          case (CProjection(_), ETerm(_)) | (_, EProj(_)) |
-            (CPattern(PAbsurd()), _) =>
+          case (CProjection(_), ETerm(_)) | (_, EProj(_)) | (CPattern(PAbsurd()), _) =>
             throw IllegalArgumentException("type error")
           case (_, ETerm(Var(_))) => status = MatchingStatus.Stuck
           // Note that we make mismatch dominating stuck because we do not eval by case tree during

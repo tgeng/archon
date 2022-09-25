@@ -10,8 +10,7 @@ trait Cache[K, V] {
   def load(key: K): Option[V]
 }
 
-class SingleLoadingCache[K, V](loadingFn: (key: K) => Option[V])
-  extends Cache[K, V] {
+class SingleLoadingCache[K, V](loadingFn: (key: K) => Option[V]) extends Cache[K, V] {
   private val cache = mutable.Map[K, V]()
   override def load(key: K): Option[V] = {
     cache.get(key) match {
@@ -30,8 +29,7 @@ class SingleLoadingCache[K, V](loadingFn: (key: K) => Option[V])
   def remove(key: K) = cache.remove(key)
 }
 
-class BatchLoadingCache[K, V](loadingFn: (key: K) => Map[K, V])
-  extends Cache[K, V] {
+class BatchLoadingCache[K, V](loadingFn: (key: K) => Map[K, V]) extends Cache[K, V] {
   private val cache = mutable.Map[K, V]()
   override def load(key: K): Option[V] = {
     cache.get(key) match {

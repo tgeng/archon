@@ -50,9 +50,8 @@ trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
     if enableDebugging then
       println(indent)
       println(
-        indent + "   " + ANSI_BLUE + pprint(Γ.toList)(using
-          IndexedSeq[Binding[VTerm]]()
-        ).toString.replaceAll("\n", "\n" + indent + "   ") + ANSI_RESET
+        indent + "   " + ANSI_BLUE + pprint(Γ.toList)(using IndexedSeq[Binding[VTerm]]()).toString
+          .replaceAll("\n", "\n" + indent + "   ") + ANSI_RESET
       )
       val stacktrace = Thread.currentThread().!!.getStackTrace.!!
       println(
@@ -94,43 +93,34 @@ type Usages = Seq[VTerm]
 object Usages:
   def zero(using Γ: Context): Usages = Seq.fill(Γ.size)(UsageLiteral(Usage.U0))
 
-  def single
-    (v: VTerm.Var, u: VTerm = VTerm.UsageLiteral(Usage.U1))
-    (using Γ: Context)
-    : Usages =
+  def single(v: VTerm.Var, u: VTerm = VTerm.UsageLiteral(Usage.U1))(using Γ: Context): Usages =
     (Seq.fill(Γ.size - v.idx - 1)(UsageLiteral(Usage.U0)) :+ u)
       ++ Seq.fill(v.idx)(UsageLiteral(Usage.U0))
 
 extension(us1: Usages)
   infix def +(us2: Usages): Usages =
-    if us1.size != us2.size then
-      throw IllegalArgumentException("mismatched size")
+    if us1.size != us2.size then throw IllegalArgumentException("mismatched size")
     else us1.zip(us2).map { (u1, u2) => UsageSum(u1, u2) }
 
   infix def *(scalar: VTerm): Usages = us1.map(u => UsageProd(u, scalar))
   infix def *(scalar: Usage)(using SourceInfo): Usages =
     us1.map(u => UsageProd(u, UsageLiteral(scalar)))
 
-def checkData
-  (data: Data)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] = ctx.trace(s"checking data signature ${data.qn}") {
-  given Context = IndexedSeq()
+def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+  ctx.trace(s"checking data signature ${data.qn}") {
+    given Context = IndexedSeq()
 
-  val tParams = data.tParamTys.map(_._1)
-  for
-    _ <- checkParameterTypeDeclarations(tParams)
-    _ <- checkTParamsAreUnrestricted(tParams)
-    _ <- checkULevel(data.ul)(using tParams.toIndexedSeq)
-    _ <- checkType(data.inherentUsage, UsageType(None))(using
-      tParams.toIndexedSeq
-    )
-    _ <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using
-      tParams.toIndexedSeq
-    )
-  yield ()
-}
+    val tParams = data.tParamTys.map(_._1)
+    for
+      _ <- checkParameterTypeDeclarations(tParams)
+      _ <- checkTParamsAreUnrestricted(tParams)
+      _ <- checkULevel(data.ul)(using tParams.toIndexedSeq)
+      _ <- checkType(data.inherentUsage, UsageType(None))(using tParams.toIndexedSeq)
+      _ <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using
+        tParams.toIndexedSeq
+      )
+    yield ()
+  }
 
 def checkDataConstructor
   (qn: QualifiedName, con: Constructor)
@@ -292,7 +282,10 @@ def checkClause
     case Some(lhs) =>
       given Context = clause.bindings.toIndexedSeq
 
-      checkType(lhs, clause.ty) >> checkType(clause.rhs, clause.ty) >> Right(())
+      for
+        _ <- checkType(lhs, clause.ty)
+        _ <- checkType(clause.rhs, clause.ty)
+      yield ()
 }
 
 def checkClauses
@@ -397,9 +390,7 @@ def inferType
           case (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
           _ <- upperBoundTy match
             case Type(ul2, _) =>
-              checkULevelSubsumption(ul, ul2)(using
-                CheckSubsumptionMode.CONVERSION
-              )
+              checkULevelSubsumption(ul, ul2)(using CheckSubsumptionMode.CONVERSION)
             case _ => Left(ExpectVType(upperBound))
         yield (Type(ULevelSuc(ul), tm), (ulUsages + upperBoundUsages) * UUnres)
       case Top(ul, u, eqD) =>
@@ -414,8 +405,8 @@ def inferType
           case (cTy, usage) <- inferType(cTm)
           r <- cTy match
             case F(vTy, eff, _) if eff == Total => Right(vTy)
-            case F(_, _, _) => Left(CollapsingEffectfulTerm(cTm))
-            case _          => Left(NotCollapsable(cTm))
+            case F(_, _, _)                     => Left(CollapsingEffectfulTerm(cTm))
+            case _                              => Left(NotCollapsable(cTm))
         yield (r, usage)
       case U(cty) =>
         for
@@ -452,7 +443,7 @@ def inferType
               yield (Type(ul, tm), (tyUsage + leftUsage + rightUsage) * UUnres)
             case _ => Left(NotTypeError(ty))
         yield r
-      case Refl() => throw IllegalArgumentException("cannot infer type")
+      case Refl()          => throw IllegalArgumentException("cannot infer type")
       case UsageLiteral(u) => Right(UsageType(Some(u)), Usages.zero)
       case UsageCompound(_, operands) =>
         for
@@ -622,7 +613,7 @@ def inferType
                       t <- reduce(t)
                       r <- t match
                         case Return(v, _) => inferType(body.substLowers(v))
-                        case c => inferType(body.substLowers(Collapse(c)))
+                        case c            => inferType(body.substLowers(Collapse(c)))
                     yield r
                   // Otherwise, just add the binding to the context and continue type checking.
                   else {
@@ -692,9 +683,7 @@ def inferType
           case (funTyTy, bodyTyUsages) <- tyTy match
             case Type(ul1, _) =>
               for
-                case (bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using
-                  Γ :+ binding
-                )
+                case (bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using Γ :+ binding)
                 r <- bodyTyTy match
                   case CType(ul2, _, eff) if eff == Total =>
                     // strengthen is safe here because if it references the binding, then the
@@ -927,8 +916,7 @@ def inferType
         for
           case (cellTy, cellUsages) <- inferType(cell)
           r <- cellTy match
-            case CellType(heap, vTy, status)
-              if status == CellStatus.Initialized =>
+            case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
               Right(
                 F(
                   vTy,
@@ -1074,8 +1062,7 @@ def checkSubsumption
                           r
                     }
                 )
-          case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _)))
-            if name1 == name2 =>
+          case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
             Σ.getConstructorOption(qn, name1) match
               case None => Left(MissingConstructor(name1, qn))
               case Some(con) =>
@@ -1094,11 +1081,9 @@ def checkSubsumption
                       r
                     }
                 )
-          case (UsageType(Some(u1)), UsageType(Some(u2)), _)
-            if mode == SUBSUMPTION && u1 >= u2 =>
+          case (UsageType(Some(u1)), UsageType(Some(u2)), _) if mode == SUBSUMPTION && u1 >= u2 =>
             Right(())
-          case (UsageType(Some(_)), UsageType(None), _)
-            if mode == SUBSUMPTION =>
+          case (UsageType(Some(_)), UsageType(None), _) if mode == SUBSUMPTION =>
             Right(())
           case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
             checkSubsumption(ty1, ty2, None) >>
@@ -1111,16 +1096,14 @@ def checkSubsumption
             ) =>
             for r <- checkSubsumption(heap1, heap2, Some(HeapType())) >>
                 checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
-                (if status1 == status2 || status1 == CellStatus.Initialized then
-                   Right(())
+                (if status1 == status2 || status1 == CellStatus.Initialized then Right(())
                  else
                    Left(
                      NotVSubsumption(sub, sup, ty, mode)
                    )
                 )
             yield r
-          case (_, Heap(GlobalHeapKey), Some(HeapType()))
-            if mode == SUBSUMPTION =>
+          case (_, Heap(GlobalHeapKey), Some(HeapType())) if mode == SUBSUMPTION =>
             Right(())
           case (v: Var, ty2, _) if mode == CheckSubsumptionMode.SUBSUMPTION =>
             Γ.resolve(v).ty match
@@ -1225,9 +1208,7 @@ def checkSubsumption
           ) =>
           checkSubsumption(eff1, eff2, Some(EffectsType())) >>
             checkSubsumption(binding2.ty, binding1.ty, None) >>
-            checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using
-              Γ :+ binding2
-            )
+            checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
         case (Application(fun1, arg1), Application(fun2, arg2), _) =>
           for
             case (fun1Ty, _) <- inferType(fun1)
@@ -1243,8 +1224,7 @@ def checkSubsumption
                 )(using CONVERSION)
               case _ => Left(NotCSubsumption(sub, sup, ty, mode))
           yield r
-        case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _)
-          if qn1 == qn2 =>
+        case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
           Σ.getRecordOption(qn1) match
             case None => Left(MissingDeclaration(qn1))
             case Some(record) =>
@@ -1282,8 +1262,7 @@ def checkSubsumption
                           r
                     }
                 )
-        case (Projection(rec1, name1), Projection(rec2, name2), _)
-          if name1 == name2 =>
+        case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
           for
             case (rec1Ty, _) <- inferType(rec1)
             case (rec2Ty, _) <- inferType(rec2)
@@ -1305,20 +1284,17 @@ def checkSubsumption
                     tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
                       case ((tArg1, tArg2), binding) =>
                         val r =
-                          checkSubsumption(tArg1, tArg2, Some(binding.ty))(using
-                            CONVERSION
-                          )
+                          checkSubsumption(tArg1, tArg2, Some(binding.ty))(using CONVERSION)
                         args = args :+ tArg1
                         r
                     }
                   ) >> allRight(
-                    args1.zip(args2).zip(operator.paramTys).map {
-                      case ((arg1, arg2), binding) =>
-                        val r = checkSubsumption(arg1, arg2, Some(binding.ty))(
-                          using CONVERSION
-                        )
-                        args = args :+ arg1
-                        r
+                    args1.zip(args2).zip(operator.paramTys).map { case ((arg1, arg2), binding) =>
+                      val r = checkSubsumption(arg1, arg2, Some(binding.ty))(
+                        using CONVERSION
+                      )
+                      args = args :+ arg1
+                      r
                     }
                   )
         // For now, we skip the complex logic checking subsumption of handler and continuations. It
@@ -1383,9 +1359,7 @@ private def checkInherentUsage
               consumedUsage,
               Some(UsageType(None)(using SiEmpty))
             )(using SUBSUMPTION)
-            _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using
-              Γ :+ b
-            )
+            _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
           yield ()
 
       allRight(
@@ -1399,8 +1373,7 @@ private def deriveTypeInherentUsage
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] = ty match
-  case _: Type | _: UsageType | _: EffectsType | _: LevelType | _: HeapType |
-    _: CellType =>
+  case _: Type | _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
     Right(UsageLiteral(UUnres))
   case _: EqualityType => Right(UsageLiteral(U0))
   case _: U            => Right(UsageLiteral(U1))
@@ -1435,9 +1408,7 @@ private def checkInherentEqDecidable
     case binding :: rest =>
       for
         eqD <- deriveTypeInherentEqDecidability(binding.ty)
-        _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using
-          SUBSUMPTION
-        )
+        _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using SUBSUMPTION)
         _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
       yield ()
 
@@ -1450,8 +1421,7 @@ private def checkInherentEqDecidable
     val numParams = constructor.paramTys.size
     val inherentUsage = data.inherentUsage.weaken(numParams, 0)
     // all paramTys and usages are weakened to be in the same context with constructor.tArgs
-    val allParams
-      : Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
+    val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
       constructor.paramTys.zipWithIndex.map { (binding, i) =>
         (
           numParams - i,
@@ -1543,8 +1513,8 @@ private def deriveTypeInherentEqDecidability
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] = ty match
-  case _: Type | _: EqualityType | _: UsageType | _: EqDecidabilityType |
-    _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+  case _: Type | _: EqualityType | _: UsageType | _: EqDecidabilityType | _: EffectsType |
+    _: LevelType | _: HeapType | _: CellType =>
     Right(EqDecidabilityLiteral(EqDecidable))
   case Top(_, _, eqDecidability) => Right(eqDecidability)
   case _: Var | _: Collapse =>
@@ -1603,8 +1573,7 @@ private def checkEqDecidabilitySubsumption
   case (_, Left(e))                               => Left(e)
   case (Right(eqD1), Right(eqD2)) if eqD1 == eqD2 => Right(())
   case (Right(EqDecidabilityLiteral(EqDecidability.EqDecidable)), _) |
-    (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnres)))
-    if mode == SUBSUMPTION =>
+    (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnres))) if mode == SUBSUMPTION =>
     Right(())
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
 
@@ -1663,8 +1632,7 @@ private def checkUsageSubsumption
   case (_, Left(e))                                       => Left(e)
   case (Right(usage1), Right(usage2)) if usage1 == usage2 => Right(())
   // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
-  case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2)))
-    if u1 >= u2 && mode == SUBSUMPTION =>
+  case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2))) if u1 >= u2 && mode == SUBSUMPTION =>
     Right(())
   case (Right(UsageLiteral(UUnres)), _) if mode == SUBSUMPTION => Right(())
   case (Right(v @ Var(_)), Right(UsageLiteral(u2))) if mode == SUBSUMPTION =>
@@ -1916,8 +1884,7 @@ private inline def debugInfer[L, R <: (CTerm | VTerm)]
   ctx.trace[L, (R, Usages)](
     s"inferring type",
     Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
-    ty =>
-      Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty._1)))
+    ty => Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty._1)))
   )(result.map { case (r, u) =>
     (r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
   })

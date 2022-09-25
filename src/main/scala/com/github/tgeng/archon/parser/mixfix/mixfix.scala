@@ -14,16 +14,15 @@ enum Fixity:
   case Infix(val associativity: Associativity)
   case Postfix
 
-  /** Note that an operator of this fixity should have at least one hole inside,
-    * for example `[_]`. In other words, atoms like `myVariable` should not be
-    * represented as an operator but simply an [[MixfixAst.Identifier]] instead.
+  /** Note that an operator of this fixity should have at least one hole inside, for example
+    * `[_]`. In other words, atoms like `myVariable` should not be represented as an operator but
+    * simply an [[MixfixAst.Identifier]] instead.
     */
   case Closed
 
 import com.github.tgeng.archon.parser.mixfix.Fixity.*
 
-case class Operator
-  (namespace: QualifiedName, fixity: Fixity, nameParts: Seq[Seq[String]]):
+case class Operator(namespace: QualifiedName, fixity: Fixity, nameParts: Seq[Seq[String]]):
   def operatorName: String =
     val rawName = nameParts.map(_.mkString).mkString("_")
     fixity match
@@ -35,11 +34,8 @@ case class Operator
   override def toString: String = namespace.toString + "." + operatorName
 
 object Operator:
-  def apply
-    (qualifiedName: QualifiedName, fixity: Fixity, nameParts: Seq[Seq[String]])
-    : Operator =
-    if nameParts.isEmpty then
-      throw IllegalArgumentException("nameParts should not be empty")
+  def apply(qualifiedName: QualifiedName, fixity: Fixity, nameParts: Seq[Seq[String]]): Operator =
+    if nameParts.isEmpty then throw IllegalArgumentException("nameParts should not be empty")
     if fixity == Closed && nameParts.size == 1 then
       throw IllegalArgumentException(
         "for closed operator the nameParts must contain at least 2 elements"
@@ -47,8 +43,8 @@ object Operator:
     nameParts.foreach(namePart => assert(namePart.nonEmpty))
     new Operator(qualifiedName, fixity, nameParts)
 
-/** Operators in neighbor nodes binds tighter than operators in this node. Note
-  * that there must not be cycles. Implementation should be immutable.
+/** Operators in neighbor nodes binds tighter than operators in this node. Note that there must
+  * not be cycles. Implementation should be immutable.
   */
 trait PrecedenceNode:
   def operators: Map[Fixity, Seq[Operator]]
@@ -63,8 +59,7 @@ trait NamePart[N]:
   def asString(n: N): String
 
 enum MixfixAst[N, L]:
-  case OperatorCall
-    (operator: Operator, args: List[MixfixAst[N, L]], nameParts: List[List[N]])
+  case OperatorCall(operator: Operator, args: List[MixfixAst[N, L]], nameParts: List[List[N]])
   case ApplyCall(args: List[MixfixAst[N, L]])
   case Identifier(name: N)
   case Literal(literal: L)
@@ -142,8 +137,7 @@ def trimGraph
       override def toString: String = operators.head.toString + "->" + operators
 
   for (oldNode, newNode) <- nodeMap do
-    newPrecedenceMap(newNode) =
-      oldNode.neighbors.filter(isNodeRelevant).map(nodeMap)
+    newPrecedenceMap(newNode) = oldNode.neighbors.filter(isNodeRelevant).map(nodeMap)
   g.flatMap(nodeMap.lift).toSeq
 
 def createMixfixParserImpl[N, M[
@@ -160,9 +154,7 @@ def createMixfixParserImpl[N, M[
   : ParserT[N, MixfixAst[N, L], M] =
   val illegalIdentifierNames = g
     .flatMap(node =>
-      node.operators.values.flatMap(ops =>
-        ops.flatMap(op => op.nameParts.flatten)
-      )
+      node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts.flatten))
     )
     .toSet
 
@@ -190,18 +182,14 @@ def createMixfixParserImpl[N, M[
           for
             ops <- P
               .lift((node.pUp, node.op(Infix(Associativity.Non)), node.pUp))
-              .map((preArg, t, postArg) =>
-                OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))
-              ) |
+              .map((preArg, t, postArg) => OperatorCall(t(0), preArg +: t(1) :+ postArg, t(2))) |
               // somehow type inferencing is not working here and requires explicit type arguments
               P.foldRight1[
                 (Operator, List[MixfixAst[N, L]], List[List[N]]),
                 MixfixAst[N, L]
               ](
                 pRight,
-                P.pure((t, postArg) =>
-                  OperatorCall(t(0), t(1) :+ postArg, t(2))
-                ),
+                P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
                 pUp
               ) |
               P.foldLeft1[MixfixAst[
@@ -219,8 +207,7 @@ def createMixfixParserImpl[N, M[
         lazily = true
       )
 
-    def pRight
-      : ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
+    def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
       P.cached(
         (node, "right"),
         node.op(Prefix) |
@@ -242,9 +229,7 @@ def createMixfixParserImpl[N, M[
         unionBiased(node.neighbors.map(_.pHat)) | closedPlus
       )
 
-    def op
-      (fix: Fixity)
-      : ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
+    def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
       P.cached(
         (node, fix),
         union(
@@ -281,9 +266,7 @@ def createMixfixParserImpl[N, M[
             P(
               node
                 .op(Closed)
-                .map((op, args, nameParts) =>
-                  OperatorCall(op, args, nameParts)
-                ),
+                .map((op, args, nameParts) => OperatorCall(op, args, nameParts)),
               getNodeTargetName(node)
             )
         )
