@@ -216,7 +216,7 @@ def elaborateSignature
       elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
     yield elaboratedTy match
       case (tIndices, ul) =>
-        Data(data.qn)(tParamTys ++ tIndices, ul, tParamTys.size, ???, ???)
+        Data(data.qn)(tParamTys.size, tParamTys ++ tIndices, ul, ???, ???)
   }
 
 def elaborateBody

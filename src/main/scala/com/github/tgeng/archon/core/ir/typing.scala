@@ -119,8 +119,17 @@ def checkData
   given Context = IndexedSeq()
 
   val tParams = data.tParamTys.map(_._1)
-  checkParameterTypeDeclarations(tParams) >>
-    checkULevel(data.ul)(using tParams.toIndexedSeq) >> Right(())
+  for
+    _ <- checkParameterTypeDeclarations(tParams)
+    _ <- checkTParamsAreUnrestricted(tParams)
+    _ <- checkULevel(data.ul)(using tParams.toIndexedSeq)
+    _ <- checkType(data.inherentUsage, UsageType(None))(using
+      tParams.toIndexedSeq
+    )
+    _ <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using
+      tParams.toIndexedSeq
+    )
+  yield ()
 }
 
 def checkDataConstructor
@@ -139,8 +148,8 @@ def checkDataConstructor
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
 
-            // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no free
-            // vars
+            // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no
+            // free vars
             checkTypes(con.tArgs, data.tParamTys.map(_._1))
           }
         yield
@@ -173,8 +182,11 @@ def checkDataConstructors
   : Either[IrError, Unit] =
   given Context = IndexedSeq()
 
-  allRight(constructors.map { con => checkDataConstructor(qn, con) }) >>
-    checkInherentEqDecidable(Σ.getData(qn), constructors)
+  for
+    _ <- allRight(constructors.map { con => checkDataConstructor(qn, con) })
+    _ <- checkInherentUsage(Σ.getData(qn), constructors)
+    _ <- checkInherentEqDecidable(Σ.getData(qn), constructors)
+  yield ()
 
 def checkRecord
   (record: Record)
@@ -185,8 +197,11 @@ def checkRecord
     given Context = IndexedSeq()
 
     val tParams = record.tParamTys.map(_._1)
-    checkParameterTypeDeclarations(tParams) >>
-      checkULevel(record.ul)(using tParams.toIndexedSeq) >> Right(())
+    for
+      _ <- checkParameterTypeDeclarations(tParams)
+      _ <- checkTParamsAreUnrestricted(tParams)
+      _ <- checkULevel(record.ul)(using tParams.toIndexedSeq)
+    yield ()
   }
 
 def checkRecordField
@@ -295,9 +310,11 @@ def checkEffect
   ctx.trace(s"checking effect signature ${effect.qn}") {
     given Context = IndexedSeq()
 
-    checkParameterTypeDeclarations(
-      effect.tParamTys
-    ) >> checkAreEqDecidableTypes(effect.tParamTys)
+    for
+      _ <- checkParameterTypeDeclarations(effect.tParamTys)
+      _ <- checkTParamsAreUnrestricted(effect.tParamTys)
+      _ <- checkAreEqDecidableTypes(effect.tParamTys)
+    yield ()
   }
 
 def checkOperator
@@ -322,13 +339,28 @@ def checkOperators
   : Either[IrError, Unit] =
   allRight(operators.map { operator => checkOperator(qn, operator) })
 
+private def checkTParamsAreUnrestricted
+  (tParamTys: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] = tParamTys match
+  case Nil => Right(())
+  case binding :: rest =>
+    for
+      inherentUsage <- deriveTypeInherentUsage(binding.ty)
+      _ <- checkUsageSubsumption(
+        UsageProd(binding.usage, inherentUsage),
+        UsageLiteral(UUnres)
+      )
+      _ <- checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
+    yield ()
+
 private def checkParameterTypeDeclarations
   (tParamTys: Telescope, levelBound: Option[ULevel] = None)
   (using Γ: Context)
   (using Σ: Signature)
-  (using
-    ctx: TypingContext
-  )
+  (using ctx: TypingContext)
   : Either[IrError, Unit] = tParamTys match
   case Nil => Right(())
   case binding :: rest =>

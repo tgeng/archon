@@ -112,9 +112,9 @@ object Builtins:
         qn,
         (
           new Data(qn)(
+            numParams,
             tParamTys,
             ul,
-            numParams,
             inherentUsage,
             inherentEqDecidability
           ),

@@ -20,16 +20,18 @@ enum Declaration:
   case Data
     (val qn: QualifiedName)
     (
-      val tParamTys: TTelescope = Nil,
-      /* binding + tParamTys */ val ul: ULevel =
-        ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
-
       /** Number of parameters among `tParamTys`, the rest are index arguments.
         * This parameter also affects how many arguments should be present in
-        * the derived constructor function.
+        * the derived constructor function: only parameter arguments are needed while index 
+        * arguments are set by constructors.
         */
       val numParams: Nat,
+      val tParamTys: TTelescope,
+      /* binding + tParamTys */
+      val ul: ULevel,
+      /* binding + tParamTys */
       val inherentUsage: VTerm,
+      /* binding + tParamTys */
       val inherentEqDecidability: VTerm
     )
   case Record
