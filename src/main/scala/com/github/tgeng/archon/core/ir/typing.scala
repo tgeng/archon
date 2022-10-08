@@ -287,6 +287,8 @@ def checkClause
         _ <- checkUsagesSubsumption(lhsUsages, true)
         rhsUsages <- checkType(clause.rhs, clause.ty)
         _ <- checkUsagesSubsumption(rhsUsages)
+        //TODO[P2]: also need to ensure constructor pattern must have usage :< U1. This should be
+        // easy to check during elaboration with declared usage so for now I will skip it.
       yield ()
 }
 
@@ -1640,8 +1642,8 @@ private def checkUsagesSubsumption
       actualConsumedUsage = UsageProd(consumedUsage, inherentUsage)
       _ <-
         if invert then
-          checkUsageSubsumption(actualProvidedUsage, actualConsumedUsage)(using SUBSUMPTION)
-        else checkUsageSubsumption(actualConsumedUsage, actualProvidedUsage)(using SUBSUMPTION)
+          checkUsageSubsumption(actualConsumedUsage, actualProvidedUsage)(using SUBSUMPTION)
+        else checkUsageSubsumption(actualProvidedUsage, actualConsumedUsage)(using SUBSUMPTION)
     yield ()
   })
 
