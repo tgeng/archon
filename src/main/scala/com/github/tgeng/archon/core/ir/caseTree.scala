@@ -4,24 +4,34 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
 enum CaseTree:
-  case Term(term: CTerm)
-  case Lambda( /* binding + 1 */ body: CTerm)
-  case Record(fields: Map[Name, CTerm])
-  case TypeCase
+  case CtTerm(term: CTerm)
+  case CtLambda( /* binding + 1 */ body: CTerm)(val boundName: Ref[Name])
+  case CtRecord(fields: Map[Name, CTerm])
+  case CtTypeCase
     (
-      arg: VTerm,
+      index: Nat,
       cases: Map[
         QualifiedName,
-        (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)
+        /* binding + arg count */ CTerm
       ],
-      /* binding + 1 */ default: CTerm
+      default: CTerm
     )
-  case DataCase
+  case CtDataCase
     (
-      arg: VTerm,
+      index: Nat,
+      qn: QualifiedName,
       cases: Map[
         Name,
-        (Nat, /* binding + 1 (for whole arg) + tuple(0) */ CTerm)
+        /* binding + arg count */ CTerm
       ]
     )
-  case EqualityCase(arg: VTerm, /* binding + 1 (for whole arg) */ body: CTerm)
+  case CtEqualityCase
+    (
+      index: Nat,
+      /** Weakening substitutor that recovers unused variables removed by unification. */
+      substitutor: Substitutor[VTerm],
+      /** Body needs to have the substitutor applied before it can be used for interpreting or
+        * further lowering.
+        */
+      body: CTerm
+    )

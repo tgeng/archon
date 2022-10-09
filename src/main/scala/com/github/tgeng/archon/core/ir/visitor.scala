@@ -7,6 +7,7 @@ import VTerm.*
 import ULevel.*
 import Pattern.*
 import CoPattern.*
+import CaseTree.*
 
 trait Visitor[C, R]:
 
@@ -140,6 +141,29 @@ trait Visitor[C, R]:
 
   def visitCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): R =
     visitName(p.name)
+
+  def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
+    case t: CtTerm          => visitCtTerm(t)
+    case l: CtLambda        => visitCtLambda(l)
+    case r: CtRecord        => visitCtRecord(r)
+    case tc: CtTypeCase     => visitCtTypeCase(tc)
+    case dc: CtDataCase     => visitCtDataCase(dc)
+    case ec: CtEqualityCase => visitCtEqualityCase(ec)
+
+  def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
+
+  def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): R =
+    withBindings(Seq(l.boundName)) {
+      visitCTerm(l.body)
+    }
+
+  def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R = ???
+
+  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R = ???
+
+  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R = ???
+
+  def visitCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): R = ???
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type                     => visitType(ty)
