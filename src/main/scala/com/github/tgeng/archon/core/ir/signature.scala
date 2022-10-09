@@ -98,6 +98,16 @@ case class Operator
 trait Signature:
   given Signature = this
 
+  def addDef(d: Definition): Signature
+
+  def addConstructor(c: Constructor): Signature
+
+  def addField(f: Field): Signature
+
+  def addClause(c: Clause): Signature
+
+  def addOperator(o: Operator): Signature
+
   def getDataOption(qn: QualifiedName): Option[Data]
 
   def getData(qn: QualifiedName): Data = getDataOption(qn).get

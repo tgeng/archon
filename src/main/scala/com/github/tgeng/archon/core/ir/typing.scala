@@ -132,8 +132,9 @@ def checkDataConstructor
       case None => Left(MissingDeclaration(qn))
       case Some(data) =>
         given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
-
         for
+          _ <- checkInherentUsage(Σ.getData(qn), con)
+          _ <- checkInherentEqDecidable(Σ.getData(qn), con)
           _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
@@ -142,41 +143,30 @@ def checkDataConstructor
             // free vars
             checkTypes(con.tArgs, data.tParamTys.map(_._1))
           }
-        yield
-          // binding of positiveVars must be either covariant or invariant
-          // binding of negativeVars must be either contravariant or invariant
-          val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
-          val tParamTysSize = data.tParamTys.size
-          val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
-            case ((_, variance), reverseIndex) =>
-              val index = tParamTysSize - reverseIndex - 1
-              variance match
-                case Variance.INVARIANT     => false
-                case Variance.COVARIANT     => negativeVars(index)
-                case Variance.CONTRAVARIANT => positiveVars(index)
-          }
-          if bindingWithIncorrectUsage.isEmpty then ()
-          else
-            Left(
-              IllegalVarianceInData(
-                data.qn,
-                bindingWithIncorrectUsage.map(_._2)
+          _ <- {
+            // binding of positiveVars must be either covariant or invariant
+            // binding of negativeVars must be either contravariant or invariant
+            val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
+            val tParamTysSize = data.tParamTys.size
+            val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter {
+              case ((_, variance), reverseIndex) =>
+                val index = tParamTysSize - reverseIndex - 1
+                variance match
+                  case Variance.INVARIANT     => false
+                  case Variance.COVARIANT     => negativeVars(index)
+                  case Variance.CONTRAVARIANT => positiveVars(index)
+            }
+            if bindingWithIncorrectUsage.isEmpty then Right(())
+            else
+              Left(
+                IllegalVarianceInData(
+                  data.qn,
+                  bindingWithIncorrectUsage.map(_._2)
+                )
               )
-            )
+          }
+        yield ()
   }
-
-def checkDataConstructors
-  (qn: QualifiedName, constructors: Seq[Constructor])
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  given Context = IndexedSeq()
-
-  for
-    _ <- allRight(constructors.map { con => checkDataConstructor(qn, con) })
-    _ <- checkInherentUsage(Σ.getData(qn), constructors)
-    _ <- checkInherentEqDecidable(Σ.getData(qn), constructors)
-  yield ()
 
 def checkRecord
   (record: Record)
@@ -233,15 +223,6 @@ def checkRecordField
             )
   }
 
-def checkRecordFields
-  (qn: QualifiedName, fields: Seq[Field])
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  given Context = IndexedSeq()
-
-  allRight(fields.map { field => checkRecordField(qn, field) })
-
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
   U(
     RecordType(
@@ -287,17 +268,10 @@ def checkClause
         _ <- checkUsagesSubsumption(lhsUsages, true)
         rhsUsages <- checkType(clause.rhs, clause.ty)
         _ <- checkUsagesSubsumption(rhsUsages)
-        //TODO[P2]: also need to ensure constructor pattern must have usage :< U1. This should be
-        // easy to check during elaboration with declared usage so for now I will skip it.
+      // TODO[P2]: also need to ensure constructor pattern must have usage :< U1. This should be
+      // easy to check during elaboration with declared usage so for now I will skip it.
       yield ()
 }
-
-def checkClauses
-  (qn: QualifiedName, clauses: Seq[Clause])
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  allRight(clauses.map { clause => checkClause(qn, clause) })
 
 def checkEffect
   (effect: Effect)
@@ -328,13 +302,6 @@ def checkOperator
         checkParameterTypeDeclarations(operator.paramTys)(using Γ) >>
           checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
   }
-
-def checkOperators
-  (qn: QualifiedName, operators: Seq[Operator])
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  allRight(operators.map { operator => checkOperator(qn, operator) })
 
 private def checkTParamsAreUnrestricted
   (tParamTys: Telescope)
@@ -1329,10 +1296,7 @@ private def simplifyLet
 }
 
 private def checkInherentUsage
-  (
-    data: Data,
-    constructors: Seq[Constructor]
-  )
+  (data: Data, constructor: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Unit] =
@@ -1362,10 +1326,7 @@ private def checkInherentUsage
             )(using SUBSUMPTION)
             _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
           yield ()
-
-      allRight(
-        constructors.map(c => checkTelescope(c.paramTys, data.inherentUsage))
-      )
+      checkTelescope(constructor.paramTys, data.inherentUsage)
 end checkInherentUsage
 
 private def deriveTypeInherentUsage
@@ -1394,7 +1355,7 @@ private def deriveTypeInherentUsage
 end deriveTypeInherentUsage
 
 private def checkInherentEqDecidable
-  (data: Data, constructors: Seq[Constructor])
+  (data: Data, constructor: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Unit] =
@@ -1472,14 +1433,16 @@ private def checkInherentEqDecidable
     else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
 
   // 3. check that either data.inherentUsage subsumes U1 OR there is zero or one constructor
-  def dataIsPresentAtRuntimeOrThereIsSingleConstructor() =
-    if constructors.size <= 1 then Right(())
-    else
+  def dataIsPresentAtRuntimeOrThereIsSingleConstructor
+    () =
+    // Only check this on the second constructor to avoid unnecessary additional checks.
+    if Σ.getConstructors(data.qn).size == 1 then
       checkSubsumption(
         data.inherentUsage,
         UsageLiteral(U1),
         Some(UsageType(None))
       )(using SUBSUMPTION)
+    else Right(())
 
   checkSubsumption(
     data.inherentEqDecidability,
@@ -1491,15 +1454,11 @@ private def checkInherentEqDecidable
     // Call 1, 2, 3
     case _ =>
       dataIsPresentAtRuntimeOrThereIsSingleConstructor() >>
-        allRight(
-          constructors.map { constructor =>
-            checkComponentTypes(
-              constructor.paramTys,
-              data.inherentEqDecidability
-            ) >>
-              checkComponentUsage(constructor)
-          }
-        )
+        checkComponentTypes(
+          constructor.paramTys,
+          data.inherentEqDecidability
+        ) >>
+        checkComponentUsage(constructor)
 
 private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor:
   override def visitCollapse
