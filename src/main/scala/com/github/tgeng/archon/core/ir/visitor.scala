@@ -143,12 +143,13 @@ trait Visitor[C, R]:
     visitName(p.name)
 
   def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
-    case t: CtTerm          => visitCtTerm(t)
-    case l: CtLambda        => visitCtLambda(l)
-    case r: CtRecord        => visitCtRecord(r)
-    case tc: CtTypeCase     => visitCtTypeCase(tc)
-    case dc: CtDataCase     => visitCtDataCase(dc)
-    case ec: CtEqualityCase => visitCtEqualityCase(ec)
+    case t: CtTerm           => visitCtTerm(t)
+    case l: CtLambda         => visitCtLambda(l)
+    case r: CtRecord         => visitCtRecord(r)
+    case tc: CtTypeCase      => visitCtTypeCase(tc)
+    case dc: CtDataCase      => visitCtDataCase(dc)
+    case ec: CtEqualityCase  => visitCtEqualityCase(ec)
+    case ee: CtEqualityEmpty => visitCtEqualityEmpty(ee)
 
   def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
 
@@ -157,13 +158,53 @@ trait Visitor[C, R]:
       visitCTerm(l.body)
     }
 
-  def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R = ???
+  def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      r.fields.flatMap { (name, body) =>
+        Seq(visitName(name), visitCTerm(body))
+      }.toSeq: _*
+    )
 
-  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R = ???
+  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitVTerm(ct.operand) +:
+        ct.cases.flatMap { (qn, body) =>
+          Seq(
+            visitQualifiedName(qn),
+            withBindings(Σ.getData(qn).tParamTys.map(_._1.name)) {
+              visitCTerm(body)
+            }
+          )
+        }.toSeq :+ visitCTerm(ct.default): _*
+    )
 
-  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R = ???
+  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
+    val constructors = Σ.getConstructors(dt.qn)
+    combine(
+      visitVTerm(dt.operand) +:
+        visitQualifiedName(dt.qn) +: dt.cases.flatMap { (name, body) =>
+          val constructor = constructors
+            .collectFirst {
+              case con if con.name == name => con
+            }
+            .getOrElse(throw IllegalStateException(s"missing constructor $name for ${dt.qn}"))
+          Seq(
+            visitName(name),
+            withBindings(constructor.paramTys.map(_.name)) {
+              visitCTerm(body)
+            }
+          )
+        }.toSeq: _*
+    )
 
-  def visitCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): R = ???
+  def visitCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitVTerm(ec.operand),
+      visitCTerm(ec.body)
+    )
+
+  def visitCtEqualityEmpty(ee: CtEqualityEmpty)(using ctx: C)(using Σ: Signature): R =
+    visitVTerm(ee.operand)
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type                     => visitType(ty)
@@ -457,6 +498,62 @@ trait Transformer[C]:
     (using Σ: Signature)
     : T =
     action(using ctx)
+
+  def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
+    ct match
+      case t: CtTerm           => transformCtTerm(t)
+      case l: CtLambda         => transformCtLambda(l)
+      case r: CtRecord         => transformCtRecord(r)
+      case tc: CtTypeCase      => transformCtTypeCase(tc)
+      case dc: CtDataCase      => transformCtDataCase(dc)
+      case ec: CtEqualityCase  => transformCtEqualityCase(ec)
+      case ee: CtEqualityEmpty => transformCtEqualityEmpty(ee)
+
+  def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtTerm(transformCTerm(ct.term))
+
+  def transformCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtLambda(
+      withBindings(Seq(l.boundName)) {
+        transformCTerm(l.body)
+      }
+    )(l.boundName)
+
+  def transformCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtRecord(
+      r.fields.map { (name, field) =>
+        (name, transformCTerm(field))
+      }
+    )
+
+  def transformCtTypeCase(tc: CtTypeCase)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtTypeCase(
+      transformVTerm(tc.operand),
+      tc.cases.map { (qn, body) =>
+        val data = Σ.getData(qn)
+        (qn, withBindings(data.tParamTys.map(_._1.name)) { body })
+      },
+      transformCTerm(tc.default)
+    )
+
+  def transformCtDataCase(dc: CtDataCase)(using ctx: C)(using Σ: Signature): CaseTree =
+    val constructors = Σ.getConstructors(dc.qn)
+    CtDataCase(
+      transformVTerm(dc.operand),
+      dc.qn,
+      dc.cases.map { (name, body) =>
+        val constructor = constructors
+          .collectFirst { case con if con.name == name => con }
+          .getOrElse(throw IllegalStateException(s"missing constructor $name for ${dc.qn}"))
+        (name, withBindings(constructor.paramTys.map(_.name)) { body })
+      }
+    )
+
+  def transformCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtEqualityCase(transformVTerm(ec.operand), transformCTerm(ec.body))
+
+  def transformCtEqualityEmpty(ee: CtEqualityEmpty)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtEqualityEmpty(transformVTerm(ee.operand))
 
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm =
     tm match

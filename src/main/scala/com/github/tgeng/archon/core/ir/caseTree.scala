@@ -9,29 +9,25 @@ enum CaseTree:
   case CtRecord(fields: Map[Name, CTerm])
   case CtTypeCase
     (
-      index: Nat,
-      cases: Map[
-        QualifiedName,
-        /* binding + arg count */ CTerm
-      ],
+      operand: VTerm,
+      cases: Map[QualifiedName, /* binding + arg count */ CTerm],
       default: CTerm
     )
   case CtDataCase
     (
-      index: Nat,
+      operand: VTerm,
       qn: QualifiedName,
-      cases: Map[
-        Name,
-        /* binding + arg count */ CTerm
-      ]
+      cases: Map[Name, /* binding + arg count */ CTerm]
     )
   case CtEqualityCase
     (
-      index: Nat,
-      /** Weakening substitutor that recovers unused variables removed by unification. */
-      substitutor: Substitutor[VTerm],
-      /** Body needs to have the substitutor applied before it can be used for interpreting or
-        * further lowering.
+      operand: VTerm,
+      /** This body term is already applied with the weakening substitutor from unification. This
+        * deviates from [1] but it is easier to implement visitor and transformers.
         */
       body: CTerm
     )
+  case CtEqualityEmpty(operand: VTerm)
+
+// [1] Jesper Cockx and Andreas Abel. 2018. Elaborating dependent (co)pattern matching. Proc. ACM
+// Program. Lang. 2, ICFP, Article 75 (September 2018), 30 pages. https://doi.org/10.1145/3236770
