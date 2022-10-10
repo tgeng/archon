@@ -180,7 +180,7 @@ private def astToIr[T]
         astToIr(telescope)(action)
       }
     yield r match
-      case (tys, t) => (Binding(ty)(binding.name) :: tys, t)
+      case (tys, t) => (Binding(ty, ???)(binding.name) :: tys, t)
 
 def astToIr
   (ast: AstCoPattern)
@@ -267,7 +267,7 @@ def astToIr
         r <- chain((gn"T", argTy), (gn"e", effects)) {
           case (argTy :: effects :: Nil, n) =>
             FunctionType(
-              Binding(argTy)(argName),
+              Binding(argTy, ???)(argName),
               bodyTy.weaken(n, 1),
               effects
             )
@@ -354,6 +354,7 @@ def astToIr
                     (Σ.resolve(effName), effArgs),
                     outputEffects,
                     outputType,
+                    ???,
                     transform.weaken(n, 1),
                     handlers.view.mapValues { case (bar, t) =>
                       t.weaken(n, bar)
@@ -472,7 +473,7 @@ private def chain[T[_]: EitherFunctor]
       var nonTrivialComputations = 0
       val f = summon[EitherFunctor[T]]
       f.map(ts) {
-        case (_, Return(_)) => Right(())
+        case (_, Return(_, _)) => Right(())
         case _              => Right(nonTrivialComputations += 1)
       }
       val boundComputations = mutable.ArrayBuffer[(Name, CTerm)]()
@@ -480,7 +481,7 @@ private def chain[T[_]: EitherFunctor]
       // Step 2. Transform the computations into values and track non-trivial computations that
       // need to appear in let bindings. Weakening is performed where appropriate.
       for vTs <- f.map(ts) {
-          case (_, Return(v)) => Right(v.weaken(nonTrivialComputations, 0))
+          case (_, Return(v, _)) => Right(v.weaken(nonTrivialComputations, 0))
           case (n, c) =>
             boundComputations.addOne((n, c.weaken(index, 0)))
             index += 1

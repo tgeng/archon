@@ -22,12 +22,7 @@ enum JValue {
 
 import JValue.*
 
-class Parsers[M[+_]: Alternative: Monad: Applicative: Functor]
-  (using Functor[ParserT[Char, *, M]])
-  (using Applicative[ParserT[Char, *, M]])
-  (using Monad[ParserT[Char, *, M]])
-  (using Alternative[ParserT[Char, *, M]])
-  (using Alternative[ParseResult[M, *]]):
+class Parsers:
   def any = P(P.any << P.eos)
 
   def doubleQuoted = P(P.quoted() << P.eos)
@@ -77,7 +72,7 @@ class Parsers[M[+_]: Alternative: Monad: Applicative: Functor]
     P.lift((words, end))
   }
 
-  def expression: ParserT[Char, String, M] = P {
+  def expression: Parser[Char, String] = P {
     def atom = P(decimal.map(_.toString) | "(" >> expression << ")")
 
     def factor = P(
@@ -105,7 +100,7 @@ class Parsers[M[+_]: Alternative: Monad: Applicative: Functor]
 
   def json = P {
     import JValue.*
-    def jValue: ParserT[Char, JValue, M] =
+    def jValue: Parser[Char, JValue] =
       jNull | jBoolean | jNumber | jString | jArray | jObject
 
     def jNull = P("null".! as JNull)
@@ -122,7 +117,11 @@ class Parsers[M[+_]: Alternative: Monad: Applicative: Functor]
     )
 
     def jObject = P {
-      def jObjectEntry = P((P.quoted() << ":".%, jValue))
+      def jObjectEntry: Parser[Char, (String, JValue)] =
+        for
+          key <- P.quoted() << ":".%
+          value <- jValue
+        yield (key, value)
 
       "{".! >%> (jObjectEntry sepBy ",".!.% map (m => JObject(m.toMap))) <%< "}"
     }
@@ -135,15 +134,9 @@ class Parsers[M[+_]: Alternative: Monad: Applicative: Functor]
   def precedenceRule = PrecedenceRule.precedenceRuleParser
 
 class ParserCombinatorsTest extends AnyFreeSpec:
-  testParsers(true)
+  testParsers()
 
-  private def testParsers[M[+_]: Alternative: Monad: Applicative: Functor]
-    (updateTestData: Boolean)
-    (using Functor[ParserT[Char, *, M]])
-    (using Applicative[ParserT[Char, *, M]])
-    (using Monad[ParserT[Char, *, M]])
-    (using Alternative[ParserT[Char, *, M]])
-    (using Alternative[ParseResult[M, *]]) =
+  private def testParsers() =
     import scala.io.Source
     val obj = Parsers()
     val parsers =
@@ -151,7 +144,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
         .map(
           _.!!.invoke(
             obj
-          ).asInstanceOf[ParserT[Char, Any, M]]
+          ).asInstanceOf[Parser[Char, Any]]
         )
     for parser <- parsers
     do
@@ -164,16 +157,14 @@ class ParserCombinatorsTest extends AnyFreeSpec:
           fail(s"No test data for $parserName. Created placeholder file.")
         val (expected, actual) = testParser(parser, testDataFile)
         if expected != actual then
-          if updateTestData then
-            testDataFile.writeText(actual)
-            fail(
-              s"Test comparison failed for $parserName. Test data has been updated."
-            )
-          else assert(expected == actual)
+          testDataFile.writeText(actual)
+          fail(
+            s"Test comparison failed for $parserName. Test data has been updated."
+          )
       }
 
   @nowarn
-  private def testParser[M[+_]](p: ParserT[Char, Any, M], testDataFile: File): (String, String) =
+  private def testParser(p: Parser[Char, Any], testDataFile: File): (String, String) =
     val testDataString = Source.fromFile(testDataFile).use { source =>
       source.mkString.replace(System.lineSeparator(), "\n").!!
     }
@@ -194,11 +185,8 @@ class ParserCombinatorsTest extends AnyFreeSpec:
       p.doParse(0)(using input) match
         case r @ ParseResult(results, errors, _) =>
           results match
-            case Nil | None =>
+            case Nil =>
               actualPart.append(r.mkErrorString(input))
-              expectedPart.append(outputs.lift(0).getOrElse(""))
-            case Some((advance, t)) =>
-              actualPart.append(s"$advance | $t")
               expectedPart.append(outputs.lift(0).getOrElse(""))
             case l: List[(Int, Any)] =>
               actualPart.append(

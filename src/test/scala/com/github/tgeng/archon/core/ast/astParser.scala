@@ -1,7 +1,6 @@
 package com.github.tgeng.archon.core.ast
 
 import collection.mutable
-import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Binding
 import com.github.tgeng.archon.core.ir.Builtins
@@ -27,7 +26,7 @@ object AstParser:
     for
       name <- name <%< P.from(":") << P.whitespaces
       ty <- rhs
-    yield Binding(ty)(name)
+    yield Binding(ty, ???)(name)
 
   def dataDecl: StrParser[AstData] = P {
     val constructor: StrParser[AstConstructor] = P {
@@ -97,12 +96,12 @@ object AstParser:
     val variance = (P.from("+").as(Variance.COVARIANT) || P
       .from("-")
       .as(Variance.CONTRAVARIANT)).??.map(_.getOrElse(Variance.INVARIANT))
-    val unnamedBinding = atom.map(Binding(_)(Name.Unreferenced))
+    val unnamedBinding = atom.map(Binding(_, ???)(Name.Unreferenced))
     val namedBinding =
       for
         name <- P.from("(") >%> name <%< P.from(":") << P.whitespaces
         ty <- rhs <%< P.from(")")
-      yield Binding(ty)(name)
+      yield Binding(ty, ???)(name)
     val bindingWithVariance =
       for
         variance <- variance
@@ -116,7 +115,7 @@ object AstParser:
       for
         name <- name <%< P.from(":") << P.whitespaces
         ty <- rhs
-      yield Binding(ty)(name)
+      yield Binding(ty, ???)(name)
     }
     P.from("{") >%>
       (binding sepByGreedy (P.whitespaces >> P.from(",") << P.whitespaces))
@@ -326,8 +325,7 @@ object AstParser:
       case ("thk", t :: Nil) => AstThunk(t)
       case ("frc", t :: Nil) => AstForce(t)
       case _                 => throw IllegalStateException()
-    }
-    ||(
+    } || (
       si(
         for
           eff <- effect

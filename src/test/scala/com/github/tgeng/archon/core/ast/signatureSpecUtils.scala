@@ -62,7 +62,7 @@ extension
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm2))
+    val (cTy, _) = assertRight(inferType(cTm2))
     assertRight(
       checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION)
     )
@@ -72,7 +72,7 @@ extension
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm2))
+    val (cTy, _) = assertRight(inferType(cTm2))
     assertLeft(
       checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.SUBSUMPTION)
     )
@@ -82,7 +82,7 @@ extension
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm2))
+    val (cTy, _) = assertRight(inferType(cTm2))
     assertRight(
       checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION)
     )
@@ -92,7 +92,7 @@ extension
 
     val cTm = astToIr(tm).asRight
     val cTm2 = astToIr(tm2).asRight
-    val cTy = assertRight(inferType(cTm2))
+    val (cTy, _) = assertRight(inferType(cTm2))
     assertLeft(
       checkSubsumption(cTm, cTm2, Some(cTy))(using CheckSubsumptionMode.CONVERSION)
     )
@@ -151,6 +151,16 @@ class TestSignature
     private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] = mutable.Map()
   )
   extends BuiltinSignature:
+
+  override def addConstructor(c: Constructor): Signature = ???
+
+  override def addField(f: Field): Signature = ???
+
+  override def addOperator(o: Operator): Signature = ???
+
+  override def addDef(d: Definition): Signature = ???
+
+  override def addClause(c: Clause): Signature = ???
 
   override def toString: String =
     s"""
@@ -278,42 +288,43 @@ class TestSignature
     ).asRight
 
     sortPreDeclarations(declarations) match
-      case Left(cycle) => tCtx.fail(s"detected cycles in declarations: $cycle")
+      case Left(cycle)               => tCtx.fail(s"detected cycles in declarations: $cycle")
       case Right(sortedDeclarations) =>
-        sortedDeclarations.foreach {
-          case (SIGNATURE, preData: PreData) =>
-            val data = assertRight(elaborateSignature(preData))
-            assertRight(checkData(data))
-            allData(data.qn) = data
-          case (BODY, preData: PreData) =>
-            val constructors = assertRight(elaborateBody(preData))
-            assertRight(checkDataConstructors(preData.qn, constructors))
-            allConstructors(preData.qn) = constructors.toIndexedSeq
-          case (SIGNATURE, preRecord: PreRecord) =>
-            val record = assertRight(elaborateSignature(preRecord))
-            assertRight(checkRecord(record))
-            allRecords(record.qn) = record
-          case (BODY, preRecord: PreRecord) =>
-            val fields = assertRight(elaborateBody(preRecord))
-            assertRight(checkRecordFields(preRecord.qn, fields))
-            allFields(preRecord.qn) = fields.toIndexedSeq
-          case (SIGNATURE, preDefinition: PreDefinition) =>
-            val definition = assertRight(elaborateSignature(preDefinition))
-            assertRight(checkDef(definition))
-            allDefinitions(definition.qn) = definition
-          case (BODY, preDefinition: PreDefinition) =>
-            val clauses = assertRight(elaborateBody(preDefinition))
-            assertRight(checkClauses(preDefinition.qn, clauses))
-            allClauses(preDefinition.qn) = clauses.toIndexedSeq
-          case (SIGNATURE, preEffect: PreEffect) =>
-            val effect = assertRight(elaborateSignature(preEffect))
-            assertRight(checkEffect(effect))
-            allEffects(effect.qn) = effect
-          case (BODY, preEffect: PreEffect) =>
-            val operators = assertRight(elaborateBody(preEffect))
-            assertRight(checkOperators(preEffect.qn, operators))
-            allOperators(preEffect.qn) = operators.toIndexedSeq
-        }
+      // TODO: re do this part
+      // sortedDeclarations.foreach {
+      //   case (SIGNATURE, preData: PreData) =>
+      //     val data = assertRight(elaborateSignature(preData))
+      //     assertRight(checkData(data))
+      //     allData(data.qn) = data
+      //   case (BODY, preData: PreData) =>
+      //     val constructors = assertRight(elaborateBody(preData))
+      //     assertRight(checkDataConstructors(preData.qn, constructors))
+      //     allConstructors(preData.qn) = constructors.toIndexedSeq
+      //   case (SIGNATURE, preRecord: PreRecord) =>
+      //     val record = assertRight(elaborateSignature(preRecord))
+      //     assertRight(checkRecord(record))
+      //     allRecords(record.qn) = record
+      //   case (BODY, preRecord: PreRecord) =>
+      //     val fields = assertRight(elaborateBody(preRecord))
+      //     assertRight(checkRecordFields(preRecord.qn, fields))
+      //     allFields(preRecord.qn) = fields.toIndexedSeq
+      //   case (SIGNATURE, preDefinition: PreDefinition) =>
+      //     val definition = assertRight(elaborateSignature(preDefinition))
+      //     assertRight(checkDef(definition))
+      //     allDefinitions(definition.qn) = definition
+      //   case (BODY, preDefinition: PreDefinition) =>
+      //     val clauses = assertRight(elaborateBody(preDefinition))
+      //     assertRight(checkClauses(preDefinition.qn, clauses))
+      //     allClauses(preDefinition.qn) = clauses.toIndexedSeq
+      //   case (SIGNATURE, preEffect: PreEffect) =>
+      //     val effect = assertRight(elaborateSignature(preEffect))
+      //     assertRight(checkEffect(effect))
+      //     allEffects(effect.qn) = effect
+      //   case (BODY, preEffect: PreEffect) =>
+      //     val operators = assertRight(elaborateBody(preEffect))
+      //     assertRight(checkOperators(preEffect.qn, operators))
+      //     allOperators(preEffect.qn) = operators.toIndexedSeq
+      // }
 
 def scope
   (b: (MutableContext, TestSignature) ?=> Unit)
@@ -331,7 +342,7 @@ extension(binding: Binding[AstTerm])
 
     val ty = astToIr(binding.ty).asRight
     val vTy = reduceVType(ty).asRight
-    Γ.addOne(Binding(vTy)(binding.name))
+    Γ.addOne(Binding(vTy, ???)(binding.name))
 
 extension(declarations: List[AstDeclaration])
   def unary_+(using Σ: TestSignature)(using TypingContext)(using TestContext) =

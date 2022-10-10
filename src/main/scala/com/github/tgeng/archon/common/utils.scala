@@ -244,9 +244,11 @@ def flattenMultisets[T](ms: Iterable[Multiset[T]]): Multiset[T] =
 def multisetOf[T](ts: T*): Multiset[T] =
   ts.groupMapReduce(t => t)(_ => 1)(_ + _)
 
-extension [L, R](e: Either[L, R])
-  inline def withFilter(inline predicate: R => Boolean): Either[L, R] = e match
-    case Right(r) if predicate(r) => e
-    case Right(_) =>
-      throw Exception("please use irrefutable pattern with Either")
-    case Left(_) => e
+package eitherFilter {
+  extension [L, R](e: Either[L, R])
+    inline def withFilter(inline predicate: R => Boolean): Either[L, R] = e match
+      case Right(r) if predicate(r) => e
+      case Right(_) =>
+        throw Exception("please use irrefutable pattern with Either")
+      case Left(_) => e
+}

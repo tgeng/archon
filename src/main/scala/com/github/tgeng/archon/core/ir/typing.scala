@@ -2,6 +2,7 @@ package com.github.tgeng.archon.core.ir
 
 import scala.collection.immutable.{Map, Set}
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Reducible.reduce
 import VTerm.*
@@ -958,9 +959,7 @@ def checkSubsumption
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
-  (using
-    ctx: TypingContext
-  )
+  (using ctx: TypingContext)
   : Either[IrError, Unit] =
   def impl: Either[IrError, Unit] =
     if rawSub == rawSup then return Right(())
