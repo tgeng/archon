@@ -27,9 +27,9 @@ def elaborateSignature
       for
         ty <- reduceCType(ty)
         r <- ty match
-          // Here and below we do not care the declared effect types because data type constructors
-          // are always total. Declaring non-total signature is not necessary (nor desirable) but
-          // acceptable.
+          // Here and below we do not care about the declared effect types because data type 
+          // constructors are always total. Declaring non-total signature is not necessary (nor 
+          // desirable) but acceptable.
           case F(Type(ul, _), _, _) => Right((Nil, ul))
           case F(t, _, _)           => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
@@ -162,32 +162,33 @@ def elaborateBody
       paramTys <- elaborateTelescope(preDefinition.paramTys)
       r <- {
         given Γ: Context = paramTys.toIndexedSeq
+        Right(???)
 
-        transpose(
-          preDefinition.clauses.zipWithIndex.flatMap { (clause, index) =>
-            clause.rhs match
-              case None => List()
-              case Some(rhs) =>
-                List(
-                  ctx.trace(s"elaborating clause $index") {
-                    for
-                      bindings <- elaborateTelescope(clause.bindings)
-                      ty <- reduceCType(clause.ty)(using Γ ++ bindings)
-                    yield
-                      val allBindings = paramTys ++ bindings
-                      Clause(
-                        allBindings,
-                        CoPattern.pVars(
-                          allBindings.size - 1,
-                          bindings.size
-                        ) ++ clause.lhs,
-                        rhs,
-                        ty
-                      )
-                  }
-                )
-          }
-        )
+        // transpose(
+        //   preDefinition.clauses.zipWithIndex.flatMap { (clause, index) =>
+        //     clause.rhs match
+        //       case None => List()
+        //       case Some(rhs) =>
+        //         List(
+        //           ctx.trace(s"elaborating clause $index") {
+        //             for
+        //               bindings <- elaborateTelescope(clause.bindings)
+        //               ty <- reduceCType(clause.ty)(using Γ ++ bindings)
+        //             yield
+        //               val allBindings = paramTys ++ bindings
+        //               Clause(
+        //                 allBindings,
+        //                 CoPattern.pVars(
+        //                   allBindings.size - 1,
+        //                   bindings.size
+        //                 ) ++ clause.lhs,
+        //                 rhs,
+        //                 ty
+        //               )
+        //           }
+        //         )
+        //   }
+        // )
       }
     yield r
   }

@@ -19,7 +19,6 @@ enum PreDeclaration:
       // declared function type. That is, indexed families are converted to parameterized inductive
       // types with equality types representing the constraints.
       val ty: CTerm,
-      val isEqDecidable: Boolean,
       val constructors: List[PreConstructor]
     )
   case PreRecord
@@ -54,10 +53,9 @@ type PreField = Field // There is no difference for field
 
 case class PreClause
   (
-    bindings: PreTelescope, // TODO[P2]: remove `binding` after elaboration is implemented
+    boundNames: List[Ref[Name]],
     lhs: List[CoPattern],
-    rhs: Option[CTerm], // `None` for absurd pattern
-    ty: CTerm // TODO[P2]: remove `ty` after elaboration is implemented
+    rhs: Option[CTerm] // `None` for absurd pattern
   )
 
 case class PreOperator(name: Name, ty: CTerm)
@@ -120,10 +118,9 @@ def sortPreDeclarations
           ) + record.qn
         case definition: PreDefinition =>
           QualifiedNameVisitor.combine(
-            definition.clauses.map { clause =>
-              QualifiedNameVisitor.combine(
-                clause.ty.visitWith(QualifiedNameVisitor)
-              )
+            definition.clauses.flatMap { clause =>
+              clause.lhs.map(QualifiedNameVisitor.visitCoPattern(_)) ++
+                clause.rhs.map(QualifiedNameVisitor.visitCTerm(_))
             }: _*
           ) + definition.qn
         case effect: PreEffect =>
