@@ -23,18 +23,18 @@ def elaborateSignature
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (TTelescope, ULevel)] =
+      : Either[IrError, (TTelescope, ULevel, VTerm, VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
           // Here and below we do not care about the declared effect types because data type 
           // constructors are always total. Declaring non-total signature is not necessary (nor 
           // desirable) but acceptable.
-          case F(Type(ul, _), _, _) => Right((Nil, ul))
+          case F(Type(Top(ul, usage, eqDecidability)), _, _) => Right((Nil, ul, usage, eqDecidability))
           case F(t, _, _)           => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
-              ((binding, INVARIANT) :: telescope, ul)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, usage, eqDecidability) =>
+              ((binding, INVARIANT) :: telescope, ul, usage, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -43,8 +43,8 @@ def elaborateSignature
       tParamTys <- elaborateTTelescope(data.tParamTys)
       elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
     yield elaboratedTy match
-      case (tIndices, ul) =>
-        Data(data.qn)(tParamTys.size, tParamTys ++ tIndices, ul, ???, ???)
+      case (tIndices, ul, usage, eqDecidability) =>
+        Data(data.qn)(tParamTys.size, tParamTys ++ tIndices, ul, usage, eqDecidability)
   }
 
 def elaborateBody
@@ -104,7 +104,7 @@ def elaborateSignature
       tParamTys <- elaborateTTelescope(record.tParamTys)
       ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
       r <- ty match
-        case CType(ul, _, _) => Right(new Record(record.qn)(tParamTys, ul))
+        case CType(CTop(ul, _), _) => Right(new Record(record.qn)(tParamTys, ul))
         case t               => Left(ExpectCType(t))
     yield r
   }

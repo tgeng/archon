@@ -99,7 +99,7 @@ enum UsageOperator:
   case USum, UProd, UJoin
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
-  case Type(ul: ULevel, upperBound: VTerm)(using sourceInfo: SourceInfo)
+  case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(TypeQn)
 
@@ -214,7 +214,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Type(ul, upperBound)            => Type(ul, upperBound)
+      case Type(upperBound)                => Type(upperBound)
       case Top(ul, u, eqD)                 => Top(ul, u, eqD)
       case Var(index)                      => Var(index)
       case Collapse(cTm)                   => Collapse(cTm)
@@ -350,7 +350,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   /** archon.builtin.CType */
   case CType
     (
-      ul: ULevel,
       upperBound: CTerm,
       effects: VTerm = VTerm.Total(using SiEmpty)
     )
@@ -382,7 +381,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  // TODO[P4]: (probably not good idea) consider adding CLet that carries out a computation and 
+  // TODO[P4]: (probably not good idea) consider adding CLet that carries out a computation and
   //  capture the resulted computation as a thunk
   //  For example,
   //    clet plus_1 = plus 1
@@ -502,14 +501,14 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Hole                           => Hole
-      case CType(ul, upperBound, effects) => CType(ul, upperBound, effects)
-      case CTop(ul, effects)              => CTop(ul, effects)
-      case Def(qn)                        => Def(qn)
-      case Force(v)                       => Force(v)
-      case F(vTy, effects, u)             => F(vTy, effects, u)
-      case Return(v, u)                   => Return(v, u)
-      case l @ Let(t, ctx)                => Let(t, ctx)(l.boundName)
+      case Hole                       => Hole
+      case CType(upperBound, effects) => CType(upperBound, effects)
+      case CTop(ul, effects)          => CTop(ul, effects)
+      case Def(qn)                    => Def(qn)
+      case Force(v)                   => Force(v)
+      case F(vTy, effects, u)         => F(vTy, effects, u)
+      case Return(v, u)               => Return(v, u)
+      case l @ Let(t, ctx)            => Let(t, ctx)(l.boundName)
       case FunctionType(binding, bodyTy, effects) =>
         FunctionType(binding, bodyTy, effects)
       case Application(fun, args)        => Application(fun, args)

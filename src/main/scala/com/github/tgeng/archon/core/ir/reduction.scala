@@ -364,16 +364,10 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType(_))) |
             (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType())) |
             (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType())) |
+            (CPattern(PDataType(UsageQn, Nil)), ETerm(UsageType(_))) |
+            (CPattern(PDataType(EqDecidabilityQn, Nil)), ETerm(EqDecidabilityType())) |
             (CPattern(PForced(_)), ETerm(_)) =>
-          case (
-              CPattern(PDataType(TypeQn, p :: Nil)),
-              ETerm(Type(l, upperBound))
-            ) =>
-            l match
-              case ULevel.USimpleLevel(l) =>
-                elims = (CPattern(p), ETerm(l)) :: elims
-              case ULevel.UωLevel(_) =>
-                throw IllegalArgumentException("type error")
+          // TODO[P4]: matching type doesn't seem to be useful.
           // TODO[P4]: matching cell type is probably not a good idea because it's unknown at what
           //  level `tyP` should be. In order to allow this, we need to make each `Cell`
           //  self-contained, just like all declared `Data`. The downside is then the need to carry

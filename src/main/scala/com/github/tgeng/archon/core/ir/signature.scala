@@ -188,7 +188,7 @@ trait Signature:
     for data <- getDataOption(qn)
     yield Definition(qn)(
       data.tParamTys.foldRight[CTerm](
-        F(Type(data.ul, DataType(qn, vars(data.tParamTys.size - 1))))
+        F(Type(DataType(qn, vars(data.tParamTys.size - 1))))
       ) { (bindingAndVariance, bodyTy) =>
         bindingAndVariance match
           case (binding, _) => FunctionType(binding, bodyTy)
@@ -204,7 +204,7 @@ trait Signature:
           data.tParamTys.map(_._1),
           pVars(highestDbIndex),
           Return(DataType(qn, vars(highestDbIndex))),
-          F(Type(data.ul, DataType(qn, vars(highestDbIndex))))
+          F(Type(DataType(qn, vars(highestDbIndex))))
         )
       )
     }
@@ -264,7 +264,7 @@ trait Signature:
     for record <- getRecordOption(qn)
     yield Definition(qn)(
       record.tParamTys.foldRight[CTerm](
-        CType(record.ul, RecordType(qn, vars(record.tParamTys.size - 1)))
+        CType(RecordType(qn, vars(record.tParamTys.size - 1)))
       ) { (bindingAndVariance, bodyTy) =>
         bindingAndVariance match
           case (binding, _) => FunctionType(binding, bodyTy)
@@ -280,7 +280,7 @@ trait Signature:
           record.tParamTys.map(_._1),
           pVars(highestDbIndex),
           RecordType(qn, vars(highestDbIndex)),
-          CType(record.ul, RecordType(qn, vars(highestDbIndex)))
+          CType(RecordType(qn, vars(highestDbIndex)))
         )
       )
     }

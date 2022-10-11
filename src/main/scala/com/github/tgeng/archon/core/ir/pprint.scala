@@ -296,13 +296,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     : Block = Block(Concat, "#", p.name)
 
   override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
-    case Type(USimpleLevel(Level(l, operands)), Top(_, _, _)) if operands.isEmpty =>
+    case Type(Top(USimpleLevel(Level(l, operands)), _, _)) if operands.isEmpty =>
       Block("Type" + l.sub)
-    case Type(USimpleLevel(l), Top(_, _, _)) => app("Type", l)
-    case Type(UωLevel(layer), Top(_, _, _))  => Block("TYPE" + layer.sub)
-    case Type(USimpleLevel(l), upperBound)   => app("SubtypeOf", l, upperBound)
-    case Type(UωLevel(layer), upperBound) =>
-      Block("SUBTYPEOF", layer.toString, upperBound)
+    // TODO: show usage and eqDecidability
+    case Type(Top(USimpleLevel(l), _, _)) => app("Type", l)
+    case Type(Top(UωLevel(layer), _, _))  => Block("TYPE" + layer.sub)
+    case Type(upperBound)                 => app("SubtypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
     top.ul match
@@ -421,16 +420,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature
     )
     : Block = cType match
-    case CType(USimpleLevel(Level(l, operands)), CTop(_, _), eff) if operands.isEmpty =>
+    case CType(CTop(USimpleLevel(Level(l, operands)), _), eff) if operands.isEmpty =>
       Block("CType" + l.sub)
-    case CType(USimpleLevel(l), CTop(_, tEff), eff) if tEff == Total =>
+    case CType(CTop(USimpleLevel(l), tEff), eff) if tEff == Total =>
       ctype(eff, "CType", l)
-    case CType(UωLevel(layer), CTop(_, tEff), eff) if tEff == Total =>
+    case CType(CTop(UωLevel(layer), tEff), eff) if tEff == Total =>
       ctype(eff, "CTYPE" + layer.sub)
-    case CType(USimpleLevel(l), upperBound, eff) =>
-      ctype(eff, "CSubtypeOf", l, upperBound)
-    case CType(UωLevel(layer), upperBound, eff) =>
-      ctype(eff, "CSUBTYPEOF", layer.toString, upperBound)
+    case CType(upperBound, eff) =>
+      ctype(eff, "CSubtypeOf", upperBound)
 
   override def visitCTop
     (cTop: CTop)

@@ -23,6 +23,8 @@ object Builtins:
 
   val UsageQn = BuiltinType / "Usage"
 
+  val EqDecidabilityQn = BuiltinType / "EqDecidability"
+
   val EqualityQn = BuiltinType / "Equality"
   val CellQn = BuiltinType / "Cell"
   val UCellQn = BuiltinType / "UCell"
@@ -74,16 +76,7 @@ object Builtins:
       (
         /* tParamTys*/
         (Binding(LevelType(), U0)(n"level"), Variance.COVARIANT) ::
-          (
-            Binding(
-              Type(
-                USimpleLevel(Var(0)),
-                Top(USimpleLevel(Var(0)))
-              ),
-              U1
-            )(n"A"),
-            Variance.COVARIANT
-          ) ::
+          (Binding(Type(Top(USimpleLevel(Var(0)))), U1)(n"A"), Variance.COVARIANT) ::
           (Binding(Var(0), U1)(n"x"), Variance.COVARIANT) ::
           (Binding(Var(1), U1)(n"y"), Variance.COVARIANT) ::
           Nil,
@@ -143,24 +136,14 @@ object Builtins:
         (
           FunctionType(
             Binding(LevelType(), U1)(n"level"),
-            F(
-              Type(
-                USimpleLevel(LevelSuc(Var(0))),
-                Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0))))
-              )
-            )
+            F(Type(Type(Top(USimpleLevel(Var(0))))))
           ),
           IndexedSeq(
             Clause(
               Binding(LevelType(), U1)(n"level") :: Nil,
               CPattern(PVar(0)) :: Nil,
-              Return(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0))))),
-              F(
-                Type(
-                  USimpleLevel(LevelSuc(Var(0))),
-                  Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0))))
-                )
-              )
+              Return(Type(Top(USimpleLevel(Var(0))))),
+              F(Type(Type(Top(USimpleLevel(Var(0))))))
             )
           )
         )
@@ -176,40 +159,17 @@ object Builtins:
           FunctionType(
             Binding(LevelType(), U1)(n"level"),
             FunctionType(
-              Binding(
-                Type(
-                  USimpleLevel(Var(0)),
-                  Top(USimpleLevel(Var(0)))
-                ),
-                U1
-              )(n"upperBound"),
-              F(
-                Type(
-                  USimpleLevel(LevelSuc(Var(1))),
-                  Type(USimpleLevel(Var(1)), Var(0))
-                )
-              )
+              Binding(Type(Top(USimpleLevel(Var(0)))), U1)(n"upperBound"),
+              F(Type(Type(Var(0))))
             )
           ),
           IndexedSeq(
             Clause(
               Binding(LevelType(), U1)(n"level") ::
-                Binding(
-                  Type(
-                    USimpleLevel(Var(0)),
-                    Top(USimpleLevel(Var(0)))
-                  ),
-                  U1
-                )(n"upperBound") ::
-                Nil,
+                Binding(Type(Top(USimpleLevel(Var(0)))), U1)(n"upperBound") :: Nil,
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
-              Return(Type(USimpleLevel(Var(1)), Var(0))),
-              F(
-                Type(
-                  USimpleLevel(LevelSuc(Var(1))),
-                  Type(USimpleLevel(Var(1)), Var(0))
-                )
-              )
+              Return(Type(Var(0))),
+              F(Type(Type(Var(0))))
             )
           )
         )
@@ -223,14 +183,14 @@ object Builtins:
         (
           FunctionType(
             Binding(LevelType(), U1)(n"level"),
-            F(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))
+            F(Type(Top(USimpleLevel(Var(0)))))
           ),
           IndexedSeq(
             Clause(
               Binding(LevelType(), U1)(n"level") :: Nil,
               CPattern(PVar(0)) :: Nil,
               Return(Top(USimpleLevel(Var(0)))),
-              F(Type(USimpleLevel(Var(0)), Top(USimpleLevel(Var(0)))))
+              F(Type(Top(USimpleLevel(Var(0)))))
             )
           )
         )
@@ -241,13 +201,13 @@ object Builtins:
       b(
         Builtins.EffectsQn,
         (
-          F(Type(USimpleLevel(LevelLiteral(0)), EffectsType())),
+          F(Type(EffectsType())),
           IndexedSeq(
             Clause(
               Nil,
               Nil,
               Return(EffectsType()),
-              F(Type(USimpleLevel(LevelLiteral(0)), EffectsType()))
+              F(Type(EffectsType()))
             )
           )
         )
@@ -258,15 +218,8 @@ object Builtins:
       b(
         Builtins.LevelQn,
         (
-          F(Type(UωLevel(0), LevelType())),
-          IndexedSeq(
-            Clause(
-              Nil,
-              Nil,
-              Return(LevelType()),
-              F(Type(UωLevel(0), LevelType()))
-            )
-          )
+          F(Type(LevelType())),
+          IndexedSeq(Clause(Nil, Nil, Return(LevelType()), F(Type(LevelType()))))
         )
       ),
 
@@ -275,15 +228,8 @@ object Builtins:
       b(
         Builtins.HeapQn,
         (
-          F(Type(USimpleLevel(LevelLiteral(0)), HeapType())),
-          IndexedSeq(
-            Clause(
-              Nil,
-              Nil,
-              Return(HeapType()),
-              F(Type(USimpleLevel(LevelLiteral(0)), HeapType()))
-            )
-          )
+          F(Type(HeapType())),
+          IndexedSeq(Clause(Nil, Nil, Return(HeapType()), F(Type(HeapType()))))
         )
       ),
 
@@ -298,10 +244,7 @@ object Builtins:
             Binding(LevelType(), U1)(n"level"),
             FunctionType(
               Binding(EffectsType(), U1)(n"effects"),
-              CType(
-                USimpleLevel(LevelSuc(Var(1))),
-                CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0)))
-              )
+              CType(CType(CTop(USimpleLevel(Var(1)), Var(0))))
             )
           ),
           IndexedSeq(
@@ -310,10 +253,9 @@ object Builtins:
                 n"effects"
               ) :: Nil,
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
-              CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0))),
+              CType(CTop(USimpleLevel(Var(1)), Var(0))),
               CType(
-                USimpleLevel(LevelSuc(Var(1))),
-                CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0)))
+                CType(CTop(USimpleLevel(Var(1)), Var(0)))
               )
             )
           )
@@ -334,18 +276,10 @@ object Builtins:
               Binding(EffectsType(), U1)(n"effects"),
               FunctionType(
                 Binding(
-                  U(
-                    CType(
-                      USimpleLevel(Var(1)),
-                      CTop(USimpleLevel(Var(1)), Var(0))
-                    )
-                  ),
+                  U(CType(CTop(USimpleLevel(Var(1)), Var(0)))),
                   U1
                 )(n"upperBound"),
-                CType(
-                  USimpleLevel(LevelSuc(Var(2))),
-                  CType(USimpleLevel(Var(2)), Force(Var(0)), Var(1))
-                )
+                CType(CType(Force(Var(0)), Var(1)))
               )
             )
           ),
@@ -354,23 +288,15 @@ object Builtins:
               Binding(LevelType(), U1)(n"level") ::
                 Binding(EffectsType(), U1)(n"effects") ::
                 Binding(
-                  U(
-                    CType(
-                      USimpleLevel(Var(1)),
-                      CTop(USimpleLevel(Var(1)), Var(0))
-                    )
-                  ),
+                  U(CType(CTop(USimpleLevel(Var(1)), Var(0)))),
                   U1
                 )(n"upperBound") ::
                 Nil,
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
                 PVar(0)
               ) :: Nil,
-              CType(USimpleLevel(Var(2)), Force(Var(0)), Var(1)),
-              CType(
-                USimpleLevel(LevelSuc(Var(2))),
-                CType(USimpleLevel(Var(2)), Force(Var(0)), Var(1))
-              )
+              CType(Force(Var(0)), Var(1)),
+              CType(CType(Force(Var(0)), Var(1)))
             )
           )
         )
@@ -387,7 +313,7 @@ object Builtins:
             Binding(LevelType(), U1)(n"level"),
             FunctionType(
               Binding(EffectsType(), U1)(n"effects"),
-              CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0)))
+              CType(CTop(USimpleLevel(Var(1)), Var(0)))
             )
           ),
           IndexedSeq(
@@ -397,7 +323,7 @@ object Builtins:
               ) :: Nil,
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               CTop(USimpleLevel(Var(1)), Var(0)),
-              CType(USimpleLevel(Var(1)), CTop(USimpleLevel(Var(1)), Var(0)))
+              CType(CTop(USimpleLevel(Var(1)), Var(0)))
             )
           )
         )
@@ -496,43 +422,20 @@ object Builtins:
             FunctionType(
               Binding(HeapType(), U1)(n"h"),
               FunctionType(
-                Binding(
-                  Type(
-                    USimpleLevel(Var(1)),
-                    Top(USimpleLevel(Var(1)))
-                  ),
-                  U1
-                )(n"A"),
-                F(
-                  Type(
-                    USimpleLevel(Var(2)),
-                    CellType(Var(1), Var(0), CellStatus.Initialized)
-                  )
-                )
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A"),
+                F(Type(CellType(Var(1), Var(0), CellStatus.Initialized)))
               )
             )
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") :: Binding(HeapType(), U1)(
-                n"h"
-              ) :: Binding(
-                Type(
-                  USimpleLevel(Var(1)),
-                  Top(USimpleLevel(Var(1)))
-                ),
-                U1
-              )(n"A") :: Nil,
+              Binding(LevelType(), U0)(n"level") :: Binding(HeapType(), U1)(n"h") ::
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A") :: Nil,
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
                 PVar(0)
               ) :: Nil,
               Return(CellType(Var(1), Var(0), CellStatus.Initialized)),
-              F(
-                Type(
-                  USimpleLevel(Var(2)),
-                  CellType(Var(1), Var(0), CellStatus.Initialized)
-                )
-              )
+              F(Type(CellType(Var(1), Var(0), CellStatus.Initialized)))
             )
           )
         )
@@ -545,43 +448,19 @@ object Builtins:
             FunctionType(
               Binding(HeapType(), U1)(n"h"),
               FunctionType(
-                Binding(
-                  Type(
-                    USimpleLevel(Var(1)),
-                    Top(USimpleLevel(Var(1)))
-                  ),
-                  U1
-                )(n"A"),
-                F(
-                  Type(
-                    USimpleLevel(Var(2)),
-                    CellType(Var(1), Var(0), CellStatus.Uninitialized)
-                  )
-                )
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A"),
+                F(Type(CellType(Var(1), Var(0), CellStatus.Uninitialized)))
               )
             )
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") :: Binding(HeapType(), U1)(
-                n"h"
-              ) :: Binding(
-                Type(
-                  USimpleLevel(Var(1)),
-                  Top(USimpleLevel(Var(1)))
-                ),
-                U1
-              )(n"A") :: Nil,
-              CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
-                PVar(0)
-              ) :: Nil,
+              Binding(LevelType(), U0)(n"level") :: Binding(HeapType(), U1)(n"h") ::
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A") ::
+                Nil,
+              CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               Return(CellType(Var(1), Var(0), CellStatus.Uninitialized)),
-              F(
-                Type(
-                  USimpleLevel(Var(2)),
-                  CellType(Var(1), Var(0), CellStatus.Uninitialized)
-                )
-              )
+              F(Type(CellType(Var(1), Var(0), CellStatus.Uninitialized)))
             )
           )
         )
@@ -594,10 +473,7 @@ object Builtins:
             FunctionType(
               Binding(HeapType(), U1)(n"h"),
               FunctionType(
-                Binding(
-                  Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))),
-                  U1
-                )(n"A"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A"),
                 F(
                   CellType(Var(1), Var(0), CellStatus.Uninitialized),
                   EffectsLiteral(Set((Builtins.HeapEffQn, Var(1) :: Nil)))
@@ -609,10 +485,7 @@ object Builtins:
             Clause(
               Binding(LevelType(), U0)(n"level") ::
                 Binding(HeapType(), U1)(n"h") ::
-                Binding(
-                  Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))),
-                  U1
-                )(n"A") ::
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A") ::
                 Nil,
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
                 PVar(0)
@@ -635,10 +508,7 @@ object Builtins:
             FunctionType(
               Binding(HeapType(), U0)(n"h"),
               FunctionType(
-                Binding(
-                  Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))),
-                  U0
-                )(n"A"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A"),
                 FunctionType(
                   Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(
                     n"cell"
@@ -655,13 +525,8 @@ object Builtins:
             Clause(
               Binding(LevelType(), U0)(n"level") ::
                 Binding(HeapType(), U0)(n"h") ::
-                Binding(
-                  Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))),
-                  U0
-                )(n"A") ::
-                Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(
-                  n"cell"
-                ) ::
+                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A") ::
+                Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(n"cell") ::
                 Nil,
               CPattern(PVar(3)) ::
                 CPattern(PVar(2)) ::
@@ -686,10 +551,7 @@ object Builtins:
             FunctionType(
               Binding(HeapType(), U0)(n"h"),
               FunctionType(
-                Binding(
-                  Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))),
-                  U0
-                )(n"A"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A"),
                 FunctionType(
                   Binding(
                     CellType(Var(1), Var(0), CellStatus.Uninitialized),
@@ -710,10 +572,7 @@ object Builtins:
             Clause(
               Binding(LevelType(), U0)(n"level") ::
                 Binding(HeapType(), U0)(n"h") ::
-                Binding(
-                  Type(USimpleLevel(Var(1)), Top(USimpleLevel(Var(1)))),
-                  U0
-                )(n"A") ::
+                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A") ::
                 Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized), U1)(
                   n"cell"
                 ) ::
@@ -768,28 +627,17 @@ object Builtins:
       if layer >= 0
     yield (
       new Definition(qn)(
-        if isComputation then
-          CType(UωLevel(layer + 1), CType(UωLevel(layer), CTop(UωLevel(layer))))
-        else F(Type(UωLevel(layer + 1), Type(UωLevel(layer), Top(UωLevel(layer)))))
+        if isComputation then CType(CType(CTop(UωLevel(layer))))
+        else F(Type(Type(Top(UωLevel(layer)))))
       ),
       IndexedSeq(
         Clause(
           Nil,
           Nil,
-          if isComputation then CType(UωLevel(layer), CTop(UωLevel(layer)))
-          else Return(Type(UωLevel(layer), Top(UωLevel(layer)))),
-          if isComputation then
-            CType(
-              UωLevel(layer + 1),
-              CType(UωLevel(layer), CTop(UωLevel(layer)))
-            )
-          else
-            F(
-              Type(
-                UωLevel(layer + 1),
-                Type(UωLevel(layer), Top(UωLevel(layer)))
-              )
-            )
+          if isComputation then CType(CTop(UωLevel(layer)))
+          else Return(Type(Top(UωLevel(layer)))),
+          if isComputation then CType(CType(CTop(UωLevel(layer))))
+          else F(Type(Type(Top(UωLevel(layer)))))
         )
       )
     )

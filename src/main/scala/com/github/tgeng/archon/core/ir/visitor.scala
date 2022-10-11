@@ -236,10 +236,7 @@ trait Visitor[C, R]:
     case cell: Cell               => visitCell(cell)
 
   def visitType(ty: Type)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitULevel(ty.ul),
-      visitVTerm(ty.upperBound)
-    )
+    visitVTerm(ty.upperBound)
 
   def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
     visitULevel(top.ul),
@@ -338,7 +335,6 @@ trait Visitor[C, R]:
 
   def visitCType(cType: CType)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitULevel(cType.ul),
       visitCTerm(cType.upperBound),
       visitVTerm(cType.effects)
     )
@@ -586,10 +582,7 @@ trait Transformer[C]:
       case cell: Cell               => transformCell(cell)
 
   def transformType(ty: Type)(using ctx: C)(using Σ: Signature): VTerm =
-    Type(
-      transformULevel(ty.ul),
-      transformVTerm(ty.upperBound)
-    )(using ty.sourceInfo)
+    Type(transformVTerm(ty.upperBound))(using ty.sourceInfo)
 
   def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(
     transformULevel(top.ul),
@@ -688,11 +681,7 @@ trait Transformer[C]:
   def transformHole(using ctx: C)(using Σ: Signature): CTerm = Hole
 
   def transformCType(cType: CType)(using ctx: C)(using Σ: Signature): CTerm =
-    CType(
-      transformULevel(cType.ul),
-      transformCTerm(cType.upperBound),
-      transformVTerm(cType.effects)
-    )(using cType.sourceInfo)
+    CType(transformCTerm(cType.upperBound), transformVTerm(cType.effects))(using cType.sourceInfo)
 
   def transformCTop(cTop: CTop)(using ctx: C)(using Σ: Signature): CTerm =
     CTop(
