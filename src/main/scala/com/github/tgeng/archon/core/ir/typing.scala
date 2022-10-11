@@ -347,12 +347,30 @@ private def checkULevel
   case ULevel.USimpleLevel(l) => checkType(l, LevelType())
   case ULevel.UωLevel(_)      => Right(Usages.zero)
 
-def inferLevel
+// Precondition: tm is already type-checked
+private def inferLevel
   (tm: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, ULevel] = ???
+  : Either[IrError, ULevel] =
+  tm match
+    case Type(upperBound) => inferLevel(upperBound).map(ULevelSuc(_))
+    case Top(ul, u, eqD)  => Right(ul)
+    case r: Var =>
+      Γ.resolve(r).ty match
+        case Type(upperBound) => inferLevel(upperBound)
+        case _                => Left(NotTypeError(tm))
+    case Collapse(cTm)                 => inferLevel(cTm)
+    case U(cty)                        => inferLevel(cty)
+    case DataType(qn, args)            => Right(Σ.getData(qn).ul.substLowers(args: _*))
+    case EqualityType(ty, left, right) => inferLevel(ty)
+    case _: UsageType | _: EqDecidabilityType | _: EqDecidabilityLiteral | _: EffectsType |
+      _: HeapType =>
+      Right(ULevel.USimpleLevel(LevelLiteral(0)))
+    case _: LevelType       => Right(ULevel.UωLevel(0))
+    case CellType(_, ty, _) => inferLevel(ty)
+    case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
 def inferType
   (tm: VTerm)
@@ -496,12 +514,30 @@ def checkType
       yield usages
 )
 
-def inferLevel
+// Precondition: tm is already type-checked
+private def inferLevel
   (tm: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, ULevel] = ???
+  : Either[IrError, ULevel] =
+  for
+    tm <- Reducible.reduce(tm)
+    ul <- tm match
+      case CType(upperBound, effects) => inferLevel(upperBound).map(ULevelSuc(_))
+      case CTop(ul, effects)          => Right(ul)
+      case F(vTy, effects, usage)     => inferLevel(vTy)
+      case FunctionType(binding, bodyTy, effects) =>
+        for
+          argLevel <- inferLevel(binding.ty)
+          bodyLevel <- inferLevel(bodyTy)(using Γ :+ binding)
+        // strengthen is always safe because the only case that bodyLevel would reference 0 is when
+        // arg is of type Level. But in that case the overall level would be ω.
+        yield ULevelMax(argLevel.weakened, bodyLevel).strengthened
+      case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).ul.substLowers(args: _*))
+      case _ =>
+        throw IllegalArgumentException(s"should have been checked to be a computation type: $tm ")
+  yield ul
 
 def inferType
   (tm: CTerm)
@@ -944,6 +980,7 @@ given CheckSubsumptionMode = SUBSUMPTION
 /** @param ty
   *   can be [[None]] if `a` and `b` are types
   */
+// Precondition: terms are already type-checked
 def checkSubsumption
   (rawSub: VTerm, rawSup: VTerm, rawTy: Option[VTerm])
   (using mode: CheckSubsumptionMode)
@@ -1074,6 +1111,7 @@ def checkSubsumption
 /** @param ty
   *   can be [[None]] if `a` and `b` are types
   */
+// Precondition: terms are already type-checked
 def checkSubsumption
   (sub: CTerm, sup: CTerm, ty: Option[CTerm])
   (using mode: CheckSubsumptionMode)
@@ -1691,11 +1729,17 @@ def checkIsType
   : Either[IrError, Unit] =
   ctx.trace("checking is type") {
     for
-      _ <- inferType(vTy) // inferType also checks term is correctly constructed
-      ul <- inferLevel(vTy)
-      _ <- levelBound match
-        case Some(bound) => checkULevelSubsumption(ul, bound)
-        case _           => Right(())
+      case (vTyTy, _) <- inferType(vTy) // inferType also checks term is correctly constructed
+      r <- vTyTy match
+        case Type(_) =>
+          levelBound match
+            case Some(bound) =>
+              for
+                ul <- inferLevel(vTy)
+                _ <- checkULevelSubsumption(ul, bound)
+              yield ()
+            case _ => Right(())
+        case _ => Left(NotTypeError(vTy))
     yield ()
   }
 

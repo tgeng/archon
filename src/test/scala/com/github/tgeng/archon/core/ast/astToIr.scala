@@ -96,7 +96,6 @@ def astToIr
         PreData(moduleQn / name)(
           tParamTys,
           ty,
-          isPure,
           constructors
         )
       }
@@ -131,7 +130,7 @@ def astToIr
                   ty <- astToIr(clause.ty)
                 yield (lhs, rhs, ty)
               }.map { case (bindings, (lhs, rhs, ty)) =>
-                PreClause(bindings, lhs, rhs, ty)
+                PreClause(???, lhs, rhs)
               }
             }
           )
@@ -474,7 +473,7 @@ private def chain[T[_]: EitherFunctor]
       val f = summon[EitherFunctor[T]]
       f.map(ts) {
         case (_, Return(_, _)) => Right(())
-        case _              => Right(nonTrivialComputations += 1)
+        case _                 => Right(nonTrivialComputations += 1)
       }
       val boundComputations = mutable.ArrayBuffer[(Name, CTerm)]()
       var index = 0
