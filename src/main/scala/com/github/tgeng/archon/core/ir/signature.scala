@@ -98,7 +98,7 @@ case class Operator
 trait Signature:
   given Signature = this
 
-  def addDef(d: Definition): Signature
+  def addDeclaration(d: Declaration): Signature
 
   def addConstructor(c: Constructor): Signature
 

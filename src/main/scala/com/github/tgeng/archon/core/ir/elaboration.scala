@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
 
 import SourceInfo.*
@@ -14,9 +15,9 @@ import PreDeclaration.*
 private given Γ0: Context = IndexedSeq()
 def elaborateSignature
   (data: PreData)
-  (using Signature)
+  (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Data] =
+  : Either[IrError, Signature] =
   ctx.trace(s"elaborating data signature ${data.qn}") {
     def elaborateTy
       (ty: CTerm)
@@ -27,14 +28,16 @@ def elaborateSignature
       for
         ty <- reduceCType(ty)
         r <- ty match
-          // Here and below we do not care about the declared effect types because data type 
-          // constructors are always total. Declaring non-total signature is not necessary (nor 
+          // Here and below we do not care about the declared effect types because data type
+          // constructors are always total. Declaring non-total signature is not necessary (nor
           // desirable) but acceptable.
-          case F(Type(Top(ul, usage, eqDecidability)), _, _) => Right((Nil, ul, usage, eqDecidability))
-          case F(t, _, _)           => Left(ExpectVType(t))
+          case F(Type(Top(ul, usage, eqDecidability)), _, _) =>
+            Right((Nil, ul, usage, eqDecidability))
+          case F(t, _, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, usage, eqDecidability) =>
-              ((binding, INVARIANT) :: telescope, ul, usage, eqDecidability)
+            elaborateTy(bodyTy)(using Γ :+ binding).map {
+              case (telescope, ul, usage, eqDecidability) =>
+                ((binding, INVARIANT) :: telescope, ul, usage, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -44,14 +47,16 @@ def elaborateSignature
       elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
     yield elaboratedTy match
       case (tIndices, ul, usage, eqDecidability) =>
-        Data(data.qn)(tParamTys.size, tParamTys ++ tIndices, ul, usage, eqDecidability)
+        Σ.addDeclaration(
+          Data(data.qn)(tParamTys.size, tParamTys ++ tIndices, ul, usage, eqDecidability)
+        )
   }
 
 def elaborateBody
   (preData: PreData)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, List[Constructor]] =
+  : Either[IrError, Signature] =
   ctx.trace(s"elaborating data body ${preData.qn}") {
     val data = Σ.getData(preData.qn)
 
@@ -81,39 +86,39 @@ def elaborateBody
     given Context = data.tParamTys.map(_._1).toIndexedSeq
 
     val indexCount = data.tParamTys.size - preData.tParamTys.size
-    transpose(
-      preData.constructors.map { constructor =>
+    preData.constructors.foldLeft[Either[IrError, Signature]](Right(Σ)) {
+      case (Right(_Σ), constructor) =>
+        given Signature = _Σ
         ctx.trace(s"elaborating constructor ${constructor.name}") {
           // weaken to accommodate data type indices
           val ty = constructor.ty.weaken(indexCount, 0)
-          elaborateTy(ty).map { case (paramTys, args) =>
-            Constructor(constructor.name, paramTys, args)
-          }
+          for case (paramTys, args) <- elaborateTy(ty)
+          yield _Σ.addConstructor(Constructor(constructor.name, paramTys, args))
         }
-      }
-    )
+      case (Left(e), _) => Left(e)
+    }
   }
 
 def elaborateSignature
   (record: PreRecord)
-  (using Signature)
+  (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Record] =
+  : Either[IrError, Signature] =
   ctx.trace(s"elaborating record signature ${record.qn}") {
     for
       tParamTys <- elaborateTTelescope(record.tParamTys)
       ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
       r <- ty match
         case CType(CTop(ul, _), _) => Right(new Record(record.qn)(tParamTys, ul))
-        case t               => Left(ExpectCType(t))
-    yield r
+        case t                     => Left(ExpectCType(t))
+    yield Σ.addDeclaration(r)
   }
 
 def elaborateBody
   (preRecord: PreRecord)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, List[Field]] =
+  : Either[IrError, Signature] =
   ctx.trace(s"elaborating record body ${preRecord.qn}") {
     val record = Σ.getRecord(preRecord.qn)
 
@@ -124,31 +129,33 @@ def elaborateBody
         record.selfName
       )
 
-    transpose(
-      preRecord.fields.map { field =>
+    preRecord.fields.foldLeft[Either[IrError, Signature]](Right(Σ)) {
+      case (Right(_Σ), field) =>
         ctx.trace(s"elaborating field ${field.name}") {
           for ty <- reduceCType(field.ty)
-          yield Field(field.name, ty)
+          yield _Σ.addField(Field(field.name, ty))
         }
-      }
-    )
+      case (Left(e), _) => Left(e)
+    }
   }
 
 def elaborateSignature
   (definition: PreDefinition)
-  (using Signature)
+  (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Definition] =
+  : Either[IrError, Signature] =
   given SourceInfo = SiEmpty
 
   ctx.trace(s"elaborating def signature ${definition.qn}") {
     for
       paramTys <- elaborateTelescope(definition.paramTys)
       ty <- reduceCType(definition.ty)(using paramTys.toIndexedSeq)
-    yield Definition(definition.qn)(
-      paramTys.foldRight(ty) { (binding, bodyTy) =>
-        FunctionType(binding, bodyTy)
-      }
+    yield Σ.addDeclaration(
+      Definition(definition.qn)(
+        paramTys.foldRight(ty) { (binding, bodyTy) =>
+          FunctionType(binding, bodyTy)
+        }
+      )
     )
   }
 
@@ -156,7 +163,7 @@ def elaborateBody
   (preDefinition: PreDefinition)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, List[Clause]] =
+  : Either[IrError, Signature] =
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
       paramTys <- elaborateTelescope(preDefinition.paramTys)
@@ -195,18 +202,19 @@ def elaborateBody
 
 def elaborateSignature
   (effect: PreEffect)
-  (using Signature)
+  (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Effect] =
+  : Either[IrError, Signature] =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
-    elaborateTelescope(effect.tParamTys).map(Effect(effect.qn)(_))
+    for tParamTys <- elaborateTelescope(effect.tParamTys)
+    yield Σ.addDeclaration(Effect(effect.qn)(tParamTys))
   }
 
 def elaborateBody
   (preEffect: PreEffect)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, List[Operator]] =
+  : Either[IrError, Signature] =
   val effect = Σ.getEffect(preEffect.qn)
 
   given Context = effect.tParamTys.toIndexedSeq
@@ -217,30 +225,33 @@ def elaborateBody
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (Telescope, /* operator return type */ VTerm)] =
+      : Either[IrError, (Telescope, /* operator return type */ VTerm, /* operator return usage */VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
           // Here and below we do not care the declared effect types because data type constructors
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
           // acceptable.
-          case F(ty, _, _) => Right((Nil, ty))
-          case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
-              (binding :: telescope, ul)
+          case F(ty, effects, usage) =>
+            assert(effects == Total)
+            Right((Nil, ty, usage))
+          case FunctionType(binding, bodyTy, effects) =>
+            assert(effects == Total)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, usage) =>
+              (binding :: telescope, ul, usage)
             }
           case _ => Left(ExpectFType(ty))
       yield r
 
-    transpose(
-      preEffect.operators.map { operator =>
+    preEffect.operators.foldLeft[Either[IrError, Signature]](Right(Σ)) {
+      case (Right(_Σ), operator) =>
+        given Signature = _Σ
         ctx.trace(s"elaborating operator ${operator.name}") {
-          elaborateTy(operator.ty).map { case (paramTys, resultTy) =>
-            Operator(operator.name, paramTys, resultTy, ???)
-          }
+          for case (paramTys, resultTy, usage) <- elaborateTy(operator.ty)
+          yield _Σ.addOperator(Operator(operator.name, paramTys, resultTy, usage))
         }
-      }
-    )
+      case (Left(e), _) => Left(e)
+    }
   }
 
 private def elaborateTTelescope
