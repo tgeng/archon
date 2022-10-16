@@ -66,14 +66,14 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     *   unless there are bugs in type checking code.)
     * @return
     */
-  //  @tailrec
+  @tailrec
   def run
     (pc: CTerm, reduceDown: Boolean = false)
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
     : Either[IrError, CTerm] =
-    val r = pc match
+    pc match
       case Hole => throw IllegalStateException()
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
@@ -86,7 +86,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case Some(clauses) =>
             clauses.first { case Clause(bindings, lhs, rhs, ty) =>
               val mapping = mutable.Map[Nat, VTerm]()
-              matchPattern(
+              matchCoPattern(
                 lhs.zip(
                   stack.reverseIterator.map {
                     case Application(_, arg) => Elimination.ETerm(arg)
@@ -97,8 +97,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                       )
                   }
                 ),
-                mapping,
-                MatchingStatus.Matched
+                mapping
               ) match
                 case MatchingStatus.Matched =>
                   stack.dropRightInPlace(lhs.length)
@@ -338,78 +337,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             )
           )
           run(input.substLowers(Heap(key)))
-    r
-
-  private enum MatchingStatus:
-    case Matched, Stuck, Mismatch
-
-  @tailrec
-  private def matchPattern
-    (
-      elims: List[(CoPattern, Elimination[VTerm])],
-      mapping: mutable.Map[Nat, VTerm],
-      matchingStatus: MatchingStatus
-    )
-    : MatchingStatus =
-    import Elimination.*
-    import Builtins.*
-    elims match
-      case Nil => matchingStatus
-      case elim :: rest =>
-        var status: MatchingStatus = matchingStatus
-        var elims = rest
-        elim match
-          case (CPattern(PVar(idx)), ETerm(v)) => mapping(idx) = v
-          case (CPattern(PRefl()), ETerm(Refl())) |
-            (CPattern(PDataType(EffectsQn, Nil)), ETerm(EffectsType(_))) |
-            (CPattern(PDataType(LevelQn, Nil)), ETerm(LevelType())) |
-            (CPattern(PDataType(HeapQn, Nil)), ETerm(HeapType())) |
-            (CPattern(PDataType(UsageQn, Nil)), ETerm(UsageType(_))) |
-            (CPattern(PDataType(EqDecidabilityQn, Nil)), ETerm(EqDecidabilityType())) |
-            (CPattern(PForced(_)), ETerm(_)) =>
-          // TODO[P4]: matching type doesn't seem to be useful.
-          // TODO[P4]: matching cell type is probably not a good idea because it's unknown at what
-          //  level `tyP` should be. In order to allow this, we need to make each `Cell`
-          //  self-contained, just like all declared `Data`. The downside is then the need to carry
-          //  a level everywhere with the cell. On the other hand, whether to allow this does not
-          //  affect the expressive power because one can simulate such by declaring a wrapper
-          //  data class. This same trick can be used for equality type, function type, and record
-          //  type.
-          // case (CPattern(PDataType(CellQn, heapP :: tyP :: Nil)), ETerm(CellType(heap, ty, status))) =>
-          //   elims = (CPattern(heapP), ETerm(heap)) :: (CPattern(tyP), ETerm(ty)) :: elims
-
-          // TODO[P4]: similarly, we don't allow matching equality type either for the same reason.
-          // case (CPattern(PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil)),
-          // ETerm(EqualityType(ty, left, right))) =>
-          //   elims = (CPattern(tyP), ETerm(ty)) ::
-          //     (CPattern(leftP), ETerm(left)) ::
-          //     (CPattern(rightP), ETerm(right)) ::
-          //     elims
-
-          // TODO[P4]: matching usage does not seem very useful. But it can be added if needed.
-          case (CPattern(PDataType(pQn, pArgs)), ETerm(DataType(qn, args))) if pQn == qn =>
-            elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (
-              CPattern(PForcedDataType(_, pArgs)),
-              ETerm(DataType(qn2, args))
-            ) =>
-            elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (CPattern(PConstructor(pName, pArgs, _)), ETerm(Con(name, args)))
-            if pName == name =>
-            elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (
-              CPattern(PForcedDataType(pName, pArgs)),
-              ETerm(Con(name, args))
-            ) =>
-            elims = pArgs.map(CPattern.apply).zip(args.map(ETerm(_))) ++ elims
-          case (CProjection(n1), EProj(n2)) if n1 == n2 =>
-          case (CProjection(_), ETerm(_)) | (_, EProj(_)) | (CPattern(PAbsurd()), _) =>
-            throw IllegalArgumentException("type error")
-          case (_, ETerm(Var(_))) => status = MatchingStatus.Stuck
-          // Note that we make mismatch dominating stuck because we do not eval by case tree during
-          // type checking.
-          case _ => return MatchingStatus.Mismatch
-        matchPattern(elims, mapping, status)
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm =
     given SourceInfo = ctx.sourceInfo
@@ -581,3 +508,88 @@ object Reducible:
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
       tm => Block(ChopDown, Aligned, yellow(tm.sourceInfo), green(pprint(tm)))
     )(summon[Reducible[CTerm]].reduce(t))
+
+enum MatchingStatus:
+  case Matched, Stuck, Mismatch
+
+@tailrec
+def matchPattern
+  (
+    constraints: List[(Pattern, VTerm)],
+    mapping: mutable.Map[Nat, VTerm],
+    matchingStatus: MatchingStatus = MatchingStatus.Matched
+  )
+  : MatchingStatus =
+  import Builtins.*
+  constraints match
+    case Nil => matchingStatus
+    case elim :: rest =>
+      var status: MatchingStatus = matchingStatus
+      var constraints = rest
+      elim match
+        case (PVar(idx), v) => mapping(idx) = v
+        case (PRefl(), Refl()) | (PDataType(EffectsQn, Nil), EffectsType(_)) |
+          (PDataType(LevelQn, Nil), LevelType()) | (PDataType(HeapQn, Nil), HeapType()) |
+          (PDataType(UsageQn, Nil), UsageType(_)) |
+          (PDataType(EqDecidabilityQn, Nil), EqDecidabilityType()) | (PForced(_), _) =>
+        // TODO[P4]: matching type doesn't seem to be useful.
+        // TODO[P4]: matching cell type is probably not a good idea because it's unknown at what
+        //  level `tyP` should be. In order to allow this, we need to make each `Cell`
+        //  self-contained, just like all declared `Data`. The downside is then the need to carry
+        //  a level everywhere with the cell. On the other hand, whether to allow this does not
+        //  affect the expressive power because one can simulate such by declaring a wrapper
+        //  data class. This same trick can be used for equality type, function type, and record
+        //  type.
+        // case (PDataType(CellQn, heapP :: tyP :: Nil), CellType(heap, ty, status)) =>
+        //   constraints = (heapP, heap) :: (tyP, ty) :: constraints
+
+        // TODO[P4]: similarly, we don't allow matching equality type either for the same reason.
+        // case (PDataType(EqualityQn, levelP :: tyP :: leftP :: rightP :: Nil),
+        // EqualityType(ty, left, right)) =>
+        //   constraints = (tyP, ty) ::
+        //     (leftP, left) ::
+        //     (rightP, right) ::
+        //     constraints
+
+        // TODO[P4]: matching usage does not seem very useful. But it can be added if needed.
+        case (PDataType(pQn, pArgs), DataType(qn, args)) if pQn == qn =>
+          constraints = pArgs.zip(args) ++ constraints
+        case (PForcedDataType(_, pArgs), DataType(qn2, args)) =>
+          constraints = pArgs.zip(args) ++ constraints
+        case (PConstructor(pName, pArgs, _), Con(name, args)) if pName == name =>
+          constraints = pArgs.zip(args) ++ constraints
+        case (
+            PForcedDataType(pName, pArgs),
+            Con(name, args)
+          ) =>
+          constraints = pArgs.zip(args) ++ constraints
+        case (PAbsurd(), _) =>
+          throw IllegalArgumentException("type error")
+        case (_, Var(_)) => status = MatchingStatus.Stuck
+        // Note that we make mismatch dominating stuck because we do not eval by case tree during
+        // type checking.
+        case _ => return MatchingStatus.Mismatch
+      matchPattern(constraints, mapping, status)
+
+@tailrec
+def matchCoPattern
+  (
+    elims: List[(CoPattern, Elimination[VTerm])],
+    mapping: mutable.Map[Nat, VTerm],
+    matchingStatus: MatchingStatus = MatchingStatus.Matched
+  )
+  : MatchingStatus =
+  import Elimination.*
+  import Builtins.*
+  elims match
+    case Nil => matchingStatus
+    case elim :: rest =>
+      var status: MatchingStatus = matchingStatus
+      var elims = rest
+      elim match
+        case (CPattern(p), ETerm(w)) => matchPattern(List((p, w)), mapping, matchingStatus)
+        case (CProjection(n1), EProj(n2)) if n1 == n2 =>
+        case (CProjection(_), ETerm(_)) | (_, EProj(_)) =>
+          throw IllegalArgumentException("type error")
+        case _ => return MatchingStatus.Mismatch
+      matchCoPattern(elims, mapping, status)

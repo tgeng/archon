@@ -75,3 +75,4 @@ enum IrError extends HasException:
   case LeakedReferenceToEffectfulComputationResult(effectfulTerm: CTerm)
   case LeakedReferenceToHeapVariable(leakyTerm: CTerm)
   case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name)
+  case UnexpectedAbsurdPattern(p: Pattern)

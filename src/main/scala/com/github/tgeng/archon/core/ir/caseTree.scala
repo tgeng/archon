@@ -11,7 +11,7 @@ enum CaseTree:
     (
       operand: VTerm,
       cases: Map[QualifiedName, /* binding + arg count */ CTerm],
-      default: CTerm
+      default: Option[CTerm] // default may be refutable due to presence of Refl on the type
     )
   case CtDataCase
     (

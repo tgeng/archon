@@ -46,7 +46,7 @@ class Substitutor[T: DeBruijn]
         .until(targetContextSize - boundIndex, -1)
         .map(i => fromIndex(sourceContextSize - i))
 
-  def apply(index: Nat): Option[T] =
+  override def apply(index: Nat): Option[T] =
     if index < targetContextSize && 0 <= index then
       if index < nonTrivialMapping.length then Some(nonTrivialMapping(index))
       else Some(fromIndex(index + sourceContextSize - targetContextSize))

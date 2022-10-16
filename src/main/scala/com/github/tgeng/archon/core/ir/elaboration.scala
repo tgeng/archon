@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
+import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
@@ -164,6 +165,40 @@ def elaborateBody
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Signature] =
+  // See [1] for how this part works.
+  type Constraint =
+    ( /* current split term */ VTerm, /* user pattern */ Pattern, /* type */ VTerm)
+  type Problem = List[
+    (
+      /* constraints */ List[Constraint],
+      /* user patterns */ List[CoPattern],
+      /* rhs */ Option[VTerm]
+    )
+  ]
+
+  def solve
+    (constraints: List[Constraint])
+    (using Γ: Context)
+    (using Σ: Signature)
+    : Either[IrError, Option[PartialSubstitution[VTerm]]] =
+    val σ = mutable.Map[Nat, VTerm]()
+    matchPattern(constraints.map { case (w, p, _) => (p, w) }, σ) match
+      case MatchingStatus.Matched =>
+        for _ <- allRight(constraints.map { case (w, p, _A) =>
+            p.toTerm match
+              case Some(p) =>
+                for
+                  _ <- checkType(p, _A)
+                  _ <- checkType(w, _A)
+                  _ <- checkSubsumption(p.subst(σ.get), w, Some(_A))(using
+                    CheckSubsumptionMode.CONVERSION
+                  )
+                yield ()
+              case None => Left(UnexpectedAbsurdPattern(p))
+          })
+        yield Some(σ.get)
+      case MatchingStatus.Mismatch | MatchingStatus.Stuck => Right(None)
+
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
       paramTys <- elaborateTelescope(preDefinition.paramTys)
@@ -225,7 +260,10 @@ def elaborateBody
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (Telescope, /* operator return type */ VTerm, /* operator return usage */VTerm)] =
+      : Either[
+        IrError,
+        (Telescope, /* operator return type */ VTerm, /* operator return usage */ VTerm)
+      ] =
       for
         ty <- reduceCType(ty)
         r <- ty match
@@ -277,3 +315,6 @@ private def elaborateTelescope
         telescope <- elaborateTelescope(telescope)(using Γ :+ newBinding)
       yield newBinding :: telescope
     }
+
+// [1] Jesper Cockx and Andreas Abel. 2018. Elaborating dependent (co)pattern matching. Proc. ACM
+// Program. Lang. 2, ICFP, Article 75 (September 2018), 30 pages. https://doi.org/10.1145/3236770
