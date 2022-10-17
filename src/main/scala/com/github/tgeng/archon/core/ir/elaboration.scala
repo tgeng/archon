@@ -254,9 +254,7 @@ def elaborateBody
           // can cause it to happen.
           assert(_A.isInstanceOf[EqualityType])
           Right(Some(Nil))
-        case _ => Right(List((v, p, _A)))
-
-      ???
+        case _ => Right(Some(List((v, p, _A))))
 
     def simplifyAll(constraints: List[Constraint])(using Σ: Signature): Either[IrError, Option[List[Constraint]]] =
       constraints match
@@ -266,8 +264,18 @@ def elaborateBody
             _E1 <- simplify(v, p, _A)
             _E2 <- simplifyAll(constraints)
           yield _E1.zip(_E2).map(_ ++ _)
-
-    ???
+    problem match
+      case Nil => Right(Nil)
+      case (_E, q, rhs) :: problem =>
+        for
+          optionE <- simplifyAll(_E)
+          r <- optionE match
+            case Some(_E) =>
+              for
+                problem <- subst(problem, σ)
+              yield (_E, q, rhs) :: problem
+            case None => subst(problem, σ)
+        yield r
 
   def isEmpty(ty: VTerm)(using Γ: Context)(using Σ: Signature): Either[IrError, Boolean] = ???
 
