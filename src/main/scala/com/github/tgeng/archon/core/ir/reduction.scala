@@ -556,7 +556,7 @@ def matchPattern
           constraints = pArgs.zip(args) ++ constraints
         case (PForcedDataType(_, pArgs), DataType(qn2, args)) =>
           constraints = pArgs.zip(args) ++ constraints
-        case (PConstructor(pName, pArgs, _), Con(name, args)) if pName == name =>
+        case (PConstructor(pName, pArgs), Con(name, args)) if pName == name =>
           constraints = pArgs.zip(args) ++ constraints
         case (
             PForcedDataType(pName, pArgs),

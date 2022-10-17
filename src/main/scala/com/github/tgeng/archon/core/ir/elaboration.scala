@@ -9,6 +9,7 @@ import SourceInfo.*
 import Declaration.*
 import CTerm.*
 import VTerm.*
+import Pattern.*
 import IrError.*
 import Variance.*
 import PreDeclaration.*
@@ -198,6 +199,77 @@ def elaborateBody
           })
         yield Some(σ.get)
       case MatchingStatus.Mismatch | MatchingStatus.Stuck => Right(None)
+
+  /** New var index is `Γ.size`. New var type is `_A`.
+    */
+  def shift(problem: Problem, _A: VTerm)(Γ: Context): Either[IrError, Problem] = ???
+
+  def filter(problem: Problem, π: Name): Either[IrError, Problem] = ???
+
+  def subst(problem: Problem, σ: PartialSubstitution[VTerm])(using Σ: Signature): Either[IrError, Problem] =
+    def simplify
+      (v: VTerm, p: Pattern, _A: VTerm)
+      (using Σ: Signature)
+      : Either[IrError, Option[List[Constraint]]] =
+      // It's assumed that v is already normalized. The only place un-normalized term may appear
+      // during elaboration is through unification. But unification pre-normalizes terms so in
+      // here all terms are already normalized.
+      (v, p) match
+        case (DataType(qn, args), PDataType(pQn, pArgs)) if qn == pQn =>
+          val data = Σ.getData(qn)
+          // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
+          // can cause it to happen.
+          assert(args.size == pArgs.size && pArgs.size == data.tParamTys.size)
+          simplifyAll(args.lazyZip(pArgs).lazyZip(data.tParamTys.map(_._1.ty)).toList)
+        case (DataType(_, _), PDataType(_, _)) => Right(None)
+        case (DataType(qn, args), PForcedDataType(pQn, pArgs)) =>
+          // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
+          // because such a mismatch means the provided forced pattern is not correct.
+          assert(qn == pQn)
+          val data = Σ.getData(qn)
+          // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
+          // can cause it to happen.
+          assert(args.size == pArgs.size && pArgs.size == data.tParamTys.size)
+          simplifyAll(args.lazyZip(pArgs).lazyZip(data.tParamTys.map(_._1.ty)).toList)
+        case (Con(name, args), PConstructor(pName, pArgs)) if name == pName =>
+          // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
+          // can cause it to happen.
+          val dataType = _A.asInstanceOf[DataType]
+          val constructor = Σ.getConstructor(dataType.qn, name)
+          val _As = constructor.paramTys.substLowers(dataType.args: _*)
+          assert(args.size == pArgs.size && pArgs.size == _As.size)
+          simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
+        case (Con(_, _), PConstructor(_, _)) => Right(None)
+        case (Con(name, args), PForcedConstructor(pName, pArgs)) =>
+          // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
+          // because such a mismatch means the provided forced pattern is not correct.
+          assert(name == pName)
+          val dataType = _A.asInstanceOf[DataType]
+          val constructor = Σ.getConstructor(dataType.qn, name)
+          val _As = constructor.paramTys.substLowers(dataType.args: _*)
+          assert(args.size == pArgs.size && pArgs.size == _As.size)
+          simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
+        case (Refl(), PRefl()) => 
+          // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
+          // can cause it to happen.
+          assert(_A.isInstanceOf[EqualityType])
+          Right(Some(Nil))
+        case _ => Right(List((v, p, _A)))
+
+      ???
+
+    def simplifyAll(constraints: List[Constraint])(using Σ: Signature): Either[IrError, Option[List[Constraint]]] =
+      constraints match
+        case Nil => Right(Some(Nil))
+        case (v, p, _A) :: constraints =>
+          for
+            _E1 <- simplify(v, p, _A)
+            _E2 <- simplifyAll(constraints)
+          yield _E1.zip(_E2).map(_ ++ _)
+
+    ???
+
+  def isEmpty(ty: VTerm)(using Γ: Context)(using Σ: Signature): Either[IrError, Boolean] = ???
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for

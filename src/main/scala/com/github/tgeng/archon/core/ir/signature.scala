@@ -125,6 +125,11 @@ trait Signature:
       }
     yield r
 
+  def getConstructor(qn: QualifiedName, conName: Name): Constructor =
+    getConstructorOption(qn, conName).getOrElse(
+      throw IllegalArgumentException(s"missing constructor $conName")
+    )
+
   def getRecordOption(qn: QualifiedName): Option[Record]
 
   def getRecord(qn: QualifiedName): Record = getRecordOption(qn).get
@@ -140,6 +145,11 @@ trait Signature:
         case field if field.name == fieldName => field
       }
     yield r
+
+  def getField(qn: QualifiedName, fieldName: Name): Field =
+    getFieldOption(qn, fieldName).getOrElse(
+      throw IllegalArgumentException(s"missing field $fieldName")
+    )
 
   def getDefinitionOption(qn: QualifiedName): Option[Definition]
 
@@ -164,18 +174,17 @@ trait Signature:
   def getOperators(qn: QualifiedName): IndexedSeq[Operator] =
     getOperatorsOption(qn).get
 
-  def getOperatorOption(qn: QualifiedName, conName: Name): Option[Operator] =
+  def getOperatorOption(qn: QualifiedName, opName: Name): Option[Operator] =
     for
       operators <- getOperatorsOption(qn)
       r <- operators.collectFirst {
-        case op if op.name == conName => op
+        case op if op.name == opName => op
       }
     yield r
 
-  def getOperator(qn: QualifiedName, name: Name): Operator =
-    getOperators(qn).getFirstOrDefault(
-      _.name == name,
-      throw IllegalArgumentException()
+  def getOperator(qn: QualifiedName, opName: Name): Operator =
+    getOperatorOption(qn, opName).getOrElse(
+      throw IllegalArgumentException(s"missing operator $opName")
     )
 
   import VTerm.*

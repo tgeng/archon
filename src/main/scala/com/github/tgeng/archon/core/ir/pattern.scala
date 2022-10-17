@@ -19,39 +19,24 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern]:
     extends Pattern(sourceInfo)
   // Note that we do not allow matching specific values of level, effect, and heap because there are no corresponding
   // eliminators. All these can only be matched with a pattern variable.
-  case PConstructor
-    (
-      name: Name,
-      args: List[Pattern],
-      isZeroUsage: Boolean = false
-    )
-    (using sourceInfo: SourceInfo)
-    extends Pattern(
-      sourceInfo
-    )
-  case PForcedConstructor
-    (
-      name: Name,
-      args: List[Pattern],
-      isZeroUsage: Boolean = false
-    )
-    (using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+  case PConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo)
+    extends Pattern(sourceInfo)
+  case PForcedConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo)
+    extends Pattern(sourceInfo)
   case PForced(term: VTerm)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PAbsurd()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
   override def withSourceInfo(sourceInfo: SourceInfo): Pattern =
     given SourceInfo = sourceInfo
     this match
-      case PVar(idx)                 => PVar(idx)
-      case PRefl()                   => PRefl()
-      case PDataType(qn, args)       => PDataType(qn, args)
-      case PForcedDataType(qn, args) => PForcedDataType(qn, args)
-      case PConstructor(name, args, isZeroUsage) =>
-        PConstructor(name, args, isZeroUsage)
-      case PForcedConstructor(name, args, isZeroUsage) =>
-        PForcedConstructor(name, args, isZeroUsage)
-      case PForced(term) => PForced(term)
-      case PAbsurd()     => PAbsurd()
+      case PVar(idx)                      => PVar(idx)
+      case PRefl()                        => PRefl()
+      case PDataType(qn, args)            => PDataType(qn, args)
+      case PForcedDataType(qn, args)      => PForcedDataType(qn, args)
+      case PConstructor(name, args)       => PConstructor(name, args)
+      case PForcedConstructor(name, args) => PForcedConstructor(name, args)
+      case PForced(term)                  => PForced(term)
+      case PAbsurd()                      => PAbsurd()
 
 import Pattern.*
 import VTerm.*
@@ -69,10 +54,10 @@ extension(p: Pattern)
       case PForcedDataType(qn, args) =>
         for args <- transpose(args.map(_.toTerm))
         yield DataType(qn, args)
-      case PConstructor(name, args, _) =>
+      case PConstructor(name, args) =>
         for args <- transpose(args.map(_.toTerm))
         yield Con(name, args)
-      case PForcedConstructor(name, args, _) =>
+      case PForcedConstructor(name, args) =>
         for args <- transpose(args.map(_.toTerm))
         yield Con(name, args)
       case PForced(t) => Some(t)
