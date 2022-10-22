@@ -85,3 +85,6 @@ class Substitutor[T: DeBruijn]
     targetContextSize - count,
     nonTrivialMapping.drop(count)
   )
+
+object Substitutor:
+  def id[T: DeBruijn](using Γ: Context) = Substitutor(Γ.size, Γ.size, IndexedSeq())

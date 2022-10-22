@@ -13,6 +13,9 @@ import Pattern.*
 import IrError.*
 import Variance.*
 import PreDeclaration.*
+import CoPattern.*
+import UnificationResult.*
+import java.security.Signer
 
 private given Γ0: Context = IndexedSeq()
 def elaborateSignature
@@ -169,6 +172,11 @@ def elaborateBody
   // See [1] for how this part works.
   type Constraint =
     ( /* current split term */ VTerm, /* user pattern */ Pattern, /* type */ VTerm)
+  def weaken(c: Constraint) = c match
+    // Note: p is not weakened because p is a user pattern. It does not leave in the Γ being
+    // assembled during elaboration.
+    case (w, p, _A) => (w.weakened, p, _A.weakened)
+
   type Problem = List[
     (
       /* constraints */ List[Constraint],
@@ -202,11 +210,26 @@ def elaborateBody
 
   /** New var index is `Γ.size`. New var type is `_A`.
     */
-  def shift(problem: Problem, _A: VTerm)(Γ: Context): Either[IrError, Problem] = ???
+  def shift(problem: Problem, _A: VTerm): Either[IrError, Problem] = problem match
+    case Nil => Right(Nil)
+    case (_E, CPattern(p) :: qs, rhs) :: problem =>
+      for problem <- shift(problem, _A)
+      yield ((Var(0), p, _A.weakened) :: _E.map(weaken), qs, rhs) :: problem
+    case _ => throw IllegalArgumentException("problem is not ready for shift")
 
-  def filter(problem: Problem, π: Name): Either[IrError, Problem] = ???
+  def filter(problem: Problem, π: Name): Either[IrError, Problem] = problem match
+    case Nil => Right(Nil)
+    case (_E, CProjection(π2) :: qs, rhs) :: problem =>
+      for problem <- filter(problem, π)
+      yield
+        if π == π2 then (_E, qs, rhs) :: problem
+        else problem
+    case _ => throw IllegalArgumentException("problem is not ready for filter")
 
-  def subst(problem: Problem, σ: PartialSubstitution[VTerm])(using Σ: Signature): Either[IrError, Problem] =
+  def subst
+    (problem: Problem, σ: PartialSubstitution[VTerm])
+    (using Σ: Signature)
+    : Either[IrError, Problem] =
     def simplify
       (v: VTerm, p: Pattern, _A: VTerm)
       (using Σ: Signature)
@@ -221,7 +244,7 @@ def elaborateBody
           // can cause it to happen.
           assert(args.size == pArgs.size && pArgs.size == data.tParamTys.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(data.tParamTys.map(_._1.ty)).toList)
-        case (DataType(_, _), PDataType(_, _)) => Right(None)
+        case (DataType(_, _), PDataType(_, _))                 => Right(None)
         case (DataType(qn, args), PForcedDataType(pQn, pArgs)) =>
           // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
           // because such a mismatch means the provided forced pattern is not correct.
@@ -239,7 +262,7 @@ def elaborateBody
           val _As = constructor.paramTys.substLowers(dataType.args: _*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
-        case (Con(_, _), PConstructor(_, _)) => Right(None)
+        case (Con(_, _), PConstructor(_, _))                     => Right(None)
         case (Con(name, args), PForcedConstructor(pName, pArgs)) =>
           // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
           // because such a mismatch means the provided forced pattern is not correct.
@@ -249,14 +272,17 @@ def elaborateBody
           val _As = constructor.paramTys.substLowers(dataType.args: _*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
-        case (Refl(), PRefl()) => 
+        case (Refl(), PRefl()) =>
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
           assert(_A.isInstanceOf[EqualityType])
           Right(Some(Nil))
         case _ => Right(Some(List((v, p, _A))))
 
-    def simplifyAll(constraints: List[Constraint])(using Σ: Signature): Either[IrError, Option[List[Constraint]]] =
+    def simplifyAll
+      (constraints: List[Constraint])
+      (using Σ: Signature)
+      : Either[IrError, Option[List[Constraint]]] =
       constraints match
         case Nil => Right(Some(Nil))
         case (v, p, _A) :: constraints =>
@@ -271,13 +297,20 @@ def elaborateBody
           optionE <- simplifyAll(_E)
           r <- optionE match
             case Some(_E) =>
-              for
-                problem <- subst(problem, σ)
+              for problem <- subst(problem, σ)
               yield (_E, q, rhs) :: problem
             case None => subst(problem, σ)
         yield r
 
-  def isEmpty(ty: VTerm)(using Γ: Context)(using Σ: Signature): Either[IrError, Boolean] = ???
+  def isEmpty(_A: VTerm)(using Γ: Context)(using Σ: Signature): Either[IrError, Boolean] =
+    _A match
+      case DataType(qn, _) => Right(Σ.getConstructors(qn).isEmpty)
+      case EqualityType(_A, u, v) =>
+        for u <- unify(u, v, _A)
+        yield u match
+          case UNo => true
+          case _   => false
+      case _ => Right(false)
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
