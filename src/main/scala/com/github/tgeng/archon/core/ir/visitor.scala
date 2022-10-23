@@ -155,13 +155,13 @@ trait Visitor[C, R]:
 
   def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): R =
     withBindings(Seq(l.boundName)) {
-      visitCTerm(l.body)
+      visitCaseTree(l.body)
     }
 
   def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R =
     combine(
       r.fields.flatMap { (name, body) =>
-        Seq(visitName(name), visitCTerm(body))
+        Seq(visitName(name), visitCaseTree(body))
       }.toSeq: _*
     )
 
@@ -172,10 +172,10 @@ trait Visitor[C, R]:
           Seq(
             visitQualifiedName(qn),
             withBindings(Σ.getData(qn).tParamTys.map(_._1.name)) {
-              visitCTerm(body)
+              visitCaseTree(body)
             }
           )
-        } ++ ct.default.map(visitCTerm)).toSeq: _*
+        } ++ ct.default.map(visitCaseTree)).toSeq: _*
     )
 
   def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
@@ -191,7 +191,7 @@ trait Visitor[C, R]:
           Seq(
             visitName(name),
             withBindings(constructor.paramTys.map(_.name)) {
-              visitCTerm(body)
+              visitCaseTree(body)
             }
           )
         }.toSeq: _*
@@ -200,7 +200,7 @@ trait Visitor[C, R]:
   def visitCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(ec.operand),
-      visitCTerm(ec.body)
+      visitCaseTree(ec.body)
     )
 
   def visitCtEqualityEmpty(ee: CtEqualityEmpty)(using ctx: C)(using Σ: Signature): R =
@@ -511,14 +511,14 @@ trait Transformer[C]:
   def transformCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): CaseTree =
     CtLambda(
       withBindings(Seq(l.boundName)) {
-        transformCTerm(l.body)
+        transformCaseTree(l.body)
       }
     )(l.boundName)
 
   def transformCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): CaseTree =
     CtRecord(
       r.fields.map { (name, field) =>
-        (name, transformCTerm(field))
+        (name, transformCaseTree(field))
       }
     )
 
@@ -529,7 +529,7 @@ trait Transformer[C]:
         val data = Σ.getData(qn)
         (qn, withBindings(data.tParamTys.map(_._1.name)) { body })
       },
-      tc.default.map(transformCTerm)
+      tc.default.map(transformCaseTree)
     )
 
   def transformCtDataCase(dc: CtDataCase)(using ctx: C)(using Σ: Signature): CaseTree =
@@ -546,10 +546,59 @@ trait Transformer[C]:
     )
 
   def transformCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtEqualityCase(transformVTerm(ec.operand), transformCTerm(ec.body))
+    CtEqualityCase(transformVTerm(ec.operand), transformCaseTree(ec.body))
 
   def transformCtEqualityEmpty(ee: CtEqualityEmpty)(using ctx: C)(using Σ: Signature): CaseTree =
     CtEqualityEmpty(transformVTerm(ee.operand))
+
+  def transformCoPattern(q: CoPattern)(using ctx: C)(using Σ: Signature): CoPattern =
+    q match
+      case p: CPattern    => transformCPattern(p)
+      case p: CProjection => transformCProjection(p)
+
+  def transformCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): CoPattern =
+    CPattern(transformPattern(p.pattern))
+
+  def transformCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): CoPattern =
+    CProjection(transformName(p.name))(using p.sourceInfo)
+
+  def transformPattern(p: Pattern)(using ctx: C)(using Σ: Signature): Pattern =
+    p match
+      case v: PVar               => transformPVar(v)
+      case r: PRefl              => transformPRefl(r)
+      case d: PDataType          => transformPDataType(d)
+      case d: PForcedDataType    => transformPForcedDataType(d)
+      case c: PConstructor       => transformPConstructor(c)
+      case c: PForcedConstructor => transformPForcedConstructor(c)
+      case f: PForced            => transformPForced(f)
+      case a: PAbsurd            => transformPAbsurd(a)
+
+  def transformPVar(v: PVar)(using ctx: C)(using Σ: Signature): Pattern = v
+
+  def transformPRefl(r: PRefl)(using ctx: C)(using Σ: Signature): Pattern = r
+
+  def transformPDataType(d: PDataType)(using ctx: C)(using Σ: Signature): Pattern =
+    PDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPForcedDataType(d: PForcedDataType)(using ctx: C)(using Σ: Signature): Pattern =
+    PForcedDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using
+      d.sourceInfo
+    )
+
+  def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
+    PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPForcedConstructor
+    (d: PForcedConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    : Pattern =
+    PForcedConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature): Pattern =
+    PForced(transformVTerm(f.term))(using f.sourceInfo)
+
+  def transformPAbsurd(a: PAbsurd)(using ctx: C)(using Σ: Signature): Pattern = a
 
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm =
     tm match

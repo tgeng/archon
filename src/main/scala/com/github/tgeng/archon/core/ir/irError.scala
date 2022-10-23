@@ -76,3 +76,7 @@ enum IrError extends HasException:
   case LeakedReferenceToHeapVariable(leakyTerm: CTerm)
   case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name)
   case UnexpectedAbsurdPattern(p: Pattern)
+  case UnexpectedCProjection(q: CoPattern)
+  case UnexpectedCPattern(q: CoPattern)
+  case MissingUserCoPattern(clause: PreClause)
+  case IncompleteClauses(qn: QualifiedName)

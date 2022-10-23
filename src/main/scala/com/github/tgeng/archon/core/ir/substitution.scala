@@ -20,6 +20,8 @@ trait Substitutable[S: Raisable, T]:
 
 import VTerm.*
 import CTerm.*
+import CoPattern.*
+import Pattern.*
 
 private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)]:
   override def withBindings[T]
@@ -33,7 +35,18 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
     if v.idx >= ctx._2 then Var(v.idx + ctx._1)(using v.sourceInfo) else v
 
+  override def transformPVar(v: PVar)(using ctx: (Int, Int))(using Σ: Signature) =
+    if v.idx >= ctx._2 then PVar(v.idx + ctx._1)(using v.sourceInfo) else v
+
 end RaiseTransformer
+
+given RaisablePattern: Raisable[Pattern] with
+  override def raise(v: Pattern, amount: Int, bar: Int)(using Σ: Signature): Pattern =
+    RaiseTransformer.transformPattern(v)(using (amount, bar))
+
+given RaisableCoPattern: Raisable[CoPattern] with
+  override def raise(v: CoPattern, amount: Int, bar: Int)(using Σ: Signature): CoPattern =
+    RaiseTransformer.transformCoPattern(v)(using (amount, bar))
 
 given RaisableVTerm: Raisable[VTerm] with
   override def raise(v: VTerm, amount: Int, bar: Int)(using Σ: Signature): VTerm =
@@ -54,7 +67,65 @@ given RaisableTelescope: Raisable[Telescope] with
           bar + 1
         )
 
-private object SubstituteTransformer
+private object PatternSubstituteTransformer
+  extends Transformer[(PartialSubstitution[Pattern], /* offset */ Int)]:
+  override def withBindings[T]
+    (bindingNames: => Seq[Ref[Name]])
+    (action: ((PartialSubstitution[Pattern], Int)) ?=> T)
+    (using ctx: (PartialSubstitution[Pattern], Int))
+    (using Σ: Signature)
+    : T =
+    action(using (ctx._1, ctx._2 + bindingNames.size))
+
+  override def transformVar
+    (v: Var)
+    (using ctx: (PartialSubstitution[Pattern], /* offset */ Int))
+    (using Σ: Signature) =
+    ctx._1(v.idx - ctx._2) match
+      case Some(t) =>
+        RaisableVTerm.raise(
+          t.toTerm.getOrElse(
+            throw IllegalArgumentException(
+              "substitutor using patterns should not contain PAbsurd"
+            )
+          ),
+          ctx._2
+        )
+      case _ => v
+
+  override def transformPVar
+    (v: PVar)
+    (using ctx: (PartialSubstitution[Pattern], /* offset */ Int))
+    (using Σ: Signature) =
+    ctx._1(v.idx - ctx._2) match
+      case Some(t) => RaisablePattern.raise(t, ctx._2)
+      case _       => v
+
+end PatternSubstituteTransformer
+
+given SubstitutablePattern: Substitutable[Pattern, Pattern] with
+  override def substitute
+    (
+      p: Pattern,
+      substitution: PartialSubstitution[Pattern],
+      offset: Int
+    )
+    (using Σ: Signature)
+    : Pattern =
+    PatternSubstituteTransformer.transformPattern(p)(using (substitution, offset))
+
+given SubstitutableCoPattern: Substitutable[CoPattern, Pattern] with
+  override def substitute
+    (
+      p: CoPattern,
+      substitution: PartialSubstitution[Pattern],
+      offset: Int
+    )
+    (using Σ: Signature)
+    : CoPattern =
+    PatternSubstituteTransformer.transformCoPattern(p)(using (substitution, offset))
+
+private object VTermSubstituteTransformer
   extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)]:
   override def withBindings[T]
     (bindingNames: => Seq[Ref[Name]])
@@ -72,7 +143,15 @@ private object SubstituteTransformer
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _       => v
 
-end SubstituteTransformer
+  override def transformPVar
+    (v: PVar)
+    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
+    (using Σ: Signature) =
+    ctx._1(v.idx - ctx._2) match
+      case Some(t) => PForced(RaisableVTerm.raise(t, ctx._2))
+      case _       => v
+
+end VTermSubstituteTransformer
 
 given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
   override def substitute
@@ -83,7 +162,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     )
     (using Σ: Signature)
     : VTerm =
-    SubstituteTransformer.transformVTerm(v)(using (substitution, offset))
+    VTermSubstituteTransformer.transformVTerm(v)(using (substitution, offset))
 
 given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
   override def substitute
@@ -94,7 +173,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     )
     (using Σ: Signature)
     : CTerm =
-    SubstituteTransformer.transformCTerm(c)(using (substitution, offset))
+    VTermSubstituteTransformer.transformCTerm(c)(using (substitution, offset))
 
 given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
   override def substitute
@@ -154,6 +233,54 @@ extension(v: VTerm)
     * indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
+    val count = vTerms.length
+    v
+      // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+      // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+      // first argument `4` at index `0` should replace `$1`.
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+      // strengthen the resulted term so that even higher indices are correct.
+      .strengthen(count, 0)
+
+extension(v: Pattern)
+  def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
+    SubstitutablePattern.substitute(v, substitution)
+  def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
+    RaisablePattern.raise(v, amount, at)
+  def weakened(using Σ: Signature) = v.weaken(1, 0)
+  def strengthened(using Σ: Signature) = v.strengthen(1, 0)
+  def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
+    RaisablePattern.raise(v, -amount, at)
+
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
+    */
+  def substLowers(vTerms: Pattern*)(using Σ: Signature) =
+    val count = vTerms.length
+    v
+      // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+      // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+      // first argument `4` at index `0` should replace `$1`.
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+      // strengthen the resulted term so that even higher indices are correct.
+      .strengthen(count, 0)
+
+extension(v: CoPattern)
+  def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
+    SubstitutableCoPattern.substitute(v, substitution)
+  def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
+    RaisableCoPattern.raise(v, amount, at)
+  def weakened(using Σ: Signature) = v.weaken(1, 0)
+  def strengthened(using Σ: Signature) = v.strengthen(1, 0)
+  def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
+    RaisableCoPattern.raise(v, -amount, at)
+
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
+    */
+  def substLowers(vTerms: Pattern*)(using Σ: Signature) =
     val count = vTerms.length
     v
       // for example, consider substitution happened when applying (4, 5) to the body of function \a,

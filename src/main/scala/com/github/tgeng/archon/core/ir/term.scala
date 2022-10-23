@@ -400,11 +400,11 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   /** archon.builtin.Function */
   case FunctionType
     (
-      binding: Binding[
-        VTerm
-      ], // effects that needed for getting the function of this type. The effects caused
-      // by function application is tracked by the `bodyTy`.
+      binding: Binding[VTerm],
       bodyTy: CTerm, /* binding offset = 1 */
+      /** effects that needed for getting the function of this type. The effects caused by
+        * function application is tracked by the `bodyTy`.
+        */
       effects: VTerm = VTerm.Total(using SiEmpty)
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType

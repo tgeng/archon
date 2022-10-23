@@ -5,19 +5,19 @@ import com.github.tgeng.archon.core.common.*
 
 enum CaseTree:
   case CtTerm(term: CTerm)
-  case CtLambda( /* binding + 1 */ body: CTerm)(val boundName: Ref[Name])
-  case CtRecord(fields: Map[Name, CTerm])
+  case CtLambda( /* binding + 1 */ body: CaseTree)(val boundName: Ref[Name])
+  case CtRecord(fields: Map[Name, CaseTree])
   case CtTypeCase
     (
       operand: VTerm,
-      cases: Map[QualifiedName, /* binding + arg count */ CTerm],
-      default: Option[CTerm] // default may be refutable due to presence of Refl on the type
+      cases: Map[QualifiedName, /* binding + arg count */ CaseTree],
+      default: Option[CaseTree] // default may be refutable due to presence of Refl on the type
     )
   case CtDataCase
     (
       operand: VTerm,
       qn: QualifiedName,
-      cases: Map[Name, /* binding + arg count */ CTerm]
+      cases: Map[Name, /* binding + arg count */ CaseTree]
     )
   case CtEqualityCase
     (
@@ -25,7 +25,7 @@ enum CaseTree:
       /** This body term is already applied with the weakening substitutor from unification. This
         * deviates from [1] but it is easier to implement visitor and transformers.
         */
-      body: CTerm
+      body: CaseTree
     )
   case CtEqualityEmpty(operand: VTerm)
 

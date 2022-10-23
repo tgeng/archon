@@ -15,6 +15,7 @@ import Variance.*
 import PreDeclaration.*
 import CoPattern.*
 import UnificationResult.*
+import CaseTree.*
 import java.security.Signer
 
 private given Γ0: Context = IndexedSeq()
@@ -169,21 +170,25 @@ def elaborateBody
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Signature] =
+
   // See [1] for how this part works.
   type Constraint =
     ( /* current split term */ VTerm, /* user pattern */ Pattern, /* type */ VTerm)
+
+  case class ElabClause
+    (
+      constraints: List[Constraint],
+      userPatterns: List[CoPattern],
+      rhs: Option[CTerm],
+      val source: PreClause
+    )
+
+  type Problem = List[ElabClause]
+
   def weaken(c: Constraint) = c match
     // Note: p is not weakened because p is a user pattern. It does not leave in the Γ being
     // assembled during elaboration.
     case (w, p, _A) => (w.weakened, p, _A.weakened)
-
-  type Problem = List[
-    (
-      /* constraints */ List[Constraint],
-      /* user patterns */ List[CoPattern],
-      /* rhs */ Option[VTerm]
-    )
-  ]
 
   def solve
     (constraints: List[Constraint])
@@ -212,19 +217,21 @@ def elaborateBody
     */
   def shift(problem: Problem, _A: VTerm): Either[IrError, Problem] = problem match
     case Nil => Right(Nil)
-    case (_E, CPattern(p) :: qs, rhs) :: problem =>
+    case ElabClause(_E, CPattern(p) :: q̅, rhs, source) :: problem =>
       for problem <- shift(problem, _A)
-      yield ((Var(0), p, _A.weakened) :: _E.map(weaken), qs, rhs) :: problem
-    case _ => throw IllegalArgumentException("problem is not ready for shift")
+      yield ElabClause((Var(0), p, _A.weakened) :: _E.map(weaken), q̅, rhs, source) :: problem
+    case ElabClause(_, q :: _, _, _) :: _   => Left(UnexpectedCProjection(q))
+    case ElabClause(_, _, rhs, source) :: _ => Left(MissingUserCoPattern(source))
 
   def filter(problem: Problem, π: Name): Either[IrError, Problem] = problem match
     case Nil => Right(Nil)
-    case (_E, CProjection(π2) :: qs, rhs) :: problem =>
+    case ElabClause(_E, CProjection(π2) :: q̅, rhs, source) :: problem =>
       for problem <- filter(problem, π)
       yield
-        if π == π2 then (_E, qs, rhs) :: problem
+        if π == π2 then ElabClause(_E, q̅, rhs, source) :: problem
         else problem
-    case _ => throw IllegalArgumentException("problem is not ready for filter")
+    case ElabClause(_, q :: _, _, _) :: _       => Left(UnexpectedCPattern(q))
+    case c @ ElabClause(_, _, rhs, source) :: _ => Left(MissingUserCoPattern(source))
 
   def subst
     (problem: Problem, σ: PartialSubstitution[VTerm])
@@ -292,13 +299,13 @@ def elaborateBody
           yield _E1.zip(_E2).map(_ ++ _)
     problem match
       case Nil => Right(Nil)
-      case (_E, q, rhs) :: problem =>
+      case ElabClause(_E, q̅, rhs, source) :: problem =>
         for
           optionE <- simplifyAll(_E)
           r <- optionE match
             case Some(_E) =>
               for problem <- subst(problem, σ)
-              yield (_E, q, rhs) :: problem
+              yield ElabClause(_E, q̅, rhs, source) :: problem
             case None => subst(problem, σ)
         yield r
 
@@ -311,6 +318,28 @@ def elaborateBody
           case UNo => true
           case _   => false
       case _ => Right(false)
+
+  def elaborate
+    (qn: QualifiedName, q̅ : List[CoPattern], _C: CTerm, problem: Problem)
+    (using Γ: Context)
+    (using Σ: Signature)
+    : Either[IrError, (Signature, CaseTree)] =
+    for
+      _C <- reduceCType(_C)
+      r <- problem match
+        // intro
+        case ElabClause(_E1, (q@CPattern(p)) :: q̅1, rhs1, source) :: _ => _C match
+            case FunctionType(binding, bodyTy, effects) =>
+              for 
+                _A <- shift(problem, binding.ty)
+                case (_Σ1, _Q) <- elaborate(qn, q̅.map(_.weakened) :+ CPattern(PVar(0)), bodyTy, _A)
+              yield (_Σ1, CtLambda(_Q)(binding.name))
+            case _ => Left(UnexpectedCPattern(q))
+        // cosplit
+        case ElabClause(_E1, CProjection(π) :: q̅1, rhs1, source) :: _ => Right((???, ???))
+        case ElabClause(_E1, Nil, rhs1, source) :: _ => Right((???, ???))
+        case Nil                                     => Left(IncompleteClauses(qn))
+    yield r
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
