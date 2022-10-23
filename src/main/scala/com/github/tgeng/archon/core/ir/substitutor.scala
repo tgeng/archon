@@ -26,6 +26,17 @@ class Substitutor[T: DeBruijn]
   (
     val sourceContextSize: Nat,
     val targetContextSize: Nat,
+    /** nonTrivialMapping[0] corresponds to Var(0) in target context. That is, for example, if
+      * sourceContextSize == 5, targetContextSize == 7 and nonTrivialMapping = [a, b, c], then the
+      * fully spelled out substitutor is
+      *
+      * ```
+      * indices: 6       5       4       3       2  1  0
+      * terms:   Var(4)  Var(3)  Var(2)  Var(1)  c  b  a
+      * ```
+      *
+      * where a, b, c are some terms living in source context.
+      */
     private var nonTrivialMapping: IndexedSeq[T]
   )
   extends PartialSubstitution[T]:
@@ -41,10 +52,10 @@ class Substitutor[T: DeBruijn]
     *   Default value makes materialization happens fully
     */
   private def materialize(boundIndex: Nat = targetContextSize): Unit =
-    if nonTrivialMapping.length == boundIndex then
-      return nonTrivialMapping ++= (targetContextSize - nonTrivialMapping.length)
-        .until(targetContextSize - boundIndex, -1)
-        .map(i => fromIndex(sourceContextSize - i))
+    if nonTrivialMapping.length == boundIndex then return
+    nonTrivialMapping ++= (targetContextSize - nonTrivialMapping.length)
+      .until(targetContextSize - boundIndex, -1)
+      .map(i => fromIndex(sourceContextSize - i))
 
   override def apply(index: Nat): Option[T] =
     if index < targetContextSize && 0 <= index then
