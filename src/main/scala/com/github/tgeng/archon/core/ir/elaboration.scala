@@ -327,16 +327,32 @@ def elaborateBody
     for
       _C <- reduceCType(_C)
       r <- problem match
-        // intro
-        case ElabClause(_E1, (q@CPattern(p)) :: q̅1, rhs1, source) :: _ => _C match
-            case FunctionType(binding, bodyTy, effects) =>
-              for 
-                _A <- shift(problem, binding.ty)
-                case (_Σ1, _Q) <- elaborate(qn, q̅.map(_.weakened) :+ CPattern(PVar(0)), bodyTy, _A)
-              yield (_Σ1, CtLambda(_Q)(binding.name))
-            case _ => Left(UnexpectedCPattern(q))
         // cosplit
         case ElabClause(_E1, CProjection(π) :: q̅1, rhs1, source) :: _ => Right((???, ???))
+        // cosplit empty
+        // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more 
+        // user (projection) pattern. This seems more natural.
+        case ElabClause(_E1, Nil, None, source) :: Nil =>
+          _C match
+            case RecordType(qn, _, _) =>
+              Σ.getFields(qn).size match
+                case 0 => Right(Σ, CtRecord(Map()))
+                case _ => Left(MissingFieldsInCoPattern(source))
+            case _ => Left(MissingUserCoPattern(source))
+        // intro
+        case ElabClause(_E1, (q @ CPattern(p)) :: q̅1, rhs1, source) :: _ =>
+          _C match
+            case FunctionType(binding, bodyTy, _) =>
+              for
+                _A <- shift(problem, binding.ty)
+                case (_Σ1, _Q) <- elaborate(
+                  qn,
+                  q̅.map(_.weakened) :+ CPattern(PVar(0)),
+                  bodyTy,
+                  _A
+                )
+              yield (_Σ1, CtLambda(_Q)(binding.name))
+            case _ => Left(UnexpectedCPattern(q))
         case ElabClause(_E1, Nil, rhs1, source) :: _ => Right((???, ???))
         case Nil                                     => Left(IncompleteClauses(qn))
     yield r

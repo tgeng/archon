@@ -79,4 +79,5 @@ enum IrError extends HasException:
   case UnexpectedCProjection(q: CoPattern)
   case UnexpectedCPattern(q: CoPattern)
   case MissingUserCoPattern(clause: PreClause)
+  case MissingFieldsInCoPattern(clause: PreClause)
   case IncompleteClauses(qn: QualifiedName)
