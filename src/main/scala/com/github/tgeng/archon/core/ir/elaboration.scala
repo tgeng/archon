@@ -332,6 +332,13 @@ def elaborateBody
           case _   => false
       case _ => Right(false)
 
+  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm =
+    q̅.foldLeft[CTerm](Def(qn)) { (f, q) =>
+      q match
+        case CPattern(p)    => Application(f, p.toTerm.getOrElse(throw IllegalStateException()))
+        case CProjection(n) => Projection(f, n)
+    }
+
   def elaborate
     (qn: QualifiedName, q̅ : List[CoPattern], _C: CTerm, problem: Problem)
     (using Γ: Context)
@@ -341,7 +348,27 @@ def elaborateBody
       _C <- reduceCType(_C)
       r <- problem match
         // cosplit
-        case ElabClause(_E1, CProjection(π) :: q̅1, rhs1, source) :: _ => Right((???, ???))
+        case ElabClause(_E1, (p @ CProjection(_)) :: q̅1, rhs1, source) :: _ =>
+          _C match
+            case RecordType(qn, args, _) =>
+              Σ.getFields(qn)
+                .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right((Σ, Map()))) {
+                  (acc, field) =>
+                    acc match
+                      case Right((_Σ, fields)) =>
+                        for
+                          problem <- filter(problem, field.name)
+                          case (_Σ, ct) <- elaborate(
+                            qn,
+                            q̅ :+ CProjection(field.name),
+                            field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
+                            problem
+                          )(using Γ)(using _Σ)
+                        yield (_Σ, fields + (field.name -> ct))
+                      case Left(e) => Left(e)
+                }
+                .map { case (_Σ, fields) => (_Σ, CtRecord(fields)) }
+            case _ => Left(UnexpectedUserCoPattern(source, p))
         // cosplit empty
         // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
         // user (projection) pattern. This seems more natural.
@@ -351,7 +378,7 @@ def elaborateBody
               Σ.getFields(qn).size match
                 case 0 => Right(Σ, CtRecord(Map()))
                 case _ => Left(MissingFieldsInCoPattern(source))
-            case _ => Left(MissingUserCoPattern(source))
+            case _ => Left(InsufficientUserCoPatterns(source))
         // intro
         case ElabClause(_E1, (q @ CPattern(p)) :: q̅1, rhs1, source) :: _ =>
           _C match

@@ -3,6 +3,7 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
+import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence
 
 enum IrError extends HasException:
   case Unknown
@@ -79,5 +80,7 @@ enum IrError extends HasException:
   case UnexpectedCProjection(q: CoPattern)
   case UnexpectedCPattern(q: CoPattern)
   case MissingUserCoPattern(clause: PreClause)
+  case UnexpectedUserCoPattern(clause: PreClause, q: CoPattern)
   case MissingFieldsInCoPattern(clause: PreClause)
   case IncompleteClauses(qn: QualifiedName)
+  case InsufficientUserCoPatterns(clause: PreClause)
