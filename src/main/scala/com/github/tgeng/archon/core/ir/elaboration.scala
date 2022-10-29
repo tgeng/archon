@@ -20,11 +20,11 @@ import java.security.Signer
 
 private given Γ0: Context = IndexedSeq()
 def elaborateSignature
-  (data: PreData)
+  (preData: PreData)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Signature] =
-  ctx.trace(s"elaborating data signature ${data.qn}") {
+  ctx.trace(s"elaborating data signature ${preData.qn}") {
     def elaborateTy
       (ty: CTerm)
       (using Γ: Context)
@@ -49,13 +49,19 @@ def elaborateSignature
       yield r
 
     for
-      tParamTys <- elaborateTTelescope(data.tParamTys)
-      elaboratedTy <- elaborateTy(data.ty)(using Γ0 ++ tParamTys.map(_._1))
-    yield elaboratedTy match
-      case (tIndices, ul, usage, eqDecidability) =>
-        Σ.addDeclaration(
-          Data(data.qn)(tParamTys.size, tParamTys ++ tIndices, ul, usage, eqDecidability)
-        )
+      tParamTys <- elaborateTTelescope(preData.tParamTys)
+      case (tIndices, ul, usage, eqDecidability) <- elaborateTy(preData.ty)(using
+        Γ0 ++ tParamTys.map(_._1)
+      )
+      data = new Data(preData.qn)(
+        tParamTys.size,
+        tParamTys ++ tIndices,
+        ul,
+        usage,
+        eqDecidability
+      )
+      _ <- checkData(data)
+    yield Σ.addDeclaration(data)
   }
 
 def elaborateBody
@@ -98,8 +104,11 @@ def elaborateBody
         ctx.trace(s"elaborating constructor ${constructor.name}") {
           // weaken to accommodate data type indices
           val ty = constructor.ty.weaken(indexCount, 0)
-          for case (paramTys, args) <- elaborateTy(ty)
-          yield _Σ.addConstructor(Constructor(constructor.name, paramTys, args))
+          for
+            case (paramTys, args) <- elaborateTy(ty)
+            con = new Constructor(constructor.name, paramTys, args)
+            _ <- checkDataConstructor(preData.qn, con)
+          yield _Σ.addConstructor(con)
         }
       case (Left(e), _) => Left(e)
     }
@@ -117,6 +126,7 @@ def elaborateSignature
       r <- ty match
         case CType(CTop(ul, _), _) => Right(new Record(record.qn)(tParamTys, ul))
         case t                     => Left(ExpectCType(t))
+      _ <- checkRecord(r)
     yield Σ.addDeclaration(r)
   }
 
@@ -138,8 +148,11 @@ def elaborateBody
     preRecord.fields.foldLeft[Either[IrError, Signature]](Right(Σ)) {
       case (Right(_Σ), field) =>
         ctx.trace(s"elaborating field ${field.name}") {
-          for ty <- reduceCType(field.ty)
-          yield _Σ.addField(Field(field.name, ty))
+          for
+            ty <- reduceCType(field.ty)
+            f = new Field(field.name, ty)
+            _ <- checkRecordField(preRecord.qn, f)
+          yield _Σ.addField(f)
         }
       case (Left(e), _) => Left(e)
     }
@@ -156,13 +169,13 @@ def elaborateSignature
     for
       paramTys <- elaborateTelescope(definition.paramTys)
       ty <- reduceCType(definition.ty)(using paramTys.toIndexedSeq)
-    yield Σ.addDeclaration(
-      Definition(definition.qn)(
+      d = new Definition(definition.qn)(
         paramTys.foldRight(ty) { (binding, bodyTy) =>
           FunctionType(binding, bodyTy)
         }
       )
-    )
+      _ <- checkDef(d)
+    yield Σ.addDeclaration(d)
   }
 
 def elaborateBody
@@ -330,7 +343,7 @@ def elaborateBody
         // cosplit
         case ElabClause(_E1, CProjection(π) :: q̅1, rhs1, source) :: _ => Right((???, ???))
         // cosplit empty
-        // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more 
+        // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
         // user (projection) pattern. This seems more natural.
         case ElabClause(_E1, Nil, None, source) :: Nil =>
           _C match
@@ -399,8 +412,11 @@ def elaborateSignature
   (using ctx: TypingContext)
   : Either[IrError, Signature] =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
-    for tParamTys <- elaborateTelescope(effect.tParamTys)
-    yield Σ.addDeclaration(Effect(effect.qn)(tParamTys))
+    for
+      tParamTys <- elaborateTelescope(effect.tParamTys)
+      e = new Effect(effect.qn)(tParamTys)
+      _ <- checkEffect(e)
+    yield Σ.addDeclaration(e)
   }
 
 def elaborateBody
@@ -443,8 +459,11 @@ def elaborateBody
       case (Right(_Σ), operator) =>
         given Signature = _Σ
         ctx.trace(s"elaborating operator ${operator.name}") {
-          for case (paramTys, resultTy, usage) <- elaborateTy(operator.ty)
-          yield _Σ.addOperator(Operator(operator.name, paramTys, resultTy, usage))
+          for
+            case (paramTys, resultTy, usage) <- elaborateTy(operator.ty)
+            o = Operator(operator.name, paramTys, resultTy, usage)
+            _ <- checkOperator(effect.qn, o)
+          yield _Σ.addOperator(o)
         }
       case (Left(e), _) => Left(e)
     }
