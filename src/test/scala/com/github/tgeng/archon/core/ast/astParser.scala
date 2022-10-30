@@ -6,7 +6,7 @@ import com.github.tgeng.archon.core.ir.Binding
 import com.github.tgeng.archon.core.ir.Builtins
 import com.github.tgeng.archon.core.ir.CellStatus
 import com.github.tgeng.archon.core.ir.Elimination
-import com.github.tgeng.archon.core.ir.TTelescope
+import com.github.tgeng.archon.core.ir.TContext
 import com.github.tgeng.archon.core.ir.Variance
 import com.github.tgeng.archon.core.ir.SourceInfo
 import com.github.tgeng.archon.core.ir.Range
@@ -92,7 +92,7 @@ object AstParser:
     yield AstEffect(name, tParamTys.map(_._1), operators)
   }
 
-  private def tParamTys: StrParser[AstTTelescope] = P {
+  private def tParamTys: StrParser[AstTContext] = P {
     val variance = (P.from("+").as(Variance.COVARIANT) || P
       .from("-")
       .as(Variance.CONTRAVARIANT)).??.map(_.getOrElse(Variance.INVARIANT))

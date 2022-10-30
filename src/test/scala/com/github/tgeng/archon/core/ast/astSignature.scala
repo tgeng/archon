@@ -4,14 +4,14 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
-type AstTTelescope = List[(Binding[AstTerm], Variance)]
+type AstTContext = List[(Binding[AstTerm], Variance)]
 type AstTelescope = List[Binding[AstTerm]]
 
 enum AstDeclaration:
   case AstData
     (
       override val name: Name,
-      val tParamTys: AstTTelescope,
+      val tParamTys: AstTContext,
       val ty: AstTerm,
       val isPure: Boolean,
       val constructors: List[AstConstructor]
@@ -19,7 +19,7 @@ enum AstDeclaration:
   case AstRecord
     (
       override val name: Name,
-      val tParamTys: AstTTelescope,
+      val tParamTys: AstTContext,
       val ty: AstTerm,
       val fields: List[AstField]
     )

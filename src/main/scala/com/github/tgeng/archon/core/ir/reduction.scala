@@ -192,7 +192,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                             effQn == hEffQn &&
                             effArgs.size == hEffArgs.size &&
                             effArgs.size == tys.size &&
-                            areEffArgsConvertible(effArgs, hEffArgs, tys)
+                            areEffArgsConvertible(effArgs, hEffArgs, tys.toList)
                           } =>
                           val handlerBody = handlers(name)
                           val capturedStack = Handler(

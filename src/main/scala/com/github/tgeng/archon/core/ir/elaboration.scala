@@ -30,7 +30,7 @@ def elaborateSignature
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (TTelescope, ULevel, VTerm, VTerm)] =
+      : Either[IrError, (TContext, ULevel, VTerm, VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
@@ -38,18 +38,18 @@ def elaborateSignature
           // constructors are always total. Declaring non-total signature is not necessary (nor
           // desirable) but acceptable.
           case F(Type(Top(ul, usage, eqDecidability)), _, _) =>
-            Right((Nil, ul, usage, eqDecidability))
+            Right((IndexedSeq(), ul, usage, eqDecidability))
           case F(t, _, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
             elaborateTy(bodyTy)(using Γ :+ binding).map {
               case (telescope, ul, usage, eqDecidability) =>
-                ((binding, INVARIANT) :: telescope, ul, usage, eqDecidability)
+                ((binding, INVARIANT) +: telescope, ul, usage, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
 
     for
-      tParamTys <- elaborateTTelescope(preData.tParamTys)
+      tParamTys <- elaborateTContext(preData.tParamTys)
       case (tIndices, ul, usage, eqDecidability) <- elaborateTy(preData.ty)(using
         Γ0 ++ tParamTys.map(_._1)
       )
@@ -121,7 +121,7 @@ def elaborateSignature
   : Either[IrError, Signature] =
   ctx.trace(s"elaborating record signature ${record.qn}") {
     for
-      tParamTys <- elaborateTTelescope(record.tParamTys)
+      tParamTys <- elaborateTContext(record.tParamTys)
       ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
       r <- ty match
         case CType(CTop(ul, _), _) => Right(new Record(record.qn)(tParamTys, ul))
@@ -167,7 +167,7 @@ def elaborateSignature
 
   ctx.trace(s"elaborating def signature ${definition.qn}") {
     for
-      paramTys <- elaborateTelescope(definition.paramTys)
+      paramTys <- elaborateContext(definition.paramTys)
       ty <- reduceCType(definition.ty)(using paramTys.toIndexedSeq)
       d = new Definition(definition.qn)(
         paramTys.foldRight(ty) { (binding, bodyTy) =>
@@ -346,60 +346,89 @@ def elaborateBody
     : Either[IrError, (Signature, CaseTree)] =
     for
       _C <- reduceCType(_C)
-      r <- problem match
-        // cosplit
-        case ElabClause(_E1, (p @ CProjection(_)) :: q̅1, rhs1, source) :: _ =>
-          _C match
-            case RecordType(qn, args, _) =>
-              Σ.getFields(qn)
-                .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right((Σ, Map()))) {
-                  (acc, field) =>
-                    acc match
-                      case Right((_Σ, fields)) =>
-                        for
-                          problem <- filter(problem, field.name)
-                          case (_Σ, ct) <- elaborate(
-                            qn,
-                            q̅ :+ CProjection(field.name),
-                            field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
-                            problem
-                          )(using Γ)(using _Σ)
-                        yield (_Σ, fields + (field.name -> ct))
-                      case Left(e) => Left(e)
-                }
-                .map { case (_Σ, fields) => (_Σ, CtRecord(fields)) }
-            case _ => Left(UnexpectedUserCoPattern(source, p))
-        // cosplit empty
+      // TODO: direct cosplit/intro by type first
+      //  then do split after all vars are introduced.
+      r <- (problem, _C) match
+        // [cosplit]
+        case (
+            ElabClause(_E1, (p @ CProjection(_)) :: q̅1, rhs1, source) :: _,
+            RecordType(qn, args, _)
+          ) =>
+          Σ.getFields(qn)
+            .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right((Σ, Map()))) {
+              (acc, field) =>
+                acc match
+                  case Right((_Σ, fields)) =>
+                    for
+                      problem <- filter(problem, field.name)
+                      case (_Σ, ct) <- elaborate(
+                        qn,
+                        q̅ :+ CProjection(field.name),
+                        field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
+                        problem
+                      )(using Γ)(using _Σ)
+                    yield (_Σ, fields + (field.name -> ct))
+                  case Left(e) => Left(e)
+            }
+            .map { case (_Σ, fields) => (_Σ, CtRecord(fields)) }
+        // [cosplit empty]
         // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
         // user (projection) pattern. This seems more natural.
-        case ElabClause(_E1, Nil, None, source) :: Nil =>
-          _C match
-            case RecordType(qn, _, _) =>
-              Σ.getFields(qn).size match
-                case 0 => Right(Σ, CtRecord(Map()))
-                case _ => Left(MissingFieldsInCoPattern(source))
-            case _ => Left(InsufficientUserCoPatterns(source))
-        // intro
-        case ElabClause(_E1, (q @ CPattern(p)) :: q̅1, rhs1, source) :: _ =>
-          _C match
-            case FunctionType(binding, bodyTy, _) =>
-              for
-                _A <- shift(problem, binding.ty)
-                case (_Σ1, _Q) <- elaborate(
-                  qn,
-                  q̅.map(_.weakened) :+ CPattern(PVar(0)),
-                  bodyTy,
-                  _A
-                )
-              yield (_Σ1, CtLambda(_Q)(binding.name))
-            case _ => Left(UnexpectedCPattern(q))
-        case ElabClause(_E1, Nil, rhs1, source) :: _ => Right((???, ???))
-        case Nil                                     => Left(IncompleteClauses(qn))
+        case (ElabClause(_E1, Nil, None, source) :: _, RecordType(qn, _, _)) =>
+          Σ.getFields(qn).size match
+            // There is no need to modify Σ because empty record does not have any clause
+            case 0 => Right(Σ, CtRecord(Map()))
+            case _ => Left(MissingFieldsInCoPattern(source))
+        // [intro]
+        case (
+            ElabClause(_E1, (q @ CPattern(p)) :: q̅1, rhs1, source) :: _,
+            FunctionType(binding, bodyTy, _)
+          ) =>
+          for
+            _A <- shift(problem, binding.ty)
+            case (_Σ1, _Q) <- elaborate(
+              qn,
+              q̅.map(_.weakened) :+ CPattern(PVar(0)),
+              bodyTy,
+              _A
+            )
+          yield (_Σ1, CtLambda(_Q)(binding.name))
+        // mismatch between copattern and _C
+        case (ElabClause(_, q :: _, _, source) :: _, _) =>
+          Left(UnexpectedUserCoPattern(source, q))
+        // All copatterns are introduced. Now start doing split
+        case (ElabClause(_E1, Nil, _, _) :: _, _) =>
+          // Note: unlike [1], we do not need to track nor update Σ because we do all intro and
+          // cosplit before any split. As a result, during split Σ will not be changed at all.
+          def split
+            (q̅ : List[CoPattern], _C: CTerm, problem: Problem)
+            (using Γ: Context)
+            : Either[IrError, (Clause, CaseTree)] =
+            val ElabClause(_E1, _, rhs1, source1) = problem(0)
+            _E1.collectFirst[(List[CoPattern], CTerm, Problem)] { case (w, p, _A) =>
+              ???
+            } match
+              case Some((q̅, _C, problem)) => split(q̅, _C, problem)
+              // [done]
+              case None =>
+                for
+                  rhs1 <- rhs1 match
+                    case Some(rhs1) => Right(rhs1)
+                    case None       => Left(UnexpectedImpossible(source1))
+                  σOption <- solve(_E1)
+                  _ <- σOption match
+                    case Some(σ) => checkType(rhs1.subst(σ), _C)
+                    case None    => Left(UnsolvedElaboration(source1))
+                yield (Clause(Γ, q̅, rhs1, _C), CtTerm(rhs1))
+          split(q̅, _C, problem).map { case (clause, caseTree) =>
+            (Σ.addClause(clause), caseTree)
+          }
+        case (Nil, _) => Left(IncompleteClauses(qn))
     yield r
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
-      paramTys <- elaborateTelescope(preDefinition.paramTys)
+      paramTys <- elaborateContext(preDefinition.paramTys)
       r <- {
         given Γ: Context = paramTys.toIndexedSeq
         Right(???)
@@ -412,7 +441,7 @@ def elaborateBody
         //         List(
         //           ctx.trace(s"elaborating clause $index") {
         //             for
-        //               bindings <- elaborateTelescope(clause.bindings)
+        //               bindings <- elaborateContext(clause.bindings)
         //               ty <- reduceCType(clause.ty)(using Γ ++ bindings)
         //             yield
         //               val allBindings = paramTys ++ bindings
@@ -440,7 +469,7 @@ def elaborateSignature
   : Either[IrError, Signature] =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     for
-      tParamTys <- elaborateTelescope(effect.tParamTys)
+      tParamTys <- elaborateContext(effect.tParamTys)
       e = new Effect(effect.qn)(tParamTys)
       _ <- checkEffect(e)
     yield Σ.addDeclaration(e)
@@ -496,28 +525,28 @@ def elaborateBody
     }
   }
 
-private def elaborateTTelescope
-  (tTelescope: PreTTelescope)
+private def elaborateTContext
+  (tTelescope: PreTContext)
   (using Γ: Context)
   (using Signature)
   (using ctx: TypingContext)
-  : Either[IrError, TTelescope] =
-  elaborateTelescope(tTelescope.map(_._1)).map(_.zip(tTelescope.map(_._2)))
+  : Either[IrError, TContext] =
+  elaborateContext(tTelescope.map(_._1)).map(_.zip(tTelescope.map(_._2)))
 
-private def elaborateTelescope
-  (telescope: PreTelescope)
+private def elaborateContext
+  (telescope: PreContext)
   (using Γ: Context)
   (using Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Telescope] = telescope match
-  case Nil => Right(Nil)
-  case binding :: telescope =>
-    ctx.trace("elaborating telescope") {
+  : Either[IrError, Context] = telescope match
+  case Nil => Right(IndexedSeq())
+  case binding :: context =>
+    ctx.trace("elaborating context") {
       for
         ty <- reduceVType(binding.ty)
         newBinding = Binding(ty, ???)(binding.name)
-        telescope <- elaborateTelescope(telescope)(using Γ :+ newBinding)
-      yield newBinding :: telescope
+        context <- elaborateContext(context)(using Γ :+ newBinding)
+      yield newBinding +: context
     }
 
 // [1] Jesper Cockx and Andreas Abel. 2018. Elaborating dependent (co)pattern matching. Proc. ACM

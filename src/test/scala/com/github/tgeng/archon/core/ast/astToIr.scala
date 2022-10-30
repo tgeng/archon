@@ -150,13 +150,13 @@ def astToIr
         PreEffect(moduleQn / name)(tParamTys, operators)
       }
 
-@targetName("astToIrTTelescope")
+@targetName("astToIrTContext")
 private def astToIr[T]
-  (tTelescope: AstTTelescope)
+  (tTelescope: AstTContext)
   (action: NameContext ?=> Either[AstError, T])
   (using ctx: NameContext)
   (using Σ: TestSignature)
-  : Either[AstError, (PreTTelescope, T)] =
+  : Either[AstError, (PreTContext, T)] =
   astToIr(tTelescope.map(_._1))(action)
     .map { case (telescope, t) =>
       (telescope.zip(tTelescope.map(_._2)), t)
@@ -170,7 +170,7 @@ private def astToIr[T]
   (using
     Σ: TestSignature
   )
-  : Either[AstError, (PreTelescope, T)] = telescope match
+  : Either[AstError, (PreContext, T)] = telescope match
   case Nil => action.map((Nil, _))
   case binding :: telescope =>
     for

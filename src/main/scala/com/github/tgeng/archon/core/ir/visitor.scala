@@ -21,7 +21,7 @@ trait Visitor[C, R]:
     : R =
     action(using ctx)
 
-  def visitPreTTelescope
+  def visitPreTContext
     (tTelescope: List[(Binding[CTerm], Variance)])
     (using ctx: C)
     (using Σ: Signature)
@@ -31,11 +31,11 @@ trait Visitor[C, R]:
       combine(
         visitPreBinding(binding),
         withBindings(Seq(binding.name)) {
-          visitPreTTelescope(rest)
+          visitPreTContext(rest)
         }
       )
 
-  def visitTTelescope
+  def visitTContext
     (tTelescope: List[(Binding[VTerm], Variance)])
     (using ctx: C)
     (using Σ: Signature)
@@ -45,18 +45,18 @@ trait Visitor[C, R]:
       combine(
         visitBinding(binding),
         withBindings(Seq(binding.name)) {
-          visitTTelescope(rest)
+          visitTContext(rest)
         }
       )
 
-  def visitPreTelescope(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
+  def visitPreContext(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
     telescope match
       case Nil => combine()
       case binding :: rest =>
         combine(
           visitPreBinding(binding),
           withBindings(Seq(binding.name)) {
-            visitPreTelescope(rest)
+            visitPreContext(rest)
           }
         )
 
@@ -171,7 +171,7 @@ trait Visitor[C, R]:
         (ct.cases.flatMap { (qn, body) =>
           Seq(
             visitQualifiedName(qn),
-            withBindings(Σ.getData(qn).tParamTys.map(_._1.name)) {
+            withBindings(Σ.getData(qn).tParamTys.map(_._1.name).toList) {
               visitCaseTree(body)
             }
           )
@@ -527,7 +527,7 @@ trait Transformer[C]:
       transformVTerm(tc.operand),
       tc.cases.map { (qn, body) =>
         val data = Σ.getData(qn)
-        (qn, withBindings(data.tParamTys.map(_._1.name)) { body })
+        (qn, withBindings(data.tParamTys.map(_._1.name).toList) { body })
       },
       tc.default.map(transformCaseTree)
     )

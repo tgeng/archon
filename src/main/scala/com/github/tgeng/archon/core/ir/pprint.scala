@@ -180,7 +180,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       action
     }
 
-  override def visitPreTTelescope
+  override def visitPreTContext
     (tTelescope: List[(Binding[CTerm], Variance)])
     (using ctx: PPrintContext)
     (using Σ: Signature)
@@ -196,7 +196,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       }
     )
 
-  override def visitTTelescope
+  override def visitTContext
     (tTelescope: List[(Binding[VTerm], Variance)])
     (using PPrintContext)
     (using Signature)
@@ -208,7 +208,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     }
   )
 
-  override def visitPreTelescope
+  override def visitPreContext
     (telescope: List[Binding[CTerm]])
     (using ctx: PPrintContext)
     (using Σ: Signature)

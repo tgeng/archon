@@ -106,7 +106,7 @@ object Builtins:
         (
           new Data(qn)(
             numParams,
-            tParamTys,
+            tParamTys.toIndexedSeq,
             ul,
             inherentUsage,
             inherentEqDecidability
@@ -140,7 +140,7 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level") :: Nil,
+              IndexedSeq(Binding(LevelType(), U1)(n"level")),
               CPattern(PVar(0)) :: Nil,
               Return(Type(Top(USimpleLevel(Var(0))))),
               F(Type(Type(Top(USimpleLevel(Var(0))))))
@@ -165,8 +165,10 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level") ::
-                Binding(Type(Top(USimpleLevel(Var(0)))), U1)(n"upperBound") :: Nil,
+              IndexedSeq(
+                Binding(LevelType(), U1)(n"level"),
+                Binding(Type(Top(USimpleLevel(Var(0)))), U1)(n"upperBound")
+              ),
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               Return(Type(Var(0))),
               F(Type(Type(Var(0))))
@@ -187,7 +189,7 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level") :: Nil,
+              IndexedSeq(Binding(LevelType(), U1)(n"level")),
               CPattern(PVar(0)) :: Nil,
               Return(Top(USimpleLevel(Var(0)))),
               F(Type(Top(USimpleLevel(Var(0)))))
@@ -204,7 +206,7 @@ object Builtins:
           F(Type(EffectsType())),
           IndexedSeq(
             Clause(
-              Nil,
+              IndexedSeq(),
               Nil,
               Return(EffectsType()),
               F(Type(EffectsType()))
@@ -219,7 +221,7 @@ object Builtins:
         Builtins.LevelQn,
         (
           F(Type(LevelType())),
-          IndexedSeq(Clause(Nil, Nil, Return(LevelType()), F(Type(LevelType()))))
+          IndexedSeq(Clause(IndexedSeq(), Nil, Return(LevelType()), F(Type(LevelType()))))
         )
       ),
 
@@ -229,7 +231,7 @@ object Builtins:
         Builtins.HeapQn,
         (
           F(Type(HeapType())),
-          IndexedSeq(Clause(Nil, Nil, Return(HeapType()), F(Type(HeapType()))))
+          IndexedSeq(Clause(IndexedSeq(), Nil, Return(HeapType()), F(Type(HeapType()))))
         )
       ),
 
@@ -249,9 +251,10 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level") :: Binding(EffectsType(), U1)(
-                n"effects"
-              ) :: Nil,
+              IndexedSeq(
+                Binding(LevelType(), U1)(n"level"),
+                Binding(EffectsType(), U1)(n"effects")
+              ),
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               CType(CTop(USimpleLevel(Var(1)), Var(0))),
               CType(
@@ -285,13 +288,11 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level") ::
-                Binding(EffectsType(), U1)(n"effects") ::
-                Binding(
-                  U(CType(CTop(USimpleLevel(Var(1)), Var(0)))),
-                  U1
-                )(n"upperBound") ::
-                Nil,
+              IndexedSeq(
+                Binding(LevelType(), U1)(n"level"),
+                Binding(EffectsType(), U1)(n"effects"),
+                Binding(U(CType(CTop(USimpleLevel(Var(1)), Var(0)))), U1)(n"upperBound")
+              ),
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
                 PVar(0)
               ) :: Nil,
@@ -318,9 +319,10 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level") :: Binding(EffectsType(), U1)(
-                n"effects"
-              ) :: Nil,
+              IndexedSeq(
+                Binding(LevelType(), U1)(n"level"),
+                Binding(EffectsType(), U1)(n"effects")
+              ),
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               CTop(USimpleLevel(Var(1)), Var(0)),
               CType(CTop(USimpleLevel(Var(1)), Var(0)))
@@ -344,9 +346,10 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(EffectsType(), U1)(n"eff1") :: Binding(EffectsType(), U1)(
-                n"eff2"
-              ) :: Nil,
+              IndexedSeq(
+                Binding(EffectsType(), U1)(n"eff1"),
+                Binding(EffectsType(), U1)(n"eff2")
+              ),
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               Return(EffectsUnion(Var(1), Var(0))),
               F(EffectsType())
@@ -366,7 +369,7 @@ object Builtins:
           ),
           IndexedSeq {
             Clause(
-              Binding(LevelType(), U1)(n"level") :: Nil,
+              IndexedSeq(Binding(LevelType(), U1)(n"level")),
               CPattern(PVar(0)) :: Nil,
               Return(LevelSuc(Var(0))),
               F(LevelType())
@@ -390,9 +393,10 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U1)(n"level1") :: Binding(LevelType(), U1)(
-                n"level2"
-              ) :: Nil,
+              IndexedSeq(
+                Binding(LevelType(), U1)(n"level1"),
+                Binding(LevelType(), U1)(n"level2")
+              ),
               CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               Return(LevelMax(Var(1), Var(0))),
               F(LevelType())
@@ -406,7 +410,7 @@ object Builtins:
           F(EffectsType()),
           IndexedSeq(
             Clause(
-              Nil,
+              IndexedSeq(),
               Nil,
               Return(EffectsLiteral(Set())),
               F(EffectsType())
@@ -429,8 +433,11 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") :: Binding(HeapType(), U1)(n"h") ::
-                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A") :: Nil,
+              IndexedSeq(
+                Binding(LevelType(), U0)(n"level"),
+                Binding(HeapType(), U1)(n"h"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A")
+              ),
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
                 PVar(0)
               ) :: Nil,
@@ -455,9 +462,11 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") :: Binding(HeapType(), U1)(n"h") ::
-                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A") ::
-                Nil,
+              IndexedSeq(
+                Binding(LevelType(), U0)(n"level"),
+                Binding(HeapType(), U1)(n"h"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A")
+              ),
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(PVar(0)) :: Nil,
               Return(CellType(Var(1), Var(0), CellStatus.Uninitialized)),
               F(Type(CellType(Var(1), Var(0), CellStatus.Uninitialized)))
@@ -483,10 +492,11 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") ::
-                Binding(HeapType(), U1)(n"h") ::
-                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A") ::
-                Nil,
+              IndexedSeq(
+                Binding(LevelType(), U0)(n"level"),
+                Binding(HeapType(), U1)(n"h"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U1)(n"A")
+              ),
               CPattern(PVar(2)) :: CPattern(PVar(1)) :: CPattern(
                 PVar(0)
               ) :: Nil,
@@ -523,11 +533,12 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") ::
-                Binding(HeapType(), U0)(n"h") ::
-                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A") ::
-                Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(n"cell") ::
-                Nil,
+              IndexedSeq(
+                Binding(LevelType(), U0)(n"level"),
+                Binding(HeapType(), U0)(n"h"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A"),
+                Binding(CellType(Var(1), Var(0), CellStatus.Initialized), U1)(n"cell")
+              ),
               CPattern(PVar(3)) ::
                 CPattern(PVar(2)) ::
                 CPattern(PVar(1)) ::
@@ -570,14 +581,13 @@ object Builtins:
           ),
           IndexedSeq(
             Clause(
-              Binding(LevelType(), U0)(n"level") ::
-                Binding(HeapType(), U0)(n"h") ::
-                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A") ::
-                Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized), U1)(
-                  n"cell"
-                ) ::
-                Binding(Var(1), U1)(n"value") ::
-                Nil,
+              IndexedSeq(
+                Binding(LevelType(), U0)(n"level"),
+                Binding(HeapType(), U0)(n"h"),
+                Binding(Type(Top(USimpleLevel(Var(1)))), U0)(n"A"),
+                Binding(CellType(Var(1), Var(0), CellStatus.Uninitialized), U1)(n"cell"),
+                Binding(Var(1), U1)(n"value")
+              ),
               CPattern(PVar(4)) ::
                 CPattern(PVar(3)) ::
                 CPattern(PVar(2)) ::
@@ -598,7 +608,7 @@ object Builtins:
           F(HeapType()),
           IndexedSeq(
             Clause(
-              Nil,
+              IndexedSeq(),
               Nil,
               Return(Heap(GlobalHeapKey)),
               F(HeapType())
@@ -632,7 +642,7 @@ object Builtins:
       ),
       IndexedSeq(
         Clause(
-          Nil,
+          IndexedSeq(),
           Nil,
           if isComputation then CType(CTop(UωLevel(layer)))
           else Return(Type(Top(UωLevel(layer)))),
@@ -646,7 +656,7 @@ object Builtins:
     b(
       Builtins.HeapEffQn,
       (
-        /* tParamTys*/ Binding(HeapType(), U1)(n"h") :: Nil,
+        /* tParamTys*/ IndexedSeq(Binding(HeapType(), U1)(n"h")),
         /* operators */ IndexedSeq(
           // Note: we declare no operations here because operations of heap effect is represented
           // specially in CTerm. Instead, the derived definitions for these operations (alloc, set, get)

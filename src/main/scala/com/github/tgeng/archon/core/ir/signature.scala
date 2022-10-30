@@ -12,7 +12,7 @@ enum Variance:
 enum Essentiality:
   case ESSENTIAL, AUXILIARY
 
-type TTelescope = List[(Binding[VTerm], Variance)]
+type TContext = collection.IndexedSeq[(Binding[VTerm], Variance)]
 
 given SourceInfo = SiEmpty
 
@@ -25,7 +25,7 @@ enum Declaration:
         * only parameter arguments are needed while index arguments are set by constructors.
         */
       val numParams: Nat,
-      val tParamTys: TTelescope,
+      val tParamTys: TContext,
       /* binding + tParamTys */
       val ul: ULevel,
       /* binding + tParamTys */
@@ -36,7 +36,7 @@ enum Declaration:
   case Record
     (val qn: QualifiedName)
     (
-      val tParamTys: TTelescope = Nil, /* binding + tParamTys */
+      val tParamTys: TContext = IndexedSeq(), /* binding + tParamTys */
       val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
       val selfName: Ref[Name] = n"self"
     )
@@ -53,7 +53,7 @@ enum Declaration:
   case Effect
     (val qn: QualifiedName)
     (
-      val tParamTys: Telescope = Nil,
+      val tParamTys: Context = IndexedSeq(),
       /* + tParamTys.size */ val continuationUsage: VTerm = VTerm.UsageLiteral(Usage.U1)
     )
 
@@ -81,7 +81,7 @@ case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
 
 case class Clause
   (
-    bindings: Telescope,
+    bindings: Context,
     lhs: List[CoPattern], /* + bindings */
     rhs: CTerm, /* + bindings */
     ty: CTerm /* + bindings */

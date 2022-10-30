@@ -60,7 +60,7 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
           case Variance.COVARIANT     => visitVTerm(arg)
           case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
           case Variance.INVARIANT     => mix(visitVTerm(arg))
-      }: _*
+      }.toSeq: _*
     )
 
   override def visitCellType
@@ -85,7 +85,7 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
             case Variance.COVARIANT     => visitVTerm(arg)
             case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
             case Variance.INVARIANT     => mix(visitVTerm(arg))
-        }: _*
+        }.toSeq: _*
     )
 
   override def visitFunctionType

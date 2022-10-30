@@ -218,6 +218,23 @@ extension(c: CTerm)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
+extension(b: Binding[VTerm])
+  def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature): Binding[VTerm] =
+    b.map(_.subst(substitution))
+  def weaken(amount: Nat, at: Nat)(using Σ: Signature): Binding[VTerm] =
+    b.map(_.weaken(amount, at))
+  def weakened(using Σ: Signature): Binding[VTerm] = b.map(_.weakened)
+  def strengthened(using Σ: Signature): Binding[VTerm] = b.map(_.strengthened)
+  def strengthen(amount: Nat, at: Nat)(using Σ: Signature): Binding[VTerm] =
+    b.map(_.strengthen(amount, at))
+
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
+    */
+  def substLowers(vTerms: VTerm*)(using Σ: Signature): Binding[VTerm] =
+    b.map(_.substLowers(vTerms: _*))
+
 extension(v: VTerm)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableVTerm.substitute(v, substitution)

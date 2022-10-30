@@ -57,12 +57,12 @@ enum IrError extends HasException:
   case IllegalVarianceInData
     (
       qn: QualifiedName,
-      illegallyUsedBindingIndices: List[Nat]
+      illegallyUsedBindingIndices: collection.Seq[Nat]
     )
   case IllegalVarianceInRecord
     (
       qn: QualifiedName,
-      illegallyUsedBindingIndices: List[Nat]
+      illegallyUsedBindingIndices: collection.Seq[Nat]
     )
   case NotEqDecidableType(ty: VTerm)
   case NormalizationError(ctm: CTerm)
@@ -84,3 +84,5 @@ enum IrError extends HasException:
   case MissingFieldsInCoPattern(clause: PreClause)
   case IncompleteClauses(qn: QualifiedName)
   case InsufficientUserCoPatterns(clause: PreClause)
+  case UnexpectedImpossible(clause: PreClause)
+  case UnsolvedElaboration(clause: PreClause)

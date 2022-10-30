@@ -6,14 +6,14 @@ import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
 import Reducible.reduce
 import SourceInfo.*
 
-type PreTTelescope = List[(Binding[CTerm], Variance)]
-type PreTelescope = List[Binding[CTerm]]
+type PreTContext = List[(Binding[CTerm], Variance)]
+type PreContext = List[Binding[CTerm]]
 
 enum PreDeclaration:
   case PreData
     (val qn: QualifiedName)
     (
-      val tParamTys: PreTTelescope,
+      val tParamTys: PreTContext,
       // This could be a eqDecidable function type that ends with `F Type` for indexed families. In this
       // case, during elaboration, all constructors are weakened by the number of args in the
       // declared function type. That is, indexed families are converted to parameterized inductive
@@ -24,7 +24,7 @@ enum PreDeclaration:
   case PreRecord
     (val qn: QualifiedName)
     (
-      val tParamTys: PreTTelescope,
+      val tParamTys: PreTContext,
       // Unlike data, for record, this `ty` is expected to be a simple computation type.
       val ty: CTerm,
       val fields: List[PreField]
@@ -32,14 +32,14 @@ enum PreDeclaration:
   case PreDefinition
     (val qn: QualifiedName)
     (
-      val paramTys: PreTelescope,
+      val paramTys: PreContext,
       val ty: CTerm,
       val clauses: List[PreClause]
     )
   case PreEffect
     (val qn: QualifiedName)
     (
-      val tParamTys: PreTelescope,
+      val tParamTys: PreContext,
       val operators: List[PreOperator]
     )
 
@@ -82,18 +82,18 @@ def sortPreDeclarations
       {
         case data: PreData =>
           QualifiedNameVisitor.combine(
-            QualifiedNameVisitor.visitPreTTelescope(data.tParamTys),
+            QualifiedNameVisitor.visitPreTContext(data.tParamTys),
             data.ty.visitWith(QualifiedNameVisitor)
           )
         case record: PreRecord =>
           QualifiedNameVisitor.combine(
-            QualifiedNameVisitor.visitPreTTelescope(record.tParamTys),
+            QualifiedNameVisitor.visitPreTContext(record.tParamTys),
             record.ty.visitWith(QualifiedNameVisitor)
           )
         case definition: PreDefinition =>
           definition.ty.visitWith(QualifiedNameVisitor)
         case effect: PreEffect =>
-          QualifiedNameVisitor.visitPreTelescope(effect.tParamTys)
+          QualifiedNameVisitor.visitPreContext(effect.tParamTys)
       }
     )
     .view
