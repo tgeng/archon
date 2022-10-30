@@ -9,7 +9,11 @@ type Telescope = List[Binding[VTerm]]
   */
 type Context = collection.IndexedSeq[Binding[VTerm]]
 
-extension(v: collection.IndexedSeq[Binding[VTerm]])
+extension(ctx: collection.IndexedSeq[Binding[VTerm]])
   def resolve(ref: VTerm.Var)(using Signature): Binding[VTerm] =
     val offset = ref.idx + 1
-    v(v.length - offset).map(RaisableVTerm.raise(_, offset))
+    ctx(ctx.size - offset).map(RaisableVTerm.raise(_, offset))
+
+  def split(ref: VTerm.Var): (Context, Binding[VTerm], Telescope) =
+    val index = ctx.size - (ref.idx + 1)
+    (ctx.take(index), ctx(index), ctx.drop(index + 1).toList)

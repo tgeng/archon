@@ -17,6 +17,7 @@ import CoPattern.*
 import UnificationResult.*
 import CaseTree.*
 import java.security.Signer
+import com.github.tgeng.archon.parser.combinators.P
 
 private given Γ0: Context = IndexedSeq()
 def elaborateSignature
@@ -398,17 +399,33 @@ def elaborateBody
           Left(UnexpectedUserCoPattern(source, q))
         // All copatterns are introduced. Now start doing split
         case (ElabClause(_E1, Nil, _, _) :: _, _) =>
-          // Note: unlike [1], we do not need to track nor update Σ because we do all intro and
-          // cosplit before any split. As a result, during split Σ will not be changed at all.
           def split
             (q̅ : List[CoPattern], _C: CTerm, problem: Problem)
             (using Γ: Context)
-            : Either[IrError, (Clause, CaseTree)] =
+            (using Σ: Signature)
+            : Either[IrError, (Signature, CaseTree)] =
             val ElabClause(_E1, _, rhs1, source1) = problem(0)
-            _E1.collectFirst[(List[CoPattern], CTerm, Problem)] { case (w, p, _A) =>
-              ???
+            _E1.collectFirst[Either[IrError, (Signature, CaseTree)]] {
+              // split constructor
+              case (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs)) =>
+                val (_Γ1, binding, _Γ2) = Γ.split(x)
+                assert(
+                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+                  "these types should be identical because they are created by [intro]"
+                )
+                val data = Σ.getData(qn)
+                Σ.getConstructors(qn)
+                  .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right(Σ, Map())) {
+                    (acc, constructor) =>
+                      acc match
+                        case Right(_Σ, branches) => ???
+                        case Left(e)             => Left(e)
+                  }
+                  .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
+              // split data type
+              // split equality type
             } match
-              case Some((q̅, _C, problem)) => split(q̅, _C, problem)
+              case Some(r) => r
               // [done]
               case None =>
                 for
@@ -419,10 +436,8 @@ def elaborateBody
                   _ <- σOption match
                     case Some(σ) => checkType(rhs1.subst(σ), _C)
                     case None    => Left(UnsolvedElaboration(source1))
-                yield (Clause(Γ, q̅, rhs1, _C), CtTerm(rhs1))
-          split(q̅, _C, problem).map { case (clause, caseTree) =>
-            (Σ.addClause(clause), caseTree)
-          }
+                yield (Σ.addClause(Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
+          split(q̅, _C, problem)
         case (Nil, _) => Left(IncompleteClauses(qn))
     yield r
 

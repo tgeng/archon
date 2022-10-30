@@ -142,7 +142,7 @@ def checkDataConstructor
 
             // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no
             // free vars
-            checkTypes(con.tArgs, data.tParamTys.map(_._1.weaken(Γ.size, 0)).toList)
+            checkTypes(con.tArgs, data.tParamTys.map(_._1).toList)
           }
           _ <- {
             // binding of positiveVars must be either covariant or invariant
@@ -417,7 +417,7 @@ def inferType
         Σ.getDataOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(data) =>
-            for usage <- checkTypes(args, data.tParamTys.map(_._1.weaken(Γ.size, 0)).toList)
+            for usage <- checkTypes(args, data.tParamTys.map(_._1).toList)
             yield (Type(tm), usage * UUnres)
       case _: Con => throw IllegalArgumentException("cannot infer type")
       case EqualityType(ty, left, right) =>
@@ -453,7 +453,7 @@ def inferType
             literal.map { (qn, args) =>
               Σ.getEffectOption(qn) match
                 case None         => Left(MissingDeclaration(qn))
-                case Some(effect) => checkTypes(args, effect.tParamTys.map(_.weaken(Γ.size, 0)).toList)
+                case Some(effect) => checkTypes(args, effect.tParamTys.toList)
             }
           ).map(_.reduce(_ + _))
           operandsUsages <- transpose(
@@ -725,7 +725,7 @@ def inferType
           case Some(record) =>
             for
               effUsages <- checkType(effects, EffectsType())
-              argsUsages <- checkTypes(args, record.tParamTys.map(_._1.weaken(Γ.size, 0)).toList)
+              argsUsages <- checkTypes(args, record.tParamTys.map(_._1).toList)
             yield (CType(tm, Total), (effUsages + argsUsages) * UUnres)
       case Projection(rec, name) =>
         for
@@ -751,7 +751,7 @@ def inferType
               case None => Left(MissingDefinition(qn))
               case Some(op) =>
                 for
-                  effUsages <- checkTypes(tArgs, effect.tParamTys.toList.weaken(Γ.size, 0))
+                  effUsages <- checkTypes(tArgs, effect.tParamTys.toList)
                   argsUsages <- checkTypes(
                     args,
                     op.paramTys.substLowers(tArgs: _*)
@@ -788,7 +788,7 @@ def inferType
                 else
                   val outputCType = F(outputType, outputEffects)
                   for
-                    effUsages <- checkTypes(args, effect.tParamTys.toList.weaken(Γ.size, 0))
+                    effUsages <- checkTypes(args, effect.tParamTys.toList)
                     case (inputCTy, inputUsages) <- inferType(input)
                     r <- inputCTy match
                       case F(inputTy, inputEff, inputUsage) =>

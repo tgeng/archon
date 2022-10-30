@@ -168,14 +168,14 @@ trait Visitor[C, R]:
   def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(ct.operand) +:
-        (ct.cases.flatMap { (qn, body) =>
+        ct.cases.flatMap { (qn, body) =>
           Seq(
             visitQualifiedName(qn),
             withBindings(Σ.getData(qn).tParamTys.map(_._1.name).toList) {
               visitCaseTree(body)
             }
           )
-        } ++ ct.default.map(visitCaseTree)).toSeq: _*
+        }.toSeq :+ visitCaseTree(ct.default): _*
     )
 
   def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
@@ -529,7 +529,7 @@ trait Transformer[C]:
         val data = Σ.getData(qn)
         (qn, withBindings(data.tParamTys.map(_._1.name).toList) { body })
       },
-      tc.default.map(transformCaseTree)
+      transformCaseTree(tc.default)
     )
 
   def transformCtDataCase(dc: CtDataCase)(using ctx: C)(using Σ: Signature): CaseTree =
