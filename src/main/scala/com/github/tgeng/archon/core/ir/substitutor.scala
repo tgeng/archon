@@ -6,12 +6,15 @@ import scala.annotation.targetName
 
 trait DeBruijn[T]:
   def fromIndex(index: Nat): T
+  def weaken(t: T, amount: Nat, bar: Nat)(using Signature): T
 
 given DeBruijnVTerm: DeBruijn[VTerm] with
   override def fromIndex(index: Nat): VTerm = VTerm.Var(index)
+  override def weaken(v: VTerm, amount: Nat, bar: Nat)(using Signature) = v.weaken(amount, bar)
 
 given DeBruijnPattern: DeBruijn[Pattern] with
   override def fromIndex(index: Nat): Pattern = Pattern.PVar(index)
+  override def weaken(p: Pattern, amount: Nat, bar: Nat)(using Signature) = p.weaken(amount, bar)
 
 /** Local references are represented as DeBruijn indices so `var 0` points to the right most entry
   * in the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)`
@@ -79,6 +82,28 @@ class Substitutor[T: DeBruijn]
       that.nonTrivialMapping ++ nonTrivialMapping
     )
 
+  @targetName("uplus")
+  infix def ⊎(terms: collection.Seq[T]): Substitutor[T] =
+    Substitutor(
+      sourceContextSize,
+      targetContextSize + terms.size,
+      terms.reverseIterator.toIndexedSeq ++ nonTrivialMapping
+    )
+
+  infix def padLeft(count: Nat) =
+    Substitutor(
+      sourceContextSize + count,
+      targetContextSize,
+      nonTrivialMapping
+    )
+
+  infix def padRight(count: Nat)(using Signature) =
+    Substitutor(
+      sourceContextSize + count,
+      targetContextSize,
+      nonTrivialMapping.map(summon[DeBruijn[T]].weaken(_, count, 0))
+    )
+
   @targetName("delete")
   infix def \(index: Nat): Substitutor[T] =
     materialize(index)
@@ -98,4 +123,4 @@ class Substitutor[T: DeBruijn]
   )
 
 object Substitutor:
-  def id[T: DeBruijn](using Γ: Context) = Substitutor(Γ.size, Γ.size, IndexedSeq())
+  def id[T: DeBruijn](size: Nat): Substitutor[T] = Substitutor(size, size, IndexedSeq())

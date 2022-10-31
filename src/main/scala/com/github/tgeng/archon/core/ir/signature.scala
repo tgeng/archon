@@ -211,7 +211,7 @@ trait Signature:
       IndexedSeq(
         Clause(
           data.tParamTys.map(_._1),
-          pVars(highestDbIndex),
+          qVars(highestDbIndex),
           Return(DataType(qn, vars(highestDbIndex))),
           F(Type(DataType(qn, vars(highestDbIndex))))
         )
@@ -257,7 +257,7 @@ trait Signature:
           IndexedSeq(
             Clause(
               allBindings,
-              pVars(allBindings.size - 1),
+              qVars(allBindings.size - 1),
               Return(Con(conName, vars(constructor.paramTys.size - 1))),
               F(
                 DataType(
@@ -287,7 +287,7 @@ trait Signature:
       IndexedSeq(
         Clause(
           record.tParamTys.map(_._1),
-          pVars(highestDbIndex),
+          qVars(highestDbIndex),
           RecordType(qn, vars(highestDbIndex)),
           CType(RecordType(qn, vars(highestDbIndex)))
         )
@@ -333,7 +333,7 @@ trait Signature:
               ),
               UsageLiteral(U1)
             )(record.selfName),
-            pVars(record.tParamTys.size),
+            qVars(record.tParamTys.size),
             Projection(Force(Var(0)), fieldName),
             field.ty
           )
@@ -355,7 +355,7 @@ trait Signature:
       IndexedSeq(
         Clause(
           effect.tParamTys,
-          pVars(highestDbIndex),
+          qVars(highestDbIndex),
           Return(EffectsLiteral(Set((qn, vars(highestDbIndex))))),
           F(EffectsType())
         )
@@ -398,7 +398,7 @@ trait Signature:
           IndexedSeq(
             Clause(
               allBindings,
-              pVars(allBindings.size - 1),
+              qVars(allBindings.size - 1),
               OperatorCall(
                 (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
                 opName,

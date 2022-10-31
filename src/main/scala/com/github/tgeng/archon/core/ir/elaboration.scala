@@ -308,7 +308,7 @@ def elaborateBody
         case Nil => Right(Some(Nil))
         case (v, p, _A) :: constraints =>
           for
-            _E1 <- simplify(v, p, _A)
+            _E1 <- simplify(v.subst(σ), p, _A)
             _E2 <- simplifyAll(constraints)
           yield _E1.zip(_E2).map(_ ++ _)
     problem match
@@ -418,8 +418,34 @@ def elaborateBody
                   .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right(Σ, Map())) {
                     (acc, constructor) =>
                       acc match
-                        case Right(_Σ, branches) => ???
-                        case Left(e)             => Left(e)
+                        case Right(_Σ, branches) =>
+                          given Signature = _Σ
+                          val Δ = constructor.paramTys.substLowers(tArgs: _*)
+
+                          // in context _Γ1 ⊎ Δ
+                          val ρ1 = Substitutor.id[Pattern](_Γ1.size).padLeft(Δ.size) ⊎
+                            Seq(PConstructor(constructor.name, pVars(Δ.size - 1)))
+
+                          val ρ1t = ρ1.map(
+                            _.toTerm
+                              .getOrElse(throw IllegalStateException("unexpected absurd pattern"))
+                          )
+
+                          // in context _Γ1 ⊎ Δ ⊎ _Γ2
+                          val ρ2 = ρ1.padRight(_Γ2.size) ⊎
+                            Substitutor.id[Pattern](_Γ2.size).padLeft(_Γ1.size + 1)
+
+                          val ρ2t = ρ2.map(
+                            _.toTerm
+                              .getOrElse(throw IllegalStateException("unexpected absurd pattern"))
+                          )
+                          given Context = _Γ1 ++ Δ.subst(ρ2t) ++ _Γ2.subst(ρ1t)
+
+                          for
+                            problem <- subst(problem, ρ2t)
+                            case (_Σ, branch) <- split(q̅.map(_.subst(ρ2)), _C.subst(ρ2t), problem)
+                          yield (_Σ, branches + (constructor.name -> branch))
+                        case Left(e) => Left(e)
                   }
                   .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
               // split data type
@@ -462,7 +488,7 @@ def elaborateBody
         //               val allBindings = paramTys ++ bindings
         //               Clause(
         //                 allBindings,
-        //                 CoPattern.pVars(
+        //                 CoPattern.qVars(
         //                   allBindings.size - 1,
         //                   bindings.size
         //                 ) ++ clause.lhs,

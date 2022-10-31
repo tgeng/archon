@@ -28,5 +28,5 @@ def unify
     u <- u.normalized
     v <- v.normalized
   yield (u, v) match
-    case (u, v) if u == v => UYes(Γ, Substitutor.id, Substitutor.id)
+    case (u, v) if u == v => UYes(Γ, Substitutor.id(Γ.size), Substitutor.id(Γ.size))
     case _                => ???

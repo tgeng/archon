@@ -38,6 +38,12 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern]:
       case PForced(term)                  => PForced(term)
       case PAbsurd()                      => PAbsurd()
 
+object Pattern:
+  def pVars(firstIndex: Nat, lastIndex: Nat = 0): List[Pattern] = firstIndex
+    .to(lastIndex, -1)
+    .map(i => Pattern.PVar(i)(using SiEmpty))
+    .toList
+
 import Pattern.*
 import VTerm.*
 
@@ -74,10 +80,8 @@ enum CoPattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[CoPattern]:
       case CProjection(name) => CProjection(name)
 
 object CoPattern:
-  def pVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] = firstIndex
-    .to(lastIndex, -1)
-    .map(i => CPattern(Pattern.PVar(i)(using SiEmpty)))
-    .toList
+  def qVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] =
+    pVars(firstIndex, lastIndex).map(CPattern(_))
 
 enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
   case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
