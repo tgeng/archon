@@ -468,7 +468,7 @@ def elaborateBody
                       for
                         problem <- subst(problem, ρ2)
                         case (_Σ, branch) <- split(
-                          q̅.map(_.subst(ρ2)),
+                          q̅.map(_.substTerm(ρ2)),
                           _C.subst(ρ2),
                           problem
                         )

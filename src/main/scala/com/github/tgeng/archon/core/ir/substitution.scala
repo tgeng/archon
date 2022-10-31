@@ -287,8 +287,7 @@ extension(v: Pattern)
 extension(v: CoPattern)
   def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
     SubstitutableCoPattern.substitute(v, substitution)
-  @targetName("substTerm")
-  def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
+  def substTerm(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     VTermSubstituteTransformer.transformCoPattern(v)(using (substitution, 0))
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableCoPattern.raise(v, amount, at)
