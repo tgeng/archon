@@ -73,35 +73,14 @@ class Substitutor[T: DeBruijn]
   )
 
   @targetName("uplus")
-  infix def ⊎(that: Substitutor[T]): Substitutor[T] =
-    assert(that.sourceContextSize == sourceContextSize)
+  infix def ⊎(that: Substitutor[T])(using Signature): Substitutor[T] =
     that.materialize()
     Substitutor(
-      sourceContextSize,
+      sourceContextSize + that.sourceContextSize,
       targetContextSize + that.targetContextSize,
-      that.nonTrivialMapping ++ nonTrivialMapping
-    )
-
-  @targetName("uplus")
-  infix def ⊎(terms: collection.Seq[T]): Substitutor[T] =
-    Substitutor(
-      sourceContextSize,
-      targetContextSize + terms.size,
-      terms.reverseIterator.toIndexedSeq ++ nonTrivialMapping
-    )
-
-  infix def padLeft(count: Nat) =
-    Substitutor(
-      sourceContextSize + count,
-      targetContextSize,
-      nonTrivialMapping
-    )
-
-  infix def padRight(count: Nat)(using Signature) =
-    Substitutor(
-      sourceContextSize + count,
-      targetContextSize,
-      nonTrivialMapping.map(summon[DeBruijn[T]].weaken(_, count, 0))
+      that.nonTrivialMapping ++ nonTrivialMapping.map(
+        summon[DeBruijn[T]].weaken(_, that.sourceContextSize, 0)
+      )
     )
 
   @targetName("delete")
@@ -124,3 +103,12 @@ class Substitutor[T: DeBruijn]
 
 object Substitutor:
   def id[T: DeBruijn](size: Nat): Substitutor[T] = Substitutor(size, size, IndexedSeq())
+
+  def of[T: DeBruijn](sourceContextSize: Nat, terms: T*): Substitutor[T] =
+    Substitutor(sourceContextSize, terms.size, terms.toIndexedSeq)
+
+extension(s: Substitutor[Pattern])
+  def toTermSubstitutor: Substitutor[VTerm] = s.map(
+    _.toTerm
+      .getOrElse(throw IllegalStateException("unexpected absurd pattern"))
+  )

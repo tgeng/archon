@@ -86,3 +86,5 @@ enum IrError extends HasException:
   case InsufficientUserCoPatterns(clause: PreClause)
   case UnexpectedImpossible(clause: PreClause)
   case UnsolvedElaboration(clause: PreClause)
+  case UnificationFailure()
+  case NonEmptyType(ty: VTerm, source: PreClause)

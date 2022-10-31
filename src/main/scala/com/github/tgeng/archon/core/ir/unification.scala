@@ -1,7 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 enum UnificationResult:
-  case UYes(Δ: Context, σ: Substitutor[Pattern], τ: Substitutor[Pattern])
+  case UYes(Δ: Context, σ: Substitutor[VTerm], τ: Substitutor[VTerm])
   case UNo
   case UUndecided
 

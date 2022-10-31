@@ -18,6 +18,7 @@ import UnificationResult.*
 import CaseTree.*
 import java.security.Signer
 import com.github.tgeng.archon.parser.combinators.P
+import scala.NonEmptyTuple
 
 private given Γ0: Context = IndexedSeq()
 def elaborateSignature
@@ -406,6 +407,7 @@ def elaborateBody
             : Either[IrError, (Signature, CaseTree)] =
             val ElabClause(_E1, _, rhs1, source1) = problem(0)
             _E1.collectFirst[Either[IrError, (Signature, CaseTree)]] {
+              // split data type
               // split constructor
               case (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs)) =>
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -423,33 +425,72 @@ def elaborateBody
                           val Δ = constructor.paramTys.substLowers(tArgs: _*)
 
                           // in context _Γ1 ⊎ Δ
-                          val ρ1 = Substitutor.id[Pattern](_Γ1.size).padLeft(Δ.size) ⊎
-                            Seq(PConstructor(constructor.name, pVars(Δ.size - 1)))
+                          val ρ1 = Substitutor.id[Pattern](_Γ1.size) ⊎
+                            Substitutor.of(
+                              Δ.size,
+                              PConstructor(constructor.name, pVars(Δ.size - 1))
+                            )
 
-                          val ρ1t = ρ1.map(
-                            _.toTerm
-                              .getOrElse(throw IllegalStateException("unexpected absurd pattern"))
-                          )
+                          val ρ1t = ρ1.toTermSubstitutor
 
                           // in context _Γ1 ⊎ Δ ⊎ _Γ2
-                          val ρ2 = ρ1.padRight(_Γ2.size) ⊎
-                            Substitutor.id[Pattern](_Γ2.size).padLeft(_Γ1.size + 1)
+                          val ρ2 = ρ1 ⊎ Substitutor.id[Pattern](_Γ2.size)
 
-                          val ρ2t = ρ2.map(
-                            _.toTerm
-                              .getOrElse(throw IllegalStateException("unexpected absurd pattern"))
-                          )
+                          val ρ2t = ρ2.toTermSubstitutor
                           given Context = _Γ1 ++ Δ.subst(ρ2t) ++ _Γ2.subst(ρ1t)
 
                           for
                             problem <- subst(problem, ρ2t)
-                            case (_Σ, branch) <- split(q̅.map(_.subst(ρ2)), _C.subst(ρ2t), problem)
+                            case (_Σ, branch) <- split(
+                              q̅.map(_.subst(ρ2)),
+                              _C.subst(ρ2t),
+                              problem
+                            )
                           yield (_Σ, branches + (constructor.name -> branch))
                         case Left(e) => Left(e)
                   }
                   .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
-              // split data type
               // split equality type
+              case (x: Var, PRefl(), _A @ EqualityType(_B, u, v)) =>
+                val (_Γ1, binding, _Γ2) = Γ.split(x)
+                assert(
+                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+                  "these types should be identical because they are created by [intro]"
+                )
+
+                for
+                  unificationResult <- unify(u, v, _B)
+                  r <- unificationResult match
+                    case UnificationResult.UYes(_Δ, ρ, τ) =>
+                      val ρ2 = ρ ⊎ Substitutor.id(_Γ2.size)
+                      val τ2 = τ ⊎ Substitutor.id(_Γ2.size)
+                      given Context = _Γ1 ++ _Γ2.subst(ρ)
+                      for
+                        problem <- subst(problem, ρ2)
+                        case (_Σ, branch) <- split(
+                          q̅.map(_.subst(ρ2)),
+                          _C.subst(ρ2),
+                          problem
+                        )
+                      yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
+                    // TODO[P2]: provide details on why unification failed
+                    case UnificationResult.UNo | UnificationResult.UUndecided =>
+                      Left(UnificationFailure())
+                yield r
+              // split empty
+              case (x: Var, PAbsurd(), _A) =>
+                _A match
+                  case DataType(qn, _) =>
+                    if Σ.getConstructors(qn).isEmpty then Right(Σ, CtDataCase(x, qn, Map()))
+                    else Left(NonEmptyType(_A, source1))
+                  case EqualityType(_A, u, v) =>
+                    for
+                      u <- unify(u, v, _A)
+                      r <- u match
+                        case UNo => Right(Σ, CtEqualityEmpty(x))
+                        case _   => Left(NonEmptyType(_A, source1))
+                    yield r
+                  case _ => Left(NonEmptyType(_A, source1))
             } match
               case Some(r) => r
               // [done]

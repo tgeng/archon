@@ -6,6 +6,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.VTerm.Type
 
 import scala.collection.immutable.{Map, Set}
+import scala.annotation.targetName
 
 type PartialSubstitution[T] = Int => Option[T]
 
@@ -286,6 +287,9 @@ extension(v: Pattern)
 extension(v: CoPattern)
   def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
     SubstitutableCoPattern.substitute(v, substitution)
+  @targetName("substTerm")
+  def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
+    VTermSubstituteTransformer.transformCoPattern(v)(using (substitution, 0))
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableCoPattern.raise(v, amount, at)
   def weakened(using Σ: Signature) = v.weaken(1, 0)
@@ -365,3 +369,7 @@ extension(telescope: Telescope)
       .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
+
+extension(ct: CaseTree)
+  def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
+    VTermSubstituteTransformer.transformCaseTree(ct)(using (substitution, 0))
