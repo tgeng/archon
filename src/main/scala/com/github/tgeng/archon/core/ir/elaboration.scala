@@ -474,7 +474,7 @@ def elaborateBody
                         )
                       yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
                     // TODO[P2]: provide details on why unification failed
-                    case UnificationResult.UNo | UnificationResult.UUndecided =>
+                    case UnificationResult.UNo | _: UnificationResult.UUndecided =>
                       Left(UnificationFailure())
                 yield r
               // split empty

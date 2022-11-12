@@ -7,14 +7,19 @@ import scala.annotation.targetName
 trait DeBruijn[T]:
   def fromIndex(index: Nat): T
   def weaken(t: T, amount: Nat, bar: Nat)(using Signature): T
+  def subst(t: T, s: Substitutor[T])(using Signature): T
 
 given DeBruijnVTerm: DeBruijn[VTerm] with
   override def fromIndex(index: Nat): VTerm = VTerm.Var(index)
   override def weaken(v: VTerm, amount: Nat, bar: Nat)(using Signature) = v.weaken(amount, bar)
 
+  override def subst(v: VTerm, s: Substitutor[VTerm])(using Signature) = v.subst(s)
+
 given DeBruijnPattern: DeBruijn[Pattern] with
   override def fromIndex(index: Nat): Pattern = Pattern.PVar(index)
   override def weaken(p: Pattern, amount: Nat, bar: Nat)(using Signature) = p.weaken(amount, bar)
+
+  override def subst(p: Pattern, s: Substitutor[Pattern])(using Signature) = p.subst(s)
 
 /** Local references are represented as DeBruijn indices so `var 0` points to the right most entry
   * in the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)`
@@ -83,8 +88,7 @@ class Substitutor[T: DeBruijn]
       )
     )
 
-  @targetName("delete")
-  infix def \(index: Nat): Substitutor[T] =
+  infix def remove(index: Nat): Substitutor[T] =
     materialize(index)
     if nonTrivialMapping.length == index then
       Substitutor(sourceContextSize, targetContextSize - 1, nonTrivialMapping)
@@ -94,6 +98,24 @@ class Substitutor[T: DeBruijn]
         targetContextSize - 1,
         nonTrivialMapping.patch(index, IndexedSeq.empty, 1)
       )
+  
+  infix def add(index: Nat, t: T) =
+    materialize(index)
+      Substitutor(
+        sourceContextSize,
+        targetContextSize - 1,
+        nonTrivialMapping.patch(index, IndexedSeq(t), 0)
+      )
+
+  @targetName("compose")
+  infix def ∘(that: Substitutor[T])(using Signature): Substitutor[T] =
+    assert(this.sourceContextSize == that.targetContextSize)
+    this.materialize()
+    Substitutor(
+      that.sourceContextSize,
+      this.targetContextSize,
+      this.nonTrivialMapping.map(summon[DeBruijn[T]].subst(_, that))
+    )
 
   def drop(count: Nat): Substitutor[T] = Substitutor(
     sourceContextSize,
