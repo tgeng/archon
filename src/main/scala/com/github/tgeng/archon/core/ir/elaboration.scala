@@ -19,6 +19,7 @@ import CaseTree.*
 import java.security.Signer
 import com.github.tgeng.archon.parser.combinators.P
 import scala.NonEmptyTuple
+import scala.Conversion
 
 private given Γ0: Context = IndexedSeq()
 def elaborateSignature
@@ -331,7 +332,7 @@ def elaborateBody
         for u <- unify(u, v, _A)
         yield u match
           case _: UNo => true
-          case _   => false
+          case _      => false
       case _ => Right(false)
 
   def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm =
@@ -406,10 +407,31 @@ def elaborateBody
             (using Σ: Signature)
             : Either[IrError, (Signature, CaseTree)] =
             val ElabClause(_E1, _, rhs1, source1) = problem(0)
+
+            def usageNoLessThanU1(x: Var): Boolean =
+              checkUsageSubsumption(Γ.resolve(x).usage, UsageLiteral(Usage.U1))(using
+                CheckSubsumptionMode.SUBSUMPTION
+              ) match
+                case Right(_) => true
+                case _        => false
+
+            def dataHasU0InherentUsage(d: DataType): Boolean =
+              val DataType(qn, tArgs) = d
+              checkUsageSubsumption(
+                Σ.getData(qn).inherentUsage.substLowers(tArgs: _*),
+                UsageLiteral(Usage.U0)
+              )(using CheckSubsumptionMode.CONVERSION) match
+                case Right(_) => true
+                case _        => false
+
             _E1.collectFirst[Either[IrError, (Signature, CaseTree)]] {
               // split data type
+              case (x: Var, PDataType(name, args), _) if usageNoLessThanU1(x) =>
+                ???
+              // TODO: implement split data type
               // split constructor
-              case (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs)) =>
+              case (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))
+                if usageNoLessThanU1(x) || dataHasU0InherentUsage(_A) =>
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
                 assert(
                   binding.ty.weaken(_Γ2.size + 1, 0) == _A,
@@ -487,7 +509,7 @@ def elaborateBody
                       u <- unify(u, v, _A)
                       r <- u match
                         case _: UNo => Right(Σ, CtEqualityEmpty(x))
-                        case _   => Left(NonEmptyType(_A, source1))
+                        case _      => Left(NonEmptyType(_A, source1))
                     yield r
                   case _ => Left(NonEmptyType(_A, source1))
             } match
