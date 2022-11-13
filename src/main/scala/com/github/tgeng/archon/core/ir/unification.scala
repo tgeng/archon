@@ -1,9 +1,17 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core.common.*
 import scala.math.{min, max}
 import scala.annotation.targetName
 import scala.annotation.compileTimeOnly
+import com.github.tgeng.archon.core.common.Name
+import java.awt.PageAttributes.ColorType
+
+enum UnificationFailureType:
+  case UfCycle, UfConflict
+
+import UnificationFailureType.*
 
 enum UnificationResult:
   case UYes
@@ -25,11 +33,13 @@ enum UnificationResult:
         */
       τ: Substitutor[VTerm]
     )
-  case UNo
-  case UUndecided(ty: VTerm, u: VTerm, v: VTerm)
+  case UNo(u: VTerm, v: VTerm, ty: VTerm, failureType: UnificationFailureType)
+  case UUndecided(u: VTerm, v: VTerm, ty: VTerm)
 
 import UnificationResult.*
 import VTerm.*
+import CTerm.*
+import ULevel.*
 
 /** A syntax-based normalization is used here and hence the type parameter `ty` is only used to
   * determine term types. Syntax-based normalization is sufficient for our use case because we
@@ -58,41 +68,211 @@ def unify
     ty <- ty.normalized
     r <- (u, v, ty) match
       // delete
-      case (u, v, _) if u == v => unify(Nil, Nil, Nil)
+      case (u, v, _) if u == v => unifyAll(Nil, Nil, Nil)
 
-      // cycle
-      case (u, v, _) if isCyclic(u, v) => Right(UNo)
+      // solution and cycle
+      case (Var(x), Var(y), ty) => solution(Var(min(x, y)), Var(max(x, y)))
+      case (x: Var, t, ty)      => solutionOrCycle(x, t, ty)
+      case (t, x: Var, ty)      => solutionOrCycle(x, t, ty)
 
-      // solution
-      case (Var(x), Var(y), _) => solution(Var(min(x, y)), Var(max(x, y)))
-      case (x: Var, t, _) => solution(x, t)
-      case (t, x: Var, _) => solution(x, t)
+      // injectivity
+      case (ty @ Type(upperBound1), Type(upperBound2), _) => unify(upperBound1, upperBound2, ty)
+      case (
+          Top(UωLevel(l1), usage1, eqDecidability1),
+          Top(UωLevel(l2), usage2, eqDecidability2),
+          _
+        ) if l1 == l2 =>
+        unifyAll(
+          List(usage1, eqDecidability1),
+          List(usage2, eqDecidability2),
+          telescope(UsageType(), EqDecidabilityType())
+        )
+      case (
+          Top(USimpleLevel(l1), usage1, eqDecidability1),
+          Top(USimpleLevel(l2), usage2, eqDecidability2),
+          _
+        ) =>
+        unifyAll(
+          List(l1, usage1, eqDecidability1),
+          List(l2, usage2, eqDecidability2),
+          telescope(LevelType(), UsageType(), EqDecidabilityType())
+        )
+      // We do not unify any computation types since it does not seem to be very
+      // useful. If someday we would add such support, we will need to extend
+      // matching logic and case tree to support dispatching on computation types.
+      // Anyway, below are some notes on how to unify function types.
+      //
+      // If we follow what's done with inductive types (for example sigma type is
+      // defined by inductive type), we would need to introduce a lower-level
+      // function type constructor that takes an explicit lambda as the body type.
+      // That is, in `FunctionType(binding: Binding[VTerm], bodyTy: CTerm, ...)`,
+      // instead of having a `bodyTy` is one DeBruijn level deeper, we would have a
+      // bodyTy that is a lambda, which is at the same DeBruijn level as `binding`.
+      // Then the surface language would need some syntax sugar for function type
+      // declarations like `x: A -> B` becomes `FunctionType(A, (\x B x))`. If we
+      // go down this path, then unification can not happen for function types
+      // created by such desugaring because the body type is never a `Var`, which
+      // allows apply "solution" rune. Note that this is indeed the case with sigma
+      // type simulated with inductive types: to allow unification to happen, the
+      // second arg of the sigma type must be a `Var` instead of a lambda that
+      // returns a `Var`.
+      //
+      // Alternatively, it seems we can do special handling for pi types (this
+      // special handling can can also be done with sigma type, or even generalize
+      // to any inductive types, essentially allow unification to happen inside
+      // lambda). This special handling is basically carve out a "forbidden zone"
+      // of (lower) DeBruijn indices. Any DeBruijn indices in this "forbidden zone"
+      // cannot be unified with the "solution" rule. For example, consider
+      // unifying `(x: Nat) -> Vec String x` and `(x: Nat) -> Vec y 3`, where `y` is
+      // bound earlier in the current context. For the body type, the forbidden zone
+      // is `{x}` (or `{0}` with DeBruijn index). Hence, `x` in the former type is in
+      // the forbidden zone and cannot be unified to `3`. On the other hand, `y` can
+      // be unified to `String` because it's outside of the forbidden zone.
+      //
+      // None of the above is currently implemented in archon because it's unclear
+      // what the benefits are, as injective type constructor is not a highly
+      // sought-after feature anyway.
+      case (U(_), U(_), _) => Right(UUndecided(u, v, ty))
+      case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
+        unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
+      case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
+        unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
+      case (EqualityType(ty1, left1, right1), EqualityType(ty2, left2, right2), _) =>
+        unifyAll(
+          List(ty1, left1, right1),
+          List(ty2, left2, right2),
+          telescope(Type(ty1), ty1, ty1)
+        )
+      case (EffectsType(u1), EffectsType(u2), _) => unify(u1, u2, UsageType())
+      case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _)
+        if status1 == status2 =>
+        unifyAll(List(heap1, ty1), List(heap2, ty2), telescope(HeapType(), Type(ty1)))
 
-      case _ => ???
+      // stuck
+      case (_: Collapse | _: Thunk, _, _) => Right(UUndecided(u, v, ty))
+      case (_, _: Collapse | _: Thunk, _) => Right(UUndecided(u, v, ty))
+
+      case _ => Right(UNo(u, v, ty, UnificationFailureType.UfConflict))
   yield r
 
+private def solutionOrCycle
+  (x: Var, t: VTerm, ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : Either[IrError, UnificationResult] =
+  if isCyclic(x, t) then Right(UNo(x, t, ty, UfCycle))
+  else solution(x, t)
+
+private object CycleVisitor
+  extends Visitor[
+    (
+      /* index causing the cycle */ Nat,
+      /* whether a type or value constructor is encountered */ Boolean
+    ), /* cycle found */ Boolean
+  ]:
+  override def combine(rs: Boolean*)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+    rs.foldLeft(false)(_ || _)
+
+  override def withBindings
+    (bindingNames: => Seq[Ref[Name]])
+    (action: ((Nat, Boolean)) ?=> Boolean)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    action(using (ctx._1 + 1, ctx._2))
+
+  override def visitVar
+    (v: Var)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    // Only report true (cyclic) if a type or value has been encountered from root term.
+    ctx._2 && v.idx == ctx._1
+
+  override def visitType(ty: Type)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+    super.visitType(ty)(using (ctx._1, true))
+
+  override def visitTop(top: Top)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+    super.visitTop(top)(using (ctx._1, true))
+
+  override def visitU(u: U)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+    super.visitU(u)(using (ctx._1, true))
+
+  override def visitDataType
+    (dataType: DataType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    super.visitDataType(dataType)(using (ctx._1, true))
+
+  override def visitCon(con: Con)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+    super.visitCon(con)(using (ctx._1, true))
+
+  override def visitEqualityType
+    (equalityType: EqualityType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    super.visitEqualityType(equalityType)(using (ctx._1, true))
+
+  // visitRefl is not needed since Refl does not contain any nested terms.
+
+  override def visitUsageType
+    (usageType: UsageType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    super.visitUsageType(usageType)(using (ctx._1, true))
+
+  override def visitEqDecidabilityType
+    (eqDecidabilityType: EqDecidabilityType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    super.visitEqDecidabilityType(eqDecidabilityType)(using (ctx._1, true))
+
+  override def visitEffectsType
+    (effectsType: EffectsType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    super.visitEffectsType(effectsType)(using (ctx._1, true))
+
+  // visitLevelType and visitHeapType are not needed since Refl does not contain any nested terms.
+
+  override def visitCellType
+    (cellType: CellType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
+    super.visitCellType(cellType)(using (ctx._1, true))
+
+private def isCyclic(x: Var, t: VTerm)(using Σ: Signature): Boolean =
+  CycleVisitor.visitVTerm(t)(using (x.idx, false))
+
 private def solution
-  (x: Var, term: VTerm)
+  (x: Var, t: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
   : Either[IrError, UnificationResult] =
   val (_Γ1, _, _Γ2) = Γ.split(x)
-  val Δ = _Γ1 ++ _Γ2.substLowers(term)
+  val Δ = _Γ1 ++ _Γ2.substLowers(t)
   // _Γ1 and _Γ2 part are just identity vars for σ and τ.
-  val σ = Substitutor.id[VTerm](Δ.size).add(x.idx, term)
+  val σ = Substitutor.id[VTerm](Δ.size).add(x.idx, t)
   val τ = Substitutor.id[VTerm](Γ.size).remove(x.idx)
   Right(UYes(Δ, σ, τ))
 
-private def isCyclic(x: VTerm, y: VTerm): Boolean = ???
+private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.size).map { i =>
+  Binding(tys(i).weaken(i, 0), Usage.UUnres)(gn"var$i")
+}.toList
 
 /** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`.
-  * However, since the current implementation is naive and does not support equivalence lifted
-  * over other type equivalence, the `tys` are terms at the same level (in the DeBruijn-index
-  * sense), unlike a telescope.
+  * Note
   */
-def unify
-  (u̅ : List[VTerm], v̅ : List[VTerm], tys: List[VTerm])
+def unifyAll
+  (u̅ : List[VTerm], v̅ : List[VTerm], telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
@@ -102,18 +282,24 @@ def unify
     (using Signature)
     : UnificationResult = (u1, u2) match
     case (UYes(_, σ1, τ1), UYes(_Δ, σ2, τ2)) => UYes(_Δ, σ1 ∘ σ2, τ2 ∘ τ1)
-    case (_: UUndecided, _: UUndecided)      => u1
-    case _                                   => UNo
+    case (uRes: UNo, _)                      => uRes
+    case (_, uRes: UNo)                      => uRes
+    case (uRes: UUndecided, _)               => uRes
+    case (_, uRes: UUndecided)               => uRes
 
-  (u̅, v̅, tys) match
+  (u̅, v̅, telescope) match
     case (Nil, Nil, Nil) => Right(UYes(Γ, Substitutor.id(Γ.size), Substitutor.id(Γ.size)))
-    case (u :: u̅, v :: v̅, ty :: tys) =>
+    case (u :: u̅, v :: v̅, binding :: telescope) =>
       for
-        uRes <- unify(u, v, ty)
+        uRes <- unify(u, v, binding.ty)
         r <- uRes match
           case UYes(_Δ, σ, τ) =>
-            for uRes2 <- unify(u̅.map(_.subst(σ)), v̅.map(_.subst(σ)), tys.map(_.subst(σ)))(using
-                _Δ
+            for uRes2 <- unifyAll(
+                u̅.map(_.subst(σ)),
+                v̅.map(_.subst(σ)),
+                telescope.substLowers(u).subst(σ)
+              )(
+                using _Δ
               )
             yield compose(uRes, uRes2)
           case u => Right(u)

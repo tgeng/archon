@@ -447,7 +447,7 @@ def inferType
       case eqD: EqDecidabilityType  => Right(Type(eqD), Usages.zero)
       case _: EqDecidabilityLiteral => Right(EqDecidabilityType(), Usages.zero)
       case e: EffectsType           => Right(Type(e), Usages.zero)
-      case Effects(literal, unionOperands) =>
+      case Effects(literal, operands) =>
         for
           literalUsages <- transpose(
             literal.map { (qn, args) =>
@@ -457,9 +457,21 @@ def inferType
             }
           ).map(_.reduce(_ + _))
           operandsUsages <- transpose(
-            unionOperands.map { ref => checkType(ref, EffectsType()) }
+            operands.map { ref => checkType(ref, EffectsType()) }
           ).map(_.reduce(_ + _))
-        yield (EffectsType(), literalUsages + operandsUsages)
+        yield (
+          EffectsType(
+            UsageJoin(
+              operands.map(getEffVarContinuationUsage).toSeq ++
+                literal.map { case (qn, args) =>
+                  Σ.getEffect(qn)
+                    .continuationUsage
+                    .substLowers(args: _*)
+                } :+ UsageLiteral(U1): _*
+            )
+          ),
+          literalUsages + operandsUsages
+        )
       case LevelType() => Right((Type(LevelType())), Usages.zero)
       case Level(_, maxOperands) =>
         for usages <- transpose(maxOperands.map { (ref, _) =>
@@ -618,13 +630,6 @@ def inferType
                     yield r
                   // Otherwise, just add the binding to the context and continue type checking.
                   else {
-                    def getEffVarContinuationUsage(tm: VTerm): VTerm =
-                      val v = tm.asInstanceOf[VTerm.Var]
-                      Γ.resolve(v) match
-                        case Binding(EffectsType(usage), _) => usage
-                        case _ =>
-                          throw IllegalStateException("typing exception")
-
                     for
                       case (bodyTy, bodyUsages) <- inferType(body)(using
                         Γ :+ Binding(ty, tBindingUsage)(gn"v")
@@ -955,6 +960,13 @@ def inferType
         yield (r, inputUsages)
   )
 
+private def getEffVarContinuationUsage(tm: VTerm)(using Γ: Context)(using Signature): VTerm =
+  val v = tm.asInstanceOf[VTerm.Var]
+  Γ.resolve(v) match
+    case Binding(EffectsType(usage), _) => usage
+    case _ =>
+      throw IllegalStateException("typing exception")
+
 def checkType
   (tm: CTerm, ty: CTerm)
   (using Γ: Context)
@@ -1071,6 +1083,12 @@ def checkSubsumption
                       r
                     }
                 )
+          case (EffectsType(continuationUsage1), EffectsType(continuationUsage2), _) =>
+            // Note that subsumption checking is reversed because the effect of the computation
+            // marks how the continuation can be invoked. Normally, checking usage is checking
+            // how a resource is *consumed*. But here, checking usage is checking how the
+            // continuation (as a resource) is provided.
+            checkUsageSubsumption(continuationUsage2, continuationUsage1)
           case (UsageType(Some(u1)), UsageType(Some(u2)), _) if mode == SUBSUMPTION && u1 >= u2 =>
             Right(())
           case (UsageType(Some(_)), UsageType(None), _) if mode == SUBSUMPTION =>

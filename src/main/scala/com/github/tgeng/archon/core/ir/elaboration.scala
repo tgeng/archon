@@ -330,7 +330,7 @@ def elaborateBody
       case EqualityType(_A, u, v) =>
         for u <- unify(u, v, _A)
         yield u match
-          case UNo => true
+          case _: UNo => true
           case _   => false
       case _ => Right(false)
 
@@ -473,9 +473,8 @@ def elaborateBody
                           problem
                         )
                       yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
-                    // TODO[P2]: provide details on why unification failed
-                    case UnificationResult.UNo | _: UnificationResult.UUndecided =>
-                      Left(UnificationFailure())
+                    case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
+                      Left(UnificationFailure(unificationResult))
                 yield r
               // split empty
               case (x: Var, PAbsurd(), _A) =>
@@ -487,7 +486,7 @@ def elaborateBody
                     for
                       u <- unify(u, v, _A)
                       r <- u match
-                        case UNo => Right(Σ, CtEqualityEmpty(x))
+                        case _: UNo => Right(Σ, CtEqualityEmpty(x))
                         case _   => Left(NonEmptyType(_A, source1))
                     yield r
                   case _ => Left(NonEmptyType(_A, source1))
