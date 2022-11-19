@@ -39,6 +39,11 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern]:
       case PAbsurd()                      => PAbsurd()
 
 object Pattern:
+  /**
+    * @param firstIndex inclusive
+    * @param lastIndex inclusive
+    * @return
+    */
   def pVars(firstIndex: Nat, lastIndex: Nat = 0): List[Pattern] = firstIndex
     .to(lastIndex, -1)
     .map(i => Pattern.PVar(i)(using SiEmpty))

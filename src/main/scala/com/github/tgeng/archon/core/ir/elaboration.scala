@@ -444,7 +444,10 @@ def elaborateBody
                       acc match
                         case Right(_Σ, branches) =>
                           given Signature = _Σ
-                          val Δ = constructor.paramTys.substLowers(tArgs: _*)
+                          // in context _Γ1
+                          val Δ = constructor.paramTys.substLowers(
+                            binding.ty.asInstanceOf[DataType].args: _*
+                          )
 
                           // in context _Γ1 ⊎ Δ
                           val ρ1 = Substitutor.id[Pattern](_Γ1.size) ⊎
@@ -459,7 +462,7 @@ def elaborateBody
                           val ρ2 = ρ1 ⊎ Substitutor.id[Pattern](_Γ2.size)
 
                           val ρ2t = ρ2.toTermSubstitutor
-                          given Context = _Γ1 ++ Δ.subst(ρ2t) ++ _Γ2.subst(ρ1t)
+                          given Context = _Γ1 ++ Δ ++ _Γ2.subst(ρ1t)
 
                           for
                             problem <- subst(problem, ρ2t)
