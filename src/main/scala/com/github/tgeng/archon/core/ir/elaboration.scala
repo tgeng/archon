@@ -422,29 +422,39 @@ def elaborateBody
                 case Right(_) => true
                 case _        => false
 
-            _E1.collectFirst[Either[IrError, (Signature, CaseTree)]] {
-              // split data type
-              case (x: Var, PDataType(qn, args), _A) if usageNoLessThanU1(x) =>
-                val (_Γ1, binding, _Γ2) = Γ.split(x)
-                assert(
-                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                  "these types should be identical because they are created by [intro]"
-                )
-                val qns = ???
-                ???
-              // TODO: implement split data type
-              // split constructor
-              case (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))
-                if usageNoLessThanU1(x) || dataHasU0InherentUsage(_A) =>
-                val (_Γ1, binding, _Γ2) = Γ.split(x)
-                assert(
-                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                  "these types should be identical because they are created by [intro]"
-                )
-                val data = Σ.getData(qn)
-                Σ.getConstructors(qn)
-                  .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right(Σ, Map())) {
-                    (acc, constructor) =>
+            _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
+              // Start with a very generic error in case no split actions can be taken at all.
+              Left(UnsolvedElaboration(source1))
+            ) { (acc, constraint) =>
+              (acc, constraint) match
+                // If a split action was successful, skip any further actions on the remaining
+                // constraints.
+                case (Right(r), _) => Right(r)
+
+                // split data type
+                case (_, (x: Var, PDataType(qn, args), _A)) if usageNoLessThanU1(x) =>
+                  val (_Γ1, binding, _Γ2) = Γ.split(x)
+                  assert(
+                    binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+                    "these types should be identical because they are created by [intro]"
+                  )
+                  val qns = ???
+                  // TODO: implement split data type
+                  ???
+
+                // split constructor
+                case (_, (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs)))
+                  if usageNoLessThanU1(x) || dataHasU0InherentUsage(_A) =>
+                  val (_Γ1, binding, _Γ2) = Γ.split(x)
+                  assert(
+                    binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+                    "these types should be identical because they are created by [intro]"
+                  )
+                  val data = Σ.getData(qn)
+                  Σ.getConstructors(qn)
+                    .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](
+                      Right(Σ, Map())
+                    ) { (acc, constructor) =>
                       acc match
                         case Right(_Σ, branches) =>
                           given Signature = _Σ
@@ -472,7 +482,7 @@ def elaborateBody
                             problem <- subst(problem, ρ2t)
                             _ <- problem match
                               case Nil => Left(MissingConstructorCase(qn, constructor.name))
-                              case _ => Right(())
+                              case _   => Right(())
                             case (_Σ, branch) <- split(
                               q̅.map(_.subst(ρ2)),
                               _C.subst(ρ2t),
@@ -480,60 +490,66 @@ def elaborateBody
                             )
                           yield (_Σ, branches + (constructor.name -> branch))
                         case Left(e) => Left(e)
-                  }
-                  .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
-              // split equality type
-              case (x: Var, PRefl(), _A @ EqualityType(_B, u, v)) =>
-                val (_Γ1, binding, _Γ2) = Γ.split(x)
-                assert(
-                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                  "these types should be identical because they are created by [intro]"
-                )
+                    }
+                    .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
-                for
-                  unificationResult <- unify(u, v, _B)
-                  r <- unificationResult match
-                    case UnificationResult.UYes(_Δ, ρ, τ) =>
-                      val ρ2 = ρ ⊎ Substitutor.id(_Γ2.size)
-                      val τ2 = τ ⊎ Substitutor.id(_Γ2.size)
-                      given Context = _Γ1 ++ _Γ2.subst(ρ)
+                // split equality type
+                case (_, (x: Var, PRefl(), _A @ EqualityType(_B, u, v))) =>
+                  val (_Γ1, binding, _Γ2) = Γ.split(x)
+                  assert(
+                    binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+                    "these types should be identical because they are created by [intro]"
+                  )
+
+                  for
+                    unificationResult <- unify(u, v, _B)
+                    r <- unificationResult match
+                      case UnificationResult.UYes(_Δ, ρ, τ) =>
+                        val ρ2 = ρ ⊎ Substitutor.id(_Γ2.size)
+                        val τ2 = τ ⊎ Substitutor.id(_Γ2.size)
+                        given Context = _Γ1 ++ _Γ2.subst(ρ)
+                        for
+                          problem <- subst(problem, ρ2)
+                          case (_Σ, branch) <- split(
+                            q̅.map(_.substTerm(ρ2)),
+                            _C.subst(ρ2),
+                            problem
+                          )
+                        yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
+                      case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
+                        Left(UnificationFailure(unificationResult))
+                  yield r
+
+                // split empty
+                case (_, (x: Var, PAbsurd(), _A)) =>
+                  _A match
+                    case DataType(qn, _) =>
+                      if Σ.getConstructors(qn).isEmpty then Right(Σ, CtDataCase(x, qn, Map()))
+                      else Left(NonEmptyType(_A, source1))
+                    case EqualityType(_A, u, v) =>
                       for
-                        problem <- subst(problem, ρ2)
-                        case (_Σ, branch) <- split(
-                          q̅.map(_.substTerm(ρ2)),
-                          _C.subst(ρ2),
-                          problem
-                        )
-                      yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
-                    case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
-                      Left(UnificationFailure(unificationResult))
-                yield r
-              // split empty
-              case (x: Var, PAbsurd(), _A) =>
-                _A match
-                  case DataType(qn, _) =>
-                    if Σ.getConstructors(qn).isEmpty then Right(Σ, CtDataCase(x, qn, Map()))
-                    else Left(NonEmptyType(_A, source1))
-                  case EqualityType(_A, u, v) =>
-                    for
-                      u <- unify(u, v, _A)
-                      r <- u match
-                        case _: UNo => Right(Σ, CtEqualityEmpty(x))
-                        case _      => Left(NonEmptyType(_A, source1))
-                    yield r
-                  case _ => Left(NonEmptyType(_A, source1))
+                        u <- unify(u, v, _A)
+                        r <- u match
+                          case _: UNo => Right(Σ, CtEqualityEmpty(x))
+                          case _      => Left(NonEmptyType(_A, source1))
+                      yield r
+                    case _ => Left(NonEmptyType(_A, source1))
+                // No action to do, just forward the previous error
+                case (l, _) => l
             } match
-              case Some(r) => r
-              // [done]
-              case None =>
+              case Right(r) => Right(r)
+
+              // [done]: no action can be taken, try [done] or fail with error of last action, which
+              // could be missing constructor case, non-empty type, etc.
+              case Left(e) =>
                 for
                   rhs1 <- rhs1 match
                     case Some(rhs1) => Right(rhs1)
-                    case None       => Left(UnexpectedImpossible(source1))
+                    case None       => Left(e)
                   σOption <- solve(_E1)
                   _ <- σOption match
                     case Some(σ) => checkType(rhs1.subst(σ), _C)
-                    case None    => Left(UnsolvedElaboration(source1))
+                    case None    => Left(e)
                 yield (Σ.addClause(Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
           split(q̅, _C, problem)
         case (Nil, _) => Left(IncompleteClauses(qn))
