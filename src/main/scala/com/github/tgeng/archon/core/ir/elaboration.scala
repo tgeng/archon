@@ -349,8 +349,6 @@ def elaborateBody
     : Either[IrError, (Signature, CaseTree)] =
     for
       _C <- reduceCType(_C)
-      // TODO: direct cosplit/intro by type first
-      //  then do split after all vars are introduced.
       r <- (problem, _C) match
         // [cosplit]
         case (
@@ -426,7 +424,13 @@ def elaborateBody
 
             _E1.collectFirst[Either[IrError, (Signature, CaseTree)]] {
               // split data type
-              case (x: Var, PDataType(name, args), _) if usageNoLessThanU1(x) =>
+              case (x: Var, PDataType(qn, args), _A) if usageNoLessThanU1(x) =>
+                val (_Γ1, binding, _Γ2) = Γ.split(x)
+                assert(
+                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+                  "these types should be identical because they are created by [intro]"
+                )
+                val qns = ???
                 ???
               // TODO: implement split data type
               // split constructor
@@ -466,6 +470,9 @@ def elaborateBody
 
                           for
                             problem <- subst(problem, ρ2t)
+                            _ <- problem match
+                              case Nil => Left(MissingConstructorCase(qn, constructor.name))
+                              case _ => Right(())
                             case (_Σ, branch) <- split(
                               q̅.map(_.subst(ρ2)),
                               _C.subst(ρ2t),
