@@ -519,15 +519,15 @@ def elaborateBody
                       .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
                 // split equality type
-                case (_, (x: Var, PRefl(), _A @ EqualityType(_B, u, v))) =>
+                case (_, (x: Var, PRefl(), _A: EqualityType)) =>
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
                   assert(
                     binding.ty.weaken(_Γ2.size + 1, 0) == _A,
                     "these types should be identical because they are created by [intro]"
                   )
-
+                  val EqualityType(_B, u, v) = binding.ty.asInstanceOf[EqualityType]
                   for
-                    unificationResult <- unify(u, v, _B)
+                    unificationResult <- unify(u, v, _B)(using _Γ1)
                     r <- unificationResult match
                       case UnificationResult.UYes(_Γ1, ρ, τ) =>
                         val ρ2 = ρ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
