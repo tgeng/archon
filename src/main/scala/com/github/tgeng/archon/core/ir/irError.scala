@@ -88,3 +88,4 @@ enum IrError extends HasException:
   case UnificationFailure(uRes: UnificationResult)
   case NonEmptyType(ty: VTerm, source: PreClause)
   case MissingConstructorCase(dataQn: QualifiedName, conName: Name)
+  case InsufficientResourceForSplit(x: VTerm.Var, binding: Binding[VTerm])

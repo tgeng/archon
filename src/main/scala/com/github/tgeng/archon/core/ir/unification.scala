@@ -28,10 +28,10 @@ enum UnificationResult:
       Δ: Context,
       /** * The solution substitution σ: Δ -> Γ.
         */
-      σ: Substitutor[VTerm],
+      σ: Substitutor[Pattern],
       /** * The recovering substitution τ: Γ -> Δ.
         */
-      τ: Substitutor[VTerm]
+      τ: Substitutor[Pattern]
     )
   case UNo(u: VTerm, v: VTerm, ty: VTerm, failureType: UnificationFailureType)
   case UUndecided(u: VTerm, v: VTerm, ty: VTerm)
@@ -260,8 +260,8 @@ private def solution
   val (_Γ1, _, _Γ2) = Γ.split(x)
   val Δ = _Γ1 ++ _Γ2.substLowers(t)
   // _Γ1 and _Γ2 part are just identity vars for σ and τ.
-  val σ = Substitutor.id[VTerm](Δ.size).add(x.idx, t)
-  val τ = Substitutor.id[VTerm](Γ.size).remove(x.idx)
+  val σ = Substitutor.id[Pattern](Δ.size).add(x.idx, Pattern.PForced(t))
+  val τ = Substitutor.id[Pattern](Γ.size).remove(x.idx)
   Right(UYes(Δ, σ, τ))
 
 private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.size).map { i =>
@@ -294,10 +294,11 @@ def unifyAll
         uRes <- unify(u, v, binding.ty)
         r <- uRes match
           case UYes(_Δ, σ, τ) =>
+            val σt = σ.toTermSubstitutor
             for uRes2 <- unifyAll(
-                u̅.map(_.subst(σ)),
-                v̅.map(_.subst(σ)),
-                telescope.substLowers(u).subst(σ)
+                u̅.map(_.subst(σt)),
+                v̅.map(_.subst(σt)),
+                telescope.substLowers(u).subst(σt)
               )(
                 using _Δ
               )

@@ -142,6 +142,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
+  // TODO: remove this since inductive type is generalized and no longer depend on this during unification
   case EqualityType
     (
       ty: VTerm,
