@@ -443,6 +443,12 @@ def elaborateBody
                     )
                     val qns = ???
                     // TODO: implement split data type
+                    //  1. collect used types among clauses as {Qn_1, Qn_2, .. Qn_k}
+                    //  2. do case split with {Qn_1, Qn_2, ..., Qn_k, x}, where x is simply a Var
+                    //     for "catch all" case. Note that matching "Var" would cause `solve` to
+                    //     fail unless there is a PVar pattern.
+                    //  3. generate cases, where the branch corresponding to `x` goes to the default 
+                    //     case
                     ???
 
                 // split constructor
@@ -491,7 +497,8 @@ def elaborateBody
                                   val ρ2 = ρ1 ⊎ Substitutor.id[Pattern](_Γ2.size)
 
                                   val ρ2t = ρ2.toTermSubstitutor
-                                  given Context = _Γ1 ++ Δ.subst(ρ.toTermSubstitutor) ++ _Γ2.subst(ρ1t)
+                                  given Context =
+                                    _Γ1 ++ Δ.subst(ρ.toTermSubstitutor) ++ _Γ2.subst(ρ1t)
 
                                   for
                                     problem <- subst(problem, ρ2t)
