@@ -310,14 +310,14 @@ def elaborateBody
         case Nil => Right(Some(Nil))
         case (v, p, _A) :: constraints =>
           for
-            _E1 <- simplify(v.subst(σ), p, _A)
+            _E1 <- simplify(v, p, _A)
             _E2 <- simplifyAll(constraints)
           yield _E1.zip(_E2).map(_ ++ _)
     problem match
       case Nil => Right(Nil)
       case ElabClause(_E, q̅, rhs, source) :: problem =>
         for
-          optionE <- simplifyAll(_E)
+          optionE <- simplifyAll(_E.map { case (v, p, _A) => (v.subst(σ), p, _A) })
           r <- optionE match
             case Some(_E) =>
               for problem <- subst(problem, σ)
@@ -450,16 +450,66 @@ def elaborateBody
                   //  2. do case split with {Qn_1, Qn_2, ..., Qn_k, x}, where x is simply a Var
                   //     for "catch all" case. Note that matching "Var" would cause `solve` to
                   //     fail unless there is a PVar pattern.
-                  qns.foldLeft[Either[IrError, (Signature, Map[QualifiedName, CaseTree])]](
-                    Right(Σ, Map())
-                  ) {
-                    case (acc, Some(qn)) => ???
-                    case (acc, None)     => ???
-                  }
+                  qns
+                    .foldLeft[
+                      Either[IrError, (Signature, Map[QualifiedName, CaseTree], Option[CaseTree])]
+                    ](
+                      Right(Σ, Map(), None)
+                    ) {
+                      // Normal type case
+                      case (Right(_Σ, branches, defaultCase), Some(qn)) =>
+                        val data = Σ.getData(qn)
+                        // in context _Γ1
+                        val Δ = data.tParamTys.map(_._1)
 
-                  //  3. generate cases, where the branch corresponding to `x` goes to the default
-                  //     case
-                  ???
+                        // in context _Γ1 ⊎ Δ
+                        val ρ1 = Substitutor.id[Pattern](_Γ1.size) ⊎ Substitutor.of(
+                          Δ.size,
+                          PDataType(qn, pVars(Δ.size - 1))
+                        )
+                        val ρ1t = ρ1.toTermSubstitutor
+
+                        // in context _Γ1 ⊎ Δ ⊎ _Γ2
+                        val ρ2 = ρ1 ⊎ Substitutor.id[Pattern](_Γ2.size)
+
+                        val ρ2t = ρ2.toTermSubstitutor
+                        given Context = _Γ1 ++ Δ ++ _Γ2.subst(ρ1t)
+
+                        for
+                          problem <- subst(problem, ρ2t)
+                          _ <- problem match
+                            case Nil =>
+                              throw IllegalStateException(
+                                "impossible because the type qualified names are collected from clauses in the problem"
+                              )
+                            case _ => Right(())
+                          case (_Σ, branch) <- split(
+                            q̅.map(_.subst(ρ2)),
+                            _C.subst(ρ2t),
+                            problem
+                          )
+                        yield (_Σ, branches + (qn -> branch), defaultCase)
+                      // Default `x` catch-all case
+                      case (Right(_Σ, branches, _), None) =>
+                        for
+                          problem <- subst(problem, Substitutor.id(Γ.size))
+                          _ <- problem match
+                            case Nil => Left(MissingDefaultTypeCase())
+                            case _   => Right(())
+                          case (_Σ, branch) <- split(q̅, _C, problem)
+                        yield (_Σ, branches, Some(branch))
+                      case (Left(e), _) => Left(e)
+                    }
+                    .map {
+                      //  3. generate cases, where the branch corresponding to `x` goes to the default
+                      //     case
+                      case (_Σ, branches, Some(defaultCase)) =>
+                        (_Σ, CtTypeCase(x, branches, defaultCase))
+                      case _ =>
+                        throw IllegalStateException(
+                          "impossible because missing default case should have caused missing default type error"
+                        )
+                    }
 
               // split constructor
               case (_, (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))) =>
@@ -479,7 +529,6 @@ def elaborateBody
                       case (Right(_Σ, branches), constructor) =>
                         given Signature = _Σ
                         // in context _Γ1
-                        // TODO: delta should also contain all the equality types (tArgs)
                         val tArgs = binding.ty.asInstanceOf[DataType].args
                         val Δ = constructor.paramTys.substLowers(tArgs: _*)
 
@@ -495,6 +544,7 @@ def elaborateBody
                           )(using _Γ1 ++ Δ)
                           r <- unificationResult match
                             case UnificationResult.UYes(_Γ1, ρ, τ) =>
+                              // in context _Γ1 ⊎ Δ
                               val ρ1 = ρ ⊎ Substitutor.of(
                                 Δ.size,
                                 PConstructor(constructor.name, pVars(Δ.size - 1))
