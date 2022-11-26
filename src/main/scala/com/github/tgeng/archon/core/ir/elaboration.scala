@@ -342,7 +342,7 @@ def elaborateBody
     }
 
   def elaborate
-    (qn: QualifiedName, q̅ : List[CoPattern], _C: CTerm, problem: Problem)
+    (q̅ : List[CoPattern], _C: CTerm, problem: Problem)
     (using Γ: Context)
     (using Σ: Signature)
     : Either[IrError, (Signature, CaseTree)] =
@@ -360,7 +360,6 @@ def elaborateBody
                 for
                   problem <- filter(problem, field.name)
                   case (_Σ, ct) <- elaborate(
-                    qn,
                     q̅ :+ CProjection(field.name),
                     field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
                     problem
@@ -385,7 +384,6 @@ def elaborateBody
           for
             _A <- shift(problem, binding.ty)
             case (_Σ1, _Q) <- elaborate(
-              qn,
               q̅.map(_.weakened) :+ CPattern(PVar(0)),
               bodyTy,
               _A
@@ -643,43 +641,20 @@ def elaborateBody
                     case None    => Left(e)
                 yield (Σ.addClause(Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
           split(q̅, _C, problem)
-        case (Nil, _) => Left(IncompleteClauses(qn))
+        case (Nil, _) => Left(IncompleteClauses(preDefinition.qn))
     yield r
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}") {
     for
       paramTys <- elaborateContext(preDefinition.paramTys)
-      r <- {
-        given Γ: Context = paramTys.toIndexedSeq
-        Right(???)
-
-        // transpose(
-        //   preDefinition.clauses.zipWithIndex.flatMap { (clause, index) =>
-        //     clause.rhs match
-        //       case None => List()
-        //       case Some(rhs) =>
-        //         List(
-        //           ctx.trace(s"elaborating clause $index") {
-        //             for
-        //               bindings <- elaborateContext(clause.bindings)
-        //               ty <- reduceCType(clause.ty)(using Γ ++ bindings)
-        //             yield
-        //               val allBindings = paramTys ++ bindings
-        //               Clause(
-        //                 allBindings,
-        //                 CoPattern.qVars(
-        //                   allBindings.size - 1,
-        //                   bindings.size
-        //                 ) ++ clause.lhs,
-        //                 rhs,
-        //                 ty
-        //               )
-        //           }
-        //         )
-        //   }
-        // )
-      }
-    yield r
+      (_Σ, _Q) <- elaborate(
+        Nil,
+        preDefinition.ty,
+        preDefinition.clauses.map { case source @ PreClause(_, lhs, rhs) =>
+          ElabClause(Nil, lhs, rhs, source)
+        }
+      )(using paramTys.toIndexedSeq)
+    yield _Σ // TODO: add _Q to _Σ
   }
 
 def elaborateSignature
