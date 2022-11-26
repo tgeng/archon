@@ -100,13 +100,15 @@ trait Signature:
 
   def addDeclaration(d: Declaration): Signature
 
-  def addConstructor(c: Constructor): Signature
+  def addConstructor(qn: QualifiedName, c: Constructor): Signature
 
-  def addField(f: Field): Signature
+  def addField(qn: QualifiedName, f: Field): Signature
 
-  def addClause(c: Clause): Signature
+  def addClause(qn: QualifiedName, c: Clause): Signature
 
-  def addOperator(o: Operator): Signature
+  def addCaseTree(qn: QualifiedName, ct: CaseTree): Signature
+
+  def addOperator(qn: QualifiedName, o: Operator): Signature
 
   def getDataOption(qn: QualifiedName): Option[Data]
 

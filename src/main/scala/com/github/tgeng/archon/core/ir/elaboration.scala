@@ -111,7 +111,7 @@ def elaborateBody
             case (paramTys, args) <- elaborateTy(ty)
             con = new Constructor(constructor.name, paramTys, args)
             _ <- checkDataConstructor(preData.qn, con)
-          yield _Σ.addConstructor(con)
+          yield _Σ.addConstructor(preData.qn, con)
         }
       case (Left(e), _) => Left(e)
     }
@@ -155,7 +155,7 @@ def elaborateBody
             ty <- reduceCType(field.ty)
             f = new Field(field.name, ty)
             _ <- checkRecordField(preRecord.qn, f)
-          yield _Σ.addField(f)
+          yield _Σ.addField(preRecord.qn, f)
         }
       case (Left(e), _) => Left(e)
     }
@@ -639,7 +639,7 @@ def elaborateBody
                   _ <- σOption match
                     case Some(σ) => checkType(rhs1.subst(σ), _C)
                     case None    => Left(e)
-                yield (Σ.addClause(Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
+                yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
           split(q̅, _C, problem)
         case (Nil, _) => Left(IncompleteClauses(preDefinition.qn))
     yield r
@@ -654,7 +654,7 @@ def elaborateBody
           ElabClause(Nil, lhs, rhs, source)
         }
       )(using paramTys.toIndexedSeq)
-    yield _Σ // TODO: add _Q to _Σ
+    yield _Σ.addCaseTree(preDefinition.qn, _Q)
   }
 
 def elaborateSignature
@@ -714,7 +714,7 @@ def elaborateBody
             case (paramTys, resultTy, usage) <- elaborateTy(operator.ty)
             o = Operator(operator.name, paramTys, resultTy, usage)
             _ <- checkOperator(effect.qn, o)
-          yield _Σ.addOperator(o)
+          yield _Σ.addOperator(effect.qn, o)
         }
       case (Left(e), _) => Left(e)
     }
