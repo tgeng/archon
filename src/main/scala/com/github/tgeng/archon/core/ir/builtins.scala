@@ -56,6 +56,9 @@ object Builtins:
   import Pattern.*
   import Usage.*
   import EqDecidability.*
+  import CaseTree.*
+
+  // TODO: add all of these through elaboration.
 
   val builtinData: Map[QualifiedName, (Data, IndexedSeq[Constructor])] = Seq(
     b(
@@ -619,38 +622,6 @@ object Builtins:
     ).map { case (qn, (ty, clauses)) =>
       (qn, (new Definition(qn)(ty), clauses))
     }.toMap
-
-  def getBigType
-    (qn: QualifiedName)
-    : Option[(Definition, IndexedSeq[Clause])] =
-    // TODO[P3]: it seems big SubtypeOf is not that useful so I will skip it for now.
-    import Name.*
-    import QualifiedName.*
-    for
-      (isComputation, layer) <-
-        qn match
-          case Node(BuiltinType, Normal(name)) if name.startsWith("TYPE") =>
-            name.drop(4).toIntOption.map((false, _))
-          case Node(BuiltinType, Normal(name)) if name.startsWith("CTYPE") =>
-            name.drop(5).toIntOption.map((true, _))
-          case _ => None
-      if layer >= 0
-    yield (
-      new Definition(qn)(
-        if isComputation then CType(CType(CTop(UωLevel(layer))))
-        else F(Type(Type(Top(UωLevel(layer)))))
-      ),
-      IndexedSeq(
-        Clause(
-          IndexedSeq(),
-          Nil,
-          if isComputation then CType(CTop(UωLevel(layer)))
-          else Return(Type(Top(UωLevel(layer)))),
-          if isComputation then CType(CType(CTop(UωLevel(layer))))
-          else F(Type(Type(Top(UωLevel(layer)))))
-        )
-      )
-    )
 
   val builtinEffects: Map[QualifiedName, (Effect, IndexedSeq[Operator])] = Seq(
     b(
