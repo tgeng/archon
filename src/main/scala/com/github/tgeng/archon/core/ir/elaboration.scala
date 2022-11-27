@@ -21,8 +21,144 @@ import com.github.tgeng.archon.parser.combinators.P
 import scala.NonEmptyTuple
 import scala.Conversion
 
+def elaborateAll
+  (declarations: Seq[PreDeclaration])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Signature] =
+  for
+    decls <- sortPreDeclarations(declarations)
+    r <- decls.foldLeft[Either[IrError, Signature]](Right(Σ)) {
+      case (Left(e), _)              => Left(e)
+      case (Right(_Σ), (part, decl)) => elaborate(part, decl)(using _Σ)
+    }
+  yield r
+
+def elaborate
+  (part: DeclarationPart, decl: PreDeclaration)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Signature] = (part, decl) match
+  case (DeclarationPart.HEAD, d: PreData)       => elaborateHead(d)
+  case (DeclarationPart.HEAD, d: PreRecord)     => elaborateHead(d)
+  case (DeclarationPart.HEAD, d: PreDefinition) => elaborateHead(d)
+  case (DeclarationPart.HEAD, d: PreEffect)     => elaborateHead(d)
+  case (DeclarationPart.BODY, d: PreData)       => elaborateBody(d)
+  case (DeclarationPart.BODY, d: PreRecord)     => elaborateBody(d)
+  case (DeclarationPart.BODY, d: PreDefinition) => elaborateBody(d)
+  case (DeclarationPart.BODY, d: PreEffect)     => elaborateBody(d)
+
+enum DeclarationPart:
+  case HEAD, BODY
+
+import DeclarationPart.*
+
+def sortPreDeclarations
+  (declarations: Seq[PreDeclaration])
+  (using Σ: Signature)
+  : Either[IrError, Seq[(DeclarationPart, PreDeclaration)]] =
+  given Unit = ()
+
+  val declByQn = declarations.associatedBy(_.qn)
+  val sigRefQn = declarations
+    .associatedBy(
+      _.qn,
+      {
+        case data: PreData =>
+          QualifiedNameVisitor.combine(
+            QualifiedNameVisitor.visitPreTContext(data.tParamTys),
+            data.ty.visitWith(QualifiedNameVisitor),
+          )
+        case record: PreRecord =>
+          QualifiedNameVisitor.combine(
+            QualifiedNameVisitor.visitPreTContext(record.tParamTys),
+            record.ty.visitWith(QualifiedNameVisitor),
+          )
+        case definition: PreDefinition =>
+          definition.ty.visitWith(QualifiedNameVisitor)
+        case effect: PreEffect =>
+          QualifiedNameVisitor.visitPreContext(effect.tParamTys)
+      },
+    )
+    .view
+    .mapValues(_ & declByQn.keySet)
+    .toMap
+
+  val bodyRefQn = declarations
+    .associatedBy(
+      _.qn,
+      {
+        case data: PreData =>
+          QualifiedNameVisitor.combine(
+            data.constructors.map { constructor =>
+              constructor.ty.visitWith(QualifiedNameVisitor)
+            }: _*,
+          ) + data.qn
+        case record: PreRecord =>
+          QualifiedNameVisitor.combine(
+            record.fields.map { field =>
+              field.ty.visitWith(QualifiedNameVisitor)
+            }: _*,
+          ) + record.qn
+        case definition: PreDefinition =>
+          QualifiedNameVisitor.combine(
+            definition.clauses.flatMap { clause =>
+              clause.lhs.map(QualifiedNameVisitor.visitCoPattern(_)) ++
+                clause.rhs.map(QualifiedNameVisitor.visitCTerm(_))
+            }: _*,
+          ) + definition.qn
+        case effect: PreEffect =>
+          QualifiedNameVisitor.combine(
+            effect.operators.map { operator =>
+              operator.ty.visitWith(QualifiedNameVisitor)
+            }: _*,
+          ) + effect.qn
+      },
+    )
+    .view
+    .mapValues(_ & declByQn.keySet)
+    .toMap
+
+  // rule:
+  //   1. any reference of A needs the signature of A, regardless whether it's in the signature or body of some declarations
+  //   2. any reference of A in a signature means the accompanied body needs full definition of A
+  topologicalSort(
+    declarations.flatMap(decl => Seq((HEAD, decl), (BODY, decl))),
+  ) {
+    case (HEAD, decl) =>
+      sigRefQn.get(decl.qn) match
+        case Some(qns) => qns.toSeq.sorted.map(qn => (HEAD, declByQn(qn)))
+        case None      => Seq()
+    case (BODY, decl) =>
+      sigRefQn.get(decl.qn) match
+        case Some(qns) =>
+          qns.toSeq.sorted.map(qn => (BODY, declByQn(qn))) ++
+            (bodyRefQn(decl.qn) -- qns).toSeq.sorted.map(qn => (HEAD, declByQn(qn)))
+        case None => Seq()
+  } match
+    case Right(decls) => Right(decls)
+    case Left(cycle)  => Left(CyclicDeclarations(cycle))
+
+private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
+
+  override def combine
+    (rs: Set[QualifiedName]*)
+    (using ctx: Unit)
+    (using
+      Σ: Signature,
+    )
+    : Set[QualifiedName] = rs.flatten.toSet
+
+  override def visitQualifiedName
+    (qn: QualifiedName)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    : Set[QualifiedName] = Set(qn)
+
+end QualifiedNameVisitor
+
 private given Γ0: Context = IndexedSeq()
-def elaborateHead
+private def elaborateHead
   (preData: PreData)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -54,20 +190,20 @@ def elaborateHead
     for
       tParamTys <- elaborateTContext(preData.tParamTys)
       case (tIndices, ul, usage, eqDecidability) <- elaborateTy(preData.ty)(using
-        Γ0 ++ tParamTys.map(_._1)
+        Γ0 ++ tParamTys.map(_._1),
       )
       data = new Data(preData.qn)(
         tParamTys.size,
         tParamTys ++ tIndices,
         ul,
         usage,
-        eqDecidability
+        eqDecidability,
       )
       _ <- checkData(data)
     yield Σ.addDeclaration(data)
   }
 
-def elaborateBody
+private def elaborateBody
   (preData: PreData)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -117,7 +253,7 @@ def elaborateBody
     }
   }
 
-def elaborateHead
+private def elaborateHead
   (record: PreRecord)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -133,7 +269,7 @@ def elaborateHead
     yield Σ.addDeclaration(r)
   }
 
-def elaborateBody
+private def elaborateBody
   (preRecord: PreRecord)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -145,7 +281,7 @@ def elaborateBody
 
     given Context = record.tParamTys.map(_._1).toIndexedSeq :+
       Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))), ???)(
-        record.selfName
+        record.selfName,
       )
 
     preRecord.fields.foldLeft[Either[IrError, Signature]](Right(Σ)) {
@@ -161,7 +297,7 @@ def elaborateBody
     }
   }
 
-def elaborateHead
+private def elaborateHead
   (definition: PreDefinition)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -175,13 +311,13 @@ def elaborateHead
       d = new Definition(definition.qn)(
         paramTys.foldRight(ty) { (binding, bodyTy) =>
           FunctionType(binding, bodyTy)
-        }
+        },
       )
       _ <- checkDef(d)
     yield Σ.addDeclaration(d)
   }
 
-def elaborateBody
+private def elaborateBody
   (preDefinition: PreDefinition)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -196,7 +332,7 @@ def elaborateBody
       constraints: List[Constraint],
       userPatterns: List[CoPattern],
       rhs: Option[CTerm],
-      val source: PreClause
+      val source: PreClause,
     )
 
   type Problem = List[ElabClause]
@@ -221,7 +357,7 @@ def elaborateBody
                   _ <- checkType(p, _A)
                   _ <- checkType(w, _A)
                   _ <- checkSubsumption(p.subst(σ.get), w, Some(_A))(using
-                    CheckSubsumptionMode.CONVERSION
+                    CheckSubsumptionMode.CONVERSION,
                   )
                 yield ()
               case None => Left(UnexpectedAbsurdPattern(p))
@@ -352,7 +488,7 @@ def elaborateBody
         // [cosplit]
         case (
             ElabClause(_E1, (p @ CProjection(_)) :: q̅1, rhs1, source) :: _,
-            RecordType(qn, args, _)
+            RecordType(qn, args, _),
           ) =>
           Σ.getFields(qn)
             .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](Right((Σ, Map()))) {
@@ -362,7 +498,7 @@ def elaborateBody
                   case (_Σ, ct) <- elaborate(
                     q̅ :+ CProjection(field.name),
                     field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
-                    problem
+                    problem,
                   )(using Γ)(using _Σ)
                 yield (_Σ, fields + (field.name -> ct))
               case (Left(e), _) => Left(e)
@@ -379,14 +515,14 @@ def elaborateBody
         // [intro]
         case (
             ElabClause(_E1, (q @ CPattern(p)) :: q̅1, rhs1, source) :: _,
-            FunctionType(binding, bodyTy, _)
+            FunctionType(binding, bodyTy, _),
           ) =>
           for
             _A <- shift(problem, binding.ty)
             case (_Σ1, _Q) <- elaborate(
               q̅.map(_.weakened) :+ CPattern(PVar(0)),
               bodyTy,
-              _A
+              _A,
             )
           yield (_Σ1, CtLambda(_Q)(binding.name))
         // mismatch between copattern and _C
@@ -403,7 +539,7 @@ def elaborateBody
 
             def providedUsageLessThanU1(x: Var): Boolean =
               checkUsageSubsumption(Γ.resolve(x).usage, UsageLiteral(Usage.U1))(using
-                CheckSubsumptionMode.SUBSUMPTION
+                CheckSubsumptionMode.SUBSUMPTION,
               ) match
                 case Right(_) => false
                 case _        => true
@@ -412,7 +548,7 @@ def elaborateBody
               val DataType(qn, tArgs) = d
               checkUsageSubsumption(
                 Σ.getData(qn).inherentUsage.substLowers(tArgs: _*),
-                UsageLiteral(Usage.U0)
+                UsageLiteral(Usage.U0),
               )(using CheckSubsumptionMode.CONVERSION) match
                 case Right(_) => true
                 case _        => false
@@ -420,7 +556,7 @@ def elaborateBody
             // Find something to split.
             _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
               // Start with a very generic error in case no split actions can be taken at all.
-              Left(UnsolvedElaboration(source1))
+              Left(UnsolvedElaboration(source1)),
             ) {
               // If a split action was successful, skip any further actions on the remaining
               // constraints.
@@ -434,7 +570,7 @@ def elaborateBody
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
                   assert(
                     binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                    "these types should be identical because they are created by [intro]"
+                    "these types should be identical because they are created by [intro]",
                   )
                   // 1. collect used types among clauses as {Qn_1, Qn_2, .. Qn_k}. Here the first
                   //    `None` is the default catch-all case.
@@ -450,9 +586,12 @@ def elaborateBody
                   //     fail unless there is a PVar pattern.
                   qns
                     .foldLeft[
-                      Either[IrError, (Signature, Map[QualifiedName, CaseTree], Option[CaseTree])]
+                      Either[
+                        IrError,
+                        (Signature, Map[QualifiedName, CaseTree], Option[CaseTree]),
+                      ],
                     ](
-                      Right(Σ, Map(), None)
+                      Right(Σ, Map(), None),
                     ) {
                       // Normal type case
                       case (Right(_Σ, branches, defaultCase), Some(qn)) =>
@@ -463,7 +602,7 @@ def elaborateBody
                         // in context _Γ1 ⊎ Δ
                         val ρ1 = Substitutor.id[Pattern](_Γ1.size) ⊎ Substitutor.of(
                           Δ.size,
-                          PDataType(qn, pVars(Δ.size - 1))
+                          PDataType(qn, pVars(Δ.size - 1)),
                         )
                         val ρ1t = ρ1.toTermSubstitutor
 
@@ -478,13 +617,13 @@ def elaborateBody
                           _ <- problem match
                             case Nil =>
                               throw IllegalStateException(
-                                "impossible because the type qualified names are collected from clauses in the problem"
+                                "impossible because the type qualified names are collected from clauses in the problem",
                               )
                             case _ => Right(())
                           case (_Σ, branch) <- split(
                             q̅.map(_.subst(ρ2)),
                             _C.subst(ρ2t),
-                            problem
+                            problem,
                           )
                         yield (_Σ, branches + (qn -> branch), defaultCase)
                       // Default `x` catch-all case
@@ -505,7 +644,7 @@ def elaborateBody
                         (_Σ, CtTypeCase(x, branches, defaultCase))
                       case _ =>
                         throw IllegalStateException(
-                          "impossible because missing default case should have caused missing default type error"
+                          "impossible because missing default case should have caused missing default type error",
                         )
                     }
 
@@ -517,12 +656,12 @@ def elaborateBody
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
                   assert(
                     binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                    "these types should be identical because they are created by [intro]"
+                    "these types should be identical because they are created by [intro]",
                   )
                   val data = Σ.getData(qn)
                   Σ.getConstructors(qn)
                     .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](
-                      Right(Σ, Map())
+                      Right(Σ, Map()),
                     ) {
                       case (Right(_Σ, branches), constructor) =>
                         given Signature = _Σ
@@ -532,20 +671,20 @@ def elaborateBody
 
                         // in context _Γ1 ⊎ Δ
                         val cTArgs = constructor.tArgs.map(
-                          _.substLowers(tArgs ++ vars(constructor.paramTys.size - 1): _*)
+                          _.substLowers(tArgs ++ vars(constructor.paramTys.size - 1): _*),
                         )
                         for
                           unificationResult <- unifyAll(
                             tArgs.map(_.weaken(Δ.size, 0)),
                             cTArgs,
-                            data.tParamTys.map(_._1).toList
+                            data.tParamTys.map(_._1).toList,
                           )(using _Γ1 ++ Δ)
                           r <- unificationResult match
                             case UnificationResult.UYes(_Γ1, ρ, τ) =>
                               // in context _Γ1 ⊎ Δ
                               val ρ1 = ρ ⊎ Substitutor.of(
                                 Δ.size,
-                                PConstructor(constructor.name, pVars(Δ.size - 1))
+                                PConstructor(constructor.name, pVars(Δ.size - 1)),
                               )
 
                               val ρ1t = ρ1.toTermSubstitutor
@@ -566,13 +705,13 @@ def elaborateBody
                                 case (_Σ, branch) <- split(
                                   q̅.map(_.subst(ρ2)),
                                   _C.subst(ρ2t),
-                                  problem
+                                  problem,
                                 )
                               yield (
                                 _Σ,
                                 branches + (constructor.name -> branch.subst(
-                                  τ.toTermSubstitutor ⊎ Substitutor.id(Δ.size + _Γ2.size)
-                                ))
+                                  τ.toTermSubstitutor ⊎ Substitutor.id(Δ.size + _Γ2.size),
+                                )),
                               )
                             case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
                               Left(UnificationFailure(unificationResult))
@@ -587,7 +726,7 @@ def elaborateBody
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
                 assert(
                   binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                  "these types should be identical because they are created by [intro]"
+                  "these types should be identical because they are created by [intro]",
                 )
                 val EqualityType(_B, u, v) = binding.ty.asInstanceOf[EqualityType]
                 for
@@ -602,7 +741,7 @@ def elaborateBody
                         case (_Σ, branch) <- split(
                           q̅.map(_.substTerm(ρ2)),
                           _C.subst(ρ2),
-                          problem
+                          problem,
                         )
                       yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
                     case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
@@ -652,12 +791,12 @@ def elaborateBody
         preDefinition.ty,
         preDefinition.clauses.map { case source @ PreClause(_, lhs, rhs) =>
           ElabClause(Nil, lhs, rhs, source)
-        }
+        },
       )(using paramTys.toIndexedSeq)
     yield _Σ.addCaseTree(preDefinition.qn, _Q)
   }
 
-def elaborateHead
+private def elaborateHead
   (effect: PreEffect)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -670,7 +809,7 @@ def elaborateHead
     yield Σ.addDeclaration(e)
   }
 
-def elaborateBody
+private def elaborateBody
   (preEffect: PreEffect)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -687,7 +826,7 @@ def elaborateBody
       (using ctx: TypingContext)
       : Either[
         IrError,
-        (Telescope, /* operator return type */ VTerm, /* operator return usage */ VTerm)
+        (Telescope, /* operator return type */ VTerm, /* operator return usage */ VTerm),
       ] =
       for
         ty <- reduceCType(ty)

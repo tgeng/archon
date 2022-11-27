@@ -90,3 +90,4 @@ enum IrError extends HasException:
   case MissingConstructorCase(dataQn: QualifiedName, conName: Name)
   case MissingDefaultTypeCase()
   case InsufficientResourceForSplit(x: VTerm.Var, binding: Binding[VTerm])
+  case CyclicDeclarations(cycle: Seq[(DeclarationPart, PreDeclaration)])
