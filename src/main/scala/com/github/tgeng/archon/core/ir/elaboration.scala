@@ -22,7 +22,7 @@ import scala.NonEmptyTuple
 import scala.Conversion
 
 private given Γ0: Context = IndexedSeq()
-def elaborateSignature
+def elaborateHead
   (preData: PreData)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -117,7 +117,7 @@ def elaborateBody
     }
   }
 
-def elaborateSignature
+def elaborateHead
   (record: PreRecord)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -161,7 +161,7 @@ def elaborateBody
     }
   }
 
-def elaborateSignature
+def elaborateHead
   (definition: PreDefinition)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -657,7 +657,7 @@ def elaborateBody
     yield _Σ.addCaseTree(preDefinition.qn, _Q)
   }
 
-def elaborateSignature
+def elaborateHead
   (effect: PreEffect)
   (using Σ: Signature)
   (using ctx: TypingContext)

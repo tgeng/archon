@@ -7,6 +7,7 @@ import com.github.tgeng.archon.core.ir.ULevel.USimpleLevel
 import SourceInfo.*
 
 trait DerivedSignature extends Signature:
+  override type S <: DerivedSignature
   override def getDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     Builtins.builtinDefinitions
       .get(qn)

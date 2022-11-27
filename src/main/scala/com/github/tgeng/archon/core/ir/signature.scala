@@ -95,17 +95,18 @@ case class Operator
   )
 
 trait Signature:
-  def addDeclaration(d: Declaration): this.type
+  type S <: Signature
+  def addDeclaration(d: Declaration): S
 
-  def addConstructor(qn: QualifiedName, c: Constructor): this.type
+  def addConstructor(qn: QualifiedName, c: Constructor): S
 
-  def addField(qn: QualifiedName, f: Field): this.type
+  def addField(qn: QualifiedName, f: Field): S
 
-  def addClause(qn: QualifiedName, c: Clause): this.type
+  def addClause(qn: QualifiedName, c: Clause): S
 
-  def addCaseTree(qn: QualifiedName, ct: CaseTree): this.type
+  def addCaseTree(qn: QualifiedName, ct: CaseTree): S
 
-  def addOperator(qn: QualifiedName, o: Operator): this.type
+  def addOperator(qn: QualifiedName, o: Operator): S
 
   def getDataOption(qn: QualifiedName): Option[Data]
 

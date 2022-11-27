@@ -5,8 +5,57 @@ import com.github.tgeng.archon.core.common.*
 import QualifiedName.*
 import VTerm.*
 import Essentiality.*
+import Declaration.*
+
+private case class SimpleSignature
+  (
+    declarations: Map[QualifiedName, Declaration],
+    constructors: Map[QualifiedName, IndexedSeq[Constructor]],
+    fields: Map[QualifiedName, IndexedSeq[Field]],
+    clauses: Map[QualifiedName, IndexedSeq[Clause]],
+    caseTrees: Map[QualifiedName, CaseTree],
+    operators: Map[QualifiedName, IndexedSeq[Operator]]
+  )
+  extends DerivedSignature:
+
+  override type S = SimpleSignature
+
+  override def addDeclaration(d: Declaration): SimpleSignature =
+    copy(declarations = declarations + (d.qn -> d))
+  override def addConstructor(qn: QualifiedName, c: Constructor): SimpleSignature =
+    copy(constructors = constructors + (qn -> (constructors.getOrElse(qn, IndexedSeq()) :+ c)))
+  override def addField(qn: QualifiedName, f: Field): SimpleSignature =
+    copy(fields = fields + (qn -> (fields.getOrElse(qn, IndexedSeq()) :+ f)))
+  override def addClause(qn: QualifiedName, c: Clause): SimpleSignature =
+    copy(clauses = clauses + (qn -> (clauses.getOrElse(qn, IndexedSeq()) :+ c)))
+  override def addCaseTree(qn: QualifiedName, ct: CaseTree): SimpleSignature =
+    copy(caseTrees = caseTrees + (qn -> ct))
+  override def addOperator(qn: QualifiedName, o: Operator): SimpleSignature =
+    copy(operators = operators + (qn -> (operators.getOrElse(qn, IndexedSeq()) :+ o)))
+
+  override def getDeclaredDefinitionOption(qn: QualifiedName): Option[Definition] =
+    declarations.get(qn).collect { case d: Definition => d }
+  override def getDeclaredClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    clauses.get(qn)
+  override def getDeclaredCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
+    caseTrees.get(qn)
+  override def getDataOption(qn: QualifiedName): Option[Data] =
+    declarations.get(qn).collect { case d: Data => d }
+  override def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]] =
+    constructors.get(qn)
+  override def getRecordOption(qn: QualifiedName): Option[Record] =
+    declarations.get(qn).collect { case d: Record => d }
+  override def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]] =
+    fields.get(qn)
+  override def getEffectOption(qn: QualifiedName): Option[Effect] =
+    declarations.get(qn).collect { case d: Effect => d }
+  override def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]] =
+    operators.get(qn)
 
 object Builtins:
+
+  val Σ: DerivedSignature = ???
+
   val BuiltinType = Builtin / "type"
 
   val TypeQn = BuiltinType / "Type"
