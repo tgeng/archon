@@ -120,7 +120,6 @@ object Builtins:
       (
         /* tParamTys*/ Nil,
         /* ul */ USimpleLevel(LevelLiteral(0)),
-        /* numParams */ 0,
         /* inherentUsage */ UsageLiteral(UUnres),
         /* inherentEqDecidability */ EqDecidabilityLiteral(EqDecidable),
         /* constructors */ IndexedSeq(
@@ -138,7 +137,6 @@ object Builtins:
           (Binding(Var(1), U1)(n"y"), Variance.COVARIANT) ::
           Nil,
         /* ul */ USimpleLevel(Var(3)),
-        /* numParams */ 3,
         /* inherentUsage */ UsageLiteral(U0),
         /* inherentEqDecidability */ EqDecidabilityLiteral(EqDecidable),
         /* constructors */ IndexedSeq(
@@ -152,7 +150,6 @@ object Builtins:
         (
           tParamTys,
           ul,
-          numParams,
           inherentUsage,
           inherentEqDecidability,
           constructors,
@@ -161,8 +158,8 @@ object Builtins:
       (
         (
           new Data(qn)(
-            numParams,
             tParamTys.toIndexedSeq,
+            ???, // TODO: fill up the tIndexTys part
             ul,
             inherentUsage,
             inherentEqDecidability,

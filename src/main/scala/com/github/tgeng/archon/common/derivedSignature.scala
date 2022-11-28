@@ -77,7 +77,7 @@ trait DerivedSignature extends Signature:
     yield (
       new Definition(qn)(
         if isComputation then CType(CType(CTop(UωLevel(layer))))
-        else F(Type(Type(Top(UωLevel(layer)))))
+        else F(Type(Type(Top(UωLevel(layer))))),
       ),
       IndexedSeq(
         Clause(
@@ -86,22 +86,22 @@ trait DerivedSignature extends Signature:
           if isComputation then CType(CTop(UωLevel(layer)))
           else Return(Type(Top(UωLevel(layer)))),
           if isComputation then CType(CType(CTop(UωLevel(layer))))
-          else F(Type(Type(Top(UωLevel(layer)))))
-        )
+          else F(Type(Type(Top(UωLevel(layer))))),
+        ),
       ),
       if isComputation then CtTerm(CType(CTop(UωLevel(layer))))
-      else CtTerm(Return(Type(Top(UωLevel(layer)))))
+      else CtTerm(Return(Type(Top(UωLevel(layer))))),
     )
 
   def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     for data <- getDataOption(qn)
     yield Definition(qn)(
       data.tParamTys.foldRight[CTerm](
-        F(Type(DataType(qn, vars(data.tParamTys.size - 1))))
+        F(Type(DataType(qn, vars(data.tParamTys.size - 1)))),
       ) { (bindingAndVariance, bodyTy) =>
         bindingAndVariance match
           case (binding, _) => FunctionType(binding, bodyTy)
-      }
+      },
     )
 
   def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
@@ -113,8 +113,8 @@ trait DerivedSignature extends Signature:
           data.tParamTys.map(_._1),
           qVars(highestDbIndex),
           Return(DataType(qn, vars(highestDbIndex))),
-          F(Type(DataType(qn, vars(highestDbIndex))))
-        )
+          F(Type(DataType(qn, vars(highestDbIndex)))),
+        ),
       )
 
   def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
@@ -124,22 +124,19 @@ trait DerivedSignature extends Signature:
           data <- getDataOption(dataQn)
           constructor <- getConstructorOption(dataQn, conName)
         yield
-          val numIndexArgs = data.tParamTys.size - data.numParams
+          val numIndexArgs = data.tParamTys.size
           Definition(qn)(
-            (data.tParamTys.take(data.numParams).map(_._1) ++
-              constructor.paramTys.strengthen(numIndexArgs, 0))
+            (data.tParamTys.map(_._1) ++ constructor.paramTys)
               .foldRight[CTerm](
                 F(
                   DataType(
                     dataQn,
-                    constructor.tArgs.map(
-                      _.strengthen(numIndexArgs, constructor.paramTys.size)
-                    )
-                  )
-                )
+                    vars(data.tParamTys.size + constructor.paramTys.size - 1) ++ constructor.tArgs,
+                  ),
+                ),
               ) { (binding, ty) =>
                 FunctionType(binding, ty)
-              }
+              },
           )
       case _ => None
 
@@ -150,8 +147,8 @@ trait DerivedSignature extends Signature:
           data <- getDataOption(dataQn)
           constructor <- getConstructorOption(dataQn, conName)
         yield
-          val numIndexArgs = data.tParamTys.size - data.numParams
-          val allBindings = data.tParamTys.take(data.numParams).map(_._1) ++
+          val numIndexArgs = data.tParamTys.size
+          val allBindings = data.tParamTys.map(_._1) ++
             constructor.paramTys.strengthen(numIndexArgs, 0)
           IndexedSeq(
             Clause(
@@ -161,10 +158,10 @@ trait DerivedSignature extends Signature:
               F(
                 DataType(
                   dataQn,
-                  constructor.tArgs.map(_.strengthen(numIndexArgs, 0))
-                )
-              )
-            )
+                  vars(data.tParamTys.size + constructor.paramTys.size - 1) ++ constructor.tArgs,
+                ),
+              ),
+            ),
           )
       case _ => None
 
@@ -172,11 +169,11 @@ trait DerivedSignature extends Signature:
     for record <- getRecordOption(qn)
     yield Definition(qn)(
       record.tParamTys.foldRight[CTerm](
-        CType(RecordType(qn, vars(record.tParamTys.size - 1)))
+        CType(RecordType(qn, vars(record.tParamTys.size - 1))),
       ) { (bindingAndVariance, bodyTy) =>
         bindingAndVariance match
           case (binding, _) => FunctionType(binding, bodyTy)
-      }
+      },
     )
 
   def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
@@ -188,8 +185,8 @@ trait DerivedSignature extends Signature:
           record.tParamTys.map(_._1),
           qVars(highestDbIndex),
           RecordType(qn, vars(highestDbIndex)),
-          CType(RecordType(qn, vars(highestDbIndex)))
-        )
+          CType(RecordType(qn, vars(highestDbIndex))),
+        ),
       )
     }
 
@@ -204,14 +201,14 @@ trait DerivedSignature extends Signature:
             FunctionType(
               Binding(
                 U(RecordType(recordQn, vars(record.tParamTys.size - 1))),
-                UsageLiteral(U1)
+                UsageLiteral(U1),
               )(record.selfName),
-              field.ty
-            )
+              field.ty,
+            ),
           ) { (bindingAndVariance, bodyTy) =>
             bindingAndVariance match
               case (binding, _) => FunctionType(binding, bodyTy)
-          }
+          },
         )
       case _ => None
 
@@ -227,15 +224,15 @@ trait DerivedSignature extends Signature:
               U(
                 RecordType(
                   recordQn,
-                  vars(record.tParamTys.size - 1)
-                )
+                  vars(record.tParamTys.size - 1),
+                ),
               ),
-              UsageLiteral(U1)
+              UsageLiteral(U1),
             )(record.selfName),
             qVars(record.tParamTys.size),
             Projection(Force(Var(0)), fieldName),
-            field.ty
-          )
+            field.ty,
+          ),
         )
       case _ => None
 
@@ -244,7 +241,7 @@ trait DerivedSignature extends Signature:
     yield Definition(qn)(
       effect.tParamTys.foldRight[CTerm](F(EffectsType())) { case (binding, bodyTy) =>
         FunctionType(binding, bodyTy)
-      }
+      },
     )
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
@@ -256,8 +253,8 @@ trait DerivedSignature extends Signature:
           effect.tParamTys,
           qVars(highestDbIndex),
           Return(EffectsLiteral(Set((qn, vars(highestDbIndex))))),
-          F(EffectsType())
-        )
+          F(EffectsType()),
+        ),
       )
     }
 
@@ -276,13 +273,13 @@ trait DerivedSignature extends Signature:
                   op.resultTy,
                   EffectsLiteral(
                     Set(
-                      (effectQn, vars(allParamTys.size - 1, op.paramTys.size))
-                    )
-                  )
-                )
+                      (effectQn, vars(allParamTys.size - 1, op.paramTys.size)),
+                    ),
+                  ),
+                ),
               ) { (binding, ty) =>
                 FunctionType(binding, ty)
-              }
+              },
           )
       case _ => None
 
@@ -301,10 +298,10 @@ trait DerivedSignature extends Signature:
               OperatorCall(
                 (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
                 opName,
-                vars(op.paramTys.size - 1)
+                vars(op.paramTys.size - 1),
               ),
-              F(op.resultTy)
-            )
+              F(op.resultTy),
+            ),
           )
       case _ => None
 
@@ -320,12 +317,10 @@ trait DerivedSignature extends Signature:
         for
           data <- getDataOption(dataQn)
           constructor <- getConstructorOption(dataQn, conName)
-        yield
-          val numIndexArgs = data.tParamTys.size - data.numParams
-          (data.tParamTys.map(_._1) ++ constructor.paramTys)
-            .foldRight(CtTerm(Return(Con(conName, vars(constructor.paramTys.size - 1))))) {
-              case (binding, _Q) => CtLambda(_Q)(binding.name)
-            }
+        yield (data.tParamTys.map(_._1) ++ constructor.paramTys)
+          .foldRight(CtTerm(Return(Con(conName, vars(constructor.paramTys.size - 1))))) {
+            case (binding, _Q) => CtLambda(_Q)(binding.name)
+          }
       case _ => None
 
   def getRecordDerivedCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
@@ -341,7 +336,7 @@ trait DerivedSignature extends Signature:
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
         yield record.tParamTys.foldRight(
-          CtLambda(CtTerm(Projection(Force(Var(0)), fieldName)))(record.selfName)
+          CtLambda(CtTerm(Projection(Force(Var(0)), fieldName)))(record.selfName),
         ) { case ((binding, _), _Q) =>
           CtLambda(_Q)(binding.name)
         }
@@ -351,7 +346,7 @@ trait DerivedSignature extends Signature:
   def getEffectDerivedCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
     for effect <- getEffectOption(qn)
     yield effect.tParamTys.foldRight(
-      CtTerm(Return(Effects(Set((qn, vars(effect.tParamTys.size - 1))), Set())))
+      CtTerm(Return(Effects(Set((qn, vars(effect.tParamTys.size - 1))), Set()))),
     ) { case (binding, _Q) =>
       CtLambda(_Q)(binding.name)
     }
@@ -369,8 +364,8 @@ trait DerivedSignature extends Signature:
               OperatorCall(
                 (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
                 opName,
-                vars(op.paramTys.size - 1)
-              )
-            )
+                vars(op.paramTys.size - 1),
+              ),
+            ),
           ) { case (binding, _Q) => CtLambda(_Q)(binding.name) }
       case _ => None

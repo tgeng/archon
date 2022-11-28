@@ -111,7 +111,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either
   ctx.trace(s"checking data signature ${data.qn}") {
     given Context = IndexedSeq()
 
-    val tParams = data.tParamTys.map(_._1)
+    val tParams = data.tParamTys.map(_._1) ++ data.tIndexTys
     for
       _ <- checkParameterTypeDeclarations(tParams.toList)
       _ <- checkTParamsAreUnrestricted(tParams.toList)
@@ -132,7 +132,7 @@ def checkDataConstructor
     Σ.getDataOption(qn) match
       case None => Left(MissingDeclaration(qn))
       case Some(data) =>
-        given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+        given Γ: Context = data.tParamTys.map(_._1)
         for
           _ <- checkInherentUsage(Σ.getData(qn), con)
           _ <- checkInherentEqDecidable(Σ.getData(qn), con)
@@ -140,9 +140,7 @@ def checkDataConstructor
           _ <- {
             given Γ2: Context = Γ ++ con.paramTys
 
-            // Note, weakening data.tParamTys is not necessary because data.tParamTys contains no
-            // free vars
-            checkTypes(con.tArgs, data.tParamTys.map(_._1).toList)
+            checkTypes(con.tArgs, data.tIndexTys.map(_.weaken(con.paramTys.size, 0)))
           }
           _ <- {
             // binding of positiveVars must be either covariant or invariant
@@ -417,7 +415,7 @@ def inferType
         Σ.getDataOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(data) =>
-            for usage <- checkTypes(args, data.tParamTys.map(_._1).toList)
+            for usage <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
             yield (Type(tm), usage * UUnres)
       case _: Con => throw IllegalArgumentException("cannot infer type")
       case EqualityType(ty, left, right) =>
@@ -1033,7 +1031,7 @@ def checkSubsumption
                 allRight(
                   args1
                     .zip(args2)
-                    .zip(data.tParamTys)
+                    .zip(data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
                     .map { case ((arg1, arg2), (binding, variance)) =>
                       variance match
                         case Variance.INVARIANT =>
@@ -1334,7 +1332,7 @@ private def checkInherentUsage
   data.inherentUsage match
     case UsageLiteral(U1) => Right(())
     case _ =>
-      given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+      given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
 
       def checkTelescope
         (telescope: Telescope, dataInherentUsage: VTerm)
@@ -1390,7 +1388,7 @@ private def checkInherentEqDecidable
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Unit] =
-  given Γ: Context = data.tParamTys.map(_._1).toIndexedSeq
+  given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
 
   // 1. check that eqD of component type ⪯ eqD of data
   def checkComponentTypes

@@ -169,7 +169,7 @@ private def elaborateHead
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (TContext, ULevel, VTerm, VTerm)] =
+      : Either[IrError, (Telescope, ULevel, VTerm, VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
@@ -177,12 +177,12 @@ private def elaborateHead
           // constructors are always total. Declaring non-total signature is not necessary (nor
           // desirable) but acceptable.
           case F(Type(Top(ul, usage, eqDecidability)), _, _) =>
-            Right((IndexedSeq(), ul, usage, eqDecidability))
+            Right((Nil, ul, usage, eqDecidability))
           case F(t, _, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
             elaborateTy(bodyTy)(using Γ :+ binding).map {
               case (telescope, ul, usage, eqDecidability) =>
-                ((binding, INVARIANT) +: telescope, ul, usage, eqDecidability)
+                (binding +: telescope, ul, usage, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -193,8 +193,8 @@ private def elaborateHead
         Γ0 ++ tParamTys.map(_._1),
       )
       data = new Data(preData.qn)(
-        tParamTys.size,
-        tParamTys ++ tIndices,
+        tParamTys,
+        tIndices,
         ul,
         usage,
         eqDecidability,
@@ -216,15 +216,19 @@ private def elaborateBody
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (Telescope, /* args */ List[VTerm])] =
+      : Either[IrError, (Telescope, /* constructor tArgs */ List[VTerm])] =
       for
         ty <- reduceCType(ty)
         r <- ty match
           // Here and below we do not care the declared effect types because data type constructors
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
           // acceptable.
-          case F(DataType(qn, args), _, _) if qn == data.qn && args.size == data.tParamTys.size =>
-            Right((Nil, args))
+          // TODO: report better error if `qn`, arg count, or param args (not refs to those bound at
+          //  data declaration) are unexpected.
+          case F(DataType(qn, args), _, _)
+            if qn == data.qn && args.size == data.tParamTys.size + data.tIndexTys.size =>
+            // Drop parameter args because Constructor.tArgs only track index args
+            Right((Nil, args.drop(data.tParamTys.size)))
           case F(t, _, _) => Left(ExpectDataType(t, Some(data.qn)))
           case FunctionType(binding, bodyTy, _) =>
             elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
@@ -234,18 +238,16 @@ private def elaborateBody
       yield r
 
     // number of index arguments
-    given Context = data.tParamTys.map(_._1).toIndexedSeq
+    given Context = data.tParamTys.map(_._1)
 
-    val indexCount = data.tParamTys.size - preData.tParamTys.size
     preData.constructors.foldLeft[Either[IrError, Signature]](Right(Σ)) {
       case (Right(_Σ), constructor) =>
         given Signature = _Σ
         ctx.trace(s"elaborating constructor ${constructor.name}") {
-          // weaken to accommodate data type indices
-          val ty = constructor.ty.weaken(indexCount, 0)
+          val ty = constructor.ty
           for
-            case (paramTys, args) <- elaborateTy(ty)
-            con = new Constructor(constructor.name, paramTys, args)
+            case (paramTys, tArgs) <- elaborateTy(ty)
+            con = new Constructor(constructor.name, paramTys, tArgs)
             _ <- checkDataConstructor(preData.qn, con)
           yield _Σ.addConstructor(preData.qn, con)
         }
@@ -401,8 +403,15 @@ private def elaborateBody
           val data = Σ.getData(qn)
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
-          assert(args.size == pArgs.size && pArgs.size == data.tParamTys.size)
-          simplifyAll(args.lazyZip(pArgs).lazyZip(data.tParamTys.map(_._1.ty)).toList)
+          assert(
+            args.size == pArgs.size && pArgs.size == data.tParamTys.size + data.tIndexTys.size,
+          )
+          simplifyAll(
+            args
+              .lazyZip(pArgs)
+              .lazyZip(data.tParamTys.map(_._1.ty) ++ data.tIndexTys.map(_.ty))
+              .toList,
+          )
         case (DataType(_, _), PDataType(_, _))                 => Right(None)
         case (DataType(qn, args), PForcedDataType(pQn, pArgs)) =>
           // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
@@ -411,8 +420,15 @@ private def elaborateBody
           val data = Σ.getData(qn)
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
-          assert(args.size == pArgs.size && pArgs.size == data.tParamTys.size)
-          simplifyAll(args.lazyZip(pArgs).lazyZip(data.tParamTys.map(_._1.ty)).toList)
+          assert(
+            args.size == pArgs.size && pArgs.size == data.tParamTys.size + data.tIndexTys.size,
+          )
+          simplifyAll(
+            args
+              .lazyZip(pArgs)
+              .lazyZip(data.tParamTys.map(_._1.ty) ++ data.tIndexTys.map(_.ty))
+              .toList,
+          )
         case (Con(name, args), PConstructor(pName, pArgs)) if name == pName =>
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
@@ -675,9 +691,9 @@ private def elaborateBody
                         )
                         for
                           unificationResult <- unifyAll(
-                            tArgs.map(_.weaken(Δ.size, 0)),
+                            tArgs.drop(data.tParamTys.size).map(_.weaken(Δ.size, 0)),
                             cTArgs,
-                            data.tParamTys.map(_._1).toList,
+                            data.tIndexTys,
                           )(using _Γ1 ++ Δ)
                           r <- unificationResult match
                             case UnificationResult.UYes(_Γ1, ρ, τ) =>

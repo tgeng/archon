@@ -55,12 +55,15 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
     val data = Σ.getData(dataType.qn)
 
     combine(
-      data.tParamTys.zip(dataType.args).map { case ((_, variance), arg) =>
-        variance match
-          case Variance.COVARIANT     => visitVTerm(arg)
-          case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
-          case Variance.INVARIANT     => mix(visitVTerm(arg))
-      }.toSeq: _*
+      (data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
+        .zip(dataType.args)
+        .map { case ((_, variance), arg) =>
+          variance match
+            case Variance.COVARIANT     => visitVTerm(arg)
+            case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
+            case Variance.INVARIANT     => mix(visitVTerm(arg))
+        }
+        .toSeq: _*,
     )
 
   override def visitCellType
@@ -69,7 +72,7 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
     (using Σ: Signature)
     : (Set[Nat], Set[Nat]) = combine(
     visitVTerm(cellType.heap),
-    mix(visitVTerm(cellType.ty))
+    mix(visitVTerm(cellType.ty)),
   )
 
   override def visitRecordType
@@ -80,12 +83,15 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
     val record = Σ.getRecord(recordType.qn)
     combine(
       visitVTerm(recordType.effects) +:
-        record.tParamTys.zip(recordType.args).map { case ((_, variance), arg) =>
-          variance match
-            case Variance.COVARIANT     => visitVTerm(arg)
-            case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
-            case Variance.INVARIANT     => mix(visitVTerm(arg))
-        }.toSeq: _*
+        record.tParamTys
+          .zip(recordType.args)
+          .map { case ((_, variance), arg) =>
+            variance match
+              case Variance.COVARIANT     => visitVTerm(arg)
+              case Variance.CONTRAVARIANT => swap(visitVTerm(arg))
+              case Variance.INVARIANT     => mix(visitVTerm(arg))
+          }
+          .toSeq: _*,
     )
 
   override def visitFunctionType
@@ -96,7 +102,7 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
     combine(
       visitVTerm(functionType.effects),
       swap(visitVTerm(functionType.binding.ty)),
-      visitCTerm(functionType.bodyTy)(using bar + 1)
+      visitCTerm(functionType.bodyTy)(using bar + 1),
     )
 
 def getFreeVars
@@ -105,7 +111,7 @@ def getFreeVars
   (using Σ: Signature)
   : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   FreeVarsVisitorObject.visitVTerm(
-    tm
+    tm,
   )
 
 def getFreeVars

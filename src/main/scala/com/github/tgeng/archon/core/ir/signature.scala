@@ -20,25 +20,22 @@ enum Declaration:
   case Data
     (val qn: QualifiedName)
     (
-      /** Number of parameters among `tParamTys`, the rest are index arguments. This parameter
-        * also affects how many arguments should be present in the derived constructor function:
-        * only parameter arguments are needed while index arguments are set by constructors.
-        */
-      val numParams: Nat,
       val tParamTys: TContext,
       /* binding + tParamTys */
+      val tIndexTys: Telescope,
+      /* binding + tParamTys + tIndexTys */
       val ul: ULevel,
-      /* binding + tParamTys */
+      /* binding + tParamTys + tIndexTys */
       val inherentUsage: VTerm,
-      /* binding + tParamTys */
-      val inherentEqDecidability: VTerm
+      /* binding + tParamTys + tIndexTys */
+      val inherentEqDecidability: VTerm,
     )
   case Record
     (val qn: QualifiedName)
     (
       val tParamTys: TContext = IndexedSeq(), /* binding + tParamTys */
       val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
-      val selfName: Ref[Name] = n"self"
+      val selfName: Ref[Name] = n"self",
     )
   case Definition(val qn: QualifiedName)(val ty: CTerm)
 
@@ -54,7 +51,7 @@ enum Declaration:
     (val qn: QualifiedName)
     (
       val tParamTys: Context = IndexedSeq(),
-      /* + tParamTys.size */ val continuationUsage: VTerm = VTerm.UsageLiteral(Usage.U1)
+      /* + tParamTys.size */ val continuationUsage: VTerm = VTerm.UsageLiteral(Usage.U1),
     )
 
   def qn: QualifiedName
@@ -65,15 +62,12 @@ case class Constructor
   (
     name: Name,
     paramTys: Telescope = Nil, /* + tParamTys */
-    /** Arguments passed to the data type constructor. For non-indexed type this should just be a
-      * sequence of variables referencing the `tParamTys`. For indexed families, the argument here
-      * can be any expressions. For example, for `Vec : (A: Type) -> (n: Nat) -> Type`, this would
-      * be [A, 0] for `Nil` and `[A, n + 1]` for `Cons`.
-      *
-      * Semantically, this is simply adding some equality constraints that requires `tParamTys` to
-      * be convertible to these args.
+    /** Arguments passed to the data type constructor. The length should be identical with
+      * `tIndexTys`. Hence, for non-indexed type this should just be `Nil`. For indexed families,
+      * the argument here can be any expressions. For example, for `Vec (A: Type) : (n: Nat) ->
+      * Type`, this would be [0] for constructor `Nil` and `[n + 1]` for constructor `Cons`.
       */
-    tArgs: Arguments = Nil /* + tParamTys + paramTys */
+    tArgs: Arguments = Nil, /* + tParamTys + paramTys */
   )
 
 case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
@@ -83,7 +77,7 @@ case class Clause
     bindings: Context,
     lhs: List[CoPattern], /* + bindings */
     rhs: CTerm, /* + bindings */
-    ty: CTerm /* + bindings */
+    ty: CTerm, /* + bindings */
   )
 
 case class Operator
@@ -91,7 +85,7 @@ case class Operator
     name: Name,
     paramTys: Telescope, /* + tParamTys */
     resultTy: VTerm /* + tParamTys + paramTys */,
-    resultUsage: VTerm /* + tParamTys + paramTys */
+    resultUsage: VTerm, /* + tParamTys + paramTys */
   )
 
 trait Signature:
@@ -127,7 +121,7 @@ trait Signature:
 
   def getConstructor(qn: QualifiedName, conName: Name): Constructor =
     getConstructorOption(qn, conName).getOrElse(
-      throw IllegalArgumentException(s"missing constructor $conName")
+      throw IllegalArgumentException(s"missing constructor $conName"),
     )
 
   def getRecordOption(qn: QualifiedName): Option[Record]
@@ -148,7 +142,7 @@ trait Signature:
 
   def getField(qn: QualifiedName, fieldName: Name): Field =
     getFieldOption(qn, fieldName).getOrElse(
-      throw IllegalArgumentException(s"missing field $fieldName")
+      throw IllegalArgumentException(s"missing field $fieldName"),
     )
 
   def getDefinitionOption(qn: QualifiedName): Option[Definition]
@@ -158,7 +152,7 @@ trait Signature:
   def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
   def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(
-    qn
+    qn,
   ).get
 
   def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
@@ -184,5 +178,5 @@ trait Signature:
 
   def getOperator(qn: QualifiedName, opName: Name): Operator =
     getOperatorOption(qn, opName).getOrElse(
-      throw IllegalArgumentException(s"missing operator $opName")
+      throw IllegalArgumentException(s"missing operator $opName"),
     )
