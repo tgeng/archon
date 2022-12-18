@@ -115,8 +115,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Top
     (
       ul: ULevel,
-      usage: VTerm = UsageLiteral(Usage.U1),
-      eqDecidability: VTerm = EqDecidabilityLiteral(EqUnres)
+      usage: VTerm = UsageLiteral(Usage.UUnres),
+      eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable)
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 

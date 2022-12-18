@@ -894,6 +894,7 @@ private def elaborateContext
     ctx.trace("elaborating context") {
       for
         ty <- reduceVType(binding.ty)
+        // TODO: check usage is total computation and reduce it
         newBinding = Binding(ty, ???)(binding.name)
         context <- elaborateContext(context)(using Γ :+ newBinding)
       yield newBinding +: context

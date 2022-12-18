@@ -14,7 +14,7 @@ enum PreDeclaration:
     (val qn: QualifiedName)
     (
       val tParamTys: PreTContext,
-      // This could be a eqDecidable function type that ends with `F Type` for indexed families. In this
+      // This could be a function type that ends with `F Type` for indexed families. In this
       // case, during elaboration, all constructors are weakened by the number of args in the
       // declared function type. That is, indexed families are converted to parameterized inductive
       // types with equality types representing the constraints.

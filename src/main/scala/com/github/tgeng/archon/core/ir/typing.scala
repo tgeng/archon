@@ -1364,7 +1364,8 @@ private def deriveTypeInherentUsage
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] = ty match
-  case _: Type | _: UsageType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+  case _: LevelType => Right(UsageLiteral(U0))
+  case _: Type | _: UsageType | _: EffectsType | _: HeapType | _: CellType =>
     Right(UsageLiteral(UUnres))
   case _: EqualityType => Right(UsageLiteral(U0))
   case _: U            => Right(UsageLiteral(U1))

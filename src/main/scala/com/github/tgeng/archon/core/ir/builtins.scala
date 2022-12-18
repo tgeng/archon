@@ -100,11 +100,7 @@ object Builtins:
       case Right(_Σ) => _Σ
       case Left(e)   => throw IllegalStateException(e.toString())
 
-  // TODO: move all of these builtin declarations here.
-  private val builtins: Seq[PreDeclaration] = Seq(
-  )
-
-  import Declaration.*
+  import PreDeclaration.*
   import CTerm.*
   import VTerm.*
   import ULevel.*
@@ -113,20 +109,35 @@ object Builtins:
   import Usage.*
   import EqDecidability.*
   import CaseTree.*
+  import ULevel.*
+
+  private def binding(name: Name, t: VTerm, usage: VTerm = UsageLiteral(U1)): Binding[CTerm] =
+    Binding(Return(t), Return(usage))(name)
+
+  private val L0 = ULevel.USimpleLevel(LevelLiteral(0))
+
+  // TODO: move all of these builtin declarations here. Also create a new EqualityType from Data.
+  private val builtins: Seq[PreDeclaration] = Seq(
+    PreData(UnitTypeQn)(
+      tParamTys = Nil,
+      ty = F(Type(Top(L0))),
+      constructors = List(PreConstructor(n"MkUnit", F(DataType(UnitTypeQn, Nil)))),
+    ),
+    PreData(EqualityQn)(
+      // Invariance of level is OK because user should almost never provide this. Instead, this is
+      // inferred by compiler for each compilation unit to be some large enough level.
+      tParamTys = List(
+        (binding(n"level", LevelType()), Variance.INVARIANT),
+        (binding(n"A", Type(Top(USimpleLevel(Var(0))))), Variance.COVARIANT),
+        (binding(n"x", Var(0)), Variance.INVARIANT),
+      ),
+      ty = FunctionType(Binding(Var(1), U1)(n"y"), F(Type(Top(USimpleLevel(Var(2)))))),
+      // TODO: add refl
+      constructors = Nil,
+    ),
+  )
 
   val builtinData: Seq[(Data, IndexedSeq[Constructor])] = Seq(
-    b(
-      Builtins.UnitTypeQn,
-      (
-        /* tParamTys*/ Nil,
-        /* ul */ USimpleLevel(LevelLiteral(0)),
-        /* inherentUsage */ UsageLiteral(UUnres),
-        /* inherentEqDecidability */ EqDecidabilityLiteral(EqDecidable),
-        /* constructors */ IndexedSeq(
-          Constructor(n"MkUnit", Nil, Nil),
-        ),
-      ),
-    ),
     b(
       Builtins.EqualityQn,
       (

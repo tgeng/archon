@@ -1,7 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
-/** A type is reifiable if the equality of its inhabitants can be efficiently determined at
-  * runtime. That is, a type is not reifiable if its inhabitants
+/** A type is eqDecidable if the equality of its inhabitants can be efficiently determined at
+  * runtime. That is, a type is not eqDecidable if its inhabitants
   *   - contain thunks because in general there is no way to decide equality of computations
   *   - contain erased parts whose equality can not be derived from non-erased parts and hence
   *     there is no way to decide equality at runtime
