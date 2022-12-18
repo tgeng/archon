@@ -178,28 +178,6 @@ class TestSignature
       assert(!qnByName.contains(name), s"$qnByName already contains $name")
       qnByName(name) = qn
 
-  Builtins.builtinData.values.foreach { case (data, constructors) =>
-    updateQnByName(data.qn)
-    constructors.foreach { constructor =>
-      updateQnByName(data.qn / constructor.name)
-    }
-  }
-
-  Builtins.builtinRecords.values.foreach { case (record, fields) =>
-    updateQnByName(record.qn)
-    fields.foreach { field =>
-      updateQnByName(record.qn / field.name)
-    }
-  }
-
-  Builtins.builtinDefinitions.keys.foreach(updateQnByName)
-  Builtins.builtinEffects.values.foreach { case (effect, operators) =>
-    updateQnByName(effect.qn)
-    operators.foreach { operator =>
-      updateQnByName(effect.qn / operator.name)
-    }
-  }
-
   allData.keys.foreach(updateQnByName)
   allConstructors.foreach((qn, constructors) =>
     constructors.foreach(c => updateQnByName(qn / c.name))

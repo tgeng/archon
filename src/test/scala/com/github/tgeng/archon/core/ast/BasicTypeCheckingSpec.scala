@@ -56,38 +56,6 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     t"Effects -> Effects" hasType t"CType L0 <>"
     t"Effects -> Effects -> Effects" hasType t"CType L0 <>"
     t"Level -> Effects" hasType t"CTYPE0"
-    Builtins.builtinData.foreach { (qn, v) =>
-      v match
-        case (data, constructors) =>
-          assertRight(checkData(data))
-          constructors.foreach { con =>
-            assertRight(checkDataConstructor(qn, con))
-          }
-    }
-    Builtins.builtinDefinitions.foreach { (qn, v) =>
-      v match
-        case (definition, clauses) =>
-          assertRight(checkDef(definition))
-          clauses.foreach { clause =>
-            assertRight(checkClause(qn, clause))
-          }
-    }
-    Builtins.builtinRecords.foreach { (qn, v) =>
-      v match
-        case (record, fields) =>
-          assertRight(checkRecord(record))
-          fields.foreach { field =>
-            assertRight(checkRecordField(qn, field))
-          }
-    }
-    Builtins.builtinEffects.foreach { (qn, v) =>
-      v match
-        case (effect, operators) =>
-          assertRight(checkEffect(effect))
-          operators.foreach { operator =>
-            assertRight(checkOperator(qn, operator))
-          }
-    }
   }
 
   +d"""
