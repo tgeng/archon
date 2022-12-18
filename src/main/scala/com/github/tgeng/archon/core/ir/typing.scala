@@ -1653,7 +1653,7 @@ private def checkUsageSubsumption
   case (Right(v @ Var(_)), Right(UsageLiteral(u2))) if mode == SUBSUMPTION =>
     Γ.resolve(v).ty match
       case UsageType(Some(u1Bound)) => checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-      case _ => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
+      case _                        => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
   case _ => Left(NotEqDecidabilitySubsumption(usage1, usage2, mode))
 
 private def checkEffSubsumption
@@ -1781,6 +1781,25 @@ def checkIsCType
         case _: CType => Left(EffectfulCTermAsType(cTy))
         case _        => Left(NotCTypeError(cTy))
     yield r
+  }
+
+def reduceUsage
+  (usage: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, VTerm] =
+  ctx.trace("reduce usage", Block(yellow(usage.sourceInfo), pprint(usage))) {
+    for
+      _ <- checkType(usage, F(UsageType()))
+      reduced <- reduce(usage)
+      usage <- reduced match
+        case Return(u, _) => Right(u)
+        case _ =>
+          throw IllegalStateException(
+            "type checking has bugs: reduced value of type `F(UsageType())` must be `Return(u)`.",
+          )
+    yield usage
   }
 
 def reduceVType

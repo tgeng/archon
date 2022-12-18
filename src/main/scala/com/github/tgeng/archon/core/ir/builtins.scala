@@ -132,8 +132,9 @@ object Builtins:
         (binding(n"x", Var(0)), Variance.INVARIANT),
       ),
       ty = FunctionType(Binding(Var(1), U1)(n"y"), F(Type(Top(USimpleLevel(Var(2)))))),
-      // TODO: add refl
-      constructors = Nil,
+      constructors = List(
+        PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
+      ),
     ),
   )
 

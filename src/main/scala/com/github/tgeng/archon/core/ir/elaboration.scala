@@ -228,6 +228,7 @@ private def elaborateBody
           case F(DataType(qn, args), _, _)
             if qn == data.qn && args.size == data.tParamTys.size + data.tIndexTys.size =>
             // Drop parameter args because Constructor.tArgs only track index args
+            // TODO: check and report invalid args
             Right((Nil, args.drop(data.tParamTys.size)))
           case F(t, _, _) => Left(ExpectDataType(t, Some(data.qn)))
           case FunctionType(binding, bodyTy, _) =>
@@ -894,8 +895,8 @@ private def elaborateContext
     ctx.trace("elaborating context") {
       for
         ty <- reduceVType(binding.ty)
-        // TODO: check usage is total computation and reduce it
-        newBinding = Binding(ty, ???)(binding.name)
+        usage <- reduceUsage(binding.usage)
+        newBinding = Binding(ty, usage)(binding.name)
         context <- elaborateContext(context)(using Γ :+ newBinding)
       yield newBinding +: context
     }
