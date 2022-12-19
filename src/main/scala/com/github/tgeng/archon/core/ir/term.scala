@@ -116,7 +116,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (
       ul: ULevel,
       usage: VTerm = UsageLiteral(Usage.UUnres),
-      eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable)
+      eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable),
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
@@ -137,7 +137,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case DataType
     (qn: QualifiedName, args: Arguments = Nil)
     (using
-      sourceInfo: SourceInfo
+      sourceInfo: SourceInfo,
     ) extends VTerm(sourceInfo), QualifiedNameOwner(qn)
   case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
@@ -147,7 +147,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (
       ty: VTerm,
       left: VTerm,
-      right: VTerm
+      right: VTerm,
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo) // , QualifiedNameOwner(EqualityQn)
   case Refl()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
@@ -161,19 +161,19 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case UsageCompound
     (operator: UsageOperator, operands: Multiset[VTerm])
     (using
-      sourceInfo: SourceInfo
+      sourceInfo: SourceInfo,
     ) extends VTerm(sourceInfo)
 
   case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
     extends VTerm(
-      sourceInfo
+      sourceInfo,
     )
 
   case EffectsType(continuationUsage: VTerm = UsageLiteral(UUnres))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
-      EffectsQn
+      EffectsQn,
     )
   case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
@@ -181,7 +181,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case LevelType()(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
-      LevelQn
+      LevelQn,
     )
   case Level
     (literal: Nat, maxOperands: Map[VTerm, /* level offset */ Nat])
@@ -207,7 +207,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   this match
     case UsageCompound(UsageOperator.UJoin, operands) if operands.isEmpty =>
       throw IllegalArgumentException(
-        "empty operands not allowed for join because join does not have an identity"
+        "empty operands not allowed for join because join does not have an identity",
       )
     case _ =>
 
@@ -246,6 +246,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     transformer.transformVTerm(this)
 
 object VTerm:
+  def Top(t: VTerm)(using SourceInfo) = new Top(ULevel.USimpleLevel(t))
   def UsageSum(operands: VTerm*)(using SourceInfo) =
     UsageCompound(UsageOperator.USum, operands.toMultiset)
   def UsageProd(operands: VTerm*)(using SourceInfo) =
@@ -256,80 +257,17 @@ object VTerm:
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(n, Map())
 
-  def LevelSuc(t: VTerm): Level = t match
-    case Level(literal, maxOperands) =>
-      Level(
-        literal + 1,
-        maxOperands.map { (r, o) => (r, o + 1) }
-      )(using SiLevelSuc(t.sourceInfo))
-    case r: Var => Level(1, Map((r, 1)))(using SiLevelSuc(t.sourceInfo))
-    case _      => throw IllegalArgumentException("type error")
+  def LevelSuc(t: VTerm): Level = Level(0, Map(t -> 1))
 
-  def LevelMax(t1: VTerm, t2: VTerm): Level = t1 match
-    case Level(literal1, maxOperands1) =>
-      t2 match
-        case Level(literal2, maxOperands2) =>
-          Level(
-            math.max(literal1, literal2),
-            Map.from(
-              (maxOperands1.toSeq ++ maxOperands2.toSeq)
-                .groupBy(_._1)
-                .map { (k, vs) => (k, vs.map(_._2).max) }
-            )
-          )(using SiLevelMax(t1.sourceInfo, t2.sourceInfo))
-        case r: Var =>
-          Level(literal1, maxOperands1.updated(r, 0))(using
-            SiLevelMax(t1.sourceInfo, t2.sourceInfo)
-          )
-        case _ => throw IllegalArgumentException("type error")
-    case r1: Var =>
-      t2 match
-        case Level(literal2, maxOperands2) =>
-          Level(literal2, maxOperands2.updated(r1, 0))(using
-            SiLevelMax(t1.sourceInfo, t2.sourceInfo)
-          )
-        case r2: Var =>
-          Level(0, Map((r1, 0), (r2, 0)))(
-            using
-            SiLevelMax(
-              t1.sourceInfo,
-              t2.sourceInfo
-            )
-          )
-        case _ => throw IllegalArgumentException("type error")
-    case _ => throw IllegalArgumentException("type error")
+  def LevelMax(t1: VTerm, t2: VTerm): Level = Level(0, Map(t1 -> 0, t2 -> 0))
 
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
-    Effects(
-      effects,
-      Set.empty
-    )
+    Effects(effects, Set.empty)
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
-    given SourceInfo = SiEffectUnion(effects1.sourceInfo, effects2.sourceInfo)
-
-    effects1 match
-      case Effects(literal1, unionOperands1) =>
-        effects2 match
-          case Effects(literal2, unionOperands2) =>
-            Effects(
-              literal1 ++ literal2,
-              unionOperands1 ++ unionOperands2
-            )
-          case r: Var => Effects(literal1, unionOperands1 + r)
-          case _      => throw IllegalArgumentException("type error")
-      case r1: Var =>
-        effects2 match
-          case Effects(literal2, unionOperands2) =>
-            Effects(
-              literal2,
-              unionOperands2 + r1
-            )
-          case r2: Var => Effects(Set(), Set(r1, r2))
-          case _       => throw IllegalArgumentException("type error")
-      case _ => throw IllegalArgumentException("type error")
+    Effects(Set.empty, Set(effects1, effects2))
 
   def vars(firstIndex: Nat, lastIndex: Nat = 0): List[Var] = firstIndex
     .to(lastIndex, -1)
@@ -352,7 +290,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case CType
     (
       upperBound: CTerm,
-      effects: VTerm = VTerm.Total(using SiEmpty)
+      effects: VTerm = VTerm.Total(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
@@ -369,7 +307,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (
       vTy: VTerm,
       effects: VTerm = VTerm.Total(using SiEmpty),
-      usage: VTerm = VTerm.UsageLiteral(Usage.U1)
+      usage: VTerm = VTerm.UsageLiteral(Usage.U1),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
   case Return(v: VTerm, usage: VTerm = VTerm.UsageLiteral(Usage.U1))(using sourceInfo: SourceInfo)
@@ -406,7 +344,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       /** effects that needed for getting the function of this type. The effects caused by
         * function application is tracked by the `bodyTy`.
         */
-      effects: VTerm = VTerm.Total(using SiEmpty)
+      effects: VTerm = VTerm.Total(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
@@ -416,7 +354,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (
       qn: QualifiedName,
       args: Arguments = Nil,
-      effects: VTerm = VTerm.Total(using SiEmpty)
+      effects: VTerm = VTerm.Total(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType, QualifiedNameOwner(qn)
 
@@ -461,17 +399,12 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         *   - a continuation parameter of type `declared operator output type -> outputType` and
         *     outputs `outputType`
         */
-      handlers: Map[
-        Name, /* binding offset = paramTys + 1 (for resume) */ CTerm
-      ],
-      input: CTerm
+      handlers: Map[Name, /* binding offset = paramTys + 1 (for resume) */ CTerm],
+      input: CTerm,
     )
     (
       val transformBoundName: Ref[Name],
-      val handlersBoundNames: Map[
-        Name,
-        (Seq[Ref[Name]], /* resume name */ Ref[Name])
-      ]
+      val handlersBoundNames: Map[Name, (Seq[Ref[Name]], /* resume name */ Ref[Name])],
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
@@ -493,7 +426,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * is used to ensure this never happens. For cases where such flexibility is needed, one
         * should use `GlobalHeapKey` instead.
         */
-      /* binding offset + 1 */ input: CTerm
+      /* binding offset + 1 */ input: CTerm,
     )
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -524,7 +457,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           outputType,
           transform,
           handlers,
-          input
+          input,
         ) =>
         Handler(
           eff,
@@ -533,10 +466,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           outputType,
           transform,
           handlers,
-          input
+          input,
         )(
           h.transformBoundName,
-          h.handlersBoundNames
+          h.handlersBoundNames,
         )
       case AllocOp(heap, ty)  => AllocOp(heap, ty)
       case SetOp(cell, value) => SetOp(cell, value)
@@ -546,7 +479,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           outputEffects,
           key,
           heapContent,
-          input
+          input,
         )(h.boundName)
 
   // TODO[P3]: support array operations on heap
@@ -558,6 +491,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): CTerm =
     transformer.transformCTerm(this)
+
+object CTerm:
+  def CTop(t: VTerm, effects: VTerm = VTerm.Total(using SiEmpty))(using sourceInfo: SourceInfo) =
+    new CTop(ULevel.USimpleLevel(t), effects)
 
 /* References:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,

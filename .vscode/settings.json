@@ -18,5 +18,20 @@
     "POPL",
     "Tabareau",
     "Unres"
-  ]
+  ],
+  "spellright.language": [
+    "en"
+  ],
+  "spellright.documentTypes": [
+    "markdown",
+    "latex",
+    "plaintext",
+    "scala"
+  ],
+  "spellright.parserByClass": {
+    "scala": {
+      "parser": "code"
+    }
+  },
+  "cSpell.enabled": false
 }
