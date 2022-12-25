@@ -51,7 +51,7 @@ enum Declaration:
     (val qn: QualifiedName)
     (
       val tParamTys: Context = IndexedSeq(),
-      /* + tParamTys.size */ val continuationUsage: VTerm = VTerm.UsageLiteral(Usage.U1),
+      val continuationUsage: Usage = Usage.U1,
     )
 
   def qn: QualifiedName

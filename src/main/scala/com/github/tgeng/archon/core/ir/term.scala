@@ -379,6 +379,30 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Handler
     (
       eff: Eff,
+      // Parameter is always bound with U1 usage. And hence needs to be deposed when handler 
+      // finishes.
+      parameterType: VTerm,
+      parameter: VTerm,     
+      // TODO: think about how to ensure deposer is always invoked in case continuation is not
+      // invoked.
+      // Notes: handlers are captured inside continuations. So the clean up logic should be executed
+      // when handlers are popped off the stack during continuation evaluation. Or, if the 
+      // continuation is discarded, they will need to be deposed. So a special extracting-handlers-
+      // out-of-continuation operation is needed and a sequence of deposer invocation must be added
+      // if the the continuation won't be invoked. (compiler should be able to automatically insert
+      // this through resource tracking).
+      // About reentrance, nothing special is done. If the parameter type is inherently linear, then
+      // re-entrant effects would simply cause a type check error. If type is not linear, then
+      // parameterDeposer is simply called many times, once per continuation going out of scope.
+      // A clean way to do this seems to be
+      // 1. make all resume passed to handler impl linear
+      // 2. depending on continuationUsage of the effect do one of the following
+      //    1. U0 -> do not pass in continuation
+      //    2. U1 -> pass in linear continuation
+      //    3. UAff -> pass in linear continuation + continuationDeposer
+      //    3. URel -> pass in linear continuation + continuationCloner
+      //    3. UUnres -> pass in linear continuation + continuationDeposer + continuationCloner
+      parameterDeposer: CTerm, // binding offset + 1 (for parameter)
       outputEffects: VTerm,
       outputUsage: VTerm,
 
@@ -391,7 +415,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * `outputType`. for cases where `outputType` equals `F(someEffects, inputBinding.ty)`, a
         * sensible default value is simply `return (var 0)`
         */
-      /* binding offset + 1 */ transform: CTerm,
+      
+      transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
 
       /** All handler implementations declared by the effect. Each handler is essentially a
         * function body that takes the following arguments
@@ -399,7 +424,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         *   - a continuation parameter of type `declared operator output type -> outputType` and
         *     outputs `outputType`
         */
-      handlers: Map[Name, /* binding offset = paramTys + 1 (for resume) */ CTerm],
+      handlers: Map[Name, /* binding offset = 1 (for parameter) + paramTys + 1 (for resume) */ CTerm],
       input: CTerm,
     )
     (
