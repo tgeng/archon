@@ -13,15 +13,12 @@ import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
-  def map[S](f: T => S): Binding[S] = Binding(f(ty), f(usage))(name)
+case class Binding[+T](ty: T)(val name: Ref[Name]):
+  def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
 
 object Binding:
-  def apply[T](ty: T, usage: T)(name: Ref[Name]): Binding[T] =
-    new Binding(ty, usage)(name)
-
-  def apply(ty: VTerm, usage: Usage)(name: Ref[Name]): Binding[VTerm] =
-    new Binding(ty, VTerm.UsageLiteral(usage))(name)
+  def apply[T](ty: T)(name: Ref[Name]): Binding[T] =
+    new Binding(ty)(name)
 
 /** Head is on the left, e.g. Z :: S Z :: []
   */
@@ -130,7 +127,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Collapse(cTm: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   // When checking usages, vars in cTy should be multiplied by UUnres so that type U is Unrestricted
-  case U(cTy: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case U(cTy: CTerm, usage: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -170,13 +167,23 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       sourceInfo,
     )
 
-  case EffectsType(continuationUsage: VTerm = UsageLiteral(UUnres))(using sourceInfo: SourceInfo)
+  /** @param continuationUsage
+    *   see `Effect` for the semantic of this.
+    */
+  case EffectsType(continuationUsage: Option[Usage] = None)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
       EffectsQn,
     )
-  case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
+  case Effects
+    (
+      literal: Set[Eff],
+      unionOperands: Map[
+        VTerm,
+        /* filterBySimpleUsage: if true, only effects with `None` continuation usage is allowed. */ Boolean,
+      ],
+    )
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType()(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
@@ -219,7 +226,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case Top(ul, u, eqD)                 => Top(ul, u, eqD)
       case Var(index)                      => Var(index)
       case Collapse(cTm)                   => Collapse(cTm)
-      case U(cTy)                          => U(cTy)
+      case U(cTy, usage)                   => U(cTy, usage)
       case Thunk(c)                        => Thunk(c)
       case DataType(qn, args)              => DataType(qn, args)
       case Con(name, args)                 => Con(name, args)
@@ -264,10 +271,12 @@ object VTerm:
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
-    Effects(effects, Set.empty)
+    Effects(effects, Map.empty)
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
-    Effects(Set.empty, Set(effects1, effects2))
+    Effects(Set.empty, Map(effects1 -> false, effects2 -> false))
+  
+  def EffectsFilter(effects: VTerm): Effects = Effects(Set.empty, Map(effects -> true))
 
   def vars(firstIndex: Nat, lastIndex: Nat = 0): List[Var] = firstIndex
     .to(lastIndex, -1)
@@ -363,46 +372,47 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
 
+  // TODO: continuation can actually be modeled as a record
+  case ContinuationType
+    (
+      usage: Option[Usage],
+      paramType: VTerm,
+      resultType: VTerm,
+      outputType: VTerm,
+      outputEffects: VTerm, // dispose and replicate has these effects filtered with continuationUsage = None
+    )
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+
   /** Internal only. This is only created by reduction.
     *
-    * A continuation behaves like a (linear) function, it has type `U inputBinding -> outputType`,
-    * where `inputBinding` is the type of the hole at the tip of the continuation seq and
-    * `outputType` is the type of the bottom continuation stack.
-    *
-    * @param continuation
+    * @param handler
+    *   the handler that delimits this continuation
+    * @param capturedStack
     *   stack containing the delimited continuation from the tip (right below operator call) to
-    *   the corresponding handler, inclusively. Note that the first term is at the bottom of the
-    *   stack and the last term is the tip of the stack.
+    *   the computation right above corresponding handler. Note that the first term is at the
+    *   bottom of the stack and the last term is the tip of the stack.
     */
-  case Continuation(capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
+  case Continuation(handler: Handler, capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
+
+  case Resume(continuation: CTerm, parameter: VTerm, result: VTerm)(using sourceInfo: SourceInfo)
+    extends CTerm(sourceInfo)
+  // Dispose and replicate can only have "simple" effects: effects whose continuationUsage is None.
+  case Dispose(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case Replicate(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case Handler
     (
       eff: Eff,
-      // Parameter is always bound with U1 usage. And hence needs to be deposed when handler 
+      // Parameter is always bound with U1 usage. And hence needs to be disposed when handler
       // finishes.
       parameterType: VTerm,
-      parameter: VTerm,     
-      // TODO: think about how to ensure deposer is always invoked in case continuation is not
-      // invoked.
-      // Notes: handlers are captured inside continuations. So the clean up logic should be executed
-      // when handlers are popped off the stack during continuation evaluation. Or, if the 
-      // continuation is discarded, they will need to be deposed. So a special extracting-handlers-
-      // out-of-continuation operation is needed and a sequence of deposer invocation must be added
-      // if the the continuation won't be invoked. (compiler should be able to automatically insert
-      // this through resource tracking).
-      // About reentrance, nothing special is done. If the parameter type is inherently linear, then
-      // re-entrant effects would simply cause a type check error. If type is not linear, then
-      // parameterDeposer is simply called many times, once per continuation going out of scope.
-      // A clean way to do this seems to be
-      // 1. make all resume passed to handler impl linear
-      // 2. depending on continuationUsage of the effect do one of the following
-      //    1. U0 -> do not pass in continuation
-      //    2. U1 -> pass in linear continuation
-      //    3. UAff -> pass in linear continuation + continuationDeposer
-      //    3. URel -> pass in linear continuation + continuationCloner
-      //    3. UUnres -> pass in linear continuation + continuationDeposer + continuationCloner
-      parameterDeposer: CTerm, // binding offset + 1 (for parameter)
+      parameter: VTerm,
+      // Effects of this term can not be re-entrant for simplicity
+      parameterDisposer: CTerm, // binding offset + 1 (for parameter)
+      // Replicator is optional: if it's present, outputEffects can be re-entrant; otherwise, output
+      // effects can only be linear or disposable
+      // Also, effects of this term can not be re-entrant for simplicity
+      parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
       outputEffects: VTerm,
       outputUsage: VTerm,
 
@@ -415,7 +425,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * `outputType`. for cases where `outputType` equals `F(someEffects, inputBinding.ty)`, a
         * sensible default value is simply `return (var 0)`
         */
-      
+
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
 
       /** All handler implementations declared by the effect. Each handler is essentially a
@@ -424,7 +434,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         *   - a continuation parameter of type `declared operator output type -> outputType` and
         *     outputs `outputType`
         */
-      handlers: Map[Name, /* binding offset = 1 (for parameter) + paramTys + 1 (for resume) */ CTerm],
+      handlers: Map[
+        Name, /* binding offset = 1 (for parameter) + paramTys + 1 (for resume) */ CTerm,
+      ],
       input: CTerm,
     )
     (
