@@ -134,7 +134,7 @@ def checkDataConstructor
       case Some(data) =>
         given Γ: Context = data.tParamTys.map(_._1)
         for
-          _ <- checkInherentUsage(Σ.getData(qn), con)
+          // _ <- checkInherentUsage(Σ.getData(qn), con)
           _ <- checkInherentEqDecidable(Σ.getData(qn), con)
           _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
           _ <- {
@@ -1324,65 +1324,65 @@ private def simplifyLet
     case _ => Right(t)
 }
 
-private def checkInherentUsage
-  (data: Data, constructor: Constructor)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  data.inherentUsage match
-    case UsageLiteral(U1) => Right(())
-    case _ =>
-      given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
+// private def checkInherentUsage
+//   (data: Data, constructor: Constructor)
+//   (using Σ: Signature)
+//   (using ctx: TypingContext)
+//   : Either[IrError, Unit] =
+//   data.inherentUsage match
+//     case UsageLiteral(U1) => Right(())
+//     case _ =>
+//       given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
 
-      def checkTelescope
-        (telescope: Telescope, dataInherentUsage: VTerm)
-        (using Γ: Context)
-        : Either[IrError, Unit] = telescope match
-        case Nil => Right(())
-        case (b @ Binding(ty, declaredUsage)) :: telescope =>
-          for
-            inherentUsage <- deriveTypeInherentUsage(ty)
-            providedUsage = UsageProd(inherentUsage, declaredUsage)
-            consumedUsage = UsageProd(
-              inherentUsage,
-              declaredUsage,
-              dataInherentUsage,
-            )
-            _ <- checkSubsumption(
-              providedUsage,
-              consumedUsage,
-              Some(UsageType(None)(using SiEmpty)),
-            )(using SUBSUMPTION)
-            _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
-          yield ()
-      checkTelescope(constructor.paramTys, data.inherentUsage)
-end checkInherentUsage
+//       def checkTelescope
+//         (telescope: Telescope, dataInherentUsage: VTerm)
+//         (using Γ: Context)
+//         : Either[IrError, Unit] = telescope match
+//         case Nil => Right(())
+//         case (b @ Binding(ty, declaredUsage)) :: telescope =>
+//           for
+//             inherentUsage <- deriveTypeInherentUsage(ty)
+//             providedUsage = UsageProd(inherentUsage, declaredUsage)
+//             consumedUsage = UsageProd(
+//               inherentUsage,
+//               declaredUsage,
+//               dataInherentUsage,
+//             )
+//             _ <- checkSubsumption(
+//               providedUsage,
+//               consumedUsage,
+//               Some(UsageType(None)(using SiEmpty)),
+//             )(using SUBSUMPTION)
+//             _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
+//           yield ()
+//       checkTelescope(constructor.paramTys, data.inherentUsage)
+// end checkInherentUsage
 
-private def deriveTypeInherentUsage
-  (ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, VTerm] = ty match
-  case _: LevelType => Right(UsageLiteral(U0))
-  case _: Type | _: UsageType | _: EffectsType | _: HeapType | _: CellType =>
-    Right(UsageLiteral(UUnres))
-  case _: EqualityType => Right(UsageLiteral(U0))
-  case _: U            => Right(UsageLiteral(U1))
-  case Top(_, u, _)    => Right(u)
-  case _: Var | _: Collapse =>
-    for
-      case (tyTy, _) <- inferType(ty)
-      r <- tyTy match
-        case Type(upperBound) => deriveTypeInherentUsage(upperBound)
-        case _                => Left(ExpectVType(ty))
-    yield r
-  case d: DataType =>
-    Σ.getDataOption(d.qn) match
-      case Some(data) => Right(data.inherentUsage.substLowers(d.args: _*))
-      case _          => Left(MissingDeclaration(d.qn))
-  case _ => Left(ExpectVType(ty))
-end deriveTypeInherentUsage
+// private def deriveTypeInherentUsage
+//   (ty: VTerm)
+//   (using Γ: Context)
+//   (using Σ: Signature)
+//   (using ctx: TypingContext)
+//   : Either[IrError, VTerm] = ty match
+//   case _: LevelType => Right(UsageLiteral(U0))
+//   case _: Type | _: UsageType | _: EffectsType | _: HeapType | _: CellType =>
+//     Right(UsageLiteral(UUnres))
+//   case _: EqualityType => Right(UsageLiteral(U0))
+//   case _: U            => Right(UsageLiteral(U1))
+//   case Top(_, u, _)    => Right(u)
+//   case _: Var | _: Collapse =>
+//     for
+//       case (tyTy, _) <- inferType(ty)
+//       r <- tyTy match
+//         case Type(upperBound) => deriveTypeInherentUsage(upperBound)
+//         case _                => Left(ExpectVType(ty))
+//     yield r
+//   case d: DataType =>
+//     Σ.getDataOption(d.qn) match
+//       case Some(data) => Right(data.inherentUsage.substLowers(d.args: _*))
+//       case _          => Left(MissingDeclaration(d.qn))
+//   case _ => Left(ExpectVType(ty))
+// end deriveTypeInherentUsage
 
 private def checkInherentEqDecidable
   (data: Data, constructor: Constructor)
@@ -1411,7 +1411,6 @@ private def checkInherentEqDecidable
   //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
   def checkComponentUsage(constructor: Constructor) =
     val numParams = constructor.paramTys.size
-    val inherentUsage = data.inherentUsage.weaken(numParams, 0)
     // all paramTys and usages are weakened to be in the same context with constructor.tArgs
     val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
       constructor.paramTys.zipWithIndex.map { (binding, i) =>
@@ -1429,7 +1428,7 @@ private def checkInherentEqDecidable
 
     val validatedParams = allParams.filter { case (_, (_, usage)) =>
       checkSubsumption(
-        UsageProd(usage, inherentUsage),
+        usage,
         UsageLiteral(U1),
         Some(UsageType(None)),
       )(
@@ -1462,18 +1461,6 @@ private def checkInherentEqDecidable
     if allValidatedParamIndices.size == constructor.paramTys.size then Right(())
     else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
 
-  // 3. check that either data.inherentUsage subsumes U1 OR there is zero or one constructor
-  def dataIsPresentAtRuntimeOrThereIsSingleConstructor
-    () =
-    // Only check this on the second constructor to avoid unnecessary additional checks.
-    if Σ.getConstructors(data.qn).size == 1 then
-      checkSubsumption(
-        data.inherentUsage,
-        UsageLiteral(U1),
-        Some(UsageType(None)),
-      )(using SUBSUMPTION)
-    else Right(())
-
   checkSubsumption(
     data.inherentEqDecidability,
     EqDecidabilityLiteral(EqUnres),
@@ -1483,11 +1470,10 @@ private def checkInherentEqDecidable
     case Right(_) => Right(())
     // Call 1, 2, 3
     case _ =>
-      dataIsPresentAtRuntimeOrThereIsSingleConstructor() >>
-        checkComponentTypes(
-          constructor.paramTys,
-          data.inherentEqDecidability,
-        ) >>
+      checkComponentTypes(
+        constructor.paramTys,
+        data.inherentEqDecidability,
+      ) >>
         checkComponentUsage(constructor)
 
 private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor:
@@ -1506,7 +1492,7 @@ private def deriveTypeInherentEqDecidability
   case _: Type | _: EqualityType | _: UsageType | _: EqDecidabilityType | _: EffectsType |
     _: LevelType | _: HeapType | _: CellType =>
     Right(EqDecidabilityLiteral(EqDecidable))
-  case Top(_, _, eqDecidability) => Right(eqDecidability)
+  case Top(_, eqDecidability) => Right(eqDecidability)
   case _: Var | _: Collapse =>
     for
       case (tyTy, _) <- inferType(ty)
@@ -1573,14 +1559,7 @@ private def checkUsage
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  for
-    inherentUsage <- deriveTypeInherentUsage(binding.ty)
-    _ <- checkUsageSubsumption(
-      UsageProd(inherentUsage, usage),
-      UsageProd(inherentUsage, binding.usage),
-    )(using SUBSUMPTION)
-  yield ()
+  : Either[IrError, Unit] = checkUsageSubsumption(usage, binding.usage)(using SUBSUMPTION)
 
 private def strengthUsages
   (usages: Seq[VTerm])
@@ -1625,15 +1604,9 @@ private def checkUsagesSubsumption
     val binding = Γ(i)
     val providedUsage = binding.usage
     val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
-    for
-      inherentUsage <- deriveTypeInherentUsage(binding.ty)
-      actualProvidedUsage = UsageProd(providedUsage, inherentUsage)
-      actualConsumedUsage = UsageProd(consumedUsage, inherentUsage)
-      _ <-
-        if invert then
-          checkUsageSubsumption(actualConsumedUsage, actualProvidedUsage)(using SUBSUMPTION)
-        else checkUsageSubsumption(actualProvidedUsage, actualConsumedUsage)(using SUBSUMPTION)
-    yield ()
+    if invert then
+      checkUsageSubsumption(consumedUsage, providedUsage)(using SUBSUMPTION)
+    else checkUsageSubsumption(providedUsage, consumedUsage)(using SUBSUMPTION)
   })
 
 private def checkUsageSubsumption

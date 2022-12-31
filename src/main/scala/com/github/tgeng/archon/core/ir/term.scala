@@ -13,12 +13,15 @@ import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
-case class Binding[+T](ty: T)(val name: Ref[Name]):
-  def map[S](f: T => S): Binding[S] = Binding(f(ty))(name)
+case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
+  def map[S](f: T => S): Binding[S] = Binding(f(ty), f(usage))(name)
 
 object Binding:
-  def apply[T](ty: T)(name: Ref[Name]): Binding[T] =
-    new Binding(ty)(name)
+  def apply[T](ty: T, usage: T)(name: Ref[Name]): Binding[T] =
+    new Binding(ty, usage)(name)
+
+  def apply(ty: VTerm, usage: Usage = Usage.U1)(name: Ref[Name]): Binding[VTerm] =
+    new Binding(ty, VTerm.UsageLiteral(usage))(name)
 
 /** Head is on the left, e.g. Z :: S Z :: []
   */
@@ -112,7 +115,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Top
     (
       ul: ULevel,
-      usage: VTerm = UsageLiteral(Usage.UUnres),
       eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable),
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
@@ -127,7 +129,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Collapse(cTm: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   // When checking usages, vars in cTy should be multiplied by UUnres so that type U is Unrestricted
-  case U(cTy: CTerm, usage: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case U(cTy: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -223,10 +225,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
     this match
       case Type(upperBound)                => Type(upperBound)
-      case Top(ul, u, eqD)                 => Top(ul, u, eqD)
+      case Top(ul, eqD)                    => Top(ul, eqD)
       case Var(index)                      => Var(index)
       case Collapse(cTm)                   => Collapse(cTm)
-      case U(cTy, usage)                   => U(cTy, usage)
+      case U(cTy)                          => U(cTy)
       case Thunk(c)                        => Thunk(c)
       case DataType(qn, args)              => DataType(qn, args)
       case Con(name, args)                 => Con(name, args)
@@ -253,7 +255,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     transformer.transformVTerm(this)
 
 object VTerm:
-  def Top(t: VTerm)(using SourceInfo) = new Top(ULevel.USimpleLevel(t))
+  def Top
+    (t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))
+    (using SourceInfo) = new Top(ULevel.USimpleLevel(t), eqDecidability)
   def UsageSum(operands: VTerm*)(using SourceInfo) =
     UsageCompound(UsageOperator.USum, operands.toMultiset)
   def UsageProd(operands: VTerm*)(using SourceInfo) =
@@ -275,9 +279,14 @@ object VTerm:
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
     Effects(Set.empty, Map(effects1 -> false, effects2 -> false))
-  
+
   def EffectsFilter(effects: VTerm): Effects = Effects(Set.empty, Map(effects -> true))
 
+  /** @param firstIndex
+    *   inclusive
+    * @param lastIndex
+    *   inclusive
+    */
   def vars(firstIndex: Nat, lastIndex: Nat = 0): List[Var] = firstIndex
     .to(lastIndex, -1)
     .map(new Var(_)(using SiEmpty))
@@ -373,15 +382,15 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     extends CTerm(sourceInfo)
 
   // TODO: continuation can actually be modeled as a record
-  case ContinuationType
-    (
-      usage: Option[Usage],
-      paramType: VTerm,
-      resultType: VTerm,
-      outputType: VTerm,
-      outputEffects: VTerm, // dispose and replicate has these effects filtered with continuationUsage = None
-    )
-    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  // case ContinuationType
+  // (
+  // usage: Option[Usage],
+  // paramType: VTerm,
+  // resultType: VTerm,
+  // outputType: VTerm,
+  // outputEffects: VTerm, // dispose and replicate has these effects filtered with continuationUsage = None
+  // )
+  // (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
   /** Internal only. This is only created by reduction.
     *
@@ -394,18 +403,16 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     */
   case Continuation(handler: Handler, capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
 
-  case Resume(continuation: CTerm, parameter: VTerm, result: VTerm)(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo)
+  // case Resume(continuation: CTerm, parameter: VTerm, result: VTerm)(using sourceInfo: SourceInfo)
+  // extends CTerm(sourceInfo)
   // Dispose and replicate can only have "simple" effects: effects whose continuationUsage is None.
-  case Dispose(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-  case Replicate(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  // case Dispose(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  // case Replicate(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case Handler
     (
       eff: Eff,
-      // Parameter is always bound with U1 usage. And hence needs to be disposed when handler
-      // finishes.
-      parameterType: VTerm,
+      parameterBinding: Binding[VTerm],
       parameter: VTerm,
       // Effects of this term can not be re-entrant for simplicity
       parameterDisposer: CTerm, // binding offset + 1 (for parameter)
@@ -489,6 +496,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case c: Continuation               => c
       case h @ Handler(
           eff,
+          paramterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,
@@ -498,6 +509,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         ) =>
         Handler(
           eff,
+          paramterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,

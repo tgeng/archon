@@ -62,10 +62,6 @@ object Builtins:
   val SubtypeOfQn = BuiltinType / "SubtypeOf"
   val TopQn = BuiltinType / "Top"
 
-  val LinearQn = BuiltinType / "Linear"
-  val AffineQn = BuiltinType / "Affine"
-  val RelevantQn = BuiltinType / "RelevantQn"
-  val UnrestrictedQn = BuiltinType / "Unrestricted"
   val CTypeQn = BuiltinType / "CType"
   val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
   val CTopQn = BuiltinType / "CTop"
@@ -80,9 +76,23 @@ object Builtins:
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"
   val HeapQn = BuiltinType / "Heap"
+  val UsageTypeQn = BuiltinType / "Usage"
+  val U0Qn = UsageTypeQn / "Zero"
+  val U1Qn = UsageTypeQn / "One"
+  val UAffQn = UsageTypeQn / "Affine"
+  val URelQn = UsageTypeQn / "Relevant"
+  val UUnresQn = UsageTypeQn / "Unrestricted"
 
   val UnitTypeQn = BuiltinType / "Unit"
   val UnitQn = UnitTypeQn / "MkUnit"
+
+  val PairTypeQn = BuiltinType / "Pair"
+  val PairQn = PairTypeQn / "MkPair"
+
+  val ContinuationTypeQn = BuiltinType / "Continuation"
+  val ResumeQn = ContinuationTypeQn / "resume"
+  val DisposeQn = ContinuationTypeQn / "dispose"
+  val ReplicateQn = ContinuationTypeQn / "replicate"
 
   val BuiltinEffects = Builtin / "effects"
   val HeapEffQn = BuiltinEffects / "heap"
@@ -96,6 +106,12 @@ object Builtins:
   val BuiltinLevel = Builtin / "level"
   val LevelSucQn = BuiltinLevel / "suc"
   val LevelMaxQn = BuiltinLevel / "max"
+
+  private val PredicateQn = BuiltinType / "predicate"
+  private val UsagePredicateQn = PredicateQn / "predicate"
+  val IsDisposable = UsagePredicateQn / "IsDisposable"
+  val IsReplicable = UsagePredicateQn / "IsReplicable"
+  val IsResumable = UsagePredicateQn / "IsResumable"
 
   def Σ(using ctx: TypingContext): Signature =
     elaborateAll(builtins)(using SimpleSignature()) match
@@ -131,11 +147,28 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"A", Type(Top(Var(0)))), Variance.COVARIANT),
-        (binding(n"x", Var(0)), Variance.INVARIANT),
+        (binding(n"x", Var(0), UsageLiteral(UUnres)), Variance.INVARIANT),
       ),
-      ty = FunctionType(Binding(Var(1), U1)(n"y"), F(Type(Top(Var(2))))),
+      ty = FunctionType(Binding(Var(1))(n"y"), F(Type(Top(Var(2))))),
       constructors = List(
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
+      ),
+    ),
+    PreData(PairTypeQn)(
+      tParamTys = List(
+        (binding(n"level", LevelType()), Variance.INVARIANT),
+        (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
+        (binding(n"A", Top(Var(1), Var(0))), Variance.COVARIANT),
+      ),
+      ty = F(Type(Top(Var(2), Var(1)))),
+      constructors = List(
+        PreConstructor(
+          n"MkPair",
+          FunctionType(
+            Binding(Var(0))(n"x"),
+            FunctionType(Binding(Var(1))(n"y"), F(DataType(PairTypeQn, vars(4, 2)))),
+          ),
+        ),
       ),
     ),
     /** Type (level : LevelType): Type(Type(Top(level))))
@@ -429,7 +462,7 @@ object Builtins:
         binding(n"heap", HeapType()),
         binding(n"A", Type(Top(Var(1)))),
         binding(n"cell", CellType(Var(1), Var(0), CellStatus.Uninitialized)),
-        binding(n"value", Var(1), UsageLiteral(UUnres)),
+        binding(n"value", Var(1)),
       ),
       ty = F(
         CellType(Var(3), Var(2), CellStatus.Initialized),

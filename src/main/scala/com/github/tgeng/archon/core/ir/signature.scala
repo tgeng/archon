@@ -26,8 +26,6 @@ enum Declaration:
       /* binding + tParamTys + tIndexTys */
       val ul: ULevel,
       /* binding + tParamTys + tIndexTys */
-      val inherentUsage: VTerm,
-      /* binding + tParamTys + tIndexTys */
       val inherentEqDecidability: VTerm,
     )
   case Record
