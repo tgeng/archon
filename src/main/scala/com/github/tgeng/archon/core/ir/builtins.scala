@@ -66,8 +66,6 @@ object Builtins:
   val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
   val CTopQn = BuiltinType / "CTop"
 
-  val UsageQn = BuiltinType / "Usage"
-
   val EqDecidabilityQn = BuiltinType / "EqDecidability"
 
   val EqualityQn = BuiltinType / "Equality"
@@ -76,12 +74,8 @@ object Builtins:
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"
   val HeapQn = BuiltinType / "Heap"
-  val UsageTypeQn = BuiltinType / "Usage"
-  val U0Qn = UsageTypeQn / "Zero"
-  val U1Qn = UsageTypeQn / "One"
-  val UAffQn = UsageTypeQn / "Affine"
-  val URelQn = UsageTypeQn / "Relevant"
-  val UUnresQn = UsageTypeQn / "Unrestricted"
+
+  val UsageQn = BuiltinType / "Usage"
 
   val UnitTypeQn = BuiltinType / "Unit"
   val UnitQn = UnitTypeQn / "MkUnit"
@@ -89,10 +83,10 @@ object Builtins:
   val PairTypeQn = BuiltinType / "Pair"
   val PairQn = PairTypeQn / "MkPair"
 
-  val ContinuationTypeQn = BuiltinType / "Continuation"
-  val ResumeQn = ContinuationTypeQn / "resume"
-  val DisposeQn = ContinuationTypeQn / "dispose"
-  val ReplicateQn = ContinuationTypeQn / "replicate"
+  val ContinuationQn = BuiltinType / "Continuation"
+  val ResumeQn = ContinuationQn / "resume"
+  val DisposeQn = ContinuationQn / "dispose"
+  val ReplicateQn = ContinuationQn / "replicate"
 
   val BuiltinEffects = Builtin / "effects"
   val HeapEffQn = BuiltinEffects / "heap"
@@ -108,10 +102,10 @@ object Builtins:
   val LevelMaxQn = BuiltinLevel / "max"
 
   private val PredicateQn = BuiltinType / "predicate"
-  private val UsagePredicateQn = PredicateQn / "predicate"
-  val IsDisposable = UsagePredicateQn / "IsDisposable"
-  val IsReplicable = UsagePredicateQn / "IsReplicable"
-  val IsResumable = UsagePredicateQn / "IsResumable"
+  private val UsagePredicateQn = PredicateQn / "usage"
+  val IsDisposableQn = UsagePredicateQn / "IsDisposable"
+  val IsReplicableQn = UsagePredicateQn / "IsReplicable"
+  val IsResumableQn = UsagePredicateQn / "IsResumable"
 
   def Σ(using ctx: TypingContext): Signature =
     elaborateAll(builtins)(using SimpleSignature()) match
@@ -170,6 +164,58 @@ object Builtins:
           ),
         ),
       ),
+    ),
+    PreData(IsDisposableQn)(
+      tParamTys = Nil,
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
+      constructors = List(
+        PreConstructor(n"ZeroIsDisposable", F(DataType(IsDisposableQn, List(UsageLiteral(U0))))),
+        PreConstructor(
+          n"AffineIsDisposable",
+          F(DataType(IsDisposableQn, List(UsageLiteral(UAff)))),
+        ),
+      ),
+    ),
+    PreData(IsReplicableQn)(
+      tParamTys = Nil,
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
+      constructors = List(
+        PreConstructor(
+          n"RelevantIsReplicable",
+          F(DataType(IsReplicableQn, List(UsageLiteral(U0)))),
+        ),
+        PreConstructor(
+          n"UnrestrictedIsReplicable",
+          F(DataType(IsReplicableQn, List(UsageLiteral(UUnres)))),
+        ),
+      ),
+    ),
+    PreData(IsResumableQn)(
+      tParamTys = Nil,
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
+      constructors = List(
+        PreConstructor(
+          n"LinearIsResumable",
+          F(DataType(IsResumableQn, List(UsageLiteral(U1)))),
+        ),
+        PreConstructor(
+          n"AffineIsResumable",
+          F(DataType(IsResumableQn, List(UsageLiteral(UAff)))),
+        ),
+        PreConstructor(
+          n"RelevantIsResumable",
+          F(DataType(IsResumableQn, List(UsageLiteral(URel)))),
+        ),
+        PreConstructor(
+          n"UnrestrictedIsResumable",
+          F(DataType(IsResumableQn, List(UsageLiteral(UUnres)))),
+        ),
+      ),
+    ),
+    PreRecord(ContinuationQn)(
+      tParamTys = ???,
+      ty = ???,
+      fields = ???,
     ),
     /** Type (level : LevelType): Type(Type(Top(level))))
       *
@@ -249,6 +295,17 @@ object Builtins:
           boundNames = Nil,
           lhs = Nil,
           rhs = Some(Return(LevelType())),
+        ),
+      ),
+    ),
+    PreDefinition(UsageQn)(
+      paramTys = Nil,
+      ty = F(Type(UsageType())),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(UsageType())),
         ),
       ),
     ),
