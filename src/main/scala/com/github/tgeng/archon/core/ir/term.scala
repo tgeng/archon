@@ -280,7 +280,7 @@ object VTerm:
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
     Effects(Set.empty, Map(effects1 -> false, effects2 -> false))
 
-  def EffectsFilter(effects: VTerm): Effects = Effects(Set.empty, Map(effects -> true))
+  def EffectsSimpleFilter(effects: VTerm): Effects = Effects(Set.empty, Map(effects -> true))
 
   /** @param firstIndex
     *   inclusive
@@ -547,6 +547,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 object CTerm:
   def CTop(t: VTerm, effects: VTerm = VTerm.Total(using SiEmpty))(using sourceInfo: SourceInfo) =
     new CTop(ULevel.USimpleLevel(t), effects)
+
+  extension(binding: Binding[VTerm])
+    infix def ->:(body: CTerm): FunctionType =
+      new FunctionType(binding, body)
 
 /* References:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,

@@ -19,7 +19,7 @@ enum PreDeclaration:
       // declared function type. That is, indexed families are converted to parameterized inductive
       // types with equality types representing the constraints.
       val ty: CTerm,
-      val constructors: List[PreConstructor]
+      val constructors: List[PreConstructor],
     )
   case PreRecord
     (val qn: QualifiedName)
@@ -27,20 +27,21 @@ enum PreDeclaration:
       val tParamTys: PreTContext,
       // Unlike data, for record, this `ty` is expected to be a simple computation type.
       val ty: CTerm,
-      val fields: List[PreField]
+      // There is no difference for field
+      val fields: List[Field],
     )
   case PreDefinition
     (val qn: QualifiedName)
     (
       val paramTys: PreContext,
       val ty: CTerm,
-      val clauses: List[PreClause]
+      val clauses: List[PreClause],
     )
   case PreEffect
     (val qn: QualifiedName)
     (
       val tParamTys: PreContext,
-      val operators: List[PreOperator]
+      val operators: List[PreOperator],
     )
 
   def qn: QualifiedName
@@ -49,13 +50,11 @@ import PreDeclaration.*
 
 case class PreConstructor(name: Name, ty: CTerm)
 
-type PreField = Field // There is no difference for field
-
 case class PreClause
   (
     boundNames: List[Ref[Name]],
     lhs: List[CoPattern],
-    rhs: Option[CTerm] // `None` for absurd pattern
+    rhs: Option[CTerm], // `None` for absurd pattern
   )
 
 case class PreOperator(name: Name, ty: CTerm)

@@ -296,7 +296,7 @@ def astToIr
         (using ctx: NameContext)
         : Either[AstError, CTerm] =
         statements match
-          case Nil                         => Right(Def(Builtins.UnitQn))
+          case Nil                         => Right(Def(Builtins.MkMkUnitQn))
           case STerm(astTerm) :: Nil       => astToIr(astTerm)
           case SBinding(_, astTerm) :: Nil => astToIr(astTerm)
           case STerm(t) :: rest =>

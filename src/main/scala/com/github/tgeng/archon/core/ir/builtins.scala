@@ -77,11 +77,11 @@ object Builtins:
 
   val UsageQn = BuiltinType / "Usage"
 
-  val UnitTypeQn = BuiltinType / "Unit"
-  val UnitQn = UnitTypeQn / "MkUnit"
+  val UnitQn = BuiltinType / "Unit"
+  val MkUnitQn = UnitQn / "MkUnit"
 
-  val PairTypeQn = BuiltinType / "Pair"
-  val PairQn = PairTypeQn / "MkPair"
+  val PairQn = BuiltinType / "Pair"
+  val MkPairQn = PairQn / "MkPair"
 
   val ContinuationQn = BuiltinType / "Continuation"
   val ResumeQn = ContinuationQn / "resume"
@@ -130,10 +130,10 @@ object Builtins:
 
   // TODO: move all of these builtin declarations here. Also create a new EqualityType from Data.
   private val builtins: Seq[PreDeclaration] = Seq(
-    PreData(UnitTypeQn)(
+    PreData(UnitQn)(
       tParamTys = Nil,
       ty = F(Type(Top(L0))),
-      constructors = List(PreConstructor(n"MkUnit", F(DataType(UnitTypeQn, Nil)))),
+      constructors = List(PreConstructor(n"MkUnit", F(DataType(UnitQn, Nil)))),
     ),
     PreData(EqualityQn)(
       // Invariance of level is OK because user should almost never provide this. Instead, this is
@@ -148,7 +148,7 @@ object Builtins:
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
       ),
     ),
-    PreData(PairTypeQn)(
+    PreData(PairQn)(
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
@@ -160,7 +160,7 @@ object Builtins:
           n"MkPair",
           FunctionType(
             Binding(Var(0))(n"x"),
-            FunctionType(Binding(Var(1))(n"y"), F(DataType(PairTypeQn, vars(4, 2)))),
+            FunctionType(Binding(Var(1))(n"y"), F(DataType(PairQn, vars(4, 2)))),
           ),
         ),
       ),
@@ -213,9 +213,45 @@ object Builtins:
       ),
     ),
     PreRecord(ContinuationQn)(
-      tParamTys = ???,
-      ty = ???,
-      fields = ???,
+      tParamTys = List(
+        (binding(n"level", LevelType()), Variance.INVARIANT),
+        (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
+        (binding(n"paramType", Type(Top(Var(1)))), Variance.CONTRAVARIANT),
+        (binding(n"resumeArgType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
+        (binding(n"outputEffect", EffectsType()), Variance.COVARIANT),
+        (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
+        (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
+      ),
+      ty = CTop(Var(5)),
+      fields = List(
+        Field(
+          n"resume",
+          Binding(DataType(IsResumableQn, List(Var(6))))(n"isResumable") ->:
+            Binding(Var(6))(n"param") ->:
+            Binding(Var(6))(n"resumeArg") ->:
+            F(Var(4), Var(6), Var(5)),
+        ),
+        Field(
+          n"dispose",
+          Binding(DataType(IsDisposableQn, List(Var(6))))(n"isDisposable") ->:
+            F(DataType(UnitQn, Nil), EffectsSimpleFilter(Var(6))),
+        ),
+        Field(
+          n"replicate",
+          Binding(DataType(IsReplicableQn, List(Var(6))))(n"isReplicable") ->:
+            F(
+              DataType(
+                PairQn,
+                List(
+                  Var(8),
+                  EqDecidabilityLiteral(EqUnres),
+                  U(RecordType(ContinuationQn, vars(8, 2))),
+                ),
+              ),
+              EffectsSimpleFilter(Var(6)),
+            ),
+        ),
+      ),
     ),
     /** Type (level : LevelType): Type(Type(Top(level))))
       *
