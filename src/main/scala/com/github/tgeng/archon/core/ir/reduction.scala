@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core.common.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -53,7 +54,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
   private def refreshHeapKeyIndex(startIndex: Nat = 0): Unit =
     for case (
         HeapHandler(_, Some(heapKey), _, _),
-        index
+        index,
       ) <- stack.view.zipWithIndex.drop(startIndex)
     do updateHeapKeyIndex(heapKey, index)
 
@@ -93,11 +94,11 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                     case Projection(_, name) => Elimination.EProj(name)
                     case t =>
                       throw IllegalArgumentException(
-                        s"type error: expect application or projection, but got $t"
+                        s"type error: expect application or projection, but got $t",
                       )
-                  }
+                  },
                 ),
-                mapping
+                mapping,
               ) match
                 case MatchingStatus.Matched =>
                   stack.dropRightInPlace(lhs.length)
@@ -143,6 +144,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
       case OperatorCall((effQn, effArgs), name, args) =>
         Σ.getEffectOption(effQn) match
           case None => Left(MissingDeclaration(effQn))
+          // TODO[P0]: do not shuffle stack if eff is simple
           case Some(eff) =>
             effArgs.normalized match
               case Left(e) => Left(e)
@@ -154,7 +156,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                       (
                         ts1: List[VTerm],
                         ts2: List[VTerm],
-                        tys: Telescope
+                        tys: Telescope,
                       )
                       : Boolean =
                       (ts1, ts2, tys) match
@@ -163,13 +165,13 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                           checkSubsumption(
                             t1,
                             t2,
-                            Some(ty.ty)
+                            Some(ty.ty),
                           )(using CheckSubsumptionMode.CONVERSION) match
                             case Right(_) =>
                               areEffArgsConvertible(
                                 ts1,
                                 ts2,
-                                tys.substLowers(t1)
+                                tys.substLowers(t1),
                               )
                             case _ => false
                         case _ => throw IllegalArgumentException()
@@ -181,12 +183,16 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                       c match
                         case h @ Handler(
                             hEff @ (hEffQn, hEffArgs),
+                            parameterBinding,
+                            parameter,
+                            parameterDisposer,
+                            parameterReplicator,
                             outputEffects,
                             outputUsage,
                             outputType,
                             transform,
                             handlers,
-                            input
+                            input,
                           ) if {
                             val tys = eff.tParamTys
                             effQn == hEffQn &&
@@ -195,21 +201,26 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                             areEffArgsConvertible(effArgs, hEffArgs, tys.toList)
                           } =>
                           val handlerBody = handlers(name)
-                          val capturedStack = Handler(
+                          val handler = Handler(
                             hEff,
+                            parameterBinding,
+                            parameter,
+                            parameterDisposer,
+                            parameterReplicator,
                             outputEffects,
                             outputUsage,
                             outputType,
                             transform,
                             handlers,
-                            Hole
+                            Hole,
                           )(
                             h.transformBoundName,
-                            h.handlersBoundNames
-                          ) +: cterms.reverseIterator.toSeq
+                            h.handlersBoundNames,
+                          )
+                          val capturedStack = cterms.reverseIterator.toSeq
 
-                          val resume = Thunk(Continuation(capturedStack))
-                          nextHole = handlerBody.substLowers(args :+ resume: _*)
+                          val resume = Thunk(Continuation(handler, capturedStack))
+                          nextHole = handlerBody.substLowers(args :+ parameter :+ resume: _*)
                         case _ if stack.isEmpty =>
                           throw IllegalArgumentException("type error")
                         // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
@@ -220,26 +231,44 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                           cterms.addOne(substHole(c, Hole))
                     }
                     run(nextHole.!!)
-      case Continuation(capturedStack) =>
+      case Continuation(handler, capturedStack) =>
         stack.pop() match
-          case Application(_, arg) =>
+          case Projection(_, name) if name == n"resume" =>
+            val Application(_, param) = stack.pop(): @unchecked
+            val Application(_, arg) = stack.pop(): @unchecked
             val currentStackHeight = stack.length
+            stack.push(
+              handler.copy(parameter = param)(
+                handler.transformBoundName,
+                handler.handlersBoundNames,
+              ),
+            )
             stack.pushAll(capturedStack)
             refreshHeapKeyIndex(currentStackHeight)
             run(Return(arg))
+          case Projection(_, name) if name == n"dispose" =>
+            val Application(_, param) = stack.pop(): @unchecked
+            ???
+          case Projection(_, name) if name == n"replicate" =>
+            val Application(_, param) = stack.pop(): @unchecked
+            ???
           case _ => throw IllegalArgumentException("type error")
       case h @ Handler(
           (effQn, effArgs),
+          parameterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,
           transform,
           handlers,
-          input
+          input,
         ) =>
         if reduceDown then
           input match
-            case Return(v, _) => run(transform.substLowers(v))
+            case Return(v, _) => run(transform.substLowers(parameter, v))
             case _            => throw IllegalArgumentException("type error")
         else
           effArgs.normalized match
@@ -248,13 +277,17 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               stack.push(
                 Handler(
                   (effQn, effArgs),
+                  parameterBinding,
+                  parameter,
+                  parameterDisposer,
+                  parameterReplicator,
                   outputEffects,
                   outputUsage,
                   outputType,
                   transform,
                   handlers,
-                  Hole
-                )(h.transformBoundName, h.handlersBoundNames)
+                  Hole,
+                )(h.transformBoundName, h.handlersBoundNames),
               )
               run(input)
       case AllocOp(heap, ty) =>
@@ -271,7 +304,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                   outputEffects,
                   key,
                   heapContent :+ None,
-                  input
+                  input,
                 )(h.boundName)
                 run(Return(cell))
               case _ => throw IllegalStateException("corrupted heap key index")
@@ -291,13 +324,13 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                       outputEffects,
                       key,
                       heapContent,
-                      input
+                      input,
                     ) =>
                     stack(heapHandlerIndex) = HeapHandler(
                       outputEffects,
                       key,
                       heapContent.updated(index, Some(value)),
-                      input
+                      input,
                     )(h.boundName)
                     run(Return(Cell(heapKey, index)))
                   case _ =>
@@ -315,7 +348,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 heapContent(index) match
                   case None =>
                     Left(
-                      IrError.UninitializedCell(reconstructTermFromStack(pc))
+                      IrError.UninitializedCell(reconstructTermFromStack(pc)),
                     )
                   case Some(value) => run(Return(value))
               case _ => throw IllegalStateException("corrupted heap key index")
@@ -327,14 +360,14 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           run(input)
         else
           assert(
-            currentKey.isEmpty
+            currentKey.isEmpty,
           ) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHeapKeyIndex(key, stack.length)
           stack.push(
             HeapHandler(outputEffects, Some(key), heapContent, input)(
-              h.boundName
-            )
+              h.boundName,
+            ),
           )
           run(input.substLowers(Heap(key)))
 
@@ -347,28 +380,36 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
       case Projection(rec, name) => Projection(c, name)
       case h @ Handler(
           eff,
+          parameterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,
           transform,
           handlers,
-          input
+          input,
         ) =>
         Handler(
           eff,
+          parameterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,
           transform,
           handlers,
-          c
+          c,
         )(
           h.transformBoundName,
-          h.handlersBoundNames
+          h.handlersBoundNames,
         )
       case h @ HeapHandler(outputEffects, key, heap, input) =>
         HeapHandler(outputEffects, key, heap, c)(
-          h.boundName
+          h.boundName,
         )
       case _ => throw IllegalArgumentException("unexpected context")
 
@@ -423,7 +464,7 @@ extension(v: VTerm)
         else
           UsageCompound(
             UsageOperator.UProd,
-            prod.map(varOrUsageToTerm).toMultiset
+            prod.map(varOrUsageToTerm).toMultiset,
           )
 
       def varOrUsageToTerm(t: Var | Usage): VTerm = t match
@@ -435,11 +476,11 @@ extension(v: VTerm)
       def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[Var])] = tm match
         case Effects(literal, operands) =>
           for literalsAndOperands: Set[(Set[Eff], Set[Var])] <- transpose(
-              operands.map(dfs)
+              operands.map(dfs),
             )
           yield (
             literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
-            literalsAndOperands.flatMap { case (_, o) => o }
+            literalsAndOperands.flatMap { case (_, o) => o },
           )
         case c: Collapse => c.normalized.flatMap(dfs)
         case v: Var      => Right((Set(), Set(v)))
@@ -458,14 +499,14 @@ extension(v: VTerm)
                 dfs(tm).map { case (l, m) =>
                   (l + offset, m.map((tm, l) => (tm, l + offset)))
                 }
-              }.toList
+              }.toList,
             )
           yield (
             (literalsAndOperands.map(_._1) ++ Seq(literal)).max,
             literalsAndOperands
               .flatMap[(VTerm, Nat)](_._2)
               .groupMap(_._1)(_._2)
-              .map { (tm, offsets) => (tm, offsets.max) }
+              .map { (tm, offsets) => (tm, offsets.max) },
           )
         case c: Collapse => c.normalized.flatMap(dfs)
         case v: Var      => Right(0, Map((v, 0)))
@@ -506,7 +547,7 @@ object Reducible:
     ctx.trace[IrError, CTerm](
       s"reducing",
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
-      tm => Block(ChopDown, Aligned, yellow(tm.sourceInfo), green(pprint(tm)))
+      tm => Block(ChopDown, Aligned, yellow(tm.sourceInfo), green(pprint(tm))),
     )(summon[Reducible[CTerm]].reduce(t))
 
 enum MatchingStatus:
@@ -517,7 +558,7 @@ def matchPattern
   (
     constraints: List[(Pattern, VTerm)],
     mapping: mutable.Map[Nat, VTerm],
-    matchingStatus: MatchingStatus = MatchingStatus.Matched
+    matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
   import Builtins.*
@@ -560,7 +601,7 @@ def matchPattern
           constraints = pArgs.zip(args) ++ constraints
         case (
             PForcedDataType(pName, pArgs),
-            Con(name, args)
+            Con(name, args),
           ) =>
           constraints = pArgs.zip(args) ++ constraints
         case (PAbsurd(), _) =>
@@ -576,7 +617,7 @@ def matchCoPattern
   (
     elims: List[(CoPattern, Elimination[VTerm])],
     mapping: mutable.Map[Nat, VTerm],
-    matchingStatus: MatchingStatus = MatchingStatus.Matched
+    matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
   import Elimination.*

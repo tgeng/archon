@@ -172,7 +172,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   /** @param continuationUsage
     *   see `Effect` for the semantic of this.
     */
-  case EffectsType(continuationUsage: Option[Usage] = None)(using sourceInfo: SourceInfo)
+  case EffectsType
+    (continuationUsage: Option[Usage] = Some(Usage.UUnres))
+    (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
       EffectsQn,

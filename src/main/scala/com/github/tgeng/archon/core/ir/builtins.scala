@@ -234,21 +234,23 @@ object Builtins:
         Field(
           n"dispose",
           Binding(DataType(IsDisposableQn, List(Var(6))))(n"isDisposable") ->:
-            F(DataType(UnitQn, Nil), EffectsSimpleFilter(Var(6))),
+            Binding(Var(6))(n"param") ->:
+            F(DataType(UnitQn, Nil), EffectsSimpleFilter(Var(7))),
         ),
         Field(
           n"replicate",
           Binding(DataType(IsReplicableQn, List(Var(6))))(n"isReplicable") ->:
+            Binding(Var(6))(n"param") ->:
             F(
               DataType(
                 PairQn,
                 List(
-                  Var(8),
+                  Var(9),
                   EqDecidabilityLiteral(EqUnres),
-                  U(RecordType(ContinuationQn, vars(8, 2))),
+                  U(RecordType(ContinuationQn, vars(9, 3))),
                 ),
               ),
-              EffectsSimpleFilter(Var(6)),
+              EffectsSimpleFilter(Var(7)),
             ),
         ),
       ),
