@@ -405,11 +405,32 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     */
   case Continuation(handler: Handler, capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
 
-  // case Resume(continuation: CTerm, parameter: VTerm, result: VTerm)(using sourceInfo: SourceInfo)
-  // extends CTerm(sourceInfo)
-  // Dispose and replicate can only have "simple" effects: effects whose continuationUsage is None.
-  // case Dispose(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-  // case Replicate(continuation: CTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  /** Internaly only. This is only created by reduction.
+    *
+    * During reduction, this value is specially handled.
+    * @param handlerIndex:
+    *   index of this handler in the reduction machine stack. In other words, size of the stack
+    *   before this handler is pushed onto the stack.
+    * @param stack1:
+    *   the replicated stack
+    * @param stack1:
+    *   the other replicated stack
+    */
+  case ContinuationReplicator(handlerIndex: Nat, stack1: Seq[CTerm], stack2: Seq[CTerm])
+    extends CTerm(SiEmpty)
+
+  /** Internaly only. This is only created by reduction.
+    * @param paramPairs
+    *   computation that returns a pair of parameters. This should simply be application of
+    *   `parameterReplicator` in handlers.
+    * @param handler
+    *   the handler that should be replicated and contain the replicated params
+    * @param continuationReplicator
+    *   the target ContinuationReplicator to which the replicated parameters is appended
+    */
+  case ContinuationReplicatorAppender
+    (paramPairs: CTerm, handler: Handler, continuationReplicator: ContinuationReplicator)
+    extends CTerm(SiEmpty)
 
   case Handler
     (

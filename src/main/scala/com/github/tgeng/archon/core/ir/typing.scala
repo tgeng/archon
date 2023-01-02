@@ -738,6 +738,7 @@ def inferType
         throw IllegalArgumentException(
           "continuation is only created in reduction and hence should not be type checked.",
         )
+      // TODO[P0]: check compatibility between presence of parameter replicator and effects
       case h @ Handler(
           eff @ (qn, args),
           outputEffects,

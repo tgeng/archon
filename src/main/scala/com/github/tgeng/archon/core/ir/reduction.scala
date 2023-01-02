@@ -248,11 +248,113 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             run(Return(arg))
           case Projection(_, name) if name == n"dispose" =>
             val Application(_, param) = stack.pop(): @unchecked
-            ???
+            stack.push(
+              handler.copy(
+                parameter = param,
+                transform = handler.parameterDisposer.weakened,
+              )(
+                handler.transformBoundName,
+                handler.handlersBoundNames,
+              ),
+            )
+            capturedStack.foreach {
+              case handler: Handler =>
+                stack.push(
+                  handler.copy(
+                    // weakened because transform also takes a output value. But for disposer calls this
+                    // value is always unit and ignored by the parameterDisposer.
+                    transform = handler.parameterDisposer.weakened,
+                  )(
+                    handler.transformBoundName,
+                    handler.handlersBoundNames,
+                  ),
+                )
+              case _ => // ignore non-handler cases since they do not contain any disposing logic.
+            }
+            run(Return(Con(n"MkUnit", Nil)))
           case Projection(_, name) if name == n"replicate" =>
             val Application(_, param) = stack.pop(): @unchecked
-            ???
+            val currentStackSize = stack.size
+            stack.push(
+              handler.copy(parameter = param)(
+                handler.transformBoundName,
+                handler.handlersBoundNames,
+              ),
+            )
+            stack.pushAll(capturedStack)
+            run(ContinuationReplicator(currentStackSize, Nil, Nil), true)
           case _ => throw IllegalArgumentException("type error")
+      case cr @ ContinuationReplicator(handlerIndex, stack1, stack2) =>
+        assert(
+          reduceDown,
+          "all calls to run with ContinuationReplicator should pass reduceDown=True",
+        )
+        stack.pop() match
+          case handler: Handler =>
+            handler.parameterReplicator match
+              case None =>
+                throw IllegalArgumentException(
+                  "type error: handler missing parameterReplicator is not compatible with re-entrant effects.",
+                )
+              case Some(parameterReplicator) =>
+                run(
+                  ContinuationReplicatorAppender(
+                    parameterReplicator.substLowers(handler.parameter),
+                    handler,
+                    cr,
+                  ),
+                )
+          case t => run(ContinuationReplicator(handlerIndex, t +: stack1, t +: stack2), true)
+      case ContinuationReplicatorAppender(
+          paramPairs,
+          handler,
+          cr @ ContinuationReplicator(handlerIndex, stack1, stack2),
+        ) =>
+        if reduceDown then
+          paramPairs match
+            case Con(name, param1 :: param2 :: Nil) if name == n"MkPair" =>
+              val handler1 = handler
+                .copy(parameter = param1)(
+                  handler.transformBoundName,
+                  handler.handlersBoundNames,
+                )
+              val handler2 = handler
+                .copy(parameter = param2)(
+                  handler.transformBoundName,
+                  handler.handlersBoundNames,
+                )
+              if stack.size == handlerIndex then
+                run(
+                  Return(
+                    Con(
+                      n"MkPair",
+                      List(
+                        Thunk(Continuation(handler1, stack1)),
+                        Thunk(Continuation(handler2, stack2)),
+                      ),
+                    ),
+                  ),
+                )
+              else if stack.size < handlerIndex then
+                throw IllegalStateException(
+                  "stack is corruptted: somehow execution has passed root handler of replication",
+                )
+              else
+                run(
+                  ContinuationReplicator(
+                    handlerIndex,
+                    handler1 +: stack1,
+                    handler2 +: stack2,
+                  ),
+                  true,
+                )
+            case _ =>
+              throw IllegalArgumentException(
+                "type error: parameterReplicator should have returned a pair of parameters",
+              )
+        else
+          stack.push(ContinuationReplicatorAppender(Hole, handler, cr))
+          run(paramPairs)
       case h @ Handler(
           (effQn, effArgs),
           parameterBinding,
