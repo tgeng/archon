@@ -762,7 +762,7 @@ def inferType
                   ),
                   effUsages + argsUsages,
                 )
-      case _: Continuation =>
+      case _: Continuation | _: ContinuationReplicator | _: ContinuationReplicatorAppender =>
         throw IllegalArgumentException(
           "continuation is only created in reduction and hence should not be type checked.",
         )
