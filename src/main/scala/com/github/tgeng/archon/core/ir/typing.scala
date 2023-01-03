@@ -767,6 +767,10 @@ def inferType
           "continuation is only created in reduction and hence should not be type checked.",
         )
       // TODO[P0]: check compatibility between presence of parameter replicator and effects
+      //  also type check parameters and redo transform and handler type checking:
+      //    - if effect is simple, handler should simply return result
+      //    - otherwise the continuation should have the proper record type
+      //    - parameter should be added to transform and handler
       case h @ Handler(
           eff @ (qn, args),
           outputEffects,
@@ -1604,7 +1608,7 @@ private def checkUsagesSubsumption
   })
 
 private def checkContinuationUsageSubsumption
-  (usage1: Option[VTerm], usage2: Option[VTerm])
+  (usage1: Option[Usage], usage2: Option[Usage])
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
@@ -1612,13 +1616,13 @@ private def checkContinuationUsageSubsumption
   : Either[IrError, Unit] = (usage1, usage2) match
   case (None, None) => Right(())
   case (None, Some(u)) =>
-    checkUsageSubsumption(UsageLiteral(U1), u) match
+    checkUsageSubsumption(UsageLiteral(U1), UsageLiteral(u)) match
       case r @ Right(_) => r
       case Left(_: NotUsageSubsumption) =>
         Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
       case l @ Left(_) => l
   case (Some(u1), Some(u2)) =>
-    checkUsageSubsumption(u1, u2) match
+    checkUsageSubsumption(UsageLiteral(u1), UsageLiteral(u2)) match
       case r @ Right(_) => r
       case Left(_: NotUsageSubsumption) =>
         Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
