@@ -53,7 +53,7 @@ extension [E](startingNodes: IterableOnce[E])
   def bfs
     (
       getNeighbors: E => IterableOnce[E],
-      seen: mutable.Set[E] = mutable.Set[E]()
+      seen: mutable.Set[E] = mutable.Set[E](),
     )
     : IterableOnce[E] =
     val queue = mutable.Queue(startingNodes.iterator.toSeq: _*)
@@ -93,7 +93,7 @@ extension [E](allNodes: IterableOnce[E])
       if !inDegree.contains(node) then inDegree(node) = 0
     val maxIncomingPathLengths = mutable.Map[E, Int]().withDefaultValue(0)
     val queue = mutable.Queue(
-      inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq: _*
+      inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq: _*,
     )
     assert(queue.nonEmpty)
     val maxDegreeForDag = inDegree.size * (inDegree.size - 1)
@@ -102,7 +102,7 @@ extension [E](allNodes: IterableOnce[E])
       for neighbor <- getNeighbors(node).iterator do
         maxIncomingPathLengths(neighbor) = max(
           maxIncomingPathLengths(node) + 1,
-          maxIncomingPathLengths(neighbor)
+          maxIncomingPathLengths(neighbor),
         )
         if maxIncomingPathLengths(neighbor) > maxDegreeForDag then
           throw IllegalArgumentException()
@@ -152,7 +152,7 @@ extension [T](elems: IterableOnce[T])
   def associatedBy[K, V]
     (
       keyExtractor: T => K,
-      valueExtractor: T => V
+      valueExtractor: T => V,
     )
     : Map[K, V] =
     val result = mutable.Map[K, V]()
@@ -194,7 +194,7 @@ def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
       v match
         case Right(r) => Right((k, r))
         case Left(l)  => Left(l)
-    }
+    },
   ).map(Map.from)
 
 def topologicalSort[T]
@@ -252,3 +252,7 @@ package eitherFilter {
         throw Exception("please use irrefutable pattern with Either")
       case Left(_) => e
 }
+
+def toBoolean(e: Either[?, ?]): Boolean = e match
+  case Right(_) => true
+  case Left(_)  => false

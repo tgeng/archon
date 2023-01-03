@@ -601,49 +601,77 @@ def inferType
             case F(ty, effects, tyUsage) =>
               for
                 effects <- effects.normalized
+                tUsages <- transpose(tUsages.map(_.normalized))
                 (bodyTy, usages) <-
-                  for
-                    case (bodyTy, usagesInBody) <- inferType(body)(using
-                      Γ :+ Binding(ty, tyUsage)(gn"v"),
+                  // If usages are either zero or unres, inlining `t` would not cause any changes on
+                  // the usages.
+                  def areTUsagesZeroOrUnrestricted: Boolean =
+                    tUsages.forall { usage =>
+                      toBoolean(
+                        checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
+                          CheckSubsumptionMode.CONVERSION,
+                        ),
+                      ) ||
+                      toBoolean(
+                        checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
+                          CheckSubsumptionMode.CONVERSION,
+                        ),
+                      )
+                    }
+                  if effects == Total && areTUsagesZeroOrUnrestricted then
+                    // Do the reduction onsite so that type checking in sub terms can leverage the
+                    // more specific type. More importantly, this way we do not need to reference
+                    // the result of a computation in the inferred type.
+                    for
+                      t <- reduce(t)
+                      r <- t match
+                        case Return(v, _) => inferType(body.substLowers(v))
+                        case c            => inferType(body.substLowers(Collapse(c)))
+                    yield r
+                  // Otherwise, just add the binding to the context and continue type checking.
+                  else
+                    for
+                      case (bodyTy, usagesInBody) <- inferType(body)(using
+                        Γ :+ Binding(ty, tyUsage)(gn"v"),
+                      )
+                      // Report an error if the type of `body` needs to reference the effectful
+                      // computation. User should use a dependent sum type to wrap such
+                      // references manually to avoid the leak.
+                      // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
+                      //  the bound variable
+                      _ <- checkVar0Leak(
+                        bodyTy,
+                        LeakedReferenceToEffectfulComputationResult(t),
+                      )
+                      _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
+                        SUBSUMPTION,
+                      )
+                      usagesInContinuation = effects match
+                        // Join with U1 for normal execution without any call to effect handlers
+                        case v: Var =>
+                          UsageJoin(
+                            getEffVarContinuationUsage(v),
+                            UsageLiteral(U1),
+                          )
+                        case Effects(literal, operands) =>
+                          UsageJoin(
+                            operands.map(getEffVarContinuationUsage).toSeq ++
+                              literal.map { case (qn, args) =>
+                                Σ.getEffect(qn)
+                                  .continuationUsage
+                                  .substLowers(args: _*)
+                              } :+ UsageLiteral(U1): _*,
+                          )
+                        case _ =>
+                          throw IllegalStateException(
+                            s"expect to be of Effects type: $tm",
+                          )
+                    yield (
+                      bodyTy.strengthened,
+                      usagesInBody
+                        .dropRight(1) // drop this binding
+                        .map(_.strengthened) * usagesInContinuation,
                     )
-                    // Report an error if the type of `body` needs to reference the effectful
-                    // computation. User should use a dependent sum type to wrap such
-                    // references manually to avoid the leak.
-                    // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
-                    //  the bound variable
-                    _ <- checkVar0Leak(
-                      bodyTy,
-                      LeakedReferenceToEffectfulComputationResult(t),
-                    )
-                    _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
-                      SUBSUMPTION,
-                    )
-                    usagesInContinuation = effects match
-                      // Join with U1 for normal execution without any call to effect handlers
-                      case v: Var =>
-                        UsageJoin(
-                          getEffVarContinuationUsage(v),
-                          UsageLiteral(U1),
-                        )
-                      case Effects(literal, operands) =>
-                        UsageJoin(
-                          operands.map(getEffVarContinuationUsage).toSeq ++
-                            literal.map { case (qn, args) =>
-                              Σ.getEffect(qn)
-                                .continuationUsage
-                                .substLowers(args: _*)
-                            } :+ UsageLiteral(U1): _*,
-                        )
-                      case _ =>
-                        throw IllegalStateException(
-                          s"expect to be of Effects type: $tm",
-                        )
-                  yield (
-                    bodyTy.strengthened,
-                    usagesInBody
-                      .dropRight(1) // drop this binding
-                      .map(_.strengthened) * usagesInContinuation,
-                  )
               yield (augmentEffect(effects, bodyTy), usages)
             case _ => Left(ExpectFType(tTy))
         yield r
@@ -1611,10 +1639,13 @@ private def checkUsageSubsumption
   case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2))) if u1 >= u2 && mode == SUBSUMPTION =>
     Right(())
   case (Right(UsageLiteral(UUnres)), _) if mode == SUBSUMPTION => Right(())
-  case (Right(v @ Var(_)), Right(UsageLiteral(u2))) if mode == SUBSUMPTION =>
+  case (Right(v @ Var(_)), Right(UsageLiteral(u2))) =>
     Γ.resolve(v).ty match
-      case UsageType(Some(u1Bound)) => checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-      case _                        => Left(NotUsageSubsumption(usage1, usage2, mode))
+      // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
+      case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(())
+      case UsageType(Some(u1Bound)) if mode == SUBSUMPTION =>
+        checkUsageSubsumption(u1Bound, UsageLiteral(u2))
+      case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
   case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
 
 private def checkEffSubsumption

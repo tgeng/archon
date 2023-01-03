@@ -153,7 +153,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
   // Note, `upper` here is in the sense of typing subsumption, not the usage lattice. This is the
   // lower bound in the usage lattice. Hence Option.None is used to represent unbounded case, as the
-  // lattice is not bounded below.
+  // lattice is not bounded below. Note that the semantic of this `upperBound` is different from
+  // `continuationUsage`.
   case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
