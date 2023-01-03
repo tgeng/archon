@@ -171,7 +171,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     )
 
   /** @param continuationUsage
-    *   see `Effect` for the semantic of this.
+    *   see `Effect` for the semantic of this. Some(Usage.UUnres) is the most general value and
+    *   allows any effects.
     */
   case EffectsType
     (continuationUsage: Option[Usage] = Some(Usage.UUnres))
