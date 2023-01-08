@@ -439,7 +439,7 @@ def inferType
       case eqD: EqDecidabilityType  => Right(Type(eqD), Usages.zero)
       case _: EqDecidabilityLiteral => Right(EqDecidabilityType(), Usages.zero)
       case e: EffectsType           => Right(Type(e), Usages.zero)
-      case Effects(literal, operands) =>
+      case eff @ Effects(literal, operands) =>
         for
           literalUsages <- transpose(
             literal.map { (qn, args) =>
@@ -449,21 +449,11 @@ def inferType
             },
           ).map(_.reduce(_ + _))
           operandsUsages <- transpose(
-            operands.map { ref => checkType(ref, EffectsType()) },
+            operands.map { (ref, _) => checkType(ref, EffectsType()) }.toList,
           ).map(_.reduce(_ + _))
+          usage <- getEffectsContinuationUsage(eff)
         yield (
-          EffectsType(
-            // TODO[P0]: a simple join wont' work here because usage continuation has special
-            // value `None`. Some special logic is needed here.
-            UsageJoin(
-              operands.map(getEffVarContinuationUsage).toSeq ++
-                literal.map { case (qn, args) =>
-                  Σ.getEffect(qn)
-                    .continuationUsage
-                    .substLowers(args: _*)
-                } :+ UsageLiteral(U1): _*,
-            ),
-          ),
+          EffectsType(usage),
           literalUsages + operandsUsages,
         )
       case LevelType() => Right((Type(LevelType())), Usages.zero)
@@ -484,6 +474,28 @@ def inferType
         yield (r, (heapUsages + tyUsages) * UUnres)
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type"),
   )
+
+def getEffectsContinuationUsage
+  (effects: Effects)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Option[Usage]] =
+  effects.normalized.map {
+    case effects: Effects =>
+      (effects.unionOperands.map {
+        case (v, false) => getEffVarContinuationUsage(v.asInstanceOf[Var])
+        case (_, true)  => None
+      } ++
+        effects.literal.map { (qn, _) => Σ.getEffect(qn).continuationUsage })
+        .foldLeft[Option[Usage]](None) {
+          case (None, None) => None
+          // None continuation usage is approximated as U1.
+          case (Some(u), None) => Some(Usage.U1 | u)
+          case (None, Some(u)) => Some(Usage.U1 | u)
+        }
+    case _ => throw IllegalStateException("Effects should still be Effects after normalization")
+  }
 
 def checkType
   (tm: VTerm, ty: VTerm)
@@ -646,31 +658,18 @@ def inferType
                       _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
                         SUBSUMPTION,
                       )
-                      usagesInContinuation = effects match
+                      usagesInContinuation <- effects match
                         // Join with U1 for normal execution without any call to effect handlers
-                        case v: Var =>
-                          UsageJoin(
-                            getEffVarContinuationUsage(v),
-                            UsageLiteral(U1),
-                          )
-                        case Effects(literal, operands) =>
-                          UsageJoin(
-                            operands.map(getEffVarContinuationUsage).toSeq ++
-                              literal.map { case (qn, args) =>
-                                Σ.getEffect(qn)
-                                  .continuationUsage
-                                  .substLowers(args: _*)
-                              } :+ UsageLiteral(U1): _*,
-                          )
+                        case v: Var => Right(getEffVarContinuationUsage(v))
+                        case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
                         case _ =>
-                          throw IllegalStateException(
-                            s"expect to be of Effects type: $tm",
-                          )
+                          throw IllegalStateException(s"expect to be of Effects type: $tm")
                     yield (
                       bodyTy.strengthened,
                       usagesInBody
                         .dropRight(1) // drop this binding
-                        .map(_.strengthened) * usagesInContinuation,
+                        .map(_.strengthened) *
+                        (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
                     )
               yield (augmentEffect(effects, bodyTy), usages)
             case _ => Left(ExpectFType(tTy))
@@ -959,8 +958,7 @@ def inferType
         yield (r, inputUsages),
   )
 
-private def getEffVarContinuationUsage(tm: VTerm)(using Γ: Context)(using Signature): VTerm =
-  val v = tm.asInstanceOf[VTerm.Var]
+private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): Option[Usage] =
   Γ.resolve(v) match
     case Binding(EffectsType(usage), _) => usage
     case _ =>
@@ -1670,8 +1668,11 @@ private def checkEffSubsumption
         Right(Effects(literals2, unionOperands2)),
       )
       if mode == CheckSubsumptionMode.SUBSUMPTION &&
-        literals1
-          .subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
+        literals1.subsetOf(literals2) && unionOperands1.forall { case (v, filterSimple1) =>
+          unionOperands2.get(v) match
+            case None                => false
+            case Some(filterSimple2) => filterSimple1 == filterSimple2 || filterSimple1 == true
+        } =>
       Right(())
     case _ => Left(NotEffectSubsumption(eff1, eff2, mode))
 
