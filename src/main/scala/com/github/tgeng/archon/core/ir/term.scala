@@ -467,7 +467,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         *     outputs `outputType`
         */
       handlers: Map[
-        Name, /* binding offset = 1 (for parameter) + paramTys + 1 (for resume) */ CTerm,
+        Name, /* binding offset = 1 (for parameter) + paramTys + 1 (for resume if needed) */ CTerm,
       ],
       input: CTerm,
     )

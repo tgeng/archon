@@ -46,17 +46,21 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
   // )
 
   private val handlerIndex = mutable.WeakHashMap[Eff, mutable.Stack[Nat]]()
-  refreshHandlerIndex()
+  regenerateHandlerIndex()
 
   private def updateHandlerIndex(eff: Eff, index: Nat) =
     handlerIndex.getOrElseUpdate(eff, mutable.Stack()).push(index)
 
-  private def refreshHandlerIndex(startIndex: Nat = 0): Unit =
+  private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
     stack.view.zipWithIndex.drop(startIndex).foreach {
       case (HeapHandler(_, Some(heapKey), _, _), index) =>
         updateHandlerIndex((Builtins.HeapEffQn, List(Heap(heapKey))), index)
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
       case _                         =>
+    }
+  private def trimHandlerIndex(): Unit =
+    handlerIndex.foreach { (_, idxStack) =>
+      while idxStack.nonEmpty && idxStack.top >= stack.size do idxStack.pop()
     }
 
   /** @param pc
@@ -143,6 +147,15 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             stack.push(pc)
             run(rec)
       case OperatorCall((effQn, effArgs), name, args) =>
+        def areEffArgsConvertible(ts1: List[VTerm], ts2: List[VTerm], tys: Telescope): Boolean =
+          (ts1, ts2, tys) match
+            case (Nil, Nil, Nil) => true
+            case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
+              checkSubsumption(t1, t2, Some(ty.ty))(using CheckSubsumptionMode.CONVERSION) match
+                case Right(_) => areEffArgsConvertible(ts1, ts2, tys.substLowers(t1))
+                case _        => false
+            case _ => throw IllegalArgumentException()
+
         Σ.getEffectOption(effQn) match
           case None => Left(MissingDeclaration(effQn))
           case Some(eff) =>
@@ -150,86 +163,17 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               effArgs <- effArgs.normalized
               args <- args.normalized
               r <-
-                def areEffArgsConvertible
-                  (
-                    ts1: List[VTerm],
-                    ts2: List[VTerm],
-                    tys: Telescope,
-                  )
-                  : Boolean =
-                  (ts1, ts2, tys) match
-                    case (Nil, Nil, Nil) => true
-                    case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
-                      checkSubsumption(
-                        t1,
-                        t2,
-                        Some(ty.ty),
-                      )(using CheckSubsumptionMode.CONVERSION) match
-                        case Right(_) =>
-                          areEffArgsConvertible(
-                            ts1,
-                            ts2,
-                            tys.substLowers(t1),
-                          )
-                        case _ => false
-                    case _ => throw IllegalArgumentException()
-                // TODO[P0]: do not prepare continuation for operators with None continuation usage.
-
-                val cterms = mutable.ArrayBuffer[CTerm]()
-                var nextHole: CTerm | Null = null
-                while (nextHole == null) {
-                  val c = stack.pop()
-                  c match
-                    case h @ Handler(
-                        hEff @ (hEffQn, hEffArgs),
-                        parameterBinding,
-                        parameter,
-                        parameterDisposer,
-                        parameterReplicator,
-                        outputEffects,
-                        outputUsage,
-                        outputType,
-                        transform,
-                        handlers,
-                        input,
-                      ) if {
-                        val tys = eff.tParamTys
-                        effQn == hEffQn &&
-                        effArgs.size == hEffArgs.size &&
-                        effArgs.size == tys.size &&
-                        areEffArgsConvertible(effArgs, hEffArgs, tys.toList)
-                      } =>
-                      val handlerBody = handlers(name)
-                      val handler = Handler(
-                        hEff,
-                        parameterBinding,
-                        parameter,
-                        parameterDisposer,
-                        parameterReplicator,
-                        outputEffects,
-                        outputUsage,
-                        outputType,
-                        transform,
-                        handlers,
-                        Hole,
-                      )(
-                        h.transformBoundName,
-                        h.handlersBoundNames,
-                      )
-                      val capturedStack = cterms.reverseIterator.toSeq
-
-                      val resume = Thunk(Continuation(handler, capturedStack))
-                      nextHole = handlerBody.substLowers(args :+ parameter :+ resume: _*)
-                    case _ if stack.isEmpty =>
-                      throw IllegalArgumentException("type error")
-                    // remove unnecessary computations with Hole so substitution and raise on the stack becomes more efficient
-                    case HeapHandler(_, Some(heapKey), _, _) =>
-                      handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).pop()
-                      cterms.addOne(substHole(c, Hole))
-                    case _ =>
-                      cterms.addOne(substHole(c, Hole))
-                }
-                run(nextHole.!!)
+                val handlerIdx = handlerIndex((effQn, effArgs)).top
+                val handler = stack(handlerIdx).asInstanceOf[Handler]
+                val opHandler = handler.handlers(name)
+                Σ.getOperator(effQn, name).continuationUsage match
+                  case None => run(opHandler.substLowers(args :+ handler.parameter: _*))
+                  case Some(_) =>
+                    val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
+                    stack.trimEnd(stack.size - handlerIdx)
+                    trimHandlerIndex()
+                    val continuation = Thunk(Continuation(handler, capturedStack))
+                    run(opHandler.substLowers(args :+ handler.parameter :+ continuation: _*))
             yield r
       case Continuation(handler, capturedStack) =>
         stack.pop() match
@@ -244,7 +188,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               ),
             )
             stack.pushAll(capturedStack)
-            refreshHandlerIndex(currentStackHeight)
+            regenerateHandlerIndex(currentStackHeight)
             run(Return(arg))
           case Projection(_, name) if name == n"dispose" =>
             val Application(_, param) = stack.pop(): @unchecked
