@@ -57,4 +57,4 @@ case class PreClause
     rhs: Option[CTerm], // `None` for absurd pattern
   )
 
-case class PreOperator(name: Name, ty: CTerm)
+case class PreOperator(name: Name, continuationUsage: Option[Usage], ty: CTerm)

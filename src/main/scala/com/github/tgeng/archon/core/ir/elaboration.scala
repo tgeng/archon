@@ -821,7 +821,15 @@ private def elaborateHead
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     for
       tParamTys <- elaborateContext(effect.tParamTys)
-      e = new Effect(effect.qn)(tParamTys)
+      e = new Effect(effect.qn)(
+        tParamTys,
+        effect.operators.map(_.continuationUsage).foldLeft[Option[Usage]](None) {
+          case (None, None) => None
+          // None continuation usage is approximated as U1.
+          case (Some(u), None) => Some(Usage.U1 | u)
+          case (None, Some(u)) => Some(Usage.U1 | u)
+        },
+      )
       _ <- checkEffect(e)
     yield Σ.addDeclaration(e)
   }
@@ -868,7 +876,7 @@ private def elaborateBody
         ctx.trace(s"elaborating operator ${operator.name}") {
           for
             case (paramTys, resultTy, usage) <- elaborateTy(operator.ty)
-            o = Operator(operator.name, paramTys, resultTy, usage)
+            o = Operator(operator.name, operator.continuationUsage, paramTys, resultTy, usage)
             _ <- checkOperator(effect.qn, o)
           yield _Σ.addOperator(effect.qn, o)
         }

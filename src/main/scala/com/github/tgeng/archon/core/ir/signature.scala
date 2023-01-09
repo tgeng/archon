@@ -71,7 +71,7 @@ enum Declaration:
         *    type, though such effects can only have `None` continuation usage so that the
         *    operation semantic is simple. 
         */
-      val continuationUsage: Option[Usage] = None,
+      val continuationUsage: Option[Usage],
     )
 
   def qn: QualifiedName
@@ -103,6 +103,7 @@ case class Clause
 case class Operator
   (
     name: Name,
+    continuationUsage: Option[Usage],
     paramTys: Telescope, /* + tParamTys */
     resultTy: VTerm /* + tParamTys + paramTys */,
     resultUsage: VTerm, /* + tParamTys + paramTys */
