@@ -169,34 +169,33 @@ private def elaborateHead
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (Telescope, ULevel, VTerm, VTerm)] =
+      : Either[IrError, (Telescope, ULevel, VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
           // Here and below we do not care about the declared effect types because data type
           // constructors are always total. Declaring non-total signature is not necessary (nor
           // desirable) but acceptable.
-          case F(Type(Top(ul, usage, eqDecidability)), _, _) =>
-            Right((Nil, ul, usage, eqDecidability))
+          case F(Type(Top(ul, eqDecidability)), _, _) =>
+            Right((Nil, ul, eqDecidability))
           case F(t, _, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
             elaborateTy(bodyTy)(using Γ :+ binding).map {
-              case (telescope, ul, usage, eqDecidability) =>
-                (binding +: telescope, ul, usage, eqDecidability)
+              case (telescope, ul, eqDecidability) =>
+                (binding +: telescope, ul, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
 
     for
       tParamTys <- elaborateTContext(preData.tParamTys)
-      case (tIndices, ul, usage, eqDecidability) <- elaborateTy(preData.ty)(using
+      case (tIndices, ul, eqDecidability) <- elaborateTy(preData.ty)(using
         Γ0 ++ tParamTys.map(_._1),
       )
       data = new Data(preData.qn)(
         tParamTys,
         tIndices,
         ul,
-        usage,
         eqDecidability,
       )
       _ <- checkData(data)
@@ -561,15 +560,6 @@ private def elaborateBody
                 case Right(_) => false
                 case _        => true
 
-            def dataHasU0InherentUsage(d: DataType): Boolean =
-              val DataType(qn, tArgs) = d
-              checkUsageSubsumption(
-                Σ.getData(qn).inherentUsage.substLowers(tArgs: _*),
-                UsageLiteral(Usage.U0),
-              )(using CheckSubsumptionMode.CONVERSION) match
-                case Right(_) => true
-                case _        => false
-
             // Find something to split.
             _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
               // Start with a very generic error in case no split actions can be taken at all.
@@ -667,7 +657,7 @@ private def elaborateBody
 
               // split constructor
               case (_, (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))) =>
-                if providedUsageLessThanU1(x) && !dataHasU0InherentUsage(_A) then
+                if providedUsageLessThanU1(x) then
                   Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
                 else
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
