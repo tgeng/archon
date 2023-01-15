@@ -772,6 +772,10 @@ def inferType
       //    - parameter should be added to transform and handler
       case h @ Handler(
           eff @ (qn, args),
+          parameterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,
@@ -779,113 +783,100 @@ def inferType
           handlers,
           input,
         ) =>
-        Σ.getEffectOption(qn) match
-          case None => Left(MissingDeclaration(qn))
-          case Some(effect) =>
-            Σ.getOperatorsOption(qn) match
-              case None => Left(MissingDefinition(qn))
-              case Some(operators) =>
-                if handlers.size != operators.size ||
-                  handlers.keySet != operators.map(_.name).toSet
-                then Left(UnmatchedHandlerImplementation(qn, handlers.keys))
-                else
-                  val outputCType = F(outputType, outputEffects)
-                  for
-                    effUsages <- checkTypes(args, effect.tParamTys.toList)
-                    case (inputCTy, inputUsages) <- inferType(input)
-                    r <- inputCTy match
-                      case F(inputTy, inputEff, inputUsage) =>
-                        val inputBinding = Binding(inputTy, inputUsage)(gn"v")
-                        for
-                          transformUsages <- checkType(
-                            transform,
-                            outputCType.weakened,
-                          )(using Γ :+ inputBinding)
-                          _ <- checkSubsumption(
-                            inputEff,
-                            EffectsUnion(
-                              outputEffects,
-                              EffectsLiteral(Set(eff)),
-                            ),
-                            Some(EffectsType()),
-                          )
-                          outputTyInherentUsage <- deriveTypeInherentUsage(
-                            outputType,
-                          )
-                          // check transform bound variable usage against last of `transformUsages`
-                          _ <- checkUsage(
-                            transformUsages.last.strengthened,
-                            inputBinding,
-                          )
-                          handlerUsages <- transpose(
-                            operators.map { opDecl =>
-                              val handlerBody = handlers(opDecl.name)
-                              val (argNames, resumeName) =
-                                h.handlersBoundNames(opDecl.name)
-                              val opArgs =
-                                args ++ vars(opDecl.paramTys.size - 1)
-                              val continuationUsage =
-                                effect.continuationUsage.substLowers(args: _*)
-                              val opResultTy =
-                                opDecl.resultTy.substLowers(opArgs: _*)
-                              val opResultUsage =
-                                opDecl.resultUsage.substLowers(opArgs: _*)
-                              val opParamTys = opDecl.paramTys
-                                .substLowers(args: _*)
-                                .zip(
-                                  argNames,
-                                )
-                                .map { case (binding, argName) =>
-                                  Binding(binding.ty, binding.usage)(argName)
-                                } :+ Binding(
-                                U(
-                                  FunctionType(
-                                    // weaken `opResult*` for continuation binding
-                                    Binding(
-                                      opResultTy.weakened,
-                                      opResultUsage.weakened,
-                                    )(gn"resume"),
-                                    F(
-                                      outputType
-                                        .weaken(opDecl.paramTys.size, 0),
-                                      outputEffects
-                                        .weaken(opDecl.paramTys.size, 0),
-                                    ),
-                                    Total,
-                                  ),
-                                ),
-                                continuationUsage.weaken(
-                                  opDecl.paramTys.size,
-                                  0,
-                                ),
-                              )(resumeName)
-                              for
-                                bodyUsages <- checkType(
-                                  handlerBody,
-                                  outputCType.weaken(opParamTys.size, 0),
-                                )(
-                                  using Γ ++ opParamTys,
-                                )
-                                _ <- checkUsages(
-                                  strengthUsages(bodyUsages.drop(Γ.size)),
-                                  opParamTys,
-                                )
-                              yield bodyUsages
-                                .dropRight(opParamTys.size)
-                                .map(_.strengthen(opParamTys.size, 0))
-                            },
-                          )
-                        yield (
-                          outputCType,
-                          // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
-                          (handlerUsages.reduce(_ + _) + transformUsages
-                            .dropRight(1)
-                            .map(
-                              _.strengthened,
-                            ) + effUsages) * UUnres + inputUsages,
-                        )
-                      case _ => Left(ExpectFType(inputCTy))
-                  yield r
+        val (effect, operators) = (for
+          effect <- Σ.getEffectOption(qn)
+          operators <- Σ.getOperatorsOption(qn)
+        yield (effect, operators)) match
+          case None    => return Left(MissingDeclaration(qn))
+          case Some(r) => r
+        if handlers.size != operators.size || handlers.keySet != operators.map(_.name).toSet then
+          return Left(UnmatchedHandlerImplementation(qn, handlers.keys))
+        for
+          effUsages <- checkTypes(args, effect.tParamTys.toList)
+          parameterUsages <- checkType(parameter, parameterBinding.ty)
+          case (inputCTy, inputUsages) <- inferType(input)
+          case (inputTy, inputEff, inputUsage) <- inputCTy match
+            case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
+            case _                                => Left(ExpectFType(inputCTy))
+          inputBinding = Binding(inputTy, inputUsage)(gn"v")
+          outputCType = F(outputType, outputEffects)
+          transformUsages <- checkType(transform, outputCType.weakened)(using
+            Γ :+ parameterBinding :+ inputBinding,
+          )
+          _ <- checkSubsumption(
+            inputEff,
+            EffectsUnion(outputEffects, EffectsLiteral(Set(eff))),
+            Some(EffectsType()),
+          )
+          // check transform bound variable usage against last of `transformUsages`
+          _ <- checkUsage(transformUsages.last.strengthened, inputBinding)
+          handlerUsages <- transpose(
+            operators.map { opDecl =>
+              val handlerBody = handlers(opDecl.name)
+              val (argNames, resumeName) =
+                h.handlersBoundNames(opDecl.name)
+              val opArgs =
+                args ++ vars(opDecl.paramTys.size - 1)
+              val continuationUsage =
+                effect.continuationUsage.substLowers(args: _*)
+              val opResultTy =
+                opDecl.resultTy.substLowers(opArgs: _*)
+              val opResultUsage =
+                opDecl.resultUsage.substLowers(opArgs: _*)
+              val opParamTys = opDecl.paramTys
+                .substLowers(args: _*)
+                .zip(
+                  argNames,
+                )
+                .map { case (binding, argName) =>
+                  Binding(binding.ty, binding.usage)(argName)
+                } :+ Binding(
+                U(
+                  FunctionType(
+                    // weaken `opResult*` for continuation binding
+                    Binding(
+                      opResultTy.weakened,
+                      opResultUsage.weakened,
+                    )(gn"resume"),
+                    F(
+                      outputType
+                        .weaken(opDecl.paramTys.size, 0),
+                      outputEffects
+                        .weaken(opDecl.paramTys.size, 0),
+                    ),
+                    Total,
+                  ),
+                ),
+                continuationUsage.weaken(
+                  opDecl.paramTys.size,
+                  0,
+                ),
+              )(resumeName)
+              for
+                bodyUsages <- checkType(
+                  handlerBody,
+                  outputCType.weaken(opParamTys.size, 0),
+                )(
+                  using Γ ++ opParamTys,
+                )
+                _ <- checkUsages(
+                  strengthUsages(bodyUsages.drop(Γ.size)),
+                  opParamTys,
+                )
+              yield bodyUsages
+                .dropRight(opParamTys.size)
+                .map(_.strengthen(opParamTys.size, 0))
+            },
+          )
+        yield (
+          outputCType,
+          // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
+          (handlerUsages.reduce(_ + _) + transformUsages
+            .dropRight(1)
+            .map(
+              _.strengthened,
+            ) + effUsages) * UUnres + inputUsages,
+        )
       case AllocOp(heap, vTy) =>
         for
           heapUsages <- checkType(heap, HeapType())
@@ -1550,40 +1541,24 @@ private def checkEqDecidabilitySubsumption
     Right(())
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
 
-// usage and binding must be at the same level
-private def checkUsage
-  (usage: VTerm, binding: Binding[VTerm])
+private def verifyUsages
+  (usages: Usages)
+  (count: Nat = usages.size)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] = checkUsageSubsumption(usage, binding.usage)(using SUBSUMPTION)
-
-private def strengthUsages
-  (usages: Seq[VTerm])
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : List[VTerm] =
-  usages.zipWithIndex.map { (u, i) =>
-    u.strengthen(usages.size - i, 0)
-  }.toList
-
-// usages must be at level corresponding to bindings
-private def checkUsages
-  (usages: List[VTerm], bindings: List[Binding[VTerm]])
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Unit] =
-  (usages, bindings) match
-    case (Nil, Nil) => Right(())
-    case (usage :: usages, binding :: bindings) =>
-      for
-        _ <- checkUsage(usage, binding)
-        _ <- checkUsages(usages, bindings)(using Γ :+ binding)
-      yield ()
-    case _ =>
-      throw IllegalArgumentException("mismatched usages and binding length")
+  : Either[IrError, Usages] =
+  transpose(usages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
+    checkUsageSubsumption(v, Γ.resolve(i).usage)(using SUBSUMPTION)
+  }) >> Right(usages.drop(count).map{v => 
+    try
+      v.strengthen(count, 0)
+    catch
+      // It's possible for a term's usage to reference a usage term after it. For example consider
+      // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
+      // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UUnres.
+      case _: StrengthenException => UsageLiteral(Usage.UUnres)
+  })
 
 /** @param invert
   *   useful when checking patterns where the consumed usages are actually provided usages because

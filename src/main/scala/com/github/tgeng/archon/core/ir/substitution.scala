@@ -24,6 +24,8 @@ import CTerm.*
 import CoPattern.*
 import Pattern.*
 
+case class StrengthenException(v: Var | PVar, amount: Int) extends Exception
+
 private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)]:
   override def withBindings[T]
     (bindingNames: => Seq[Ref[Name]])
@@ -34,10 +36,20 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
     action(using (ctx._1, ctx._2 + bindingNames.size))
 
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
-    if v.idx >= ctx._2 then Var(v.idx + ctx._1)(using v.sourceInfo) else v
+    if v.idx >= ctx._2 then
+      val newIndex = v.idx + ctx._1
+      if newIndex < 0 then
+        throw StrengthenException(v, ctx._1)
+      Var(newIndex)(using v.sourceInfo)
+    else v
 
   override def transformPVar(v: PVar)(using ctx: (Int, Int))(using Σ: Signature) =
-    if v.idx >= ctx._2 then PVar(v.idx + ctx._1)(using v.sourceInfo) else v
+    if v.idx >= ctx._2 then
+      val newIndex = v.idx + ctx._1
+      if newIndex < 0 then
+        throw StrengthenException(v, ctx._1)
+      PVar(newIndex)(using v.sourceInfo)
+    else v
 
 end RaiseTransformer
 
@@ -65,7 +77,7 @@ given RaisableTelescope: Raisable[Telescope] with
         binding.map(RaisableVTerm.raise(_, amount, bar)) :: raise(
           telescope,
           amount,
-          bar + 1
+          bar + 1,
         )
 
 private object PatternSubstituteTransformer
@@ -87,10 +99,10 @@ private object PatternSubstituteTransformer
         RaisableVTerm.raise(
           t.toTerm.getOrElse(
             throw IllegalArgumentException(
-              "substitutor using patterns should not contain PAbsurd"
-            )
+              "substitutor using patterns should not contain PAbsurd",
+            ),
           ),
-          ctx._2
+          ctx._2,
         )
       case _ => v
 
@@ -109,7 +121,7 @@ given SubstitutablePattern: Substitutable[Pattern, Pattern] with
     (
       p: Pattern,
       substitution: PartialSubstitution[Pattern],
-      offset: Int
+      offset: Int,
     )
     (using Σ: Signature)
     : Pattern =
@@ -120,7 +132,7 @@ given SubstitutableCoPattern: Substitutable[CoPattern, Pattern] with
     (
       p: CoPattern,
       substitution: PartialSubstitution[Pattern],
-      offset: Int
+      offset: Int,
     )
     (using Σ: Signature)
     : CoPattern =
@@ -159,7 +171,7 @@ given SubstitutableVTerm: Substitutable[VTerm, VTerm] with
     (
       v: VTerm,
       substitution: PartialSubstitution[VTerm],
-      offset: Int
+      offset: Int,
     )
     (using Σ: Signature)
     : VTerm =
@@ -170,7 +182,7 @@ given SubstitutableCTerm: Substitutable[CTerm, VTerm] with
     (
       c: CTerm,
       substitution: PartialSubstitution[VTerm],
-      offset: Int
+      offset: Int,
     )
     (using Σ: Signature)
     : CTerm =
@@ -181,18 +193,18 @@ given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
     (
       telescope: Telescope,
       substitution: PartialSubstitution[VTerm],
-      offset: Int
+      offset: Int,
     )
     (using Σ: Signature)
     : Telescope = telescope match
     case Nil => Nil
     case binding :: telescope =>
       binding.map(
-        SubstitutableVTerm.substitute(_, substitution, offset)
+        SubstitutableVTerm.substitute(_, substitution, offset),
       ) :: substitute(
         telescope,
         substitution,
-        offset + 1
+        offset + 1,
       )
 
 extension(c: CTerm)
@@ -313,7 +325,7 @@ extension(v: CoPattern)
 extension(ul: ULevel)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     ul.map(
-      SubstitutableVTerm.substitute(_, substitution)
+      SubstitutableVTerm.substitute(_, substitution),
     )
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
     ul.map(RaisableVTerm.raise(_, amount, at))
@@ -323,8 +335,8 @@ extension(ul: ULevel)
     RaisableVTerm.raise(
       _,
       -amount,
-      at
-    )
+      at,
+    ),
   )
 
   /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
@@ -352,7 +364,7 @@ extension(telescope: Telescope)
     RaisableTelescope.raise(
       telescope,
       -amount,
-      at
+      at,
     )
 
   /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the

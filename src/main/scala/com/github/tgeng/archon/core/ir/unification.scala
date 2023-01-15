@@ -31,7 +31,7 @@ enum UnificationResult:
       σ: Substitutor[Pattern],
       /** * The recovering substitution τ: Γ -> Δ.
         */
-      τ: Substitutor[Pattern]
+      τ: Substitutor[Pattern],
     )
   case UNo(u: VTerm, v: VTerm, ty: VTerm, failureType: UnificationFailureType)
   case UUndecided(u: VTerm, v: VTerm, ty: VTerm)
@@ -78,24 +78,24 @@ def unify
       // injectivity
       case (ty @ Type(upperBound1), Type(upperBound2), _) => unify(upperBound1, upperBound2, ty)
       case (
-          Top(UωLevel(l1), usage1, eqDecidability1),
-          Top(UωLevel(l2), usage2, eqDecidability2),
-          _
+          Top(UωLevel(l1), eqDecidability1),
+          Top(UωLevel(l2), eqDecidability2),
+          _,
         ) if l1 == l2 =>
-        unifyAll(
-          List(usage1, eqDecidability1),
-          List(usage2, eqDecidability2),
-          telescope(UsageType(), EqDecidabilityType())
+        unify(
+          eqDecidability1,
+          eqDecidability2,
+          EqDecidabilityType(),
         )
       case (
-          Top(USimpleLevel(l1), usage1, eqDecidability1),
-          Top(USimpleLevel(l2), usage2, eqDecidability2),
-          _
+          Top(USimpleLevel(l1), eqDecidability1),
+          Top(USimpleLevel(l2), eqDecidability2),
+          _,
         ) =>
         unifyAll(
-          List(l1, usage1, eqDecidability1),
-          List(l2, usage2, eqDecidability2),
-          telescope(LevelType(), UsageType(), EqDecidabilityType())
+          List(l1, eqDecidability1),
+          List(l2, eqDecidability2),
+          telescope(LevelType(), EqDecidabilityType()),
         )
       // We do not unify any computation types since it does not seem to be very
       // useful. If someday we would add such support, we will need to extend
@@ -141,9 +141,8 @@ def unify
         unifyAll(
           List(ty1, left1, right1),
           List(ty2, left2, right2),
-          telescope(Type(ty1), ty1, ty1)
+          telescope(Type(ty1), ty1, ty1),
         )
-      case (EffectsType(u1), EffectsType(u2), _) => unify(u1, u2, UsageType())
       case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _)
         if status1 == status2 =>
         unifyAll(List(heap1, ty1), List(heap2, ty2), telescope(HeapType(), Type(ty1)))
@@ -168,8 +167,8 @@ private object CycleVisitor
   extends Visitor[
     (
       /* index causing the cycle */ Nat,
-      /* whether a type or value constructor is encountered */ Boolean
-    ), /* cycle found */ Boolean
+      /* whether a type or value constructor is encountered */ Boolean,
+    ), /* cycle found */ Boolean,
   ]:
   override def combine(rs: Boolean*)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
     rs.foldLeft(false)(_ || _)
@@ -298,9 +297,9 @@ def unifyAll
             for uRes2 <- unifyAll(
                 u̅.map(_.subst(σt)),
                 v̅.map(_.subst(σt)),
-                telescope.substLowers(u).subst(σt)
+                telescope.substLowers(u).subst(σt),
               )(
-                using _Δ
+                using _Δ,
               )
             yield compose(uRes, uRes2)
           case u => Right(u)
