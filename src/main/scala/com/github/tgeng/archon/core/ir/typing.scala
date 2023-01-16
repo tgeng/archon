@@ -794,78 +794,104 @@ def inferType
         for
           effUsages <- checkTypes(args, effect.tParamTys.toList)
           parameterUsages <- checkType(parameter, parameterBinding.ty)
+          parameterOpsEffects = EffectsSimpleFilter(outputEffects.weakened)
+          parameterOpsΓ = Γ :+ parameterBinding
+          parameterDisposerUsages <- checkType(
+            parameterDisposer,
+            F(DataType(Builtins.UnitQn), parameterOpsEffects),
+          )(using parameterOpsΓ)
+          parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
+          parameterReplicatorUsages <- parameterReplicator match
+            case Some(parameterReplicator) =>
+              for
+                parameterReplicatorUsages <- checkType(
+                  parameterReplicator,
+                  F(
+                    DataType(Builtins.PairQn, List(parameterBinding.ty.weakened)),
+                    parameterOpsEffects,
+                  ),
+                )(using parameterOpsΓ)
+                parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
+                  parameterOpsΓ,
+                )
+              yield parameterReplicatorUsages
+            case None =>
+              // parameterReplicator is not specified, in this case, the outputEffects must not be
+              // re-entrant.
+              for _ <- checkType(outputEffects, EffectsType(Some(Usage.UAff)))
+              yield List.fill(Γ.size)(UsageLiteral(Usage.U0))
           case (inputCTy, inputUsages) <- inferType(input)
           case (inputTy, inputEff, inputUsage) <- inputCTy match
             case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
             case _                                => Left(ExpectFType(inputCTy))
           inputBinding = Binding(inputTy, inputUsage)(gn"v")
           outputCType = F(outputType, outputEffects)
-          transformUsages <- checkType(transform, outputCType.weakened)(using
-            Γ :+ parameterBinding :+ inputBinding,
-          )
+          transformΓ = Γ :+ parameterBinding :+ inputBinding.weakened
+          transformUsages <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
+          transformUsages <- verifyUsages(transformUsages)(2)
           _ <- checkSubsumption(
             inputEff,
             EffectsUnion(outputEffects, EffectsLiteral(Set(eff))),
             Some(EffectsType()),
           )
-          // check transform bound variable usage against last of `transformUsages`
-          _ <- checkUsage(transformUsages.last.strengthened, inputBinding)
           handlerUsages <- transpose(
             operators.map { opDecl =>
               val handlerBody = handlers(opDecl.name)
-              val (argNames, resumeName) =
-                h.handlersBoundNames(opDecl.name)
-              val opArgs =
-                args ++ vars(opDecl.paramTys.size - 1)
-              val continuationUsage =
-                effect.continuationUsage.substLowers(args: _*)
-              val opResultTy =
-                opDecl.resultTy.substLowers(opArgs: _*)
-              val opResultUsage =
-                opDecl.resultUsage.substLowers(opArgs: _*)
-              val opParamTys = opDecl.paramTys
+              val (argNames, parameterName, resumeNameOption) = h.handlersBoundNames(opDecl.name)
+              val opArgs = args ++ vars(opDecl.paramTys.size - 1)
+              val opResultTy = opDecl.resultTy.substLowers(opArgs: _*)
+              val opResultUsage = opDecl.resultUsage.substLowers(opArgs: _*)
+              val opParamTys = (opDecl.paramTys
                 .substLowers(args: _*)
-                .zip(
-                  argNames,
-                )
+                .zip(argNames)
                 .map { case (binding, argName) =>
                   Binding(binding.ty, binding.usage)(argName)
-                } :+ Binding(
-                U(
-                  FunctionType(
-                    // weaken `opResult*` for continuation binding
-                    Binding(
-                      opResultTy.weakened,
-                      opResultUsage.weakened,
-                    )(gn"resume"),
-                    F(
-                      outputType
-                        .weaken(opDecl.paramTys.size, 0),
-                      outputEffects
-                        .weaken(opDecl.paramTys.size, 0),
-                    ),
-                    Total,
-                  ),
-                ),
-                continuationUsage.weaken(
-                  opDecl.paramTys.size,
-                  0,
-                ),
-              )(resumeName)
+                } :+ parameterBinding.weaken(opDecl.paramTys.size, 0))
               for
-                bodyUsages <- checkType(
-                  handlerBody,
-                  outputCType.weaken(opParamTys.size, 0),
-                )(
-                  using Γ ++ opParamTys,
+                continuationTy <- opDecl.continuationUsage match
+                  case Some(continuationUsage) =>
+                    resumeNameOption match
+                      case Some(resumeName) =>
+                        for
+                          parameterTypeLevel <- inferLevel(parameterBinding.ty)
+                          inputTypeLevel <- inferLevel(inputTy)
+                          outputTypeLevel <- inferLevel(outputType)
+                          level <- (parameterTypeLevel, inputTypeLevel, outputTypeLevel) match
+                            case (
+                                ULevel.USimpleLevel(p),
+                                ULevel.USimpleLevel(i),
+                                ULevel.USimpleLevel(o),
+                              ) =>
+                              Right(LevelMax(p, i, o))
+                            case (l: ULevel.UωLevel, _, _) => Left(LevelTooBig(l))
+                            case (_, l: ULevel.UωLevel, _) => Left(LevelTooBig(l))
+                            case (_, _, l: ULevel.UωLevel) => Left(LevelTooBig(l))
+                        yield List(
+                          Binding(
+                            U(
+                              RecordType(
+                                Builtins.ContinuationQn,
+                                List(
+                                  level,
+                                  UsageLiteral(continuationUsage),
+                                  parameterBinding.ty,
+                                  inputTy,
+                                  outputEffects,
+                                  outputUsage,
+                                  outputType,
+                                ),
+                              ).weaken(opDecl.paramTys.size + 1, 0),
+                            ),
+                          )(resumeName),
+                        )
+                      case None => throw IllegalArgumentException("missing name for continuation")
+                  case None => Right(Nil)
+                opParamTys <- Right(opParamTys ++ continuationTy)
+                bodyUsages <- checkType(handlerBody, outputCType.weaken(opParamTys.size, 0))(using
+                  Γ ++ opParamTys,
                 )
-                _ <- checkUsages(
-                  strengthUsages(bodyUsages.drop(Γ.size)),
-                  opParamTys,
-                )
+                bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
               yield bodyUsages
-                .dropRight(opParamTys.size)
-                .map(_.strengthen(opParamTys.size, 0))
             },
           )
         yield (
@@ -1541,6 +1567,13 @@ private def checkEqDecidabilitySubsumption
     Right(())
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
 
+/** @param usages
+  *   usage terms should live in Γ
+  * @param count
+  *   number of usages to verify, counting from the end (right)
+  * @return
+  *   unverified usages
+  */
 private def verifyUsages
   (usages: Usages)
   (count: Nat = usages.size)
@@ -1550,9 +1583,8 @@ private def verifyUsages
   : Either[IrError, Usages] =
   transpose(usages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
     checkUsageSubsumption(v, Γ.resolve(i).usage)(using SUBSUMPTION)
-  }) >> Right(usages.drop(count).map{v => 
-    try
-      v.strengthen(count, 0)
+  }) >> Right(usages.drop(count).map { v =>
+    try v.strengthen(count, 0)
     catch
       // It's possible for a term's usage to reference a usage term after it. For example consider
       // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`

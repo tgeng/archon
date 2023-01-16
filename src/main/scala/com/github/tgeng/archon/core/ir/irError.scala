@@ -46,6 +46,7 @@ enum IrError extends HasException:
       mode: CheckSubsumptionMode
     )
   case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
+  case LevelTooBig(level: ULevel)
   case NotEqDecidabilitySubsumption
     (
       sub: VTerm,

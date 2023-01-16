@@ -274,7 +274,7 @@ object VTerm:
 
   def LevelSuc(t: VTerm): Level = Level(0, Map(t -> 1))
 
-  def LevelMax(t1: VTerm, t2: VTerm): Level = Level(0, Map(t1 -> 0, t2 -> 0))
+  def LevelMax(ts: VTerm*): Level = Level(0, Map(ts.map(_ -> 0): _*))
 
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
@@ -467,13 +467,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         *     outputs `outputType`
         */
       handlers: Map[
-        Name, /* binding offset = 1 (for parameter) + paramTys + 1 (for resume if needed) */ CTerm,
+        Name,
+        /* binding offset = 1 (for parameter) + paramTys + 1 (for resume if needed) */ CTerm,
       ],
       input: CTerm,
     )
     (
       val transformBoundName: Ref[Name],
-      val handlersBoundNames: Map[Name, (Seq[Ref[Name]], /* resume name */ Ref[Name])],
+      val handlersBoundNames: Map[
+        Name,
+        (Seq[Ref[Name]], /* parameter name */ Ref[Name], /* resume name */ Option[Ref[Name]]),
+      ],
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
