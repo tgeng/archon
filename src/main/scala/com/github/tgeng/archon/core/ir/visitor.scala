@@ -240,7 +240,6 @@ trait Visitor[C, R]:
 
   def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
     visitULevel(top.ul),
-    visitVTerm(top.usage),
     visitVTerm(top.eqDecidability),
   )
 
@@ -301,7 +300,7 @@ trait Visitor[C, R]:
 
   def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
     combine(
-      (effects.literal.map(visitEff) ++ effects.unionOperands.map(
+      (effects.literal.map(visitEff) ++ effects.unionOperands.keys.map(
         visitVTerm,
       )).toSeq: _*,
     )
@@ -407,6 +406,24 @@ trait Visitor[C, R]:
   def visitContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): R =
     combine(continuation.capturedStack.map(visitCTerm): _*)
 
+  def visitContinuationReplicationState
+    (c: ContinuationReplicationState)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    combine(c.stack1.map(visitCTerm) ++ c.stack2.map(visitCTerm): _*)
+
+  def visitContinuationReplicationStateAppender
+    (c: ContinuationReplicationStateAppender)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    combine(
+      visitCTerm(c.paramPairs),
+      visitHandler(c.handler),
+      visitContinuationReplicationState(c.state),
+    )
+
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitEff(handler.eff) +:
@@ -417,8 +434,8 @@ trait Visitor[C, R]:
           visitCTerm(handler.transform)
         } +:
         handler.handlers.map { (name, body) =>
-          val (argNames, resumeName) = handler.handlersBoundNames(name)
-          withBindings(argNames :+ resumeName) {
+          val (argNames, parameterName, resumeName) = handler.handlersBoundNames(name)
+          withBindings((argNames :+ parameterName) ++ resumeName) {
             visitCTerm(body)
           }
         }.toSeq :+
@@ -465,25 +482,27 @@ trait Visitor[C, R]:
   def visitName(name: Name)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature): R = tm match
-    case Hole                       => visitHole
-    case cType: CType               => visitCType(cType)
-    case cTop: CTop                 => visitCTop(cTop)
-    case d: Def                     => visitDef(d)
-    case force: Force               => visitForce(force)
-    case f: F                       => visitF(f)
-    case r: Return                  => visitReturn(r)
-    case let: Let                   => visitLet(let)
-    case functionType: FunctionType => visitFunctionType(functionType)
-    case application: Application   => visitApplication(application)
-    case recordType: RecordType     => visitRecordType(recordType)
-    case projection: Projection     => visitProjection(projection)
-    case operatorCall: OperatorCall => visitOperatorCall(operatorCall)
-    case continuation: Continuation => visitContinuation(continuation)
-    case handler: Handler           => visitHandler(handler)
-    case allocOp: AllocOp           => visitAllocOp(allocOp)
-    case setOp: SetOp               => visitSetOp(setOp)
-    case getOp: GetOp               => visitGetOp(getOp)
-    case heapHandler: HeapHandler   => visitHeapHandler(heapHandler)
+    case Hole                                    => visitHole
+    case cType: CType                            => visitCType(cType)
+    case cTop: CTop                              => visitCTop(cTop)
+    case d: Def                                  => visitDef(d)
+    case force: Force                            => visitForce(force)
+    case f: F                                    => visitF(f)
+    case r: Return                               => visitReturn(r)
+    case let: Let                                => visitLet(let)
+    case functionType: FunctionType              => visitFunctionType(functionType)
+    case application: Application                => visitApplication(application)
+    case recordType: RecordType                  => visitRecordType(recordType)
+    case projection: Projection                  => visitProjection(projection)
+    case operatorCall: OperatorCall              => visitOperatorCall(operatorCall)
+    case continuation: Continuation              => visitContinuation(continuation)
+    case c: ContinuationReplicationState         => visitContinuationReplicationState(c)
+    case c: ContinuationReplicationStateAppender => visitContinuationReplicationStateAppender(c)
+    case handler: Handler                        => visitHandler(handler)
+    case allocOp: AllocOp                        => visitAllocOp(allocOp)
+    case setOp: SetOp                            => visitSetOp(setOp)
+    case getOp: GetOp                            => visitGetOp(getOp)
+    case heapHandler: HeapHandler                => visitHeapHandler(heapHandler)
 
 trait Transformer[C]:
 
@@ -640,7 +659,6 @@ trait Transformer[C]:
 
   def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(
     transformULevel(top.ul),
-    transformVTerm(top.usage),
     transformVTerm(top.eqDecidability),
   )(using top.sourceInfo)
 
@@ -707,7 +725,7 @@ trait Transformer[C]:
 
   def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm = Effects(
     effects.literal.map { (qn, args) => (qn, args.map(transformVTerm)) },
-    effects.unionOperands.map(transformVTerm),
+    effects.unionOperands.map((v, f) => transformVTerm(v) -> f),
   )(using effects.sourceInfo)
 
   def transformLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): VTerm =
@@ -807,11 +825,38 @@ trait Transformer[C]:
     )(using operatorCall.sourceInfo)
 
   def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
-    Continuation(continuation.capturedStack.map(transformCTerm))
+    Continuation(
+      transformHandler(continuation.handler),
+      continuation.capturedStack.map(transformCTerm),
+    )
+  def transformContinuationReplicationState
+    (c: ContinuationReplicationState)
+    (using ctx: C)
+    (using Σ: Signature)
+    : ContinuationReplicationState =
+    ContinuationReplicationState(
+      c.handlerIndex,
+      c.stack1.map(transformCTerm),
+      c.stack2.map(transformCTerm),
+    )
 
-  def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformContinuationReplicationStateAppender
+    (c: ContinuationReplicationStateAppender)
+    (using ctx: C)
+    (using Σ: Signature)
+    : CTerm = ContinuationReplicationStateAppender(
+    transformCTerm(c.paramPairs),
+    transformHandler(c.handler),
+    transformContinuationReplicationState(c.state),
+  )
+
+  def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
     Handler(
       transformEff(handler.eff),
+      handler.parameterBinding.map(transformVTerm),
+      transformVTerm(handler.parameter),
+      transformCTerm(handler.parameterDisposer),
+      handler.parameterReplicator.map(transformCTerm),
       transformVTerm(handler.outputEffects),
       transformVTerm(handler.outputUsage),
       transformVTerm(handler.outputType),
@@ -819,10 +864,10 @@ trait Transformer[C]:
         transformCTerm(handler.transform)
       },
       handler.handlers.map { (name, body) =>
-        val (argNames, resumeName) = handler.handlersBoundNames(name)
+        val (argNames, parameterName, resumeName) = handler.handlersBoundNames(name)
         (
           name,
-          withBindings(argNames :+ resumeName) {
+          withBindings((argNames :+ parameterName) ++ resumeName) {
             transformCTerm(body)
           },
         )
@@ -877,22 +922,25 @@ trait Transformer[C]:
 
   def transformCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature): CTerm =
     tm match
-      case Hole                       => transformHole
-      case cType: CType               => transformCType(cType)
-      case cTop: CTop                 => transformCTop(cTop)
-      case d: Def                     => transformDef(d)
-      case force: Force               => transformForce(force)
-      case f: F                       => transformF(f)
-      case r: Return                  => transformReturn(r)
-      case let: Let                   => transformLet(let)
-      case functionType: FunctionType => transformFunctionType(functionType)
-      case application: Application   => transformApplication(application)
-      case recordType: RecordType     => transformRecordType(recordType)
-      case projection: Projection     => transformProjection(projection)
-      case operatorCall: OperatorCall => transformOperatorCall(operatorCall)
-      case continuation: Continuation => transformContinuation(continuation)
-      case handler: Handler           => transformHandler(handler)
-      case allocOp: AllocOp           => transformAllocOp(allocOp)
-      case setOp: SetOp               => transformSetOp(setOp)
-      case getOp: GetOp               => transformGetOp(getOp)
-      case heapHandler: HeapHandler   => transformHeapHandler(heapHandler)
+      case Hole                            => transformHole
+      case cType: CType                    => transformCType(cType)
+      case cTop: CTop                      => transformCTop(cTop)
+      case d: Def                          => transformDef(d)
+      case force: Force                    => transformForce(force)
+      case f: F                            => transformF(f)
+      case r: Return                       => transformReturn(r)
+      case let: Let                        => transformLet(let)
+      case functionType: FunctionType      => transformFunctionType(functionType)
+      case application: Application        => transformApplication(application)
+      case recordType: RecordType          => transformRecordType(recordType)
+      case projection: Projection          => transformProjection(projection)
+      case operatorCall: OperatorCall      => transformOperatorCall(operatorCall)
+      case continuation: Continuation      => transformContinuation(continuation)
+      case c: ContinuationReplicationState => transformContinuationReplicationState(c)
+      case c: ContinuationReplicationStateAppender =>
+        transformContinuationReplicationStateAppender(c)
+      case handler: Handler         => transformHandler(handler)
+      case allocOp: AllocOp         => transformAllocOp(allocOp)
+      case setOp: SetOp             => transformSetOp(setOp)
+      case getOp: GetOp             => transformGetOp(getOp)
+      case heapHandler: HeapHandler => transformHeapHandler(heapHandler)

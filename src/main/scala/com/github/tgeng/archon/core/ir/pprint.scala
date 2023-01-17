@@ -60,7 +60,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
             ctx.potentiallyConflictingNames
               .getOrElse(ref, Nil)
               .map(_.value)
-              .toSet
+              .toSet,
           )
     }
 
@@ -99,7 +99,7 @@ import PPrintPrecedence.*
 class PPrintContext
   (
     val names: mutable.ArrayBuffer[Ref[Name]],
-    var currentPrecedence: PPrintPrecedence = PPBase
+    var currentPrecedence: PPrintPrecedence = PPBase,
   ):
   def resolve(dbIndex: Nat): Ref[Name] = names(names.size - 1 - dbIndex)
 
@@ -125,7 +125,7 @@ class PPrintContext
 
 object PPrintContext:
   def apply(ctx: Context) = new PPrintContext(
-    ctx.map(_.name).to(mutable.ArrayBuffer)
+    ctx.map(_.name).to(mutable.ArrayBuffer),
   )
 
 object PrettyPrinter extends Visitor[PPrintContext, Block]:
@@ -152,7 +152,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     visitCTerm(_)
 
   given (using PPrintContext)(using Signature): Conversion[Binding[VTerm], Block] = visitBinding(
-    _
+    _,
   )
 
   given (using PPrintContext)(using Signature): Conversion[Ref[Name], Block] =
@@ -193,7 +193,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         case (binding, INVARIANT)     => binding
         case (binding, COVARIANT)     => Block("+", binding)
         case (binding, CONTRAVARIANT) => Block("-", binding)
-      }
+      },
     )
 
   override def visitTContext
@@ -205,7 +205,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       case (binding, INVARIANT)     => binding
       case (binding, COVARIANT)     => Block("+", binding)
       case (binding, CONTRAVARIANT) => Block("-", binding)
-    }
+    },
   )
 
   override def visitPreContext
@@ -213,7 +213,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = bracketAndComma(
-    telescopeToBlock(telescope, _.name)(visitPreBinding)
+    telescopeToBlock(telescope, _.name)(visitPreBinding),
   )
 
   override def visitTelescope
@@ -221,7 +221,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = bracketAndComma(
-    telescopeToBlock(telescope, _.name)(visitBinding)
+    telescopeToBlock(telescope, _.name)(visitBinding),
   )
 
   private def telescopeToBlock[T]
@@ -253,7 +253,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case n            => Block(n.toString + ":", binding.ty)
 
   override def visitPVar(pVar: PVar)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
-    ctx.resolve(pVar.idx).value.toString
+    ctx.resolve(pVar.idx).value.toString,
   )
 
   override def visitPRefl(PRefl: PRefl)(using gctx: PPrintContext)(using Σ: Signature): Block =
@@ -265,7 +265,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block = bracketAndSpace(
     pDataType.qn,
-    pDataType.args.map(visitPattern)
+    pDataType.args.map(visitPattern),
   )
 
   override def visitPForcedDataType
@@ -274,7 +274,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block = bracketAndSpace(
     Block("." + pDataType.qn.shortName),
-    pDataType.args.map(visitPattern)
+    pDataType.args.map(visitPattern),
   )
 
   override def visitPForced
@@ -296,12 +296,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     : Block = Block(Concat, "#", p.name)
 
   override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
-    case Type(Top(USimpleLevel(Level(l, operands)), _, _)) if operands.isEmpty =>
+    case Type(Top(USimpleLevel(Level(l, operands)), _)) if operands.isEmpty =>
       Block("Type" + l.sub)
     // TODO: show usage and eqDecidability
-    case Type(Top(USimpleLevel(l), _, _)) => app("Type", l)
-    case Type(Top(UωLevel(layer), _, _))  => Block("TYPE" + layer.sub)
-    case Type(upperBound)                 => app("SubtypeOf", upperBound)
+    case Type(Top(USimpleLevel(l), _)) => app("Type", l)
+    case Type(Top(UωLevel(layer), _))  => Block("TYPE" + layer.sub)
+    case Type(upperBound)              => app("SubtypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
     top.ul match
@@ -341,11 +341,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     "Equality",
     equalityType.ty,
     equalityType.left,
-    equalityType.right
+    equalityType.right,
   )
 
   override def visitRefl(refl: Refl)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
-    "Refl{}"
+    "Refl{}",
   )
 
   override def visitEffects
@@ -356,8 +356,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp) {
-        (effects.literal.map(visitEff) ++ effects.unionOperands.map(
-          visitVTerm
+        // TODO: print effect filter
+        (effects.literal.map(visitEff) ++ effects.unionOperands.keys.map(
+          visitVTerm,
         )) sepBy "|"
       }
 
@@ -366,7 +367,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       case (v, 0) => v
       case (v, offset) =>
         ctx.withPrecedence(PPLevelOp)(
-          Block(Whitespace, NoWrap, v, "+", offset.toString)
+          Block(Whitespace, NoWrap, v, "+", offset.toString),
         )
 
     val operands = mutable.ArrayBuffer[Block]()
@@ -387,7 +388,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (heap: Heap)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = Block(heap.key.toString)
 
@@ -395,7 +396,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (cellType: CellType)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = cellType.status match
     case CellStatus.Initialized   => app("Cell", cellType.heap, cellType.ty)
@@ -405,7 +406,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (cell: Cell)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     Block("cell" + cell.index + "@" + cell.heapKey)
@@ -417,7 +418,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (cType: CType)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = cType match
     case CType(CTop(USimpleLevel(Level(l, operands)), _), eff) if operands.isEmpty =>
@@ -433,7 +434,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (cTop: CTop)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     cTop.ul match
@@ -446,7 +447,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (d: Def)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     Block(Concat, NoWrap, "𝑓 ", d.qn.shortName)
@@ -455,7 +456,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (force: Force)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = app("frc", force.v)
 
@@ -466,7 +467,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (r: Return)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = app("rtn", r.v)
 
@@ -474,7 +475,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (let: Let)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     visitStatements(let)
@@ -482,7 +483,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitFunctionType
     (functionType: FunctionType)
     (using
-      ctx: PPrintContext
+      ctx: PPrintContext,
     )
     (using Σ: Signature)
     : Block = ctx.withPrecedence(PPFun) {
@@ -490,14 +491,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       case FunctionType(
           binding,
           bodyTy,
-          effects
+          effects,
         ) =>
         Left(
           (
             (visitBinding(binding), visitVTerm(effects)),
             bodyTy,
-            Seq(binding.name)
-          )
+            Seq(binding.name),
+          ),
         )
       case c => Right(visitCTerm(c))
     }
@@ -509,13 +510,13 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       bindings.map { case (binding, effects) =>
         ctype(effects, binding, "->")
       },
-      body
+      body,
     )
   }
 
   override def visitApplication
     (
-      application: Application
+      application: Application,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
@@ -533,7 +534,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (elim: Elimination[VTerm])
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = elim match
     case Elimination.ETerm(t) => t
@@ -541,18 +542,18 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   override def visitRecordType
     (
-      recordType: RecordType
+      recordType: RecordType,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = ctype(
     recordType.effects,
-    bracketAndSpace(recordType.qn, recordType.args.map(visitVTerm))
+    bracketAndSpace(recordType.qn, recordType.args.map(visitVTerm)),
   )
 
   override def visitProjection
     (
-      projection: Projection
+      projection: Projection,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
@@ -567,30 +568,30 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   override def visitOperatorCall
     (
-      operatorCall: OperatorCall
+      operatorCall: OperatorCall,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = app(
     Block(operatorCall.name, "@", visitEff(operatorCall.eff)),
-    operatorCall.args.map(visitVTerm)
+    operatorCall.args.map(visitVTerm),
   )
 
   override def visitContinuation
     (
-      continuation: Continuation
+      continuation: Continuation,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = Block(
-    s"<continuation#${continuation.systemId} ${continuation.capturedStack.size}>"
+    s"<continuation#${continuation.systemId} ${continuation.capturedStack.size}>",
   )
 
   override def visitHandler
     (handler: Handler)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = visitStatements(handler)
 
@@ -598,7 +599,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (allocOp: AllocOp)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     app("alloc", allocOp.heap, allocOp.ty)
@@ -607,7 +608,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (setOp: SetOp)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     app("set", setOp.cell, setOp.value)
@@ -616,7 +617,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (getOp: GetOp)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block =
     app("get", getOp.cell)
@@ -624,14 +625,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitHeapHandler
     (heapHandler: HeapHandler)
     (using
-      ctx: PPrintContext
+      ctx: PPrintContext,
     )
     (using Σ: Signature)
     : Block = visitStatements(heapHandler)
 
   private def visitStatements
     (
-      handler: HeapHandler | Handler | Let
+      handler: HeapHandler | Handler | Let,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
@@ -639,12 +640,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     val (statements, input) = unroll[Block, CTerm](handler) {
       case h @ Handler(
           effTm,
+          // TODO: print parameters
+          _,
+          _,
+          _,
+          _,
           outputEffects,
           outputUsage,
           outputType,
           transform,
           handlers,
-          input
+          input,
         ) =>
         Left(
           (
@@ -664,9 +670,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                   Block(Whitespace, NoWrap, "rtn", h.transformBoundName, "->"),
                   withBindings(Seq(h.transformBoundName)) {
                     transform
-                  }
+                  },
                 ) +: handlers.keys.toSeq.map { name =>
-                  val (paramNames, resumeName) = h.handlersBoundNames(name)
+                  // TODO: resume parameter name
+                  val (paramNames, parameterName, _) = h.handlersBoundNames(name)
                   val body = handlers(name)
                   Block(
                     Whitespace,
@@ -677,19 +684,19 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                       NoWrap,
                       name,
                       paramNames.map(r => visitName(r.value)),
-                      resumeName,
-                      "->"
+                      parameterName,
+                      "->",
                     ),
-                    withBindings(paramNames :+ resumeName) {
+                    withBindings(paramNames :+ parameterName) {
                       body
-                    }
+                    },
                   )
-                }
-              )
+                },
+              ),
             ),
             input,
-            Nil
-          )
+            Nil,
+          ),
         )
       case h @ HeapHandler(outputEffects, _, _, input) =>
         Left(
@@ -699,17 +706,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               NoWrap,
               "heap",
               h.boundName,
-              eff(outputEffects)
+              eff(outputEffects),
             ),
             input,
-            Seq(h.boundName)
-          )
+            Seq(h.boundName),
+          ),
         )
       case l @ Let(t, body) =>
         Left(
           Block("let", l.boundName, "=", visitCTerm(t)),
           body,
-          Seq(l.boundName)
+          Seq(l.boundName),
         )
       case c => Right(visitCTerm(c))
     }
@@ -719,26 +726,26 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         AlwaysNewline,
         Aligned,
         statements,
-        input
+        input,
       )
     }
 
   override def visitEff
     (
-      eff: (QualifiedName, Arguments)
+      eff: (QualifiedName, Arguments),
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = bracketAndSpace(
     Block(NoWrap, Concat, "𝑒 " + eff._1.shortName),
-    eff._2.map(visitVTerm)
+    eff._2.map(visitVTerm),
   )
 
   override def visitBigLevel
     (layer: Nat)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = Block("ω" + layer)
 
@@ -746,7 +753,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (qn: QualifiedName)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = Block(qn.shortName.toString)
 
@@ -754,14 +761,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (name: Name)
     (using ctx: PPrintContext)
     (using
-      Σ: Signature
+      Σ: Signature,
     )
     : Block = Block(name.toString)
 
   private def ctype
     (
       effTm: PPrintContext ?=> Block,
-      blocks: (PPrintContext ?=> String | Block | Iterable[Block])*
+      blocks: (PPrintContext ?=> String | Block | Iterable[Block])*,
     )
     (using ctx: PPrintContext)
     : Block = ctx.withPrecedence(PPEffOp) {
@@ -779,16 +786,16 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           ctx.withPrecedence(PPManualEncapsulation) {
             effTm
           },
-          ">"
+          ">",
         ),
-        app(blocks: _*)
+        app(blocks: _*),
       )
   }
 
   private def eff
     (tm: VTerm)
     (using
-      ctx: PPrintContext
+      ctx: PPrintContext,
     )
     (using Σ: Signature)
     : Block = ctx.withPrecedence(PPEffOp) {
@@ -797,7 +804,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   private def app
     (
-      blocks: (PPrintContext ?=> String | Block | Iterable[Block])*
+      blocks: (PPrintContext ?=> String | Block | Iterable[Block])*,
     )
     (using ctx: PPrintContext)
     : Block = ctx.withPrecedence(PPApp) {
@@ -806,7 +813,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   private def juxtapose
     (
-      blocks: (PPrintContext ?=> String | Block | Iterable[Block])*
+      blocks: (PPrintContext ?=> String | Block | Iterable[Block])*,
     )
     (using ctx: PPrintContext)
     : Block =
@@ -815,16 +822,16 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         FixedIncrement(2) +:
         Wrap +:
         blocks.map[
-          (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block])
+          (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block]),
         ](
-          _(using summon[PPrintContext])
-        ): _*
+          _(using summon[PPrintContext]),
+        ): _*,
     )
 
   private def bracketAndSpace
     (
       head: Block,
-      blocks: PPrintContext ?=> Seq[Block]
+      blocks: PPrintContext ?=> Seq[Block],
     )
     (using ctx: PPrintContext)
     : Block =
@@ -840,17 +847,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             Whitespace,
             NoWrap,
             Aligned,
-            blocks(using ctx)
+            blocks(using ctx),
           )
         },
-        "}"
+        "}",
       )
     }
 
   private def bracketAndComma
     (blocks: PPrintContext ?=> Seq[Block])
     (using
-      ctx: PPrintContext
+      ctx: PPrintContext,
     )
     : Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
@@ -866,17 +873,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             ChopDown,
             FixedIncrement(2),
             bs.init.map(b => Block(NoWrap, Concat, b, ",")),
-            bs.last
+            bs.last,
           )
       },
-      "}"
+      "}",
     )
   }
 
   private def bracketAndNewline
     (blocks: PPrintContext ?=> Seq[Block])
     (using
-      ctx: PPrintContext
+      ctx: PPrintContext,
     )
     : Block = ctx.withPrecedence(PPManualEncapsulation) {
     Block(
@@ -887,10 +894,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           Concat,
           AlwaysNewline,
           FixedIncrement(2),
-          blocks(using ctx)
+          blocks(using ctx),
         )
       },
-      "}"
+      "}",
     )
   }
 
@@ -903,13 +910,13 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           Wrap,
           FixedIncrement(2),
           blocks.init.map(Block(Whitespace, NoWrap, _, delimiter)),
-          blocks.last
+          blocks.last,
         )
 
 private def unroll[E, T]
   (t: T)
   (
-    destruct: PPrintContext ?=> T => Either[(E, T, Seq[Ref[Name]]), Block]
+    destruct: PPrintContext ?=> T => Either[(E, T, Seq[Ref[Name]]), Block],
   )
   (using ctx: PPrintContext)
   : (List[E], Block) = destruct(t) match

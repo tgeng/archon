@@ -159,7 +159,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
         Σ.getEffectOption(effQn) match
           case None => Left(MissingDeclaration(effQn))
           case Some(eff) =>
-            for
+            (for
               effArgs <- effArgs.normalized
               args <- args.normalized
               r <-
@@ -167,14 +167,16 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 val handler = stack(handlerIdx).asInstanceOf[Handler]
                 val opHandler = handler.handlers(name)
                 Σ.getOperator(effQn, name).continuationUsage match
-                  case None => run(opHandler.substLowers(args :+ handler.parameter: _*))
+                  case None => Right(opHandler.substLowers(args :+ handler.parameter: _*))
                   case Some(_) =>
                     val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
-                    stack.trimEnd(stack.size - handlerIdx)
+                    stack.dropRightInPlace(stack.size - handlerIdx)
                     trimHandlerIndex()
                     val continuation = Thunk(Continuation(handler, capturedStack))
-                    run(opHandler.substLowers(args :+ handler.parameter :+ continuation: _*))
-            yield r
+                    Right(opHandler.substLowers(args :+ handler.parameter :+ continuation: _*))
+            yield r) match
+              case Right(pc) => run(pc)
+              case Left(e) => Left(e)
       case Continuation(handler, capturedStack) =>
         stack.pop() match
           case Projection(_, name) if name == n"resume" =>
@@ -226,12 +228,12 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               ),
             )
             stack.pushAll(capturedStack)
-            run(ContinuationReplicator(currentStackSize, Nil, Nil), true)
+            run(ContinuationReplicationState(currentStackSize, Nil, Nil), true)
           case _ => throw IllegalArgumentException("type error")
-      case cr @ ContinuationReplicator(handlerIndex, stack1, stack2) =>
+      case cr @ ContinuationReplicationState(handlerIndex, stack1, stack2) =>
         assert(
           reduceDown,
-          "all calls to run with ContinuationReplicator should pass reduceDown=True",
+          "all calls to run with ContinuationReplicationState should pass reduceDown=True",
         )
         stack.pop() match
           case handler: Handler =>
@@ -242,21 +244,21 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 )
               case Some(parameterReplicator) =>
                 run(
-                  ContinuationReplicatorAppender(
+                  ContinuationReplicationStateAppender(
                     parameterReplicator.substLowers(handler.parameter),
                     handler,
                     cr,
                   ),
                 )
-          case t => run(ContinuationReplicator(handlerIndex, t +: stack1, t +: stack2), true)
-      case ContinuationReplicatorAppender(
+          case t => run(ContinuationReplicationState(handlerIndex, t +: stack1, t +: stack2), true)
+      case ContinuationReplicationStateAppender(
           paramPairs,
           handler,
-          cr @ ContinuationReplicator(handlerIndex, stack1, stack2),
+          cr @ ContinuationReplicationState(handlerIndex, stack1, stack2),
         ) =>
         if reduceDown then
           paramPairs match
-            case Con(name, param1 :: param2 :: Nil) if name == n"MkPair" =>
+            case Return(Con(name, param1 :: param2 :: Nil), _) if name == n"MkPair" =>
               val handler1 = handler
                 .copy(parameter = param1)(
                   handler.transformBoundName,
@@ -285,7 +287,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 )
               else
                 run(
-                  ContinuationReplicator(
+                  ContinuationReplicationState(
                     handlerIndex,
                     handler1 +: stack1,
                     handler2 +: stack2,
@@ -297,7 +299,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 "type error: parameterReplicator should have returned a pair of parameters",
               )
         else
-          stack.push(ContinuationReplicatorAppender(Hole, handler, cr))
+          stack.push(ContinuationReplicationStateAppender(Hole, handler, cr))
           run(paramPairs)
       case h @ Handler(
           (effQn, effArgs),

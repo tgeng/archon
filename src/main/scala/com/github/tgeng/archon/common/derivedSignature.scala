@@ -9,10 +9,7 @@ import SourceInfo.*
 trait DerivedSignature extends Signature:
   override type S <: DerivedSignature
   override def getDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    Builtins.builtinDefinitions
-      .get(qn)
-      .map(_._1)
-      .orElse(getDataDerivedDefinitionOption(qn))
+    getDataDerivedDefinitionOption(qn)
       .orElse(getDataConDerivedDefinitionOption(qn))
       .orElse(getRecordDerivedDefinitionOption(qn))
       .orElse(getRecordFieldDerivedDefinitionOption(qn))
@@ -346,7 +343,7 @@ trait DerivedSignature extends Signature:
   def getEffectDerivedCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
     for effect <- getEffectOption(qn)
     yield effect.tParamTys.foldRight(
-      CtTerm(Return(Effects(Set((qn, vars(effect.tParamTys.size - 1))), Set()))),
+      CtTerm(Return(Effects(Set((qn, vars(effect.tParamTys.size - 1))), Map()))),
     ) { case (binding, _Q) =>
       CtLambda(_Q)(binding.name)
     }

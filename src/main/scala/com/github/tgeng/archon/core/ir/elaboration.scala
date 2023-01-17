@@ -818,6 +818,7 @@ private def elaborateHead
           // None continuation usage is approximated as U1.
           case (Some(u), None) => Some(Usage.U1 | u)
           case (None, Some(u)) => Some(Usage.U1 | u)
+          case (Some(u1), Some(u2)) => Some(u1 | u2)
         },
       )
       _ <- checkEffect(e)

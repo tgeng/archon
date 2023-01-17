@@ -491,8 +491,9 @@ def getEffectsContinuationUsage
         .foldLeft[Option[Usage]](None) {
           case (None, None) => None
           // None continuation usage is approximated as U1.
-          case (Some(u), None) => Some(Usage.U1 | u)
-          case (None, Some(u)) => Some(Usage.U1 | u)
+          case (Some(u), None)      => Some(Usage.U1 | u)
+          case (None, Some(u))      => Some(Usage.U1 | u)
+          case (Some(u1), Some(u2)) => Some(u1 | u2)
         }
     case _ => throw IllegalStateException("Effects should still be Effects after normalization")
   }
@@ -761,7 +762,8 @@ def inferType
                   ),
                   effUsages + argsUsages,
                 )
-      case _: Continuation | _: ContinuationReplicator | _: ContinuationReplicatorAppender =>
+      case _: Continuation | _: ContinuationReplicationState |
+        _: ContinuationReplicationStateAppender =>
         throw IllegalArgumentException(
           "continuation is only created in reduction and hence should not be type checked.",
         )
@@ -783,15 +785,13 @@ def inferType
           handlers,
           input,
         ) =>
-        val (effect, operators) = (for
-          effect <- Σ.getEffectOption(qn)
-          operators <- Σ.getOperatorsOption(qn)
-        yield (effect, operators)) match
-          case None    => return Left(MissingDeclaration(qn))
-          case Some(r) => r
-        if handlers.size != operators.size || handlers.keySet != operators.map(_.name).toSet then
-          return Left(UnmatchedHandlerImplementation(qn, handlers.keys))
         for
+          effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
+          operators <- Σ.getOperatorsOption(qn).toRight(MissingDeclaration(qn))
+          _ <-
+            if handlers.size == operators.size && handlers.keySet == operators.map(_.name).toSet
+            then Right(())
+            else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
           effUsages <- checkTypes(args, effect.tParamTys.toList)
           parameterUsages <- checkType(parameter, parameterBinding.ty)
           parameterOpsEffects = EffectsSimpleFilter(outputEffects.weakened)

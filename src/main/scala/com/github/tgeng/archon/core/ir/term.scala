@@ -409,7 +409,11 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   /** Internaly only. This is only created by reduction.
     *
-    * During reduction, this value is specially handled.
+    * During reduction, this value is specially handled: any non-handlers are skipped and
+    * parameterReplicator in handlers are executed one by one to collect the replicated
+    * parameters. These replicated parameters are then collected into the two stacks, until
+    * reaching the handler at `handlerIndex` (the handler that contains the operator
+    * implementation which invokes the continuation replication).
     * @param handlerIndex:
     *   index of this handler in the reduction machine stack. In other words, size of the stack
     *   before this handler is pushed onto the stack.
@@ -418,20 +422,22 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param stack1:
     *   the other replicated stack
     */
-  case ContinuationReplicator(handlerIndex: Nat, stack1: Seq[CTerm], stack2: Seq[CTerm])
+  case ContinuationReplicationState(handlerIndex: Nat, stack1: Seq[CTerm], stack2: Seq[CTerm])
     extends CTerm(SiEmpty)
 
   /** Internaly only. This is only created by reduction.
+    *
+    * A helper that marks the end of execution of a `parameterReplicator`.
     * @param paramPairs
     *   computation that returns a pair of parameters. This should simply be application of
     *   `parameterReplicator` in handlers.
     * @param handler
     *   the handler that should be replicated and contain the replicated params
-    * @param continuationReplicator
-    *   the target ContinuationReplicator to which the replicated parameters is appended
+    * @param state
+    *   the target ContinuationReplicationState to which the replicated parameters is appended
     */
-  case ContinuationReplicatorAppender
-    (paramPairs: CTerm, handler: Handler, continuationReplicator: ContinuationReplicator)
+  case ContinuationReplicationStateAppender
+    (paramPairs: CTerm, handler: Handler, state: ContinuationReplicationState)
     extends CTerm(SiEmpty)
 
   case Handler
@@ -522,7 +528,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case RecordType(qn, args, effects) => RecordType(qn, args, effects)
       case Projection(rec, name)         => Projection(rec, name)
       case OperatorCall(eff, name, args) => OperatorCall(eff, name, args)
-      case c: Continuation               => c
+      case c: (Continuation | ContinuationReplicationState |
+          ContinuationReplicationStateAppender) =>
+        c
       case h @ Handler(
           eff,
           paramterBinding,
