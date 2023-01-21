@@ -128,7 +128,6 @@ object Builtins:
 
   private val L0 = ULevel.USimpleLevel(LevelLiteral(0))
 
-  // TODO: move all of these builtin declarations here. Also create a new EqualityType from Data.
   private val builtins: Seq[PreDeclaration] = Seq(
     PreData(UnitQn)(
       tParamTys = Nil,

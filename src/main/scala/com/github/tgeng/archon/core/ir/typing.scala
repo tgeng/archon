@@ -266,8 +266,6 @@ def checkClause
         _ <- checkUsagesSubsumption(lhsUsages, true)
         rhsUsages <- checkType(clause.rhs, clause.ty)
         _ <- checkUsagesSubsumption(rhsUsages)
-      // TODO[P2]: also need to ensure constructor pattern must have usage :< U1. This should be
-      // easy to check during elaboration with declared usage so for now I will skip it.
       yield ()
 }
 
@@ -767,11 +765,6 @@ def inferType
         throw IllegalArgumentException(
           "continuation is only created in reduction and hence should not be type checked.",
         )
-      // TODO[P0]: check compatibility between presence of parameter replicator and effects
-      //  also type check parameters and redo transform and handler type checking:
-      //    - if effect is simple, handler should simply return result
-      //    - otherwise the continuation should have the proper record type
-      //    - parameter should be added to transform and handler
       case h @ Handler(
           eff @ (qn, args),
           parameterBinding,
@@ -962,7 +955,7 @@ def inferType
                   ),
                   Some(EffectsType()),
                 )(using SUBSUMPTION)
-                // TODO: Use more sophisticated check here to catch leak through wrapping heap
+                // TODO[P2]: Use more sophisticated check here to catch leak through wrapping heap
                 //  variable inside things. If it's leaked, there is no point using this handler at
                 //  all. Simply using GlobalHeapKey is the right thing to do. This is because a
                 //  creating a leaked heap key itself is performing a side effect with global heap.

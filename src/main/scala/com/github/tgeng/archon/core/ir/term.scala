@@ -141,7 +141,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
-  // TODO: remove this since inductive type is generalized and no longer depend on this during unification
+  // TODO[P2]: remove this since inductive type is generalized and no longer depend on this during unification
   case EqualityType
     (
       ty: VTerm,
@@ -384,17 +384,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
-
-  // TODO: continuation can actually be modeled as a record
-  // case ContinuationType
-  // (
-  // usage: Option[Usage],
-  // paramType: VTerm,
-  // resultType: VTerm,
-  // outputType: VTerm,
-  // outputEffects: VTerm, // dispose and replicate has these effects filtered with continuationUsage = None
-  // )
-  // (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
   /** Internal only. This is only created by reduction.
     *
