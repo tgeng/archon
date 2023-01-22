@@ -324,12 +324,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (collapse: Collapse)
     (using ctx: PPrintContext)
     (using Σ: Signature)
-    : Block = app("clp", collapse.cTm)
+    : Block = app(".collapse", collapse.cTm)
 
   override def visitU(u: U)(using ctx: PPrintContext)(using Σ: Signature): Block = app("U", u.cTy)
 
   override def visitThunk(thunk: Thunk)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    app("thk", thunk.c)
+    app(".thunk", thunk.c)
 
   override def visitDataType
     (dataType: DataType)
@@ -417,7 +417,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature,
     )
     : Block =
-    Block("cell" + cell.index + "@" + cell.heapKey)
+    Block(".cell" + cell.index + "@" + cell.heapKey)
 
   override def visitHole(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block("<hole>")
@@ -466,12 +466,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using
       Σ: Signature,
     )
-    : Block = app("frc", force.v)
+    : Block = app(".force", force.v)
 
-  override def visitF
-    (f: F)
-    (using ctx: PPrintContext)
-    (using Σ: Signature) =
+  override def visitF(f: F)(using ctx: PPrintContext)(using Σ: Signature) =
     ctype(f.effects, "[", f.usage, "]", f.vTy)
 
   override def visitReturn
@@ -480,7 +477,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using
       Σ: Signature,
     )
-    : Block = app("rtn", r.v)
+    : Block = app(".return", r.v)
 
   override def visitLet
     (let: Let)
@@ -667,41 +664,74 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             Block(
               Whitespace,
               NoWrap,
-              "hdl",
+              ".handler",
               visitEff(effTm),
               eff(outputEffects),
-              // TODO[P2]: print outputUsage
+              Block("[", outputUsage, "]"),
               outputType,
               bracketAndNewline(
                 Block(
                   Whitespace,
                   Wrap,
                   FixedIncrement(2),
-                  Block(Whitespace, NoWrap, "rtn", h.transformBoundName, "->"),
+                  Block(Whitespace, NoWrap, ".return", h.transformBoundName, "->"),
                   withBindings(Seq(h.transformBoundName)) {
                     transform
                   },
-                ) +: handlers.keys.toSeq.map { name =>
-                  // TODO: resume parameter name
-                  val (paramNames, parameterName, _) = h.handlersBoundNames(name)
+                ) +: Block(
+                  Whitespace,
+                  Wrap,
+                  FixedIncrement(2),
+                  Block(Whitespace, NoWrap, ".dispose", h.parameterBinding.name, "->"),
+                  withBindings(Seq(h.parameterBinding.name)) {
+                    parameterDisposer
+                  },
+                ) +: (h.parameterReplicator
+                  .map(replicator =>
+                    Block(
+                      Whitespace,
+                      Wrap,
+                      FixedIncrement(2),
+                      Block(Whitespace, NoWrap, ".replicate", h.parameterBinding.name, "->"),
+                      withBindings(Seq(h.parameterBinding.name)) {
+                        replicator
+                      },
+                    ),
+                  )
+                  .toSeq ++ handlers.keys.toSeq.map { name =>
+                  val (paramNames, parameterName, resumeNameOption) = h.handlersBoundNames(name)
                   val body = handlers(name)
+                  val paramBlock = resumeNameOption match
+                    case Some(resumeName) =>
+                      Block(
+                        Whitespace,
+                        NoWrap,
+                        name,
+                        paramNames.map(r => visitName(r.value)),
+                        parameterName,
+                        resumeName,
+                        "->",
+                      )
+                    case None =>
+                      Block(
+                        Whitespace,
+                        NoWrap,
+                        name,
+                        paramNames.map(r => visitName(r.value)),
+                        parameterName,
+                        "->",
+                      )
+
                   Block(
                     Whitespace,
                     Wrap,
                     FixedIncrement(2),
-                    Block(
-                      Whitespace,
-                      NoWrap,
-                      name,
-                      paramNames.map(r => visitName(r.value)),
-                      parameterName,
-                      "->",
-                    ),
+                    paramBlock,
                     withBindings(paramNames :+ parameterName) {
                       body
                     },
                   )
-                },
+                }),
               ),
             ),
             input,
@@ -714,7 +744,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             Block(
               Whitespace,
               NoWrap,
-              "heap",
+              ".heap",
               h.boundName,
               eff(outputEffects),
             ),
@@ -724,7 +754,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         )
       case l @ Let(t, body) =>
         Left(
-          Block("let", l.boundName, "=", visitCTerm(t)),
+          Block(".let", l.boundName, "=", visitCTerm(t)),
           body,
           Seq(l.boundName),
         )
@@ -802,15 +832,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       )
   }
 
-  private def eff
-    (tm: VTerm)
-    (using
-      ctx: PPrintContext,
-    )
-    (using Σ: Signature)
-    : Block = ctx.withPrecedence(PPEffOp) {
-    Block(Concat, NoWrap, "<", tm, ">")
-  }
+  private def eff(tm: VTerm)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    ctx.withPrecedence(PPEffOp) {
+      Block(Concat, NoWrap, "<", tm, ">")
+    }
 
   private def app
     (
