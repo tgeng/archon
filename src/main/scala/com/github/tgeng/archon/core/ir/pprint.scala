@@ -364,7 +364,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     else
       ctx.withPrecedence(PPEffOp) {
         (effects.literal.map(visitEff) ++ effects.unionOperands.map { (t, filter) =>
-          if filter 
+          if filter
           then Block("%", visitVTerm(t))
           else visitVTerm(t)
         }) sepBy "|"
@@ -468,9 +468,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     : Block = app("frc", force.v)
 
-  override def visitF(f: F)(using ctx: PPrintContext)(using Σ: Signature) =
-    // TODO: print usages
-    ctype(f.effects, "F", f.vTy)
+  override def visitF
+    (f: F)
+    (using ctx: PPrintContext)
+    (using Σ: Signature) =
+    ctype(f.effects, "[", f.usage, "]", f.vTy)
 
   override def visitReturn
     (r: Return)

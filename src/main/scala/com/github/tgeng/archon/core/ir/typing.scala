@@ -30,6 +30,10 @@ private val ANSI_BLUE = "\u001b[34m"
 private val ANSI_CYAN = "\u001b[36m"
 private val ANSI_WHITE = "\u001b[37m"
 
+// TODO[P2]: make type checking logic rewrite terms so that all total computations are evaluated.
+//  This should (usually) simplify terms and result in faster code. Also this would benefit further
+//  lowering of the code.
+
 def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
@@ -388,8 +392,6 @@ def inferType
             case F(vTy, eff, u) if eff == Total => Right((vTy, u))
             case F(_, _, _)                     => Left(CollapsingEffectfulTerm(cTm))
             case _                              => Left(NotCollapsable(cTm))
-            // Make sure it makes sense to multiple usages to the terms inside `Collapse`.
-          _ <- checkUsageSubsumption(u, UsageLiteral(Usage.U1))
         yield (vTy, usage)
       case U(cty) =>
         for
