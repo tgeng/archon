@@ -622,9 +622,33 @@ def inferType
                 effects <- effects.normalized
                 tUsages <- transpose(tUsages.map(_.normalized))
                 (bodyTy, usages) <-
-                  // Here we do not check usages from `t` because semnatically usage checking
-                  // happens after total term reduction, which happens at compile time.
-                  if effects == Total then
+                  // If some usages are not zero or unres, inlining `t` would change usage checking
+                  // result because
+                  //
+                  // * either some linear or relevant usages becomes zero because the computation
+                  //   gets removed
+                  //
+                  // * or if the term is wrapped inside a `Collapse` and get multiplied
+                  //
+                  // Such changes would alter usage checking result, which can be confusing for 
+                  // users. Note that, it's still possible that with inlining causes usages to be
+                  // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
+                  // unrestricted usage. Hence, usage checking would still pass. On the other hand,
+                  // it's not possible for inlining to create usage out of nowhere.
+                  def areTUsagesZeroOrUnrestricted: Boolean =
+                    tUsages.forall { usage =>
+                      toBoolean(
+                        checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
+                          CheckSubsumptionMode.CONVERSION,
+                        ),
+                      ) ||
+                      toBoolean(
+                        checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
+                          CheckSubsumptionMode.CONVERSION,
+                        ),
+                      )
+                    }
+                  if effects == Total && areTUsagesZeroOrUnrestricted then
                     // Do the reduction onsite so that type checking in sub terms can leverage the
                     // more specific type. More importantly, this way we do not need to reference
                     // the result of a computation in the inferred type.
