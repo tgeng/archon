@@ -384,11 +384,13 @@ def inferType
       case Collapse(cTm) =>
         for
           case (cTy, usage) <- inferType(cTm)
-          r <- cTy match
-            case F(vTy, eff, _) if eff == Total => Right(vTy)
+          case (vTy, u) <- cTy match
+            case F(vTy, eff, u) if eff == Total => Right((vTy, u))
             case F(_, _, _)                     => Left(CollapsingEffectfulTerm(cTm))
             case _                              => Left(NotCollapsable(cTm))
-        yield (r, usage)
+            // Make sure it makes sense to multiple usages to the terms inside `Collapse`.
+          _ <- checkUsageSubsumption(u, UsageLiteral(Usage.U1))
+        yield (vTy, usage)
       case U(cty) =>
         for
           case (ctyTy, usage) <- inferType(cty)
@@ -597,13 +599,17 @@ def inferType
         for
           effUsages <- checkType(effects, EffectsType())
           uUsages <- checkType(usage, UsageType(None))
+          // Prevent returning value of U0 usage, which does not make sense.
+          _ <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
           case (vTyTy, vTyUsages) <- inferType(vTy)
           cTyTy <- vTyTy match
             case Type(_) => Right(CType(tm, Total))
             case _       => Left(NotTypeError(vTy))
         yield (cTyTy, (effUsages + uUsages + vTyUsages) * UUnres)
       case Return(v, usage) =>
-        for case (vTy, vUsages) <- inferType(v)
+        for
+          _ <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
+          case (vTy, vUsages) <- inferType(v)
         yield (F(vTy, Total), vUsages * usage)
       case Let(t, body) =>
         for
@@ -614,22 +620,9 @@ def inferType
                 effects <- effects.normalized
                 tUsages <- transpose(tUsages.map(_.normalized))
                 (bodyTy, usages) <-
-                  // If usages are either zero or unres, inlining `t` would not cause any changes on
-                  // the usages.
-                  def areTUsagesZeroOrUnrestricted: Boolean =
-                    tUsages.forall { usage =>
-                      toBoolean(
-                        checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
-                          CheckSubsumptionMode.CONVERSION,
-                        ),
-                      ) ||
-                      toBoolean(
-                        checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
-                          CheckSubsumptionMode.CONVERSION,
-                        ),
-                      )
-                    }
-                  if effects == Total && areTUsagesZeroOrUnrestricted then
+                  // Here we do not check usages from `t` because semnatically usage checking
+                  // happens after total term reduction, which happens at compile time.
+                  if effects == Total then
                     // Do the reduction onsite so that type checking in sub terms can leverage the
                     // more specific type. More importantly, this way we do not need to reference
                     // the result of a computation in the inferred type.
@@ -1412,7 +1405,7 @@ private def checkInherentEqDecidable
       yield ()
 
   // 2. inductively define a set of constructor params and this set must contain all constructor
-  //    params in order for the data to be non-EqUnres
+  //    params in order for the data to be non-EqUnknown
   //  base: constructor type and component types whose binding has non-0 usage (component usage is
   //        calculated by product of declared usage in binding and data.inherentUsage).
   //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
@@ -1470,7 +1463,7 @@ private def checkInherentEqDecidable
 
   checkSubsumption(
     data.inherentEqDecidability,
-    EqDecidabilityLiteral(EqUnres),
+    EqDecidabilityLiteral(EqUnknown),
     Some(EqDecidabilityType()),
   )(using CONVERSION) match
     // short circuit since there is no need to do any check
@@ -1507,7 +1500,7 @@ private def deriveTypeInherentEqDecidability
         case Type(upperBound) => deriveTypeInherentEqDecidability(upperBound)
         case _                => Left(ExpectVType(ty))
     yield r
-  case _: U => Right(EqDecidabilityLiteral(EqUnres))
+  case _: U => Right(EqDecidabilityLiteral(EqUnknown))
   case d: DataType =>
     Σ.getDataOption(d.qn) match
       case Some(data) =>
@@ -1556,7 +1549,7 @@ private def checkEqDecidabilitySubsumption
   case (_, Left(e))                               => Left(e)
   case (Right(eqD1), Right(eqD2)) if eqD1 == eqD2 => Right(())
   case (Right(EqDecidabilityLiteral(EqDecidability.EqDecidable)), _) |
-    (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnres))) if mode == SUBSUMPTION =>
+    (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnknown))) if mode == SUBSUMPTION =>
     Right(())
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
 

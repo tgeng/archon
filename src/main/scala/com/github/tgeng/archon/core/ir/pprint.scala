@@ -298,10 +298,17 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
     case Type(Top(USimpleLevel(Level(l, operands)), _)) if operands.isEmpty =>
       Block("Type" + l.sub)
-    // TODO: show usage and eqDecidability
-    case Type(Top(USimpleLevel(l), _)) => app("Type", l)
-    case Type(Top(UωLevel(layer), _))  => Block("TYPE" + layer.sub)
-    case Type(upperBound)              => app("SubtypeOf", upperBound)
+    case Type(Top(USimpleLevel(l), EqDecidabilityLiteral(EqDecidability.EqDecidable))) =>
+      app("Type", l)
+    case Type(Top(UωLevel(layer), EqDecidabilityLiteral(EqDecidability.EqDecidable))) =>
+      Block("TYPE" + layer.sub)
+    case Type(Top(USimpleLevel(l), EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
+      app("Type?", l)
+    case Type(Top(UωLevel(layer), EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
+      app("TYPE?" + layer.sub)
+    case Type(Top(USimpleLevel(l), eqD)) => app("Type", l, "withEqDecidability", eqD)
+    case Type(Top(UωLevel(layer), eqD))  => app("TYPE" + layer.sub, "withEqDecidability", eqD)
+    case Type(upperBound)                => app("SubtypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
     top.ul match
@@ -356,10 +363,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp) {
-        // TODO: print effect filter
-        (effects.literal.map(visitEff) ++ effects.unionOperands.keys.map(
-          visitVTerm,
-        )) sepBy "|"
+        (effects.literal.map(visitEff) ++ effects.unionOperands.map { (t, filter) =>
+          if filter 
+          then Block("%", visitVTerm(t))
+          else visitVTerm(t)
+        }) sepBy "|"
       }
 
   override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =
@@ -461,6 +469,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     : Block = app("frc", force.v)
 
   override def visitF(f: F)(using ctx: PPrintContext)(using Σ: Signature) =
+    // TODO: print usages
     ctype(f.effects, "F", f.vTy)
 
   override def visitReturn
@@ -640,11 +649,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     val (statements, input) = unroll[Block, CTerm](handler) {
       case h @ Handler(
           effTm,
-          // TODO: print parameters
-          _,
-          _,
-          _,
-          _,
+          parameterBinding,
+          parameter,
+          parameterDisposer,
+          parameterReplicator,
           outputEffects,
           outputUsage,
           outputType,

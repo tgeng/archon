@@ -67,6 +67,8 @@ object Builtins:
   val CTopQn = BuiltinType / "CTop"
 
   val EqDecidabilityQn = BuiltinType / "EqDecidability"
+  val EqDecidableQn = EqDecidabilityQn / "Decidable"
+  val EqUnknownQn = EqDecidabilityQn / "Unknown"
 
   val EqualityQn = BuiltinType / "Equality"
   val CellQn = BuiltinType / "Cell"
@@ -245,7 +247,7 @@ object Builtins:
                 PairQn,
                 List(
                   Var(9),
-                  EqDecidabilityLiteral(EqUnres),
+                  EqDecidabilityLiteral(EqUnknown),
                   U(RecordType(ContinuationQn, vars(9, 3))),
                 ),
               ),

@@ -287,13 +287,15 @@ trait Visitor[C, R]:
     (eqDecidabilityType: EqDecidabilityType)
     (using ctx: C)
     (using Σ: Signature)
-    : R = combine()
+    : R = visitQualifiedName(Builtins.EqDecidabilityQn)
 
   def visitEqDecidabilityLiteral
     (eqDecidabilityLiteral: EqDecidabilityLiteral)
     (using ctx: C)
     (using Σ: Signature)
-    : R = combine()
+    : R = eqDecidabilityLiteral.eqDecidability match
+      case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
+      case EqDecidability.EqUnknown => visitQualifiedName(Builtins.EqUnknownQn)
 
   def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(Builtins.EffectsQn)

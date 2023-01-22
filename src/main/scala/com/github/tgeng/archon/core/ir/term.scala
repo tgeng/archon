@@ -7,7 +7,6 @@ import QualifiedName.*
 import SourceInfo.*
 import EqDecidability.*
 import Usage.*
-import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side

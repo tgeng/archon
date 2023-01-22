@@ -13,4 +13,4 @@ package com.github.tgeng.archon.core.ir
   * can leverage this as a bound for the key type.
   */
 enum EqDecidability:
-  case EqDecidable, EqUnres
+  case EqDecidable, EqUnknown
