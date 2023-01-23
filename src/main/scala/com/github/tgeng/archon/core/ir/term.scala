@@ -180,15 +180,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     QualifiedNameOwner(
       EffectsQn,
     )
-  case Effects
-    (
-      literal: Set[Eff],
-      unionOperands: Map[
-        VTerm,
-        /* filterBySimpleUsage: if true, only effects with `None` continuation usage is allowed. */ Boolean,
-      ],
-    )
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
 
   case LevelType()(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
@@ -278,12 +271,10 @@ object VTerm:
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
-    Effects(effects, Map.empty)
+    Effects(effects, Set.empty)
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
-    Effects(Set.empty, Map(effects1 -> false, effects2 -> false))
-
-  def EffectsSimpleFilter(effects: VTerm): Effects = Effects(Set.empty, Map(effects -> true))
+    Effects(Set.empty, Set(effects1, effects2))
 
   /** @param firstIndex
     *   inclusive

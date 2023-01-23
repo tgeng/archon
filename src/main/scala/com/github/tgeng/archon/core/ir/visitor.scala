@@ -294,15 +294,15 @@ trait Visitor[C, R]:
     (using ctx: C)
     (using Σ: Signature)
     : R = eqDecidabilityLiteral.eqDecidability match
-      case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
-      case EqDecidability.EqUnknown => visitQualifiedName(Builtins.EqUnknownQn)
+    case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
+    case EqDecidability.EqUnknown   => visitQualifiedName(Builtins.EqUnknownQn)
 
   def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(Builtins.EffectsQn)
 
   def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
     combine(
-      (effects.literal.map(visitEff) ++ effects.unionOperands.keys.map(
+      (effects.literal.map(visitEff) ++ effects.unionOperands.map(
         visitVTerm,
       )).toSeq: _*,
     )
@@ -727,7 +727,7 @@ trait Transformer[C]:
 
   def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm = Effects(
     effects.literal.map { (qn, args) => (qn, args.map(transformVTerm)) },
-    effects.unionOperands.map((v, f) => transformVTerm(v) -> f),
+    effects.unionOperands.map(v => transformVTerm(v)),
   )(using effects.sourceInfo)
 
   def transformLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): VTerm =

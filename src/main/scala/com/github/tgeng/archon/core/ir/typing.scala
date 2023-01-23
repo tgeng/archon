@@ -451,7 +451,7 @@ def inferType
             },
           ).map(_.reduce(_ + _))
           operandsUsages <- transpose(
-            operands.map { (ref, _) => checkType(ref, EffectsType()) }.toList,
+            operands.map { ref => checkType(ref, EffectsType()) }.toList,
           ).map(_.reduce(_ + _))
           usage <- getEffectsContinuationUsage(eff)
         yield (
@@ -485,10 +485,7 @@ def getEffectsContinuationUsage
   : Either[IrError, Option[Usage]] =
   effects.normalized.map {
     case effects: Effects =>
-      (effects.unionOperands.map {
-        case (v, false) => getEffVarContinuationUsage(v.asInstanceOf[Var])
-        case (_, true)  => None
-      } ++
+      (effects.unionOperands.map { v => getEffVarContinuationUsage(v.asInstanceOf[Var]) } ++
         effects.literal.map { (qn, _) => Σ.getEffect(qn).continuationUsage })
         .foldLeft[Option[Usage]](None) {
           case (None, None) => None
@@ -630,7 +627,7 @@ def inferType
                   //
                   // * or if the term is wrapped inside a `Collapse` and get multiplied
                   //
-                  // Such changes would alter usage checking result, which can be confusing for 
+                  // Such changes would alter usage checking result, which can be confusing for
                   // users. Note that, it's still possible that with inlining causes usages to be
                   // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
                   // unrestricted usage. Hence, usage checking would still pass. On the other hand,
@@ -797,6 +794,29 @@ def inferType
           handlers,
           input,
         ) =>
+        def filterSimpleEffects(normalizedEffects: VTerm): Either[IrError, VTerm] =
+          normalizedEffects match
+            case v: Var => filterSimpleEffects(Effects(Set(), Set(v)))
+            case Effects(literal, vars) =>
+              Right(
+                Effects(
+                  literal.filter { case (effQn, _) =>
+                    Σ.getEffect(effQn).continuationUsage match
+                      // `None` means the effect is simple
+                      case None => true
+                      // Any other value means the effect is not simple and hence needs to be
+                      // filtered out
+                      case _ => false
+                  },
+                  vars.filter { v =>
+                    Γ.resolve(v.asInstanceOf[Var]) match
+                      // Only keep variables that are limited to simple effects
+                      case Binding(EffectsType(None), _) => true
+                      case _                             => false
+                  },
+                ),
+              )
+            case _ => Left(EffectTermToComplex(normalizedEffects))
         for
           effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
           operators <- Σ.getOperatorsOption(qn).toRight(MissingDeclaration(qn))
@@ -806,7 +826,13 @@ def inferType
             else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
           effUsages <- checkTypes(args, effect.tParamTys.toList)
           parameterUsages <- checkType(parameter, parameterBinding.ty)
-          parameterOpsEffects = EffectsSimpleFilter(outputEffects.weakened)
+          _ <- parameterReplicator match
+            case Some(_) => checkType(outputEffects, EffectsType())
+            // parameterReplicator is not specified, in this case, the outputEffects must not be
+            // re-entrant.
+            case None => checkType(outputEffects, EffectsType(Some(Usage.UAff)))
+          outputEffects <- outputEffects.normalized
+          parameterOpsEffects <- filterSimpleEffects(outputEffects.weakened)
           parameterOpsΓ = Γ :+ parameterBinding
           parameterDisposerUsages <- checkType(
             parameterDisposer,
@@ -827,11 +853,7 @@ def inferType
                   parameterOpsΓ,
                 )
               yield parameterReplicatorUsages
-            case None =>
-              // parameterReplicator is not specified, in this case, the outputEffects must not be
-              // re-entrant.
-              for _ <- checkType(outputEffects, EffectsType(Some(Usage.UAff)))
-              yield List.fill(Γ.size)(UsageLiteral(Usage.U0))
+            case None => Right(List.fill(Γ.size)(UsageLiteral(Usage.U0)))
           case (inputCTy, inputUsages) <- inferType(input)
           case (inputTy, inputEff, inputUsage) <- inputCTy match
             case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
@@ -888,6 +910,7 @@ def inferType
                                   UsageLiteral(continuationUsage),
                                   parameterBinding.ty,
                                   inputTy,
+                                  parameterOpsEffects,
                                   outputEffects,
                                   outputUsage,
                                   outputType,
@@ -1687,11 +1710,7 @@ private def checkEffSubsumption
         Right(Effects(literals2, unionOperands2)),
       )
       if mode == CheckSubsumptionMode.SUBSUMPTION &&
-        literals1.subsetOf(literals2) && unionOperands1.forall { case (v, filterSimple1) =>
-          unionOperands2.get(v) match
-            case None                => false
-            case Some(filterSimple2) => filterSimple1 == filterSimple2 || filterSimple1 == true
-        } =>
+        literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
       Right(())
     case _ => Left(NotEffectSubsumption(eff1, eff2, mode))
 

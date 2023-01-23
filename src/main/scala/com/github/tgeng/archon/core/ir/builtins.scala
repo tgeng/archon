@@ -219,7 +219,8 @@ object Builtins:
         (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
         (binding(n"paramType", Type(Top(Var(1)))), Variance.CONTRAVARIANT),
         (binding(n"resumeArgType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
-        (binding(n"outputEffect", EffectsType()), Variance.COVARIANT),
+        (binding(n"paramOpsEffects", EffectsType()), Variance.INVARIANT),
+        (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
         (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
       ),
@@ -236,7 +237,7 @@ object Builtins:
           n"dispose",
           Binding(DataType(IsDisposableQn, List(Var(6))))(n"isDisposable") ->:
             Binding(Var(6))(n"param") ->:
-            F(DataType(UnitQn, Nil), EffectsSimpleFilter(Var(7))),
+            F(DataType(UnitQn, Nil), Var(8)),
         ),
         Field(
           n"replicate",
@@ -246,12 +247,12 @@ object Builtins:
               DataType(
                 PairQn,
                 List(
-                  Var(9),
+                  Var(10),
                   EqDecidabilityLiteral(EqUnknown),
-                  U(RecordType(ContinuationQn, vars(9, 3))),
+                  U(RecordType(ContinuationQn, vars(10, 3))),
                 ),
               ),
-              EffectsSimpleFilter(Var(7)),
+              Var(8),
             ),
         ),
       ),

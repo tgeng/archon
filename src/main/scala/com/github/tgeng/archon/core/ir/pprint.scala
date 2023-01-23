@@ -363,11 +363,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp) {
-        (effects.literal.map(visitEff) ++ effects.unionOperands.map { (t, filter) =>
-          if filter
-          then Block("%", visitVTerm(t))
-          else visitVTerm(t)
-        }) sepBy "|"
+        (effects.literal.map(visitEff) ++ effects.unionOperands.map(visitVTerm)) sepBy "|"
       }
 
   override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =

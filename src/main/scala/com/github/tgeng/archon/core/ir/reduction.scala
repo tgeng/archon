@@ -176,7 +176,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                     Right(opHandler.substLowers(args :+ handler.parameter :+ continuation: _*))
             yield r) match
               case Right(pc) => run(pc)
-              case Left(e) => Left(e)
+              case Left(e)   => Left(e)
       case Continuation(handler, capturedStack) =>
         stack.pop() match
           case Projection(_, name) if name == n"resume" =>
@@ -250,7 +250,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                     cr,
                   ),
                 )
-          case t => run(ContinuationReplicationState(handlerIndex, t +: stack1, t +: stack2), true)
+          case t =>
+            run(ContinuationReplicationState(handlerIndex, t +: stack1, t +: stack2), true)
       case ContinuationReplicationStateAppender(
           paramPairs,
           handler,
@@ -523,46 +524,23 @@ extension(v: VTerm)
 
       dfs(u).map(lubToTerm)
     case e: Effects =>
-      def dfs
-        (tm: VTerm, filterSimpleEffects: Boolean)
-        : Either[IrError, (Set[Eff], Map[Var, Boolean])] =
-        tm match
-          case Effects(literal, operands) =>
-            for literalsAndOperands: Set[(Set[Eff], Map[Var, Boolean])] <- transpose(
-                operands.map(dfs).toSet,
-              )
-            yield (
-              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal).filter {
-                case (effQn, _) =>
-                  if filterSimpleEffects then
-                    Σ.getEffect(effQn).continuationUsage match
-                      // `None` means the effect is simple
-                      case None => true
-                      // Any other value means the effect is not simple and hence needs to be
-                      // filtered out
-                      case _ => false
-                  else true // return true since no filtering is needed
-              },
-              literalsAndOperands.flatMap { case (_, m) =>
-                m.flatMap { case (v -> b) =>
-                  Γ.resolve(v) match
-                    // filter out U0 since simple effects cannot have U0 continuation usage.
-                    case Binding(EffectsType(Some(Usage.U0)), _) => Nil
-                    // normalize simple effects to have filter set to true since filtering on it
-                    // is an noop.
-                    case Binding(EffectsType(None), _) => Seq(v -> true)
-                    case _                             => Seq(v -> (filterSimpleEffects || b))
-                }
-              }.toMap,
+      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[Var])] = tm match
+        case Effects(literal, operands) =>
+          for literalsAndOperands: Set[(Set[Eff], Set[Var])] <- transpose(
+              operands.map(dfs),
             )
-          case c: Collapse => c.normalized.flatMap(t => dfs(t, filterSimpleEffects))
-          case v: Var      => Right((Set(), Map(v -> filterSimpleEffects)))
-          case _ =>
-            throw IllegalStateException(s"expect to be of Effects type: $tm")
+          yield (
+            literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
+            literalsAndOperands.flatMap { case (_, o) => o },
+          )
+        case c: Collapse => c.normalized.flatMap(dfs)
+        case v: Var      => Right((Set(), Set(v)))
+        case _ =>
+          throw IllegalStateException(s"expect to be of Effects type: $tm")
 
-      dfs(e, false).map { case (eff, operands) =>
+      dfs(e).map { case (eff, operands) =>
         // Unfortunately Set in scala is not covariant, though it could be.
-        Effects(eff, operands.asInstanceOf[Map[VTerm, Boolean]])
+        Effects(eff, operands.asInstanceOf[Set[VTerm]])
       }
     case l: Level =>
       def dfs(tm: VTerm): Either[IrError, (Nat, Map[VTerm, Nat])] = tm match
