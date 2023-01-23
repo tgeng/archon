@@ -871,16 +871,17 @@ def inferType
           handlerUsages <- transpose(
             operators.map { opDecl =>
               val handlerBody = handlers(opDecl.name)
-              val (argNames, parameterName, resumeNameOption) = h.handlersBoundNames(opDecl.name)
+              val (argNames, resumeNameOption) = h.handlersBoundNames(opDecl.name)
               val opArgs = args ++ vars(opDecl.paramTys.size - 1)
               val opResultTy = opDecl.resultTy.substLowers(opArgs: _*)
               val opResultUsage = opDecl.resultUsage.substLowers(opArgs: _*)
-              val opParamTys = (opDecl.paramTys
+              val opParamTys = parameterBinding +: opDecl.paramTys
                 .substLowers(args: _*)
                 .zip(argNames)
                 .map { case (binding, argName) =>
                   Binding(binding.ty, binding.usage)(argName)
-                } :+ parameterBinding.weaken(opDecl.paramTys.size, 0))
+                }
+                .weakened
               for
                 continuationTy <- opDecl.continuationUsage match
                   case Some(continuationUsage) =>

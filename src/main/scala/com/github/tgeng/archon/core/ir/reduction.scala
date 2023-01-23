@@ -9,12 +9,12 @@ import CTerm.*
 import VTerm.*
 import Pattern.*
 import CoPattern.*
-import com.github.tgeng.archon.core.ir.IrError.MissingDeclaration
 import PrettyPrinter.pprint
 import WrapPolicy.*
 import IndentPolicy.*
 import DelimitPolicy.*
 import Usage.*
+import IrError.*
 
 trait Reducible[T]:
   def reduce

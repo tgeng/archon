@@ -428,19 +428,28 @@ trait Visitor[C, R]:
 
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitEff(handler.eff) +:
-        visitVTerm(handler.outputEffects) +:
-        visitVTerm(handler.outputUsage) +:
-        visitVTerm(handler.outputType) +:
-        withBindings(Seq(handler.transformBoundName)) {
+      Seq(
+        visitEff(handler.eff),
+        withBindings(Seq(handler.parameterBinding.name)) {
+          visitCTerm(handler.parameterDisposer)
+        },
+      ) ++ handler.parameterReplicator.map(t =>
+        withBindings(Seq(handler.parameterBinding.name)) {
+          visitCTerm(t)
+        },
+      ) ++ Seq(
+        visitVTerm(handler.outputEffects),
+        visitVTerm(handler.outputUsage),
+        visitVTerm(handler.outputType),
+        withBindings(Seq(handler.parameterBinding.name, handler.transformBoundName)) {
           visitCTerm(handler.transform)
-        } +:
-        handler.handlers.map { (name, body) =>
-          val (argNames, parameterName, resumeName) = handler.handlersBoundNames(name)
-          withBindings((argNames :+ parameterName) ++ resumeName) {
-            visitCTerm(body)
-          }
-        }.toSeq :+
+        },
+      ) ++ handler.handlers.map { (name, body) =>
+        val (argNames, resumeName) = handler.handlersBoundNames(name)
+        withBindings((handler.parameterBinding.name +: argNames) ++ resumeName) {
+          visitCTerm(body)
+        }
+      } :+
         visitCTerm(handler.input): _*,
     )
 
@@ -857,19 +866,25 @@ trait Transformer[C]:
       transformEff(handler.eff),
       handler.parameterBinding.map(transformVTerm),
       transformVTerm(handler.parameter),
-      transformCTerm(handler.parameterDisposer),
-      handler.parameterReplicator.map(transformCTerm),
+      withBindings(Seq(handler.parameterBinding.name)) {
+        transformCTerm(handler.parameterDisposer)
+      },
+      handler.parameterReplicator.map(t =>
+        withBindings(Seq(handler.parameterBinding.name)) {
+          transformCTerm(t)
+        },
+      ),
       transformVTerm(handler.outputEffects),
       transformVTerm(handler.outputUsage),
       transformVTerm(handler.outputType),
-      withBindings(Seq(handler.transformBoundName)) {
+      withBindings(Seq(handler.parameterBinding.name, handler.transformBoundName)) {
         transformCTerm(handler.transform)
       },
       handler.handlers.map { (name, body) =>
-        val (argNames, parameterName, resumeName) = handler.handlersBoundNames(name)
+        val (argNames, resumeName) = handler.handlersBoundNames(name)
         (
           name,
-          withBindings((argNames :+ parameterName) ++ resumeName) {
+          withBindings((handler.parameterBinding.name +: argNames) ++ resumeName) {
             transformCTerm(body)
           },
         )

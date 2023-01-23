@@ -665,7 +665,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               eff(outputEffects),
               Block("[", outputUsage, "]"),
               outputType,
-              bracketAndNewline(
+              handlerDefinition(
+                h.parameterBinding.name,
                 Block(
                   Whitespace,
                   Wrap,
@@ -678,7 +679,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                   Whitespace,
                   Wrap,
                   FixedIncrement(2),
-                  Block(Whitespace, NoWrap, ".dispose", h.parameterBinding.name, "->"),
+                  Block(Whitespace, NoWrap, ".dispose", "->"),
                   withBindings(Seq(h.parameterBinding.name)) {
                     parameterDisposer
                   },
@@ -688,42 +689,30 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                       Whitespace,
                       Wrap,
                       FixedIncrement(2),
-                      Block(Whitespace, NoWrap, ".replicate", h.parameterBinding.name, "->"),
+                      Block(Whitespace, NoWrap, ".replicate", "->"),
                       withBindings(Seq(h.parameterBinding.name)) {
                         replicator
                       },
                     ),
                   )
                   .toSeq ++ handlers.keys.toSeq.map { name =>
-                  val (paramNames, parameterName, resumeNameOption) = h.handlersBoundNames(name)
+                  val (paramNames, resumeNameOption) = h.handlersBoundNames(name)
                   val body = handlers(name)
-                  val paramBlock = resumeNameOption match
-                    case Some(resumeName) =>
-                      Block(
-                        Whitespace,
-                        NoWrap,
-                        name,
-                        paramNames.map(r => visitName(r.value)),
-                        parameterName,
-                        resumeName,
-                        "->",
-                      )
-                    case None =>
-                      Block(
-                        Whitespace,
-                        NoWrap,
-                        name,
-                        paramNames.map(r => visitName(r.value)),
-                        parameterName,
-                        "->",
-                      )
+                  val allParamNames = paramNames ++ resumeNameOption
+                  val paramBlock = Block(
+                    Whitespace,
+                    NoWrap,
+                    name,
+                    allParamNames.map(r => visitName(r.value)),
+                    "->",
+                  )
 
                   Block(
                     Whitespace,
                     Wrap,
                     FixedIncrement(2),
                     paramBlock,
-                    withBindings(paramNames :+ parameterName) {
+                    withBindings(allParamNames) {
                       body
                     },
                   )
@@ -911,8 +900,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
   }
 
-  private def bracketAndNewline
-    (blocks: PPrintContext ?=> Seq[Block])
+  private def handlerDefinition
+    (paramName: Ref[Name], blocks: PPrintContext ?=> Seq[Block])
     (using
       ctx: PPrintContext,
     )

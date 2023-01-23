@@ -461,7 +461,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       val transformBoundName: Ref[Name],
       val handlersBoundNames: Map[
         Name,
-        (Seq[Ref[Name]], /* parameter name */ Ref[Name], /* resume name */ Option[Ref[Name]]),
+        (Seq[Ref[Name]], /* resume name */ Option[Ref[Name]]),
       ],
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
