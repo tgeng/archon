@@ -430,6 +430,8 @@ trait Visitor[C, R]:
     combine(
       Seq(
         visitEff(handler.eff),
+        visitVTerm(handler.parameter),
+        visitBinding(handler.parameterBinding),
         withBindings(Seq(handler.parameterBinding.name)) {
           visitCTerm(handler.parameterDisposer)
         },
@@ -864,8 +866,8 @@ trait Transformer[C]:
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
     Handler(
       transformEff(handler.eff),
-      handler.parameterBinding.map(transformVTerm),
       transformVTerm(handler.parameter),
+      handler.parameterBinding.map(transformVTerm),
       withBindings(Seq(handler.parameterBinding.name)) {
         transformCTerm(handler.parameterDisposer)
       },

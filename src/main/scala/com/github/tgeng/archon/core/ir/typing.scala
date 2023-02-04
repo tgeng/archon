@@ -783,8 +783,8 @@ def inferType
         )
       case h @ Handler(
           eff @ (qn, args),
-          parameterBinding,
           parameter,
+          parameterBinding,
           parameterDisposer,
           parameterReplicator,
           outputEffects,

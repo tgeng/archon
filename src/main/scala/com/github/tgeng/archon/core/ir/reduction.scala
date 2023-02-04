@@ -304,8 +304,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           run(paramPairs)
       case h @ Handler(
           (effQn, effArgs),
-          parameterBinding,
           parameter,
+          parameterBinding,
           parameterDisposer,
           parameterReplicator,
           outputEffects,
@@ -328,8 +328,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               stack.push(
                 Handler(
                   (effQn, effArgs),
-                  parameterBinding,
                   parameter,
+                  parameterBinding,
                   parameterDisposer,
                   parameterReplicator,
                   outputEffects,

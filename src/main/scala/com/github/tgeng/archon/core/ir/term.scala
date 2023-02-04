@@ -422,8 +422,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Handler
     (
       eff: Eff,
-      parameterBinding: Binding[VTerm],
       parameter: VTerm,
+      parameterBinding: Binding[VTerm],
       // Effects of this term can not be re-entrant for simplicity
       parameterDisposer: CTerm, // binding offset + 1 (for parameter)
       // Replicator is optional: if it's present, outputEffects can be re-entrant; otherwise, output
