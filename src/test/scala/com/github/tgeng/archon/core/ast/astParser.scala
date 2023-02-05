@@ -78,18 +78,18 @@ object AstParser:
   }
 
   def effectDecl: StrParser[AstEffect] = P {
-    val operator: StrParser[AstOperator] = P {
+    val operation: StrParser[AstOperation] = P {
       for
         name <- name <%< P.from(":") << P.whitespaces
         ty <- rhs <%< P.from(";") << P.whitespaces
-      yield AstOperator(name, ty)
+      yield AstOperation(name, ty)
     }
     for
       name <- P.from("effect") >%> name << P.whitespaces
       tParamTys <- tParamTys <%< P.from(";") << P.whitespaces
-      operators <- operator sepByGreedy P.whitespaces
+      operations <- operation sepByGreedy P.whitespaces
     // note: in production code, we should report error if variance is not "invariant"
-    yield AstEffect(name, tParamTys.map(_._1), operators)
+    yield AstEffect(name, tParamTys.map(_._1), operations)
   }
 
   private def tParamTys: StrParser[AstTContext] = P {

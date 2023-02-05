@@ -148,7 +148,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case _ =>
             stack.push(pc)
             run(rec)
-      case OperatorCall((effQn, effArgs), name, args) =>
+      case OperationCall((effQn, effArgs), name, args) =>
         def areEffArgsConvertible(ts1: List[VTerm], ts2: List[VTerm], tys: Telescope): Boolean =
           (ts1, ts2, tys) match
             case (Nil, Nil, Nil) => true
@@ -168,7 +168,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 val handlerIdx = handlerIndex((effQn, effArgs)).top
                 val handler = stack(handlerIdx).asInstanceOf[Handler]
                 val opHandler = handler.handlers(effQn / name)
-                Σ.getOperator(effQn, name).continuationUsage match
+                Σ.getOperation(effQn, name).continuationUsage match
                   case None => Right(opHandler.substLowers(args :+ handler.parameter: _*))
                   case Some(_) =>
                     val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
@@ -492,12 +492,12 @@ extension(v: VTerm)
     case u: UsageCompound =>
       def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match
         case UsageLiteral(u) => Right(uLubFromLiteral(u))
-        case UsageCompound(operator, operands) =>
+        case UsageCompound(operation, operands) =>
           transpose(operands.multiToSeq.toList.map(dfs)).map { operands =>
-            operator match
-              case UsageOperator.UProd => uLubProd(operands)
-              case UsageOperator.USum  => uLubSum(operands)
-              case UsageOperator.UJoin => uLubJoin(operands)
+            operation match
+              case UsageOperation.UProd => uLubProd(operands)
+              case UsageOperation.USum  => uLubSum(operands)
+              case UsageOperation.UJoin => uLubJoin(operands)
           }
         case c: Collapse => c.normalized.flatMap(dfs)
         case v: Var      => Right(uLubFromT(v))
@@ -507,19 +507,19 @@ extension(v: VTerm)
       def lubToTerm(lub: ULub[Var]): VTerm =
         if lub.isEmpty then throw IllegalStateException("lub cannot be empty")
         else if lub.size == 1 then sumToTerm(lub.head)
-        else UsageCompound(UsageOperator.UJoin, lub.map(sumToTerm).toMultiset)
+        else UsageCompound(UsageOperation.UJoin, lub.map(sumToTerm).toMultiset)
 
       def sumToTerm(sum: USum[Var]): VTerm =
         if sum.isEmpty then UsageLiteral(Usage.U0)
         else if sum.size == 1 then prodToTerm(sum.head)
-        else UsageCompound(UsageOperator.USum, sum.map(prodToTerm).toMultiset)
+        else UsageCompound(UsageOperation.USum, sum.map(prodToTerm).toMultiset)
 
       def prodToTerm(prod: UProd[Var]): VTerm =
         if prod.isEmpty then UsageLiteral(Usage.U1)
         else if prod.size == 1 then varOrUsageToTerm(prod.head)
         else
           UsageCompound(
-            UsageOperator.UProd,
+            UsageOperation.UProd,
             prod.map(varOrUsageToTerm).toMultiset,
           )
 

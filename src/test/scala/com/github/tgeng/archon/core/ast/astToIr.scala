@@ -138,16 +138,16 @@ def astToIr
       }.map { case (paramTys, (ty, clauses)) =>
         PreDefinition(moduleQn / name)(paramTys, ty, clauses)
       }
-    case AstEffect(name, tParamTys, operators) =>
+    case AstEffect(name, tParamTys, operations) =>
       astToIr(tParamTys) {
         transpose(
-          operators.map { operator =>
-            for ty <- astToIr(operator.ty)
-            yield PreOperator(operator.name, ty)
+          operations.map { operation =>
+            for ty <- astToIr(operation.ty)
+            yield PreOperation(operation.name, ty)
           }
         )
-      }.map { case (tParamTys, operators) =>
-        PreEffect(moduleQn / name)(tParamTys, operators)
+      }.map { case (tParamTys, operations) =>
+        PreEffect(moduleQn / name)(tParamTys, operations)
       }
 
 @targetName("astToIrTContext")

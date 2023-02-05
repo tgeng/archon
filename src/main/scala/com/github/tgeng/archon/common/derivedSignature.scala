@@ -260,7 +260,7 @@ trait DerivedSignature extends Signature:
       case Node(effectQn, opName) =>
         for
           eff <- getEffectOption(effectQn)
-          op <- getOperatorOption(effectQn, opName)
+          op <- getOperationOption(effectQn, opName)
         yield
           val allParamTys = eff.tParamTys ++ op.paramTys
           Definition(qn)(
@@ -285,14 +285,14 @@ trait DerivedSignature extends Signature:
       case Node(effectQn, opName) =>
         for
           eff <- getEffectOption(effectQn)
-          op <- getOperatorOption(effectQn, opName)
+          op <- getOperationOption(effectQn, opName)
         yield
           val allBindings = eff.tParamTys ++ op.paramTys
           IndexedSeq(
             Clause(
               allBindings,
               qVars(allBindings.size - 1),
-              OperatorCall(
+              OperationCall(
                 (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
                 opName,
                 vars(op.paramTys.size - 1),
@@ -353,12 +353,12 @@ trait DerivedSignature extends Signature:
       case Node(effectQn, opName) =>
         for
           eff <- getEffectOption(effectQn)
-          op <- getOperatorOption(effectQn, opName)
+          op <- getOperationOption(effectQn, opName)
         yield
           val allBindings = eff.tParamTys ++ op.paramTys
           allBindings.foldRight(
             CtTerm(
-              OperatorCall(
+              OperationCall(
                 (effectQn, vars(allBindings.size - 1, op.paramTys.size)),
                 opName,
                 vars(op.paramTys.size - 1),

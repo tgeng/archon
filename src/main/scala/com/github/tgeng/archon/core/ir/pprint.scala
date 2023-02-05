@@ -570,15 +570,15 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     }
     juxtapose(f, args.reverse.map(visitElim))
 
-  override def visitOperatorCall
+  override def visitOperationCall
     (
-      operatorCall: OperatorCall,
+      operationCall: OperationCall,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = app(
-    Block(operatorCall.name, "@", visitEff(operatorCall.eff)),
-    operatorCall.args.map(visitVTerm),
+    Block(operationCall.name, "@", visitEff(operationCall.eff)),
+    operationCall.args.map(visitVTerm),
   )
 
   override def visitContinuation

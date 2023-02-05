@@ -148,7 +148,7 @@ class TestSignature
     private val allDefinitions: mutable.Map[QualifiedName, Definition] = mutable.Map(),
     private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] = mutable.Map(),
     private val allEffects: mutable.Map[QualifiedName, Effect] = mutable.Map(),
-    private val allOperators: mutable.Map[QualifiedName, IndexedSeq[Operator]] = mutable.Map()
+    private val allOperations: mutable.Map[QualifiedName, IndexedSeq[Operation]] = mutable.Map()
   )
   extends BuiltinSignature:
 
@@ -156,7 +156,7 @@ class TestSignature
 
   override def addField(f: Field): Signature = ???
 
-  override def addOperator(o: Operator): Signature = ???
+  override def addOperation(o: Operation): Signature = ???
 
   override def addDef(d: Definition): Signature = ???
 
@@ -186,7 +186,7 @@ class TestSignature
   allFields.foreach((qn, fields) => fields.foreach(f => updateQnByName(qn / f.name)))
   allDefinitions.keys.foreach(updateQnByName)
   allEffects.keys.foreach(updateQnByName)
-  allOperators.foreach((qn, operators) => operators.foreach(o => updateQnByName(qn / o.name)))
+  allOperations.foreach((qn, operations) => operations.foreach(o => updateQnByName(qn / o.name)))
 
   override def getUserDataOption(qn: QualifiedName) = allData.get(qn)
 
@@ -206,7 +206,7 @@ class TestSignature
 
   override def getUserEffectOption(qn: QualifiedName) = allEffects.get(qn)
 
-  override def getUserOperatorsOption(qn: QualifiedName) = allOperators.get(qn)
+  override def getUserOperationsOption(qn: QualifiedName) = allOperations.get(qn)
 
   def resolve(name: Name): QualifiedName = resolveOption(name).get
 
@@ -225,7 +225,7 @@ class TestSignature
     allDefinitions,
     allClauses,
     allEffects,
-    allOperators
+    allOperations
   )
 
   def addDeclarations
@@ -252,11 +252,11 @@ class TestSignature
           updateQnByName(recordQn / field.name)
         }
       case AstDefinition(name, _, _, _) => updateQnByName(testModuleQn / name)
-      case AstEffect(name, _, operators) =>
+      case AstEffect(name, _, operations) =>
         val effectQn = testModuleQn / name
         updateQnByName(effectQn)
-        operators.foreach { operator =>
-          updateQnByName(effectQn / operator.name)
+        operations.foreach { operation =>
+          updateQnByName(effectQn / operation.name)
         }
     }
     val declarations = transpose(
@@ -299,9 +299,9 @@ class TestSignature
       //     assertRight(checkEffect(effect))
       //     allEffects(effect.qn) = effect
       //   case (BODY, preEffect: PreEffect) =>
-      //     val operators = assertRight(elaborateBody(preEffect))
-      //     assertRight(checkOperators(preEffect.qn, operators))
-      //     allOperators(preEffect.qn) = operators.toIndexedSeq
+      //     val operations = assertRight(elaborateBody(preEffect))
+      //     assertRight(checkOperations(preEffect.qn, operations))
+      //     allOperations(preEffect.qn) = operations.toIndexedSeq
       // }
 
 def scope

@@ -398,11 +398,11 @@ trait Visitor[C, R]:
       visitName(projection.name),
     )
 
-  def visitOperatorCall(operatorCall: OperatorCall)(using ctx: C)(using Σ: Signature): R =
+  def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitEff(operatorCall.eff) +:
-        visitName(operatorCall.name) +:
-        operatorCall.args.map(visitVTerm): _*,
+      visitEff(operationCall.eff) +:
+        visitName(operationCall.name) +:
+        operationCall.args.map(visitVTerm): _*,
     )
 
   def visitContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): R =
@@ -507,7 +507,7 @@ trait Visitor[C, R]:
     case application: Application                => visitApplication(application)
     case recordType: RecordType                  => visitRecordType(recordType)
     case projection: Projection                  => visitProjection(projection)
-    case operatorCall: OperatorCall              => visitOperatorCall(operatorCall)
+    case operationCall: OperationCall              => visitOperationCall(operationCall)
     case continuation: Continuation              => visitContinuation(continuation)
     case c: ContinuationReplicationState         => visitContinuationReplicationState(c)
     case c: ContinuationReplicationStateAppender => visitContinuationReplicationStateAppender(c)
@@ -717,7 +717,7 @@ trait Transformer[C]:
     (using ctx: C)
     (using Σ: Signature)
     : VTerm = UsageCompound(
-    usageCompound.operator,
+    usageCompound.operation,
     usageCompound.operands.multiMap(transformVTerm),
   )
 
@@ -830,12 +830,12 @@ trait Transformer[C]:
       transformName(projection.name),
     )(using projection.sourceInfo)
 
-  def transformOperatorCall(operatorCall: OperatorCall)(using ctx: C)(using Σ: Signature): CTerm =
-    OperatorCall(
-      transformEff(operatorCall.eff),
-      transformName(operatorCall.name),
-      operatorCall.args.map(transformVTerm),
-    )(using operatorCall.sourceInfo)
+  def transformOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): CTerm =
+    OperationCall(
+      transformEff(operationCall.eff),
+      transformName(operationCall.name),
+      operationCall.args.map(transformVTerm),
+    )(using operationCall.sourceInfo)
 
   def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
     Continuation(
@@ -953,7 +953,7 @@ trait Transformer[C]:
       case application: Application        => transformApplication(application)
       case recordType: RecordType          => transformRecordType(recordType)
       case projection: Projection          => transformProjection(projection)
-      case operatorCall: OperatorCall      => transformOperatorCall(operatorCall)
+      case operationCall: OperationCall      => transformOperationCall(operationCall)
       case continuation: Continuation      => transformContinuation(continuation)
       case c: ContinuationReplicationState => transformContinuationReplicationState(c)
       case c: ContinuationReplicationStateAppender =>

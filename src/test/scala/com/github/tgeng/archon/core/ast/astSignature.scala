@@ -34,7 +34,7 @@ enum AstDeclaration:
     (
       override val name: Name,
       val tParamTys: AstTelescope,
-      val operators: List[AstOperator]
+      val operations: List[AstOperation]
     )
 
   def name: Name
@@ -51,4 +51,4 @@ case class AstClause
     ty: AstTerm // TODO[P3]: remove `ty` after elaboration is implemented
   )
 
-case class AstOperator(name: Name, ty: AstTerm)
+case class AstOperation(name: Name, ty: AstTerm)

@@ -109,8 +109,8 @@ def sortPreDeclarations
           ) + definition.qn
         case effect: PreEffect =>
           QualifiedNameVisitor.combine(
-            effect.operators.map { operator =>
-              operator.ty.visitWith(QualifiedNameVisitor)
+            effect.operations.map { operation =>
+              operation.ty.visitWith(QualifiedNameVisitor)
             }: _*,
           ) + effect.qn
       },
@@ -813,7 +813,7 @@ private def elaborateHead
       tParamTys <- elaborateContext(effect.tParamTys)
       e = new Effect(effect.qn)(
         tParamTys,
-        effect.operators.map(_.continuationUsage).foldLeft[Option[Usage]](None) {
+        effect.operations.map(_.continuationUsage).foldLeft[Option[Usage]](None) {
           case (None, None) => None
           // None continuation usage is approximated as U1.
           case (Some(u), None) => Some(Usage.U1 | u)
@@ -842,7 +842,7 @@ private def elaborateBody
       (using ctx: TypingContext)
       : Either[
         IrError,
-        (Telescope, /* operator return type */ VTerm, /* operator return usage */ VTerm),
+        (Telescope, /* operation return type */ VTerm, /* operation return usage */ VTerm),
       ] =
       for
         ty <- reduceCType(ty)
@@ -861,15 +861,15 @@ private def elaborateBody
           case _ => Left(ExpectFType(ty))
       yield r
 
-    preEffect.operators.foldLeft[Either[IrError, Signature]](Right(Σ)) {
-      case (Right(_Σ), operator) =>
+    preEffect.operations.foldLeft[Either[IrError, Signature]](Right(Σ)) {
+      case (Right(_Σ), operation) =>
         given Signature = _Σ
-        ctx.trace(s"elaborating operator ${operator.name}") {
+        ctx.trace(s"elaborating operation ${operation.name}") {
           for
-            case (paramTys, resultTy, usage) <- elaborateTy(operator.ty)
-            o = Operator(operator.name, operator.continuationUsage, paramTys, resultTy, usage)
-            _ <- checkOperator(effect.qn, o)
-          yield _Σ.addOperator(effect.qn, o)
+            case (paramTys, resultTy, usage) <- elaborateTy(operation.ty)
+            o = Operation(operation.name, operation.continuationUsage, paramTys, resultTy, usage)
+            _ <- checkOperation(effect.qn, o)
+          yield _Σ.addOperation(effect.qn, o)
         }
       case (Left(e), _) => Left(e)
     }

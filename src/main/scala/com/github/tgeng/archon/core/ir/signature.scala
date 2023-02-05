@@ -51,7 +51,7 @@ enum Declaration:
       val tParamTys: Context = IndexedSeq(),
       /** Semantic:
         *
-        *   - None: operators don't manipulate continuations at all (hence won't have access to a
+        *   - None: operations don't manipulate continuations at all (hence won't have access to a
         *     continuation argument). Instead, implementation of an operation simply returns the
         *     operation result. Semantically None subsumes `U1` because it's a more restricted
         *     case of U1.
@@ -100,7 +100,7 @@ case class Clause
     ty: CTerm, /* + bindings */
   )
 
-case class Operator
+case class Operation
   (
     name: Name,
     continuationUsage: Option[Usage],
@@ -121,7 +121,7 @@ trait Signature:
 
   def addCaseTree(qn: QualifiedName, ct: CaseTree): S
 
-  def addOperator(qn: QualifiedName, o: Operator): S
+  def addOperation(qn: QualifiedName, o: Operation): S
 
   def getDataOption(qn: QualifiedName): Option[Data]
 
@@ -184,20 +184,20 @@ trait Signature:
 
   def getEffect(qn: QualifiedName): Effect = getEffectOption(qn).get
 
-  def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]]
+  def getOperationsOption(qn: QualifiedName): Option[IndexedSeq[Operation]]
 
-  def getOperators(qn: QualifiedName): IndexedSeq[Operator] =
-    getOperatorsOption(qn).get
+  def getOperations(qn: QualifiedName): IndexedSeq[Operation] =
+    getOperationsOption(qn).get
 
-  def getOperatorOption(qn: QualifiedName, opName: Name): Option[Operator] =
+  def getOperationOption(qn: QualifiedName, opName: Name): Option[Operation] =
     for
-      operators <- getOperatorsOption(qn)
-      r <- operators.collectFirst {
+      operations <- getOperationsOption(qn)
+      r <- operations.collectFirst {
         case op if op.name == opName => op
       }
     yield r
 
-  def getOperator(qn: QualifiedName, opName: Name): Operator =
-    getOperatorOption(qn, opName).getOrElse(
-      throw IllegalArgumentException(s"missing operator $opName"),
+  def getOperation(qn: QualifiedName, opName: Name): Operation =
+    getOperationOption(qn, opName).getOrElse(
+      throw IllegalArgumentException(s"missing operation $opName"),
     )

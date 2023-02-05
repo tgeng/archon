@@ -139,7 +139,7 @@ extension [I, T, M[+_]]
   (using ap: Alternative[ParseResult[M, *]])
   (using am: Alternative[M])
   (p: ParserT[I, T, M])
-  /** Similar to `or` in `Alternative[ParserT]`, but this operator does not invoke the second
+  /** Similar to `or` in `Alternative[ParserT]`, but this operation does not invoke the second
     * parser if the first is successful, even if `M` is a `List` for non-deterministic parsing.
     */
   infix def ||(q: => ParserT[I, T, M]): ParserT[I, T, M] =

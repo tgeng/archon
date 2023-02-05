@@ -29,7 +29,7 @@ enum IrError extends HasException:
   case UnmatchedHandlerImplementation
     (
       qn: QualifiedName,
-      implementedOperators: Iterable[QualifiedName]
+      implementedOperations: Iterable[QualifiedName]
     )
   case NotVSubsumption
     (
@@ -74,7 +74,7 @@ enum IrError extends HasException:
   case MissingDefinition(qn: QualifiedName)
   case MissingConstructor(name: Name, qn: QualifiedName)
   case MissingField(name: Name, qn: QualifiedName)
-  case MissingOperator(name: Name, qn: QualifiedName)
+  case MissingOperation(name: Name, qn: QualifiedName)
   case LeakedReferenceToEffectfulComputationResult(effectfulTerm: CTerm)
   case LeakedReferenceToHeapVariable(leakyTerm: CTerm)
   case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name)

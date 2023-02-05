@@ -286,19 +286,19 @@ def checkEffect
     yield ()
   }
 
-def checkOperator
-  (qn: QualifiedName, operator: Operator)
+def checkOperation
+  (qn: QualifiedName, operation: Operation)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Unit] =
-  ctx.trace(s"checking effect operator $qn.${operator.name}") {
+  ctx.trace(s"checking effect operation $qn.${operation.name}") {
     Σ.getEffectOption(qn) match
       case None => Left(MissingDeclaration(qn))
       case Some(effect) =>
         val Γ = effect.tParamTys.toIndexedSeq
 
-        checkParameterTypeDeclarations(operator.paramTys)(using Γ) >>
-          checkIsType(operator.resultTy)(using Γ ++ operator.paramTys)
+        checkParameterTypeDeclarations(operation.paramTys)(using Γ) >>
+          checkIsType(operation.resultTy)(using Γ ++ operation.paramTys)
   }
 
 private def checkTParamsAreUnrestricted
@@ -752,11 +752,11 @@ def inferType
                   Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(rec): _*)))
             case _ => Left(ExpectRecord(rec))
         yield (ty, recUsages)
-      case OperatorCall(eff @ (qn, tArgs), name, args) =>
+      case OperationCall(eff @ (qn, tArgs), name, args) =>
         Σ.getEffectOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(effect) =>
-            Σ.getOperatorOption(qn, name) match
+            Σ.getOperationOption(qn, name) match
               case None => Left(MissingDefinition(qn))
               case Some(op) =>
                 for
@@ -880,15 +880,15 @@ def inferType
               val (qn, args) = eff
               for
                 effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
-                operators <- Σ.getOperatorsOption(qn).toRight(MissingDeclaration(qn))
+                operations <- Σ.getOperationsOption(qn).toRight(MissingDeclaration(qn))
                 _ <-
-                  if handlers.size == operators.size && handlers.keySet == operators
+                  if handlers.size == operations.size && handlers.keySet == operations
                       .map(_.name)
                       .toSet
                   then Right(())
                   else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
                 handlerUsages <- transpose(
-                  operators.map { opDecl =>
+                  operations.map { opDecl =>
                     val handlerBody = handlers(qn / opDecl.name)
                     val (argNames, resumeNameOption) = h.handlersBoundNames(qn / opDecl.name)
                     // All of the following opXXX are weakened for handler parameter
@@ -1355,13 +1355,13 @@ def checkSubsumption
             r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
           yield r
         case (
-            OperatorCall((qn1, tArgs1), name1, args1),
-            OperatorCall((qn2, tArgs2), name2, args2),
+            OperationCall((qn1, tArgs1), name1, args1),
+            OperationCall((qn2, tArgs2), name2, args2),
             _,
           ) if qn1 == qn2 && name1 == name2 =>
-          Σ.getOperatorOption(qn1, name1) match
-            case None => Left(MissingOperator(name1, qn1))
-            case Some(operator) =>
+          Σ.getOperationOption(qn1, name1) match
+            case None => Left(MissingOperation(name1, qn1))
+            case Some(operation) =>
               var args = IndexedSeq[VTerm]()
               Σ.getEffectOption(qn1) match
                 case None => Left(MissingDeclaration(qn1))
@@ -1374,7 +1374,7 @@ def checkSubsumption
                       r
                     },
                   ) >> allRight(
-                    args1.zip(args2).zip(operator.paramTys).map { case ((arg1, arg2), binding) =>
+                    args1.zip(args2).zip(operation.paramTys).map { case ((arg1, arg2), binding) =>
                       val r = checkSubsumption(arg1, arg2, Some(binding.ty))(
                         using CONVERSION,
                       )

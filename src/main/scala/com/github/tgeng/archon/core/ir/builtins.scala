@@ -16,7 +16,7 @@ private case class SimpleSignature
     fields: Map[QualifiedName, IndexedSeq[Field]] = Map(),
     clauses: Map[QualifiedName, IndexedSeq[Clause]] = Map(),
     caseTrees: Map[QualifiedName, CaseTree] = Map(),
-    operators: Map[QualifiedName, IndexedSeq[Operator]] = Map(),
+    operations: Map[QualifiedName, IndexedSeq[Operation]] = Map(),
   )
   extends DerivedSignature:
 
@@ -32,8 +32,8 @@ private case class SimpleSignature
     copy(clauses = clauses + (qn -> (clauses.getOrElse(qn, IndexedSeq()) :+ c)))
   override def addCaseTree(qn: QualifiedName, ct: CaseTree): SimpleSignature =
     copy(caseTrees = caseTrees + (qn -> ct))
-  override def addOperator(qn: QualifiedName, o: Operator): SimpleSignature =
-    copy(operators = operators + (qn -> (operators.getOrElse(qn, IndexedSeq()) :+ o)))
+  override def addOperation(qn: QualifiedName, o: Operation): SimpleSignature =
+    copy(operations = operations + (qn -> (operations.getOrElse(qn, IndexedSeq()) :+ o)))
 
   override def getDeclaredDefinitionOption(qn: QualifiedName): Option[Definition] =
     declarations.get(qn).collect { case d: Definition => d }
@@ -51,8 +51,8 @@ private case class SimpleSignature
     fields.get(qn)
   override def getEffectOption(qn: QualifiedName): Option[Effect] =
     declarations.get(qn).collect { case d: Effect => d }
-  override def getOperatorsOption(qn: QualifiedName): Option[IndexedSeq[Operator]] =
-    operators.get(qn)
+  override def getOperationsOption(qn: QualifiedName): Option[IndexedSeq[Operation]] =
+    operations.get(qn)
 
 object Builtins:
 
@@ -597,7 +597,7 @@ object Builtins:
       // Note: we declare no operations here because operations of heap effect is represented
       // specially in CTerm. Instead, the derived definitions for these operations (alloc, set, get)
       // are directly added as builtin definitions.
-      operators = Nil,
+      operations = Nil,
     ),
   )
 

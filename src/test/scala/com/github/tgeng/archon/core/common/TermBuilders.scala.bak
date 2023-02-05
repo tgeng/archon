@@ -60,7 +60,7 @@ object TermBuilders:
       val args = elims.map(_.asInstanceOf[Arg].v)
       Σ.getEffectOption(qn).map(_ => (qn, args)).get
 
-  def op(eff: Eff, name: Name, args: VTerm*) = OperatorCall(eff, name, args.toList)
+  def op(eff: Eff, name: Name, args: VTerm*) = OperationCall(eff, name, args.toList)
 
   given Conversion[SomeCall[Name], VTerm] = _ match
     case SomeCall(n, elims) => Con(n, elims.map(_.asInstanceOf[Arg].v))

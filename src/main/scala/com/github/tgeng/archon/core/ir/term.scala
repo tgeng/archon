@@ -94,7 +94,7 @@ enum CellStatus extends Comparable[CellStatus]:
     else if this == CellStatus.Initialized then -1
     else 1
 
-enum UsageOperator:
+enum UsageOperation:
   case USum, UProd, UJoin
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
@@ -158,7 +158,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageCompound
-    (operator: UsageOperator, operands: Multiset[VTerm])
+    (operation: UsageOperation, operands: Multiset[VTerm])
     (using
       sourceInfo: SourceInfo,
     ) extends VTerm(sourceInfo)
@@ -210,7 +210,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   this match
-    case UsageCompound(UsageOperator.UJoin, operands) if operands.isEmpty =>
+    case UsageCompound(UsageOperation.UJoin, operands) if operands.isEmpty =>
       throw IllegalArgumentException(
         "empty operands not allowed for join because join does not have an identity",
       )
@@ -255,11 +255,11 @@ object VTerm:
     (t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))
     (using SourceInfo) = new Top(ULevel.USimpleLevel(t), eqDecidability)
   def UsageSum(operands: VTerm*)(using SourceInfo) =
-    UsageCompound(UsageOperator.USum, operands.toMultiset)
+    UsageCompound(UsageOperation.USum, operands.toMultiset)
   def UsageProd(operands: VTerm*)(using SourceInfo) =
-    UsageCompound(UsageOperator.UProd, operands.toMultiset)
+    UsageCompound(UsageOperation.UProd, operands.toMultiset)
   def UsageJoin(operands: VTerm*)(using SourceInfo) =
-    UsageCompound(UsageOperator.UJoin, operands.toMultiset)
+    UsageCompound(UsageOperation.UJoin, operands.toMultiset)
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(n, Map())
@@ -372,7 +372,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   case Projection(rec: CTerm, name: Name)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  case OperatorCall(eff: Eff, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
+  case OperationCall(eff: Eff, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
 
   /** Internal only. This is only created by reduction.
@@ -380,7 +380,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param handler
     *   the handler that delimits this continuation
     * @param capturedStack
-    *   stack containing the delimited continuation from the tip (right below operator call) to
+    *   stack containing the delimited continuation from the tip (right below operation call) to
     *   the computation right above corresponding handler. Note that the first term is at the
     *   bottom of the stack and the last term is the tip of the stack.
     */
@@ -391,7 +391,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * During reduction, this value is specially handled: any non-handlers are skipped and
     * parameterReplicator in handlers are executed one by one to collect the replicated
     * parameters. These replicated parameters are then collected into the two stacks, until
-    * reaching the handler at `handlerIndex` (the handler that contains the operator
+    * reaching the handler at `handlerIndex` (the handler that contains the operation
     * implementation which invokes the continuation replication).
     * @param handlerIndex:
     *   index of this handler in the reduction machine stack. In other words, size of the stack
@@ -453,7 +453,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       /** All handler implementations declared by the effect. Each handler is essentially a
         * function body that takes the following arguments
         *   - all declared parameters
-        *   - a continuation parameter of type `declared operator output type -> outputType` and
+        *   - a continuation parameter of type `declared operation output type -> outputType` and
         *     outputs `outputType`
         */
       handlers: Map[
@@ -511,7 +511,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case Application(fun, args)        => Application(fun, args)
       case RecordType(qn, args, effects) => RecordType(qn, args, effects)
       case Projection(rec, name)         => Projection(rec, name)
-      case OperatorCall(eff, name, args) => OperatorCall(eff, name, args)
+      case OperationCall(eff, name, args) => OperationCall(eff, name, args)
       case c: (Continuation | ContinuationReplicationState |
           ContinuationReplicationStateAppender) =>
         c
