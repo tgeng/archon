@@ -699,12 +699,15 @@ def inferType
                 case (bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using Γ :+ binding)
                 r <- bodyTyTy match
                   case CType(_, eff) if eff == Total =>
-                    // strengthen is safe here because if it references the binding, then the
+                    // Strengthen is safe here because if it references the binding, then the
                     // binding must be at level ω and hence ULevelMax would return big type.
+                    // Also, there is no need to check the dropped usage because usages in types
+                    // is always multiplied by U0.
                     Right(
-                      (CType(tm, Total)),
+                      CType(tm, Total),
                       bodyTyUsages.dropRight(1).map(_.strengthened),
                     )
+                  // TODO[P3]: think about whether the following is actually desirable
                   // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
                   // inference.
                   case F(Type(_), eff, _) if eff == Total =>
