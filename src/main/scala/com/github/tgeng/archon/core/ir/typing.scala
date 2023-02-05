@@ -882,11 +882,10 @@ def inferType
                 effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
                 operations <- Σ.getOperationsOption(qn).toRight(MissingDeclaration(qn))
                 _ <-
-                  if handlers.size == operations.size && handlers.keySet == operations
-                      .map(_.name)
-                      .toSet
-                  then Right(())
-                  else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
+                  val missingOperationQn =
+                    operations.map(qn / _.name).filter(qn => !handlers.contains(qn)).toSet
+                  if missingOperationQn.isEmpty then Right(())
+                  else Left(MissingHandlerImplementation(missingOperationQn, h.sourceInfo))
                 handlerUsages <- transpose(
                   operations.map { opDecl =>
                     val handlerBody = handlers(qn / opDecl.name)
@@ -969,8 +968,22 @@ def inferType
                 )
               yield handlerUsages.reduce(_ + _)
             eff match
-              case Effects(effs, s) if s.isEmpty => transpose(effs.map(checkHandler(_)))
-              case _                             => Left(EffectTermToComplex(eff))
+              case Effects(effs, s) if s.isEmpty =>
+                val effQns = effs.map(_._1)
+                for
+                  _ <-
+                    val unknownOperationQns = handlers.keySet
+                      .filter {
+                        case QualifiedName.Node(parent, _) => !effQns.contains(parent)
+                        case qn => throw IllegalStateException(s"bad operation name $qn")
+                      }
+                    if unknownOperationQns.isEmpty
+                    then Right(())
+                    else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
+                  r <- transpose(effs.map(checkHandler(_)))
+                yield r
+
+              case _ => Left(EffectTermToComplex(eff))
         yield (
           outputCType,
           // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.

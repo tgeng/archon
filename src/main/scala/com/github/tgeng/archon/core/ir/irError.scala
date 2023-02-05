@@ -26,24 +26,21 @@ enum IrError extends HasException:
   case ReductionStuck(stuckTerm: CTerm)
   case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case UninitializedCell(stuckTerm: CTerm)
-  case UnmatchedHandlerImplementation
-    (
-      qn: QualifiedName,
-      implementedOperations: Iterable[QualifiedName]
-    )
+  case MissingHandlerImplementation(expectedOperations: Set[QualifiedName], handler: SourceInfo)
+  case UnknownHandlerImplementation(unknownOperations: Set[QualifiedName], handler: SourceInfo)
   case NotVSubsumption
     (
       sub: VTerm,
       sup: VTerm,
       ty: Option[VTerm],
-      mode: CheckSubsumptionMode
+      mode: CheckSubsumptionMode,
     )
   case NotCSubsumption
     (
       sub: CTerm,
       sup: CTerm,
       ty: Option[CTerm],
-      mode: CheckSubsumptionMode
+      mode: CheckSubsumptionMode,
     )
   case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
   case LevelTooBig(level: ULevel)
@@ -51,20 +48,21 @@ enum IrError extends HasException:
     (
       sub: VTerm,
       sup: VTerm,
-      mode: CheckSubsumptionMode
+      mode: CheckSubsumptionMode,
     )
   case NotUsageSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
-  case NotContinuationUsageSubsumption(sub: Option[Usage], sup: Option[Usage], mode: CheckSubsumptionMode)
+  case NotContinuationUsageSubsumption
+    (sub: Option[Usage], sup: Option[Usage], mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
   case IllegalVarianceInData
     (
       qn: QualifiedName,
-      illegallyUsedBindingIndices: collection.Seq[Nat]
+      illegallyUsedBindingIndices: collection.Seq[Nat],
     )
   case IllegalVarianceInRecord
     (
       qn: QualifiedName,
-      illegallyUsedBindingIndices: collection.Seq[Nat]
+      illegallyUsedBindingIndices: collection.Seq[Nat],
     )
   case NotEqDecidableType(ty: VTerm)
   case NormalizationError(ctm: CTerm)
