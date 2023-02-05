@@ -826,7 +826,8 @@ def inferType
             case Effects(effs, s) if s.isEmpty => Right(effs)
             case _                             => Left(EffectTermToComplex(eff))
           effUsages <- checkType(eff, EffectsType())
-          parameterUsages <- checkType(parameter, parameterBinding.ty)
+          singleParameterUsages <- checkType(parameter, parameterBinding.ty)
+          parameterUsages = singleParameterUsages * parameterBinding.usage
           _ <- parameterReplicator match
             case Some(_) => checkType(outputEffects, EffectsType())
             // parameterReplicator is not specified, in this case, the outputEffects must not be
