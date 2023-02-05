@@ -71,8 +71,10 @@ enum FStatement:
       outputUsage: FTerm,
       outputType: FTerm,
       transform: Option[FTerm],
-      handlers: Map[]
-    ) // TODO: add more
+      // TODO: Think about how resolution of operation names can be done. Maybe augment 
+      // QualifiedName with holes that can be filled up during type checking.
+      handlers: Map[QualifiedName, FTerm], // TODO: use clauses here instead.
+    )
   case FSHeapHandler() // TODO: add more
 
 case class FClause(lhs: List[FCoPattern], rhs: Option[FTerm])
