@@ -14,12 +14,14 @@ import com.github.tgeng.archon.core.common.*
   * user: def (Nat) + (Nat) : Nat
   *           0 + n => n
   *           (S m) + n => S (m + n)
+  * ```
   * 
   * * Use '_' for automatically inferred value, like in Agda and Idris
   * * Use '$' for placeholder of unbound variables, like '_' in Scala. Specifically, '$0' binds to
   *   the first parameter, '$1' the second, etc
   * 
-  * handler <eff1 a | eff2 b> [1] getParam c d : <eff3 a | eff4 d> [1] OutputType
+  * ```
+  * handler <eff1 a | eff2 b> with [1] getParam c d : <eff3 a | eff4 d> [1] OutputType
   *   dispose p => somehowDispose p
   *   replicate p => somehowReplicate p
   *   return p x => somehowDispose p; x

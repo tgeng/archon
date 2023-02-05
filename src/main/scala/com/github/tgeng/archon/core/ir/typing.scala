@@ -120,9 +120,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either
       _ <- checkParameterTypeDeclarations(tParams.toList)
       _ <- checkTParamsAreUnrestricted(tParams.toList)
       _ <- checkULevel(data.ul)(using tParams.toIndexedSeq)
-      _ <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using
-        tParams.toIndexedSeq,
-      )
+      _ <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using tParams.toIndexedSeq)
     yield ()
   }
 
@@ -523,8 +521,8 @@ def checkType
     case Cell(heapKey, _) =>
       ty match
         case CellType(heap, _, _) if Heap(heapKey) == heap => Right(Usages.zero)
-        case _: CellType => Left(ExpectCellTypeWithHeap(heapKey))
-        case _           => Left(ExpectCellType(ty))
+        case _: CellType                                   => Left(ExpectCellTypeWithHeap(heapKey))
+        case _                                             => Left(ExpectCellType(ty))
     case _ =>
       for
         case (inferred, usages) <- inferType(tm)
@@ -751,12 +749,7 @@ def inferType
               Σ.getFieldOption(qn, name) match
                 case None => Left(MissingField(name, qn))
                 case Some(f) =>
-                  Right(
-                    augmentEffect(
-                      effects,
-                      f.ty.substLowers(args :+ Thunk(rec): _*),
-                    ),
-                  )
+                  Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(rec): _*)))
             case _ => Left(ExpectRecord(rec))
         yield (ty, recUsages)
       case OperatorCall(eff @ (qn, tArgs), name, args) =>
@@ -768,10 +761,7 @@ def inferType
               case Some(op) =>
                 for
                   effUsages <- checkTypes(tArgs, effect.tParamTys.toList)
-                  argsUsages <- checkTypes(
-                    args,
-                    op.paramTys.substLowers(tArgs: _*),
-                  )
+                  argsUsages <- checkTypes(args, op.paramTys.substLowers(tArgs: _*))
                 yield (
                   F(
                     op.resultTy.substLowers(tArgs ++ args: _*),
@@ -834,12 +824,16 @@ def inferType
             // re-entrant.
             case None => checkType(outputEffects, EffectsType(Some(Usage.UAff)))
           outputEffects <- outputEffects.normalized
-          parameterOpsEffects <- filterSimpleEffects(outputEffects.weakened)
+          parameterOpsEffects <- filterSimpleEffects(outputEffects)
           parameterOpsΓ = Γ :+ parameterBinding
           parameterDisposerUsages <- checkType(
             parameterDisposer,
             F(DataType(Builtins.UnitQn), parameterOpsEffects),
           )(using parameterOpsΓ)
+          parameterTypeLevel <- inferLevel(parameterBinding.ty)
+          parameterTypeLevel <- parameterTypeLevel match
+            case ULevel.USimpleLevel(l) => Right(l)
+            case _                      => Left(LevelTooBig(parameterTypeLevel))
           parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
           parameterReplicatorUsages <- parameterReplicator match
             case Some(parameterReplicator) =>
@@ -847,9 +841,19 @@ def inferType
                 parameterReplicatorUsages <- checkType(
                   parameterReplicator,
                   F(
-                    DataType(Builtins.PairQn, List(parameterBinding.ty.weakened)),
+                    DataType(
+                      Builtins.PairQn,
+                      List(
+                        parameterTypeLevel,
+                        EqDecidabilityLiteral(EqDecidability.EqUnknown),
+                        parameterBinding.usage,
+                        parameterBinding.ty,
+                        parameterBinding.usage,
+                        parameterBinding.ty,
+                      ),
+                    ),
                     parameterOpsEffects,
-                  ),
+                  ).weakened,
                 )(using parameterOpsΓ)
                 parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
                   parameterOpsΓ,
@@ -861,7 +865,7 @@ def inferType
             case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
             case _                                => Left(ExpectFType(inputCTy))
           inputBinding = Binding(inputTy, inputUsage)(gn"v")
-          outputCType = F(outputType, outputEffects)
+          outputCType = F(outputType, outputEffects, outputUsage)
           transformΓ = Γ :+ parameterBinding :+ inputBinding.weakened
           transformUsages <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
           transformUsages <- verifyUsages(transformUsages)(2)
@@ -887,9 +891,9 @@ def inferType
                   operators.map { opDecl =>
                     val handlerBody = handlers(opDecl.name)
                     val (argNames, resumeNameOption) = h.handlersBoundNames(opDecl.name)
-                    val opArgs = args ++ vars(opDecl.paramTys.size - 1)
-                    val opResultTy = opDecl.resultTy.substLowers(opArgs: _*)
-                    val opResultUsage = opDecl.resultUsage.substLowers(opArgs: _*)
+                    // All of the following opXXX are weakened for handler parameter
+                    val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
+                    val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
                     val opParamTys = parameterBinding +: opDecl.paramTys
                       .substLowers(args: _*)
                       .zip(argNames)
@@ -898,58 +902,68 @@ def inferType
                       }
                       .weakened
                     for
-                      continuationTy <- opDecl.continuationUsage match
+                      opResultTyLevel <- inferLevel(opResultTy)
+                      opResultTyLevel <- opResultTyLevel match
+                        case ULevel.USimpleLevel(l) => Right(l)
+                        case _                      => Left(LevelTooBig(opResultTyLevel))
+                      case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
                         case Some(continuationUsage) =>
                           resumeNameOption match
                             case Some(resumeName) =>
                               for
-                                parameterTypeLevel <- inferLevel(parameterBinding.ty)
-                                inputTypeLevel <- inferLevel(inputTy)
                                 outputTypeLevel <- inferLevel(outputType)
-                                level <- (
-                                  parameterTypeLevel,
-                                  inputTypeLevel,
-                                  outputTypeLevel,
-                                ) match
-                                  case (
-                                      ULevel.USimpleLevel(p),
-                                      ULevel.USimpleLevel(i),
-                                      ULevel.USimpleLevel(o),
-                                    ) =>
-                                    Right(LevelMax(p, i, o))
-                                  case (l: ULevel.UωLevel, _, _) => Left(LevelTooBig(l))
-                                  case (_, l: ULevel.UωLevel, _) => Left(LevelTooBig(l))
-                                  case (_, _, l: ULevel.UωLevel) => Left(LevelTooBig(l))
-                              yield List(
-                                Binding(
-                                  U(
-                                    RecordType(
-                                      Builtins.ContinuationQn,
-                                      List(
-                                        level,
-                                        UsageLiteral(continuationUsage),
-                                        parameterBinding.ty,
-                                        inputTy,
-                                        parameterOpsEffects,
-                                        outputEffects,
-                                        outputUsage,
-                                        outputType,
-                                      ),
-                                    ).weaken(opDecl.paramTys.size + 1, 0),
-                                  ),
-                                )(resumeName),
+                                level <- outputTypeLevel match
+                                  case ULevel.USimpleLevel(o) =>
+                                    Right(LevelMax(parameterTypeLevel, opResultTyLevel, o))
+                                  case l: ULevel.UωLevel => Left(LevelTooBig(l))
+                              yield (
+                                opParamTys :+
+                                  Binding(
+                                    U(
+                                      RecordType(
+                                        Builtins.ContinuationQn,
+                                        List(
+                                          level,
+                                          UsageLiteral(continuationUsage),
+                                          parameterBinding.usage,
+                                          parameterBinding.ty,
+                                          opResultUsage,
+                                          opResultTy,
+                                          parameterOpsEffects,
+                                          outputEffects,
+                                          outputUsage,
+                                          outputType,
+                                        ),
+                                      ).weaken(opDecl.paramTys.size + 1, 0),
+                                    ),
+                                  )(resumeName),
+                                outputCType.weaken(opParamTys.size + 1, 0),
                               )
                             case None =>
                               throw IllegalArgumentException("missing name for continuation")
-                        case None => Right(Nil)
-                      opParamTys <- Right(opParamTys ++ continuationTy)
-                      bodyUsages <- checkType(
-                        handlerBody,
-                        outputCType.weaken(opParamTys.size, 0),
-                      )(using Γ ++ opParamTys)
-                      bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using
-                        Γ ++ opParamTys,
-                      )
+                        case None =>
+                          Right(
+                            (
+                              opParamTys,
+                              F(
+                                DataType(
+                                  Builtins.PairQn,
+                                  List(
+                                    opResultTyLevel,
+                                    EqDecidabilityLiteral(EqDecidability.EqUnknown),
+                                    parameterBinding.usage,
+                                    parameterBinding.ty,
+                                    opResultUsage,
+                                    opResultTy,
+                                  ),
+                                ),
+                                outputEffects,
+                                opResultUsage,
+                              ).weaken(opDecl.paramTys.size, 0),
+                            ),
+                          )
+                      bodyUsages <- checkType(handlerBody, opOutputTy)(using Γ ++ opParamTys)
+                      bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
                     yield bodyUsages
                   },
                 )
@@ -1353,12 +1367,11 @@ def checkSubsumption
                 case None => Left(MissingDeclaration(qn1))
                 case Some(effect) =>
                   allRight(
-                    tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
-                      case ((tArg1, tArg2), binding) =>
-                        val r =
-                          checkSubsumption(tArg1, tArg2, Some(binding.ty))(using CONVERSION)
-                        args = args :+ tArg1
-                        r
+                    tArgs1.zip(tArgs2).zip(effect.tParamTys).map { case ((tArg1, tArg2), binding) =>
+                      val r =
+                        checkSubsumption(tArg1, tArg2, Some(binding.ty))(using CONVERSION)
+                      args = args :+ tArg1
+                      r
                     },
                   ) >> allRight(
                     args1.zip(args2).zip(operator.paramTys).map { case ((arg1, arg2), binding) =>
@@ -1467,17 +1480,15 @@ private def checkInherentEqDecidable
   given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
 
   // 1. check that eqD of component type ⪯ eqD of data
-  def checkComponentTypes
-    (tys: Telescope, dataEqD: VTerm)
-    (using Γ: Context)
-    : Either[IrError, Unit] = tys match
-    case Nil => Right(())
-    case binding :: rest =>
-      for
-        eqD <- deriveTypeInherentEqDecidability(binding.ty)
-        _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using SUBSUMPTION)
-        _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
-      yield ()
+  def checkComponentTypes(tys: Telescope, dataEqD: VTerm)(using Γ: Context): Either[IrError, Unit] =
+    tys match
+      case Nil => Right(())
+      case binding :: rest =>
+        for
+          eqD <- deriveTypeInherentEqDecidability(binding.ty)
+          _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using SUBSUMPTION)
+          _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
+        yield ()
 
   // 2. inductively define a set of constructor params and this set must contain all constructor
   //    params in order for the data to be non-EqUnknown

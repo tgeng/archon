@@ -153,15 +153,18 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
-        (binding(n"A", Top(Var(1), Var(0))), Variance.COVARIANT),
+        (binding(n"usage1", UsageType()), Variance.INVARIANT),
+        (binding(n"A1", Top(Var(2), Var(1))), Variance.COVARIANT),
+        (binding(n"usage2", EqDecidabilityType()), Variance.INVARIANT),
+        (binding(n"A2", Top(Var(4), Var(3))), Variance.COVARIANT),
       ),
-      ty = F(Type(Top(Var(2), Var(1)))),
+      ty = F(Type(Top(Var(5), Var(4)))),
       constructors = List(
         PreConstructor(
           n"MkPair",
           FunctionType(
-            Binding(Var(0))(n"x"),
-            FunctionType(Binding(Var(1))(n"y"), F(DataType(PairQn, vars(4, 2)))),
+            Binding(Var(2), Var(3))(n"x"),
+            FunctionType(Binding(Var(1), Var(2))(n"y"), F(DataType(PairQn, vars(4, 2)))),
           ),
         ),
       ),
@@ -217,42 +220,47 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
+        (binding(n"paramUsage", UsageType()), Variance.CONTRAVARIANT),
         (binding(n"paramType", Type(Top(Var(1)))), Variance.CONTRAVARIANT),
+        (binding(n"resumeArgUsage", UsageType()), Variance.CONTRAVARIANT),
         (binding(n"resumeArgType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
         (binding(n"paramOpsEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
         (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
       ),
-      ty = CTop(Var(5)),
+      ty = CTop(Var(9)),
       fields = List(
         Field(
           n"resume",
           Binding(DataType(IsResumableQn, List(Var(6))))(n"isResumable") ->:
-            Binding(Var(6))(n"param") ->:
-            Binding(Var(6))(n"resumeArg") ->:
-            F(Var(4), Var(6), Var(5)),
+            Binding(Var(7), Var(8))(n"param") ->:
+            Binding(Var(6), Var(7))(n"resumeArg") ->:
+            F(Var(3), Var(5), Var(4)),
         ),
         Field(
           n"dispose",
           Binding(DataType(IsDisposableQn, List(Var(6))))(n"isDisposable") ->:
-            Binding(Var(6))(n"param") ->:
-            F(DataType(UnitQn, Nil), Var(8)),
+            Binding(Var(7), Var(8))(n"param") ->:
+            F(DataType(UnitQn, Nil), Var(5)),
         ),
         Field(
           n"replicate",
           Binding(DataType(IsReplicableQn, List(Var(6))))(n"isReplicable") ->:
-            Binding(Var(6))(n"param") ->:
+            Binding(Var(7), Var(8))(n"param") ->:
             F(
               DataType(
                 PairQn,
                 List(
-                  Var(10),
+                  Var(11),
                   EqDecidabilityLiteral(EqUnknown),
-                  U(RecordType(ContinuationQn, vars(10, 3))),
+                  Var(9),
+                  U(RecordType(ContinuationQn, vars(11, 2))),
+                  Var(9),
+                  U(RecordType(ContinuationQn, vars(11, 2))),
                 ),
               ),
-              Var(8),
+              Var(5),
             ),
         ),
       ),
