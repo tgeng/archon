@@ -251,9 +251,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     transformer.transformVTerm(this)
 
 object VTerm:
-  def Top
-    (t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))
-    (using SourceInfo) = new Top(ULevel.USimpleLevel(t), eqDecidability)
+  def Top(t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))(using SourceInfo) =
+    new Top(ULevel.USimpleLevel(t), eqDecidability)
   def UsageSum(operands: VTerm*)(using SourceInfo) =
     UsageCompound(UsageOperation.USum, operands.toMultiset)
   def UsageProd(operands: VTerm*)(using SourceInfo) =
@@ -353,8 +352,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (
       binding: Binding[VTerm],
       bodyTy: CTerm, /* binding offset = 1 */
-      /** effects that needed for getting the function of this type. The effects caused by
-        * function application is tracked by the `bodyTy`.
+      /** effects that needed for getting the function of this type. The effects caused by function
+        * application is tracked by the `bodyTy`.
         */
       effects: VTerm = VTerm.Total(using SiEmpty),
     )
@@ -380,19 +379,19 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param handler
     *   the handler that delimits this continuation
     * @param capturedStack
-    *   stack containing the delimited continuation from the tip (right below operation call) to
-    *   the computation right above corresponding handler. Note that the first term is at the
-    *   bottom of the stack and the last term is the tip of the stack.
+    *   stack containing the delimited continuation from the tip (right below operation call) to the
+    *   computation right above corresponding handler. Note that the first term is at the bottom of
+    *   the stack and the last term is the tip of the stack.
     */
   case Continuation(handler: Handler, capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
 
   /** Internaly only. This is only created by reduction.
     *
     * During reduction, this value is specially handled: any non-handlers are skipped and
-    * parameterReplicator in handlers are executed one by one to collect the replicated
-    * parameters. These replicated parameters are then collected into the two stacks, until
-    * reaching the handler at `handlerIndex` (the handler that contains the operation
-    * implementation which invokes the continuation replication).
+    * parameterReplicator in handlers are executed one by one to collect the replicated parameters.
+    * These replicated parameters are then collected into the two stacks, until reaching the handler
+    * at `handlerIndex` (the handler that contains the operation implementation which invokes the
+    * continuation replication).
     * @param handlerIndex:
     *   index of this handler in the reduction machine stack. In other words, size of the stack
     *   before this handler is pushed onto the stack.
@@ -421,10 +420,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   case Handler
     (
-      /** Handle general term here instead of a single effect. During type checking it will fail
-        * if this term is not convertible to a effect literal. The ability to handle multiple 
-        * effects is useful when one needs to use a linear resource (as parameter to the handler)
-        * with multiple effects.
+      /** Handle general term here instead of a single effect. During type checking it will fail if
+        * this term is not convertible to a effect literal. The ability to handle multiple effects
+        * is useful when one needs to use a linear resource (as parameter to the handler) with
+        * multiple effects.
         */
       eff: VTerm,
       parameter: VTerm,
@@ -450,8 +449,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
 
-      /** All handler implementations declared by the effect. Each handler is essentially a
-        * function body that takes the following arguments
+      /** All handler implementations declared by the effect. Each handler is essentially a function
+        * body that takes the following arguments
         *   - all declared parameters
         *   - a continuation parameter of type `declared operation output type -> outputType` and
         *     outputs `outputType`
@@ -476,8 +475,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case HeapHandler
     (
-      outputEffects: VTerm,
-
       /** Newly created heap handler should always set this to `None`. This key is instantiated
         * during reduction to a fresh value.
         */
@@ -508,9 +505,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case l @ Let(t, ctx)            => Let(t, ctx)(l.boundName)
       case FunctionType(binding, bodyTy, effects) =>
         FunctionType(binding, bodyTy, effects)
-      case Application(fun, args)        => Application(fun, args)
-      case RecordType(qn, args, effects) => RecordType(qn, args, effects)
-      case Projection(rec, name)         => Projection(rec, name)
+      case Application(fun, args)         => Application(fun, args)
+      case RecordType(qn, args, effects)  => RecordType(qn, args, effects)
+      case Projection(rec, name)          => Projection(rec, name)
       case OperationCall(eff, name, args) => OperationCall(eff, name, args)
       case c: (Continuation | ContinuationReplicationState |
           ContinuationReplicationStateAppender) =>
@@ -547,9 +544,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case AllocOp(heap, ty)  => AllocOp(heap, ty)
       case SetOp(cell, value) => SetOp(cell, value)
       case GetOp(cell)        => GetOp(cell)
-      case h @ HeapHandler(outputEffects, key, heapContent, input) =>
+      case h @ HeapHandler(key, heapContent, input) =>
         HeapHandler(
-          outputEffects,
           key,
           heapContent,
           input,

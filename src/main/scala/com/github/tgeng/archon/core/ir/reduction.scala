@@ -55,7 +55,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
 
   private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
     stack.view.zipWithIndex.drop(startIndex).foreach {
-      case (HeapHandler(_, Some(heapKey), _, _), index) =>
+      case (HeapHandler(Some(heapKey), _, _), index) =>
         updateHandlerIndex(Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set()), index)
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
       case _                         =>
@@ -351,10 +351,9 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case Right(Heap(heapKey)) =>
             val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
             stack(heapHandlerIndex) match
-              case h @ HeapHandler(outputEffects, key, heapContent, input) =>
+              case h @ HeapHandler(key, heapContent, input) =>
                 val cell = Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
-                  outputEffects,
                   key,
                   heapContent :+ None,
                   input,
@@ -374,13 +373,11 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
                 stack(heapHandlerIndex) match
                   case h @ HeapHandler(
-                      outputEffects,
                       key,
                       heapContent,
                       input,
                     ) =>
                     stack(heapHandlerIndex) = HeapHandler(
-                      outputEffects,
                       key,
                       heapContent.updated(index, Some(value)),
                       input,
@@ -397,7 +394,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case Right(Cell(heapKey, index)) =>
             val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
             stack(heapHandlerIndex) match
-              case HeapHandler(_, _, heapContent, _) =>
+              case HeapHandler(_, heapContent, _) =>
                 heapContent(index) match
                   case None =>
                     Left(
@@ -406,7 +403,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                   case Some(value) => run(Return(value))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
-      case h @ HeapHandler(outputEffects, currentKey, heapContent, input) =>
+      case h @ HeapHandler(currentKey, heapContent, input) =>
         if reduceDown then
           assert(currentKey.nonEmpty)
           handlerIndex((Builtins.HeapEffQn, List(Heap(currentKey.get)))).pop()
@@ -420,11 +417,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             Effects(Set((Builtins.HeapEffQn, List(Heap(key)))), Set()),
             stack.length,
           )
-          stack.push(
-            HeapHandler(outputEffects, Some(key), heapContent, input)(
-              h.boundName,
-            ),
-          )
+          stack.push(HeapHandler(Some(key), heapContent, input)(h.boundName))
           run(input.substLowers(Heap(key)))
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm =
@@ -463,11 +456,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           h.transformBoundName,
           h.handlersBoundNames,
         )
-      case h @ HeapHandler(outputEffects, key, heap, input) =>
-        HeapHandler(outputEffects, key, heap, c)(
-          h.boundName,
-        )
-      case _ => throw IllegalArgumentException("unexpected context")
+      case h @ HeapHandler(key, heap, input) => HeapHandler(key, heap, c)(h.boundName)
+      case _                                 => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc

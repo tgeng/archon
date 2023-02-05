@@ -100,11 +100,7 @@ trait Visitor[C, R]:
         pDataType.args.map(visitPattern): _*,
     )
 
-  def visitPForcedDataType
-    (pForcedDataType: PForcedDataType)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
+  def visitPForcedDataType(pForcedDataType: PForcedDataType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(pForcedDataType.qn) +:
         pForcedDataType.args.map(visitPattern): _*,
@@ -471,12 +467,9 @@ trait Visitor[C, R]:
     combine(visitVTerm(getOp.cell))
 
   def visitHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(heapHandler.outputEffects),
-      withBindings(Seq(heapHandler.boundName)) {
-        visitCTerm(heapHandler.input)
-      },
-    )
+    withBindings(Seq(heapHandler.boundName)) {
+      visitCTerm(heapHandler.input)
+    }
 
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -507,7 +500,7 @@ trait Visitor[C, R]:
     case application: Application                => visitApplication(application)
     case recordType: RecordType                  => visitRecordType(recordType)
     case projection: Projection                  => visitProjection(projection)
-    case operationCall: OperationCall              => visitOperationCall(operationCall)
+    case operationCall: OperationCall            => visitOperationCall(operationCall)
     case continuation: Continuation              => visitContinuation(continuation)
     case c: ContinuationReplicationState         => visitContinuationReplicationState(c)
     case c: ContinuationReplicationStateAppender => visitContinuationReplicationStateAppender(c)
@@ -618,9 +611,7 @@ trait Transformer[C]:
     PDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
 
   def transformPForcedDataType(d: PForcedDataType)(using ctx: C)(using Σ: Signature): Pattern =
-    PForcedDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using
-      d.sourceInfo,
-    )
+    PForcedDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
 
   def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
     PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
@@ -830,7 +821,11 @@ trait Transformer[C]:
       transformName(projection.name),
     )(using projection.sourceInfo)
 
-  def transformOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformOperationCall
+    (operationCall: OperationCall)
+    (using ctx: C)
+    (using Σ: Signature)
+    : CTerm =
     OperationCall(
       transformEff(operationCall.eff),
       transformName(operationCall.name),
@@ -914,7 +909,6 @@ trait Transformer[C]:
 
   def transformHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): CTerm =
     HeapHandler(
-      transformVTerm(heapHandler.outputEffects),
       heapHandler.key,
       heapHandler.heapContent,
       withBindings(List(heapHandler.boundName)) {
@@ -953,7 +947,7 @@ trait Transformer[C]:
       case application: Application        => transformApplication(application)
       case recordType: RecordType          => transformRecordType(recordType)
       case projection: Projection          => transformProjection(projection)
-      case operationCall: OperationCall      => transformOperationCall(operationCall)
+      case operationCall: OperationCall    => transformOperationCall(operationCall)
       case continuation: Continuation      => transformContinuation(continuation)
       case c: ContinuationReplicationState => transformContinuationReplicationState(c)
       case c: ContinuationReplicationStateAppender =>

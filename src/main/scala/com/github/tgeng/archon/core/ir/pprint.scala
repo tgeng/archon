@@ -244,13 +244,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case Unreferenced => Block(binding.ty)
     case n            => Block(n, ":", binding.ty)
 
-  override def visitBinding
-    (binding: Binding[VTerm])
-    (using PPrintContext)
-    (using Signature)
-    : Block = binding.name.value match
-    case Unreferenced => Block(binding.ty)
-    case n            => Block(n.toString + ":", binding.ty)
+  override def visitBinding(binding: Binding[VTerm])(using PPrintContext)(using Signature): Block =
+    binding.name.value match
+      case Unreferenced => Block(binding.ty)
+      case n            => Block(n.toString + ":", binding.ty)
 
   override def visitPVar(pVar: PVar)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
     ctx.resolve(pVar.idx).value.toString,
@@ -277,17 +274,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     pDataType.args.map(visitPattern),
   )
 
-  override def visitPForced
-    (pForced: PForced)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = Block(Concat, ".(", pForced.term, ")")
+  override def visitPForced(pForced: PForced)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    Block(Concat, ".(", pForced.term, ")")
 
-  override def visitPAbsurd
-    (pAbsurd: PAbsurd)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = Block("()")
+  override def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    Block("()")
 
   override def visitCProjection
     (p: CProjection)
@@ -355,11 +346,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     "Refl{}",
   )
 
-  override def visitEffects
-    (effects: Effects)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
+  override def visitEffects(effects: Effects)(using ctx: PPrintContext)(using Σ: Signature): Block =
     if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp) {
@@ -723,7 +710,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             Nil,
           ),
         )
-      case h @ HeapHandler(outputEffects, _, _, input) =>
+      case h @ HeapHandler(_, _, input) =>
         Left(
           (
             Block(
@@ -731,7 +718,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               NoWrap,
               ".heap",
               h.boundName,
-              eff(outputEffects),
             ),
             input,
             Seq(h.boundName),

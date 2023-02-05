@@ -1031,7 +1031,7 @@ def inferType
             case _: CellType => Left(UninitializedCell(tm))
             case _           => Left(ExpectCell(cell))
         yield (r, cellUsages)
-      case h @ HeapHandler(outputEffects, _, _, input) =>
+      case h @ HeapHandler(_, _, input) =>
         val heapVarBinding =
           Binding[VTerm](HeapType(), UsageLiteral(UUnres))(h.boundName)
 
@@ -1042,14 +1042,6 @@ def inferType
           r <- inputCTy match
             case F(inputTy, eff, _) =>
               for
-                _ <- checkSubsumption(
-                  eff,
-                  EffectsUnion(
-                    EffectsLiteral(Set((Builtins.HeapEffQn, Var(0) :: Nil))),
-                    outputEffects.weakened,
-                  ),
-                  Some(EffectsType()),
-                )(using SUBSUMPTION)
                 // TODO[P2]: Use more sophisticated check here to catch leak through wrapping heap
                 //  variable inside things. If it's leaked, there is no point using this handler at
                 //  all. Simply using GlobalHeapKey is the right thing to do. This is because a
@@ -1058,7 +1050,18 @@ def inferType
                   inputTy,
                   LeakedReferenceToHeapVariable(input),
                 )
-              yield F(inputTy.strengthened, outputEffects)
+                outputEff = eff match
+                  case Effects(literal, vars) =>
+                    Effects(
+                      literal.filter {
+                        // Filter out current heap effect. `Var(0)` binds to the heap key of this
+                        // handler.
+                        case (qn, args) => qn != Builtins.HeapEffQn && args != List(Var(0))
+                      },
+                      vars,
+                    )
+                  case _ => eff
+              yield F(inputTy.strengthened, outputEff)
             case _ => Left(ExpectFType(inputCTy))
         yield (r, inputUsages),
   )
