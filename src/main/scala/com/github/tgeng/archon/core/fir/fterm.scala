@@ -25,8 +25,8 @@ import com.github.tgeng.archon.core.common.*
   *   dispose p => somehowDispose p
   *   replicate p => somehowReplicate p
   *   return p x => somehowDispose p; x
-  *   op1 p arg1 arg2 c => c.resume p (doSomething1 arg1 arg2)
-  *   op2 p arg1 arg2 c => c.dispose p
+  *   op foo p arg1 arg2 c => c.resume p (doSomething1 arg1 arg2)
+  *   op bar p arg1 arg2 c => c.dispose p; someResult
   * ```
   */
 

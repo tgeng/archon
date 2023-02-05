@@ -167,7 +167,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               r <-
                 val handlerIdx = handlerIndex((effQn, effArgs)).top
                 val handler = stack(handlerIdx).asInstanceOf[Handler]
-                val opHandler = handler.handlers(name)
+                val opHandler = handler.handlers(effQn / name)
                 Σ.getOperator(effQn, name).continuationUsage match
                   case None => Right(opHandler.substLowers(args :+ handler.parameter: _*))
                   case Some(_) =>

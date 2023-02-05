@@ -29,7 +29,7 @@ enum IrError extends HasException:
   case UnmatchedHandlerImplementation
     (
       qn: QualifiedName,
-      implementedOperators: Iterable[Name]
+      implementedOperators: Iterable[QualifiedName]
     )
   case NotVSubsumption
     (

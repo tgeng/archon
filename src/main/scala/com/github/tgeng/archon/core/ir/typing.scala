@@ -889,8 +889,8 @@ def inferType
                   else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
                 handlerUsages <- transpose(
                   operators.map { opDecl =>
-                    val handlerBody = handlers(opDecl.name)
-                    val (argNames, resumeNameOption) = h.handlersBoundNames(opDecl.name)
+                    val handlerBody = handlers(qn / opDecl.name)
+                    val (argNames, resumeNameOption) = h.handlersBoundNames(qn / opDecl.name)
                     // All of the following opXXX are weakened for handler parameter
                     val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
                     val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
