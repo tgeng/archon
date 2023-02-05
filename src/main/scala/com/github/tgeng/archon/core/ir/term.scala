@@ -421,7 +421,12 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   case Handler
     (
-      eff: Eff,
+      /** Handle general term here instead of a single effect. During type checking it will fail
+        * if this term is not convertible to a effect literal. The ability to handle multiple 
+        * effects is useful when one needs to use a linear resource (as parameter to the handler)
+        * with multiple effects.
+        */
+      eff: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
       // Effects of this term can not be re-entrant for simplicity

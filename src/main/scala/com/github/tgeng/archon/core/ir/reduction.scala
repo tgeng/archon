@@ -48,13 +48,15 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
   private val handlerIndex = mutable.WeakHashMap[Eff, mutable.Stack[Nat]]()
   regenerateHandlerIndex()
 
-  private def updateHandlerIndex(eff: Eff, index: Nat) =
-    handlerIndex.getOrElseUpdate(eff, mutable.Stack()).push(index)
+  private def updateHandlerIndex(eff: VTerm, index: Nat) = eff match
+    case Effects(effs, s) if s.isEmpty =>
+      for eff <- effs do handlerIndex.getOrElseUpdate(eff, mutable.Stack()).push(index)
+    case _ => throw IllegalStateException(s"bad effects $eff")
 
   private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
     stack.view.zipWithIndex.drop(startIndex).foreach {
       case (HeapHandler(_, Some(heapKey), _, _), index) =>
-        updateHandlerIndex((Builtins.HeapEffQn, List(Heap(heapKey))), index)
+        updateHandlerIndex(Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set()), index)
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
       case _                         =>
     }
@@ -303,7 +305,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           stack.push(ContinuationReplicationStateAppender(Hole, handler, cr))
           run(paramPairs)
       case h @ Handler(
-          (effQn, effArgs),
+          eff,
           parameter,
           parameterBinding,
           parameterDisposer,
@@ -315,19 +317,19 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           handlers,
           input,
         ) =>
-        effArgs.normalized match
+        eff.normalized match
           case Left(e) => Left(e)
-          case Right(effArgs) =>
+          case Right(eff) =>
             if reduceDown then
-              updateHandlerIndex((effQn, effArgs), stack.length)
+              updateHandlerIndex(eff, stack.length)
               input match
                 case Return(v, _) => run(transform.substLowers(parameter, v))
                 case _            => throw IllegalArgumentException("type error")
             else
-              updateHandlerIndex((effQn, effArgs), stack.length)
+              updateHandlerIndex(eff, stack.length)
               stack.push(
                 Handler(
-                  (effQn, effArgs),
+                  eff,
                   parameter,
                   parameterBinding,
                   parameterDisposer,
@@ -414,7 +416,10 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             currentKey.isEmpty,
           ) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
-          updateHandlerIndex((Builtins.HeapEffQn, List(Heap(key))), stack.length)
+          updateHandlerIndex(
+            Effects(Set((Builtins.HeapEffQn, List(Heap(key)))), Set()),
+            stack.length,
+          )
           stack.push(
             HeapHandler(outputEffects, Some(key), heapContent, input)(
               h.boundName,

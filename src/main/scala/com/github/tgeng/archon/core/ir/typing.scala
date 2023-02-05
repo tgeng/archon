@@ -782,7 +782,7 @@ def inferType
           "continuation is only created in reduction and hence should not be type checked.",
         )
       case h @ Handler(
-          eff @ (qn, args),
+          eff,
           parameter,
           parameterBinding,
           parameterDisposer,
@@ -818,13 +818,11 @@ def inferType
               )
             case _ => Left(EffectTermToComplex(normalizedEffects))
         for
-          effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
-          operators <- Σ.getOperatorsOption(qn).toRight(MissingDeclaration(qn))
-          _ <-
-            if handlers.size == operators.size && handlers.keySet == operators.map(_.name).toSet
-            then Right(())
-            else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
-          effUsages <- checkTypes(args, effect.tParamTys.toList)
+          eff <- eff.normalized
+          effs <- eff match
+            case Effects(effs, s) if s.isEmpty => Right(effs)
+            case _                             => Left(EffectTermToComplex(eff))
+          effUsages <- checkType(eff, EffectsType())
           parameterUsages <- checkType(parameter, parameterBinding.ty)
           _ <- parameterReplicator match
             case Some(_) => checkType(outputEffects, EffectsType())
@@ -865,79 +863,102 @@ def inferType
           transformUsages <- verifyUsages(transformUsages)(2)
           _ <- checkSubsumption(
             inputEff,
-            EffectsUnion(outputEffects, EffectsLiteral(Set(eff))),
+            EffectsUnion(outputEffects, eff),
             Some(EffectsType()),
           )
-          handlerUsages <- transpose(
-            operators.map { opDecl =>
-              val handlerBody = handlers(opDecl.name)
-              val (argNames, resumeNameOption) = h.handlersBoundNames(opDecl.name)
-              val opArgs = args ++ vars(opDecl.paramTys.size - 1)
-              val opResultTy = opDecl.resultTy.substLowers(opArgs: _*)
-              val opResultUsage = opDecl.resultUsage.substLowers(opArgs: _*)
-              val opParamTys = parameterBinding +: opDecl.paramTys
-                .substLowers(args: _*)
-                .zip(argNames)
-                .map { case (binding, argName) =>
-                  Binding(binding.ty, binding.usage)(argName)
-                }
-                .weakened
+          // Check handler implementations
+          handlerUsages <-
+            def checkHandler(eff: Eff): Either[IrError, Usages] =
+              val (qn, args) = eff
               for
-                continuationTy <- opDecl.continuationUsage match
-                  case Some(continuationUsage) =>
-                    resumeNameOption match
-                      case Some(resumeName) =>
-                        for
-                          parameterTypeLevel <- inferLevel(parameterBinding.ty)
-                          inputTypeLevel <- inferLevel(inputTy)
-                          outputTypeLevel <- inferLevel(outputType)
-                          level <- (parameterTypeLevel, inputTypeLevel, outputTypeLevel) match
-                            case (
-                                ULevel.USimpleLevel(p),
-                                ULevel.USimpleLevel(i),
-                                ULevel.USimpleLevel(o),
-                              ) =>
-                              Right(LevelMax(p, i, o))
-                            case (l: ULevel.UωLevel, _, _) => Left(LevelTooBig(l))
-                            case (_, l: ULevel.UωLevel, _) => Left(LevelTooBig(l))
-                            case (_, _, l: ULevel.UωLevel) => Left(LevelTooBig(l))
-                        yield List(
-                          Binding(
-                            U(
-                              RecordType(
-                                Builtins.ContinuationQn,
-                                List(
-                                  level,
-                                  UsageLiteral(continuationUsage),
-                                  parameterBinding.ty,
-                                  inputTy,
-                                  parameterOpsEffects,
-                                  outputEffects,
-                                  outputUsage,
-                                  outputType,
-                                ),
-                              ).weaken(opDecl.paramTys.size + 1, 0),
-                            ),
-                          )(resumeName),
-                        )
-                      case None => throw IllegalArgumentException("missing name for continuation")
-                  case None => Right(Nil)
-                opParamTys <- Right(opParamTys ++ continuationTy)
-                bodyUsages <- checkType(handlerBody, outputCType.weaken(opParamTys.size, 0))(using
-                  Γ ++ opParamTys,
+                effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
+                operators <- Σ.getOperatorsOption(qn).toRight(MissingDeclaration(qn))
+                _ <-
+                  if handlers.size == operators.size && handlers.keySet == operators
+                      .map(_.name)
+                      .toSet
+                  then Right(())
+                  else Left(UnmatchedHandlerImplementation(qn, handlers.keys))
+                handlerUsages <- transpose(
+                  operators.map { opDecl =>
+                    val handlerBody = handlers(opDecl.name)
+                    val (argNames, resumeNameOption) = h.handlersBoundNames(opDecl.name)
+                    val opArgs = args ++ vars(opDecl.paramTys.size - 1)
+                    val opResultTy = opDecl.resultTy.substLowers(opArgs: _*)
+                    val opResultUsage = opDecl.resultUsage.substLowers(opArgs: _*)
+                    val opParamTys = parameterBinding +: opDecl.paramTys
+                      .substLowers(args: _*)
+                      .zip(argNames)
+                      .map { case (binding, argName) =>
+                        Binding(binding.ty, binding.usage)(argName)
+                      }
+                      .weakened
+                    for
+                      continuationTy <- opDecl.continuationUsage match
+                        case Some(continuationUsage) =>
+                          resumeNameOption match
+                            case Some(resumeName) =>
+                              for
+                                parameterTypeLevel <- inferLevel(parameterBinding.ty)
+                                inputTypeLevel <- inferLevel(inputTy)
+                                outputTypeLevel <- inferLevel(outputType)
+                                level <- (
+                                  parameterTypeLevel,
+                                  inputTypeLevel,
+                                  outputTypeLevel,
+                                ) match
+                                  case (
+                                      ULevel.USimpleLevel(p),
+                                      ULevel.USimpleLevel(i),
+                                      ULevel.USimpleLevel(o),
+                                    ) =>
+                                    Right(LevelMax(p, i, o))
+                                  case (l: ULevel.UωLevel, _, _) => Left(LevelTooBig(l))
+                                  case (_, l: ULevel.UωLevel, _) => Left(LevelTooBig(l))
+                                  case (_, _, l: ULevel.UωLevel) => Left(LevelTooBig(l))
+                              yield List(
+                                Binding(
+                                  U(
+                                    RecordType(
+                                      Builtins.ContinuationQn,
+                                      List(
+                                        level,
+                                        UsageLiteral(continuationUsage),
+                                        parameterBinding.ty,
+                                        inputTy,
+                                        parameterOpsEffects,
+                                        outputEffects,
+                                        outputUsage,
+                                        outputType,
+                                      ),
+                                    ).weaken(opDecl.paramTys.size + 1, 0),
+                                  ),
+                                )(resumeName),
+                              )
+                            case None =>
+                              throw IllegalArgumentException("missing name for continuation")
+                        case None => Right(Nil)
+                      opParamTys <- Right(opParamTys ++ continuationTy)
+                      bodyUsages <- checkType(
+                        handlerBody,
+                        outputCType.weaken(opParamTys.size, 0),
+                      )(using Γ ++ opParamTys)
+                      bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using
+                        Γ ++ opParamTys,
+                      )
+                    yield bodyUsages
+                  },
                 )
-                bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
-              yield bodyUsages
-            },
-          )
+              yield handlerUsages.reduce(_ + _)
+            eff match
+              case Effects(effs, s) if s.isEmpty => transpose(effs.map(checkHandler(_)))
+              case _                             => Left(EffectTermToComplex(eff))
         yield (
           outputCType,
           // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
           (handlerUsages.reduce(_ + _) + transformUsages
             .dropRight(1)
-            .map(
-              _.strengthened,
-            ) + effUsages) * UUnres + inputUsages,
+            .map(_.strengthened) + effUsages) * UUnres + inputUsages,
         )
       case AllocOp(heap, vTy) =>
         for

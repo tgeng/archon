@@ -661,7 +661,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               Whitespace,
               NoWrap,
               ".handler",
-              visitEff(effTm),
+              visitVTerm(effTm),
               eff(outputEffects),
               Block("[", outputUsage, "]"),
               outputType,
