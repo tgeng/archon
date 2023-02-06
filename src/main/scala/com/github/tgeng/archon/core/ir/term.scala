@@ -132,6 +132,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  // TODO[P1]: Consider support builtin sigma type. The rationale is that simulating this with
+  //  inductive types requires functions for the dependent piece, which can be too unwieldy with
+  //  the separation of computation from values.
+
   case DataType
     (qn: QualifiedName, args: Arguments = Nil)
     (using

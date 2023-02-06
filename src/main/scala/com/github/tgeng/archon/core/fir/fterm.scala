@@ -3,7 +3,11 @@ package com.github.tgeng.archon.core.fir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
-/** Syntax
+/** # Syntax
+  *
+  * ## Hard keywrods: -> ; , ( ) { } $ =>
+  * ## Soft keywords: < > [ ] 
+  * 
   * ```
   * user: def repeat : (x: Nat) -> [*] A -> <eff x> Vector A x
   *           repeat 0 a => Nil
@@ -21,6 +25,8 @@ import com.github.tgeng.archon.core.common.*
   * second, etc. Also, internal names of operator has holes filled with `$`. So the `+` operator in
   * `1 + 2` has internal name `$+$`.
   *
+  * ## Handler
+  *
   * ```
   * handler <eff1 a | eff2 b> with (getParam c d: [1] ParamType) : <eff3 a | eff4 d> [1] OutputType
   *   dispose p => somehowDispose p
@@ -29,6 +35,14 @@ import com.github.tgeng.archon.core.common.*
   *   op foo p (A x) arg2 c => c.resume p (doSomething1 x arg2)
   *      foo p (B y) _ c => c.resume p (doSomethingElse1 y)
   *   op bar p arg1 arg2 c => c.dispose p; someResult
+  * ```
+  * # Lambda 
+  * ```
+  * user: filter { e => e % 2 == 0 } [1, 2, 3]
+  * full: filter {
+  *         Nat -> Boolean
+  *         e => e % 2 == 0
+  *       } [1, 2, 3]
   * ```
   */
 
@@ -49,6 +63,7 @@ enum FTerm:
   case FFunctionType(argName: Name, argTy: FTerm, bodyTy: FTerm, effects: FTerm)
   case FRedux(head: FTerm, elims: List[Either[Name, FTerm]])
   case FBlock(statements: List[FStatement])
+  // TODO: think more about this part
   case FLambda(ty: FTerm, clauses: List[FClause])
 
 case class HandlerParameter
@@ -71,10 +86,10 @@ enum FStatement:
       outputUsage: FTerm,
       outputType: FTerm,
       transform: Option[FTerm],
-      // TODO: Think about how resolution of operation names can be done. Maybe augment 
+      // TODO: Think about how resolution of operation names can be done. Maybe augment
       // QualifiedName with holes that can be filled up during type checking.
       handlers: Map[QualifiedName, FTerm], // TODO: use clauses here instead.
     )
-  case FSHeapHandler() // TODO: add more
+  case FSHeapHandler(name: Name)
 
 case class FClause(lhs: List[FCoPattern], rhs: Option[FTerm])
