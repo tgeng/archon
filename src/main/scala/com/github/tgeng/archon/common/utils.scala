@@ -200,6 +200,16 @@ def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
 def topologicalSort[T]
   (ts: Seq[T])
   (getDeps: T => Seq[T])
+  // TODO: recursion check during totality check will have to be done on all mutual recursive
+  //  definitions together. So the sorted result must be Seq[Set[T]] instead.
+  //  Notes
+  //  1. recursion check should be done regardless of the declared effects, any presence of
+  //  (potentially) diverging recursive calls should show up as `div` effect. In other words, one
+  //  can not omit `div` effect on effectful computation because handlers can swallow non-div
+  //  effects.
+  //  2. non-divergemce is much stronger than saying a function is not self-recursive. A
+  //  non-recursive function may still diverge if it invoke some other divergen computation. It's
+  //  non-divergence is only true when all computations are non-divergent (also non-recursive).
   : Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
   object CycleException extends Exception
   val visited = mutable.ArrayBuffer[T]()

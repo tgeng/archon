@@ -63,8 +63,9 @@ enum FTerm:
   case FFunctionType(argName: Name, argTy: FTerm, bodyTy: FTerm, effects: FTerm)
   case FRedux(head: FTerm, elims: List[Either[Name, FTerm]])
   case FBlock(statements: List[FStatement])
-  // TODO: think more about this part
-  case FLambda(ty: FTerm, clauses: List[FClause])
+  // TODO: Properly handle lambda requires term synthesis. Otherwise, usage of captured terms must
+  //  be provided manually, which is very cumbersome.
+  // case FLambda(ty: FTerm, clauses: List[FClause])
 
 case class HandlerParameter
   (
@@ -86,9 +87,9 @@ enum FStatement:
       outputUsage: FTerm,
       outputType: FTerm,
       transform: Option[FTerm],
-      // TODO: Think about how resolution of operation names can be done. Maybe augment
-      // QualifiedName with holes that can be filled up during type checking.
-      handlers: Map[QualifiedName, FTerm], // TODO: use clauses here instead.
+      // TODO: Properly handle handler implementation requires term synthesis and type-drive
+      //  qualified name resolution. Otherwise, manually write down these is very cumbersome.
+      handlers: Map[QualifiedName, FTerm],
     )
   case FSHeapHandler(name: Name)
 
