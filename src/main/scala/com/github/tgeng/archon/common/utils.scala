@@ -210,6 +210,20 @@ def topologicalSort[T]
   //  2. non-divergemce is much stronger than saying a function is not self-recursive. A
   //  non-recursive function may still diverge if it invoke some other divergen computation. It's
   //  non-divergence is only true when all computations are non-divergent (also non-recursive).
+  //  3. there is a problem with heap and parameterized handler: user can store self-reference into
+  //  a heap var (or emulate heap with handler parameter) and makes a seemingly total function
+  //  divergent. For example, following f is considered total because it reads a cell value of a 
+  //  total function and invoke it.
+  //
+  //  def f: (h: Heap) => (v: Cell (U <total> Nat)) -> Nat
+  //      f h => return force (getCellValue h v)
+  //  
+  //  But one can store `f` itself into a cell and pass this cell to `f` to make the function
+  //  divergent. Maybe it's possible to track some size information in the type so that for a 
+  //  computation to be total, its component computations must be "smaller". Also the size of
+  //  a computation may be considered to be parameterized by the argument. So `fib 1` is "bigger" 
+  //  than `fib 0`.
+   
   : Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
   object CycleException extends Exception
   val visited = mutable.ArrayBuffer[T]()
