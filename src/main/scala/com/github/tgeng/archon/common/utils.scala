@@ -220,9 +220,10 @@ def topologicalSort[T]
   //  
   //  But one can store `f` itself into a cell and pass this cell to `f` to make the function
   //  divergent. Maybe it's possible to track some size information in the type so that for a 
-  //  computation to be total, its component computations must be "smaller". Also the size of
-  //  a computation may be considered to be parameterized by the argument. So `fib 1` is "bigger" 
-  //  than `fib 0`.
+  //  computation to be non-divergent, its component computations must all be "smaller". Also 
+  //  the size of a computation may be considered to be parameterized by the argument. So 
+  //  `fib 1` is "bigger" than `fib 0`. In other words, divergence can arise from non-divergent
+  //  computations if one or more of the nested computations are "equal size" or "bigger".
    
   : Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
   object CycleException extends Exception
