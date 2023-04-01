@@ -104,8 +104,7 @@ extension [E](allNodes: IterableOnce[E])
           maxIncomingPathLengths(node) + 1,
           maxIncomingPathLengths(neighbor),
         )
-        if maxIncomingPathLengths(neighbor) > maxDegreeForDag then
-          throw IllegalArgumentException()
+        if maxIncomingPathLengths(neighbor) > maxDegreeForDag then throw IllegalArgumentException()
         queue.enqueue(neighbor)
     maxIncomingPathLengths.toMap.withDefaultValue(0)
 
@@ -200,31 +199,38 @@ def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
 def topologicalSort[T]
   (ts: Seq[T])
   (getDeps: T => Seq[T])
-  // TODO: recursion check during totality check will have to be done on all mutual recursive
-  //  definitions together. So the sorted result must be Seq[Set[T]] instead.
-  //  Notes
-  //  1. recursion check should be done regardless of the declared effects, any presence of
-  //  (potentially) diverging recursive calls should show up as `div` effect. In other words, one
-  //  can not omit `div` effect on effectful computation because handlers can swallow non-div
-  //  effects.
-  //  2. non-divergemce is much stronger than saying a function is not self-recursive. A
-  //  non-recursive function may still diverge if it invoke some other divergen computation. It's
-  //  non-divergence is only true when all computations are non-divergent (also non-recursive).
-  //  3. there is a problem with heap and parameterized handler: user can store self-reference into
-  //  a heap var (or emulate heap with handler parameter) and makes a seemingly total function
-  //  divergent. For example, following f is considered total because it reads a cell value of a 
-  //  total function and invoke it.
-  //
-  //  def f: (h: Heap) => (v: Cell (U <total> Nat)) -> Nat
-  //      f h => return force (getCellValue h v)
-  //  
-  //  But one can store `f` itself into a cell and pass this cell to `f` to make the function
-  //  divergent. Maybe it's possible to track some size information in the type so that for a 
-  //  computation to be non-divergent, its component computations must all be "smaller". Also 
-  //  the size of a computation may be considered to be parameterized by the argument. So 
-  //  `fib 1` is "bigger" than `fib 0`. In other words, divergence can arise from non-divergent
-  //  computations if one or more of the nested computations are "equal size" or "bigger".
-   
+// TODO: recursion check during totality check will have to be done on all mutual recursive
+//  definitions together. So the sorted result must be Seq[Set[T]] instead.
+//  Notes
+//  1. recursion check should be done regardless of the declared effects, any presence of
+//  (potentially) diverging recursive calls should show up as `div` effect. In other words, one
+//  can not omit `div` effect on effectful computation because handlers can swallow non-div
+//  effects.
+//  2. non-divergemce is much stronger than saying a function is not self-recursive. A
+//  non-recursive function may still diverge if it invoke some other divergen computation. It's
+//  non-divergence is only true when all computations are non-divergent (also non-recursive).
+//  3. there is a problem with heap and parameterized handler: user can store self-reference into
+//  a heap var (or emulate heap with handler parameter) and makes a seemingly total function
+//  divergent. For example, following f is considered total because it reads a cell value of a
+//  total function and invoke it.
+//
+//  def f: (h: Heap) => (v: Cell (U <total> Nat)) -> Nat
+//      f h => return force (getCellValue h v)
+//
+//  But one can store `f` itself into a cell and pass this cell to `f` to make the function
+//  divergent. Maybe it's possible to track some size information in the type so that for a
+//  computation to be non-divergent, its component computations must all be "smaller". Also
+//  the size of a computation may be considered to be parameterized by the argument. So
+//  `fib 1` is "bigger" than `fib 0`. In other words, divergence can arise from non-divergent
+//  computations if one or more of the nested computations are "equal size" or "bigger".
+//
+//  Updated notes:
+//  * The issue with self-referencing computations is solved by flagging any `force` as divergent.
+//  * In addition to allowing casts to workaround termination checker, it's possible to add some
+//    special `timeout` function that takes a duration and a computation, and return an option of
+//    the computation result it finishes within the given amount of time.
+//  * termination checking can be lazy: if the functions to be checked is already marked divergent,
+//    we can just skip the check.
   : Either[ /* cycle */ Seq[T], /* sorted */ Seq[T]] =
   object CycleException extends Exception
   val visited = mutable.ArrayBuffer[T]()

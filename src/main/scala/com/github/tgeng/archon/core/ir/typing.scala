@@ -589,7 +589,10 @@ def inferType
         for
           case (vTy, vUsages) <- inferType(v)
           cTy <- vTy match
-            case U(cty) => Right(cty)
+            // TODO[p4]: annotating all force as divergent is probably a bit overkill. The problem
+            // is that computations may be dynamically loaded from handlers and hence there is no
+            // way to statically detect cyclic references between computations (functions, etc).
+            case U(cty) => Right(augmentEffect(Div, cty))
             case _      => Left(ExpectUType(vTy))
         yield (cTy, vUsages)
       case F(vTy, effects, usage) =>
@@ -765,7 +768,11 @@ def inferType
                 yield (
                   F(
                     op.resultTy.substLowers(tArgs ++ args: _*),
-                    EffectsLiteral(Set(eff)),
+                    // TODO[p4]: figure out if there is way to better manage divergence for handler
+                    // operations. The dynamic nature of handler dispatching makes it impossible to
+                    // know at compile time whether this would lead to a cyclic reference in
+                    // computations.
+                    EffectsLiteral(Set(eff, (Builtins.DivQn, Nil))),
                   ),
                   effUsages + argsUsages,
                 )

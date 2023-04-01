@@ -98,6 +98,7 @@ object Builtins:
   val GlobalHeapKeyQn = HeapEffQn / "global"
   val EffectsUnionQn = BuiltinEffects / "union"
   val TotalQn = BuiltinEffects / "total"
+  val DivQn = BuiltinEffects / "div"
 
   val BuiltinLevel = Builtin / "level"
   val LevelSucQn = BuiltinLevel / "suc"

@@ -272,6 +272,7 @@ object VTerm:
   def LevelMax(ts: VTerm*): Level = Level(0, Map(ts.map(_ -> 0): _*))
 
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
+  def Div(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set((Builtins.DivQn, Nil)))
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
     Effects(effects, Set.empty)
