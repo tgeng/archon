@@ -272,8 +272,20 @@ object VTerm:
   def LevelMax(ts: VTerm*): Level = Level(0, Map(ts.map(_ -> 0): _*))
 
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
-  def Div(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set((Builtins.DivQn, Nil)))
-  def MaybeDiv(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set((Builtins.MaybeDivQn, Nil)))
+
+  /** Marker of a computation that surely diverges. Computation with this effect will not be
+    * executed by the type checker.
+    */
+  def Div(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
+    Set((Builtins.DivQn, Nil), (Builtins.MaybeDivQn, Nil)),
+  )
+
+  /** Marker of a computation that may or may not diverge. Computation with this effect will be
+    * executed by the type checker with timeout.
+    */
+  def MaybeDiv(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
+    Set((Builtins.MaybeDivQn, Nil)),
+  )
 
   def canReduce(eff: VTerm) = eff == Total || eff == MaybeDiv
 
