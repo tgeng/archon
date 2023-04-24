@@ -99,6 +99,7 @@ object Builtins:
   val EffectsUnionQn = BuiltinEffects / "union"
   val TotalQn = BuiltinEffects / "total"
   val DivQn = BuiltinEffects / "div"
+  val MaybeDivQn = BuiltinEffects / "mdiv"
 
   val BuiltinLevel = Builtin / "level"
   val LevelSucQn = BuiltinLevel / "suc"

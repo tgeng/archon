@@ -589,10 +589,12 @@ def inferType
         for
           case (vTy, vUsages) <- inferType(v)
           cTy <- vTy match
-            // TODO[p4]: annotating all force as divergent is probably a bit overkill. The problem
-            // is that computations may be dynamically loaded from handlers and hence there is no
-            // way to statically detect cyclic references between computations (functions, etc).
-            case U(cty) => Right(augmentEffect(Div, cty))
+            // TODO: think about whether this is good enough.
+            // Annotating all force as maybe-divergent because the computations may be dynamically 
+            // loaded from handlers and hence there is no way to statically detect cyclic references
+            // between computations (functions, etc) unless I make the type system even more 
+            // complicated to somehow tracking possible call-hierarchy.
+            case U(cty) => Right(augmentEffect(MaybeDiv, cty))
             case _      => Left(ExpectUType(vTy))
         yield (cTy, vUsages)
       case F(vTy, effects, usage) =>

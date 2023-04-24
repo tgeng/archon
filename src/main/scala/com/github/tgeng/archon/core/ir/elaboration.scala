@@ -851,10 +851,8 @@ private def elaborateBody
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
           // acceptable.
           case F(ty, effects, usage) =>
-            assert(effects == Total)
             Right((Nil, ty, usage))
           case FunctionType(binding, bodyTy, effects) =>
-            assert(effects == Total)
             elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, usage) =>
               (binding :: telescope, ul, usage)
             }

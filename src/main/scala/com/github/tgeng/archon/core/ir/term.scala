@@ -273,6 +273,9 @@ object VTerm:
 
   def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
   def Div(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set((Builtins.DivQn, Nil)))
+  def MaybeDiv(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set((Builtins.MaybeDivQn, Nil)))
+
+  def canReduce(eff: VTerm) = eff == Total || eff == MaybeDiv
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
     Effects(effects, Set.empty)
