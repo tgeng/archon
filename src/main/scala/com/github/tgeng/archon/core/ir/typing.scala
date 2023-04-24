@@ -774,7 +774,7 @@ def inferType
                     // operations. The dynamic nature of handler dispatching makes it impossible to
                     // know at compile time whether this would lead to a cyclic reference in
                     // computations.
-                    EffectsLiteral(Set(eff, (Builtins.DivQn, Nil))),
+                    EffectsLiteral(Set(eff, (Builtins.MaybeDivQn, Nil))),
                   ),
                   effUsages + argsUsages,
                 )
