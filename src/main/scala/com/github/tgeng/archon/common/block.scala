@@ -1,7 +1,7 @@
 package com.github.tgeng.archon.common
 
 import collection.mutable
-import scala.util.control.NonLocalReturns.*
+import scala.util.boundary, boundary.break;
 
 trait BlockConverter[T] {
   final def pprint(t: T, widthLimit: Int = 120): String = {
@@ -164,54 +164,53 @@ case class Block
     private def width
       (widthLeft: Int, onlyMeasureFirstLine: Boolean = false)
       (using ctx: PrintContext)
-      : Option[Int] = b match {
-      case s: String => if (s.size <= widthLeft) Some(s.size) else None
-      case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
-        if (onlyMeasureFirstLine) {
-          wrapPolicy match {
-            case AlwaysNewline => return Some(0)
-            case ChopDown =>
-              indentPolicy match {
-                case FixedIncrement(_) => return Some(0)
-                case Aligned =>
+      : Option[Int] = boundary: 
+        b match {
+          case s: String => if (s.size <= widthLeft) Some(s.size) else None
+          case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
+            if (onlyMeasureFirstLine) {
+              wrapPolicy match {
+                case AlwaysNewline => return Some(0)
+                case ChopDown =>
+                  indentPolicy match {
+                    case FixedIncrement(_) => return Some(0)
+                    case Aligned =>
+                      b.children.headOption match {
+                        case Some(cb) => return cb.width(widthLeft, true)
+                        case None     => return Some(0)
+                      }
+                  }
+                case Wrap =>
                   b.children.headOption match {
                     case Some(cb) => return cb.width(widthLeft, true)
                     case None     => return Some(0)
                   }
+                case _ => ()
               }
-            case Wrap =>
-              b.children.headOption match {
-                case Some(cb) => return cb.width(widthLeft, true)
-                case None     => return Some(0)
+            }
+            wrapPolicy match {
+              case AlwaysNewline => return None
+              case _             => ()
+            }
+            var width = 0
+            var widthLeft2 = widthLeft
+            for (child <- children) {
+              var childWidth = child.width(widthLeft2) match {
+                case Some(w) => w
+                case None    => break[Option[Int]](None)
               }
-            case _ => ()
-          }
-        }
-        wrapPolicy match {
-          case AlwaysNewline => return None
-          case _             => ()
-        }
-        var width = 0
-        var widthLeft2 = widthLeft
-        returning {
-          for (child <- children) {
-            var childWidth = child.width(widthLeft2) match {
-              case Some(w) => w
-              case None    => throwReturn[Option[Int]](None)
+              delimitPolicy match {
+                case Whitespace | Paragraph => childWidth += 1
+                case Concat                 => ()
+              }
+              width += childWidth
+              widthLeft2 -= childWidth
             }
             delimitPolicy match {
-              case Whitespace | Paragraph => childWidth += 1
-              case Concat                 => ()
+              case Whitespace | Paragraph => Some(width - 1)
+              case Concat                 => Some(width)
             }
-            width += childWidth
-            widthLeft2 -= childWidth
           }
-          delimitPolicy match {
-            case Whitespace | Paragraph => Some(width - 1)
-            case Concat                 => Some(width)
-          }
-        }
-      }
     }
 }
 
