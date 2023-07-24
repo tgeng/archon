@@ -128,7 +128,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case _ => throw IllegalArgumentException("type error")
       case Let(t, ctx) =>
         t match
-          case Return(v, _)    => run(ctx.substLowers(v))
+          case Return(v)    => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -261,7 +261,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
         ) =>
         if reduceDown then
           paramPairs match
-            case Return(Con(name, param1 :: param2 :: Nil), _) if name == n"MkPair" =>
+            case Return(Con(name, param1 :: param2 :: Nil)) if name == n"MkPair" =>
               val handler1 = handler
                 .copy(parameter = param1)(
                   handler.transformBoundName,
@@ -323,7 +323,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             if reduceDown then
               updateHandlerIndex(eff, stack.length)
               input match
-                case Return(v, _) => run(transform.substLowers(parameter, v))
+                case Return(v) => run(transform.substLowers(parameter, v))
                 case _            => throw IllegalArgumentException("type error")
             else
               updateHandlerIndex(eff, stack.length)
@@ -476,7 +476,7 @@ extension(v: VTerm)
       for
         reduced <- Reducible.reduce(cTm)
         r <- reduced match
-          case Return(v, _) => Right(v)
+          case Return(v) => Right(v)
           case stuckC       => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case u: UsageCompound =>

@@ -356,7 +356,7 @@ trait Visitor[C, R]:
     )
 
   def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R =
-    combine(visitVTerm(r.v), visitVTerm(r.usage))
+    combine(visitVTerm(r.v))
 
   def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -780,7 +780,7 @@ trait Transformer[C]:
     )(using f.sourceInfo)
 
   def transformReturn(r: Return)(using ctx: C)(using Σ: Signature): CTerm =
-    Return(transformVTerm(r.v), transformVTerm(r.usage))(using r.sourceInfo)
+    Return(transformVTerm(r.v))(using r.sourceInfo)
 
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(

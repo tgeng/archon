@@ -504,6 +504,11 @@ def checkType
   tm,
   ty,
   tm match
+    case Collapse(c) => checkType(c, F(ty))
+    case Thunk(c) =>
+      ty match
+        case U(cty) => checkType(c, cty)
+        case _      => Left(ExpectUType(ty))
     case Con(name, args) =>
       ty match
         case DataType(qn, tArgs) =>
@@ -590,9 +595,9 @@ def inferType
           case (vTy, vUsages) <- inferType(v)
           cTy <- vTy match
             // TODO: think about whether this is good enough.
-            // Annotating all force as maybe-divergent because the computations may be dynamically 
+            // Annotating all force as maybe-divergent because the computations may be dynamically
             // loaded from handlers and hence there is no way to statically detect cyclic references
-            // between computations (functions, etc) unless I make the type system even more 
+            // between computations (functions, etc) unless I make the type system even more
             // complicated to somehow tracking possible call-hierarchy.
             case U(cty) => Right(augmentEffect(MaybeDiv, cty))
             case _      => Left(ExpectUType(vTy))
@@ -608,11 +613,9 @@ def inferType
             case Type(_) => Right(CType(tm, Total))
             case _       => Left(NotTypeError(vTy))
         yield (cTyTy, (effUsages + uUsages + vTyUsages) * UUnres)
-      case Return(v, usage) =>
-        for
-          _ <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
-          case (vTy, vUsages) <- inferType(v)
-        yield (F(vTy, Total), vUsages * usage)
+      case Return(v) =>
+        for case (vTy, vUsages) <- inferType(v)
+        yield (F(vTy, Total), vUsages)
       case Let(t, body) =>
         for
           case (tTy, tUsages) <- inferType(t)
@@ -655,8 +658,8 @@ def inferType
                     for
                       t <- reduce(t)
                       r <- t match
-                        case Return(v, _) => inferType(body.substLowers(v))
-                        case c            => inferType(body.substLowers(Collapse(c)))
+                        case Return(v) => inferType(body.substLowers(v))
+                        case c         => inferType(body.substLowers(Collapse(c)))
                     yield r
                   // Otherwise, just add the binding to the context and continue type checking.
                   else
@@ -1089,11 +1092,19 @@ def checkType
   : Either[IrError, Usages] = debugCheck(
   tm,
   ty,
-  for
-    case (tmTy, usages) <- inferType(tm)
-    ty <- reduceCType(ty)
-    _ <- checkSubsumption(tmTy, ty, None)
-  yield usages,
+  tm match
+    case Force(v) => checkType(v, U(ty))
+    case Return(v) =>
+      ty match
+        case F(ty, _, usage) => checkType(v, ty).map(_ * usage)
+        case _               => Left(ExpectFType(ty))
+    // TODO: check let, handler, and heap-handler
+    case _ =>
+      for
+        case (tmTy, usages) <- inferType(tm)
+        ty <- reduceCType(ty)
+        _ <- checkSubsumption(tmTy, ty, None)
+      yield usages,
 )
 
 enum CheckSubsumptionMode:
@@ -1294,9 +1305,8 @@ def checkSubsumption
             _ <- checkUsageSubsumption(u1, u2)
             r <- checkSubsumption(vTy1, vTy2, None)
           yield r
-        case (Return(v1, u1), Return(v2, u2), Some(F(ty, _, _))) =>
-          checkSubsumption(v1, v2, Some(ty))(using CONVERSION) >>
-            checkSubsumption(u1, u2, Some(UsageType(None)))(using CONVERSION)
+        case (Return(v1), Return(v2), Some(F(ty, _, _))) =>
+          checkSubsumption(v1, v2, Some(ty))(using CONVERSION)
         case (Let(t1, ctx1), Let(t2, ctx2), ty) =>
           for
             case (t1CTy, _) <- inferType(t1)
@@ -1891,7 +1901,7 @@ def reduceUsage
       _ <- checkType(usage, F(UsageType()))
       reduced <- reduce(usage)
       usage <- reduced match
-        case Return(u, _) => Right(u)
+        case Return(u) => Right(u)
         case _ =>
           throw IllegalStateException(
             "type checking has bugs: reduced value of type `F(UsageType())` must be `Return(u)`.",
@@ -1913,7 +1923,7 @@ def reduceVType
           for
             reducedTy <- reduce(vTy)
             r <- reducedTy match
-              case Return(vTy, _) => Right(vTy)
+              case Return(vTy) => Right(vTy)
               case _ =>
                 throw IllegalStateException(
                   "type checking has bugs: reduced value of type `F ...` must be `Return ...`.",
@@ -1942,7 +1952,7 @@ def reduceCType
             case F(_, eff, _) if eff == Total =>
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
-                case Return(vty, _) => Right(F(vty)(using cTy.sourceInfo))
+                case Return(vty) => Right(F(vty)(using cTy.sourceInfo))
                 case Let(t, ctx) =>
                   reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
                 case c =>
