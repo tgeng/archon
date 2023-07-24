@@ -708,223 +708,7 @@ def inferType
         throw IllegalArgumentException(
           "continuation is only created in reduction and hence should not be type checked.",
         )
-      case h @ Handler(
-          eff,
-          parameter,
-          parameterBinding,
-          parameterDisposer,
-          parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
-          transform,
-          handlers,
-          input,
-        ) =>
-        def filterSimpleEffects(normalizedEffects: VTerm): Either[IrError, VTerm] =
-          normalizedEffects match
-            case v: Var => filterSimpleEffects(Effects(Set(), Set(v)))
-            case Effects(literal, vars) =>
-              Right(
-                Effects(
-                  literal.filter { case (effQn, _) =>
-                    Σ.getEffect(effQn).continuationUsage match
-                      // `None` means the effect is simple
-                      case None => true
-                      // Any other value means the effect is not simple and hence needs to be
-                      // filtered out
-                      case _ => false
-                  },
-                  vars.filter { v =>
-                    Γ.resolve(v.asInstanceOf[Var]) match
-                      // Only keep variables that are limited to simple effects
-                      case Binding(EffectsType(None), _) => true
-                      case _                             => false
-                  },
-                ),
-              )
-            case _ => Left(EffectTermToComplex(normalizedEffects))
-        for
-          eff <- eff.normalized
-          effs <- eff match
-            case Effects(effs, s) if s.isEmpty => Right(effs)
-            case _                             => Left(EffectTermToComplex(eff))
-          effUsages <- checkType(eff, EffectsType())
-          singleParameterUsages <- checkType(parameter, parameterBinding.ty)
-          parameterUsages = singleParameterUsages * parameterBinding.usage
-          _ <- parameterReplicator match
-            case Some(_) => checkType(outputEffects, EffectsType())
-            // parameterReplicator is not specified, in this case, the outputEffects must not be
-            // re-entrant.
-            case None => checkType(outputEffects, EffectsType(Some(Usage.UAff)))
-          outputEffects <- outputEffects.normalized
-          parameterOpsEffects <- filterSimpleEffects(outputEffects)
-          parameterOpsΓ = Γ :+ parameterBinding
-          parameterDisposerUsages <- checkType(
-            parameterDisposer,
-            F(DataType(Builtins.UnitQn), parameterOpsEffects),
-          )(using parameterOpsΓ)
-          parameterTypeLevel <- inferLevel(parameterBinding.ty)
-          parameterTypeLevel <- parameterTypeLevel match
-            case ULevel.USimpleLevel(l) => Right(l)
-            case _                      => Left(LevelTooBig(parameterTypeLevel))
-          parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
-          parameterReplicatorUsages <- parameterReplicator match
-            case Some(parameterReplicator) =>
-              for
-                parameterReplicatorUsages <- checkType(
-                  parameterReplicator,
-                  F(
-                    DataType(
-                      Builtins.PairQn,
-                      List(
-                        parameterTypeLevel,
-                        EqDecidabilityLiteral(EqDecidability.EqUnknown),
-                        parameterBinding.usage,
-                        parameterBinding.ty,
-                        parameterBinding.usage,
-                        parameterBinding.ty,
-                      ),
-                    ),
-                    parameterOpsEffects,
-                  ).weakened,
-                )(using parameterOpsΓ)
-                parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
-                  parameterOpsΓ,
-                )
-              yield parameterReplicatorUsages
-            case None => Right(List.fill(Γ.size)(UsageLiteral(Usage.U0)))
-          case (inputCTy, inputUsages) <- inferType(input)
-          case (inputTy, inputEff, inputUsage) <- inputCTy match
-            case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
-            case _                                => Left(ExpectFType(inputCTy))
-          inputBinding = Binding(inputTy, inputUsage)(gn"v")
-          outputCType = F(outputType, outputEffects, outputUsage)
-          transformΓ = Γ :+ parameterBinding :+ inputBinding.weakened
-          transformUsages <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
-          transformUsages <- verifyUsages(transformUsages)(2)
-          _ <- checkSubsumption(
-            inputEff,
-            EffectsUnion(outputEffects, eff),
-            Some(EffectsType()),
-          )
-          // Check handler implementations
-          handlerUsages <-
-            def checkHandler(eff: Eff): Either[IrError, Usages] =
-              val (qn, args) = eff
-              for
-                effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
-                operations <- Σ.getOperationsOption(qn).toRight(MissingDeclaration(qn))
-                _ <-
-                  val missingOperationQn =
-                    operations.map(qn / _.name).filter(qn => !handlers.contains(qn)).toSet
-                  if missingOperationQn.isEmpty then Right(())
-                  else Left(MissingHandlerImplementation(missingOperationQn, h.sourceInfo))
-                handlerUsages <- transpose(
-                  operations.map { opDecl =>
-                    val handlerBody = handlers(qn / opDecl.name)
-                    val (argNames, resumeNameOption) = h.handlersBoundNames(qn / opDecl.name)
-                    // All of the following opXXX are weakened for handler parameter
-                    val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
-                    val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
-                    val opParamTys = parameterBinding +: opDecl.paramTys
-                      .substLowers(args: _*)
-                      .zip(argNames)
-                      .map { case (binding, argName) =>
-                        Binding(binding.ty, binding.usage)(argName)
-                      }
-                      .weakened
-                    for
-                      opResultTyLevel <- inferLevel(opResultTy)
-                      opResultTyLevel <- opResultTyLevel match
-                        case ULevel.USimpleLevel(l) => Right(l)
-                        case _                      => Left(LevelTooBig(opResultTyLevel))
-                      case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
-                        case Some(continuationUsage) =>
-                          resumeNameOption match
-                            case Some(resumeName) =>
-                              for
-                                outputTypeLevel <- inferLevel(outputType)
-                                level <- outputTypeLevel match
-                                  case ULevel.USimpleLevel(o) =>
-                                    Right(LevelMax(parameterTypeLevel, opResultTyLevel, o))
-                                  case l: ULevel.UωLevel => Left(LevelTooBig(l))
-                              yield (
-                                opParamTys :+
-                                  Binding(
-                                    U(
-                                      RecordType(
-                                        Builtins.ContinuationQn,
-                                        List(
-                                          level,
-                                          UsageLiteral(continuationUsage),
-                                          parameterBinding.usage,
-                                          parameterBinding.ty,
-                                          opResultUsage,
-                                          opResultTy,
-                                          parameterOpsEffects,
-                                          outputEffects,
-                                          outputUsage,
-                                          outputType,
-                                        ),
-                                      ).weaken(opDecl.paramTys.size + 1, 0),
-                                    ),
-                                  )(resumeName),
-                                outputCType.weaken(opParamTys.size + 1, 0),
-                              )
-                            case None =>
-                              throw IllegalArgumentException("missing name for continuation")
-                        case None =>
-                          Right(
-                            (
-                              opParamTys,
-                              F(
-                                DataType(
-                                  Builtins.PairQn,
-                                  List(
-                                    opResultTyLevel,
-                                    EqDecidabilityLiteral(EqDecidability.EqUnknown),
-                                    parameterBinding.usage,
-                                    parameterBinding.ty,
-                                    opResultUsage,
-                                    opResultTy,
-                                  ),
-                                ),
-                                outputEffects,
-                                opResultUsage,
-                              ).weaken(opDecl.paramTys.size, 0),
-                            ),
-                          )
-                      bodyUsages <- checkType(handlerBody, opOutputTy)(using Γ ++ opParamTys)
-                      bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
-                    yield bodyUsages
-                  },
-                )
-              yield handlerUsages.reduce(_ + _)
-            eff match
-              case Effects(effs, s) if s.isEmpty =>
-                val effQns = effs.map(_._1)
-                for
-                  _ <-
-                    val unknownOperationQns = handlers.keySet
-                      .filter {
-                        case QualifiedName.Node(parent, _) => !effQns.contains(parent)
-                        case qn => throw IllegalStateException(s"bad operation name $qn")
-                      }
-                    if unknownOperationQns.isEmpty
-                    then Right(())
-                    else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
-                  r <- transpose(effs.map(checkHandler(_)))
-                yield r
-
-              case _ => Left(EffectTermToComplex(eff))
-        yield (
-          outputCType,
-          // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
-          (handlerUsages.reduce(_ + _) + transformUsages
-            .dropRight(1)
-            .map(_.strengthened) + effUsages) * UUnres + inputUsages,
-        )
+      case h: Handler => checkHandler(h, None)
       case AllocOp(heap, vTy) =>
         for
           heapUsages <- checkType(heap, HeapType())
@@ -965,39 +749,7 @@ def inferType
             case _: CellType => Left(UninitializedCell(tm))
             case _           => Left(ExpectCell(cell))
         yield (r, cellUsages)
-      case h @ HeapHandler(_, _, input) =>
-        val heapVarBinding =
-          Binding[VTerm](HeapType(), UsageLiteral(UUnres))(h.boundName)
-
-        given Context = Γ :+ heapVarBinding
-
-        for
-          case (inputCTy, inputUsages) <- inferType(input)
-          r <- inputCTy match
-            case F(inputTy, eff, _) =>
-              for
-                // TODO[P2]: Use more sophisticated check here to catch leak through wrapping heap
-                //  variable inside things. If it's leaked, there is no point using this handler at
-                //  all. Simply using GlobalHeapKey is the right thing to do. This is because a
-                //  creating a leaked heap key itself is performing a side effect with global heap.
-                _ <- checkVar0Leak(
-                  inputTy,
-                  LeakedReferenceToHeapVariable(input),
-                )
-                outputEff = eff match
-                  case Effects(literal, vars) =>
-                    Effects(
-                      literal.filter {
-                        // Filter out current heap effect. `Var(0)` binds to the heap key of this
-                        // handler.
-                        case (qn, args) => qn != Builtins.HeapEffQn && args != List(Var(0))
-                      },
-                      vars,
-                    )
-                  case _ => eff
-              yield F(inputTy.strengthened, outputEff)
-            case _ => Left(ExpectFType(inputCTy))
-        yield (r, inputUsages),
+      case h: HeapHandler => checkHeapHandler(h, None),
   )
 
 private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): Option[Usage] =
@@ -1020,8 +772,9 @@ def checkType
       ty match
         case F(ty, _, usage) => checkType(v, ty).map(_ * usage)
         case _               => Left(ExpectFType(ty))
-    case tm: Let => checkLet(tm, Some(ty)).map(_._2)
-    // TODO: check let, handler, and heap-handler
+    case l: Let     => checkLet(l, Some(ty)).map(_._2)
+    case h: Handler => checkHandler(h, Some(ty)).map(_._2)
+    case h: HeapHandler => checkHeapHandler(h, Some(ty)).map(_._2)
     case _ =>
       for
         case (tmTy, usages) <- inferType(tm)
@@ -1234,13 +987,13 @@ def checkSubsumption
           for
             t1CTy <- ty1 match
               case Some(ty1) => Right(ty1)
-              case None => inferType(t1).map(_._1)
+              case None      => inferType(t1).map(_._1)
             r <- t1CTy match
               case F(t1Ty, _, _) =>
                 for
                   t2CTy <- ty1 match
                     case Some(ty2) => Right(ty2)
-                    case None => inferType(t2).map(_._1)
+                    case None      => inferType(t2).map(_._1)
                   _ <- checkSubsumption(t1CTy, t2CTy, None)(using CONVERSION)
                   _ <- checkSubsumption(t1, t2, Some(t2CTy))(using CONVERSION)
                   r <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using CONVERSION)(using
@@ -1366,7 +1119,7 @@ private def simplifyLet
     case Let(t, ty, ctx) =>
       for
         tTy <- ty match
-          case None => inferType(t).map(_._1)
+          case None     => inferType(t).map(_._1)
           case Some(ty) => Right(ty)
         r <- tTy match
           case F(_, eff, _) if eff == Total =>
@@ -1774,100 +1527,366 @@ def checkTypes
       ).map(_.reduce(_ + _))
   }
 
-private def checkLet(tm: Let, bodyTy: Option[CTerm])
+private def checkLet
+  (tm: Let, bodyTy: Option[CTerm])
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext): Either[IrError, (CTerm, Usages)] =
-    val t = tm.t
-    val ty = tm.ty
-    val body = tm.ctx
-    for
-      case (tTy, tUsages) <- ty match
-        case None => inferType(t)
-        case Some(ty) => checkType(t, ty).map((ty, _))
-      r <- tTy match
-        case F(ty, effects, tyUsage) =>
-          for
-            effects <- effects.normalized
-            tUsages <- transpose(tUsages.map(_.normalized))
-            (bodyTy, usages) <-
-              // If some usages are not zero or unres, inlining `t` would change usage checking
-              // result because
-              //
-              // * either some linear or relevant usages becomes zero because the computation
-              //   gets removed
-              //
-              // * or if the term is wrapped inside a `Collapse` and get multiplied
-              //
-              // Such changes would alter usage checking result, which can be confusing for
-              // users. Note that, it's still possible that with inlining causes usages to be
-              // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
-              // unrestricted usage. Hence, usage checking would still pass. On the other hand,
-              // it's not possible for inlining to create usage out of nowhere.
-              def areTUsagesZeroOrUnrestricted: Boolean =
-                tUsages.forall { usage =>
-                  toBoolean(
-                    checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
-                      CheckSubsumptionMode.CONVERSION,
-                    ),
-                  ) ||
-                  toBoolean(
-                    checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
-                      CheckSubsumptionMode.CONVERSION,
-                    ),
-                  )
-                }
-              if effects == Total && areTUsagesZeroOrUnrestricted then
-                // Do the reduction onsite so that type checking in sub terms can leverage the
-                // more specific type. More importantly, this way we do not need to reference
-                // the result of a computation in the inferred type.
-                for
-                  t <- reduce(t)
-                  newBody = t match
-                    case Return(v) => body.substLowers(v)
-                    case c         => body.substLowers(Collapse(c))
-                  r <- bodyTy match
-                    case Some(bodyTy) => checkType(newBody, bodyTy).map(u => (bodyTy, u))
-                    case None => inferType(newBody)
-                yield r
-              // Otherwise, just add the binding to the context and continue type checking.
-              else
-                for
-                  case (bodyTy, usagesInBody) <- bodyTy match
-                    case None => inferType(body)(using
-                        Γ :+ Binding(ty, tyUsage)(gn"v"),
-                      )
-                    case Some(bodyTy) => checkType(body, bodyTy.weakened)(using
-                        Γ :+ Binding(ty, tyUsage)(gn"v"),
-                      ).map((bodyTy, _))
-                  // Report an error if the type of `body` needs to reference the effectful
-                  // computation. User should use a dependent sum type to wrap such
-                  // references manually to avoid the leak.
-                  // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
-                  //  the bound variable
-                  _ <- checkVar0Leak(
-                    bodyTy,
-                    LeakedReferenceToEffectfulComputationResult(t),
-                  )
-                  _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
-                    SUBSUMPTION,
-                  )
-                  usagesInContinuation <- effects match
-                    // Join with U1 for normal execution without any call to effect handlers
-                    case v: Var => Right(getEffVarContinuationUsage(v))
-                    case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
-                    case _ =>
-                      throw IllegalStateException(s"expect to be of Effects type: $tm")
-                yield (
-                  bodyTy.strengthened,
-                  usagesInBody
-                    .dropRight(1) // drop this binding
-                    .map(_.strengthened) *
-                    (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
+  (using ctx: TypingContext)
+  : Either[IrError, (CTerm, Usages)] =
+  val t = tm.t
+  val ty = tm.ty
+  val body = tm.ctx
+  for
+    case (tTy, tUsages) <- ty match
+      case None     => inferType(t)
+      case Some(ty) => checkType(t, ty).map((ty, _))
+    r <- tTy match
+      case F(ty, effects, tyUsage) =>
+        for
+          effects <- effects.normalized
+          tUsages <- transpose(tUsages.map(_.normalized))
+          (bodyTy, usages) <-
+            // If some usages are not zero or unres, inlining `t` would change usage checking
+            // result because
+            //
+            // * either some linear or relevant usages becomes zero because the computation
+            //   gets removed
+            //
+            // * or if the term is wrapped inside a `Collapse` and get multiplied
+            //
+            // Such changes would alter usage checking result, which can be confusing for
+            // users. Note that, it's still possible that with inlining causes usages to be
+            // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
+            // unrestricted usage. Hence, usage checking would still pass. On the other hand,
+            // it's not possible for inlining to create usage out of nowhere.
+            def areTUsagesZeroOrUnrestricted: Boolean =
+              tUsages.forall { usage =>
+                toBoolean(
+                  checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
+                    CheckSubsumptionMode.CONVERSION,
+                  ),
+                ) ||
+                toBoolean(
+                  checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
+                    CheckSubsumptionMode.CONVERSION,
+                  ),
                 )
-          yield (augmentEffect(effects, bodyTy), usages)
-        case _ => Left(ExpectFType(tTy))
-    yield r
+              }
+            if effects == Total && areTUsagesZeroOrUnrestricted then
+              // Do the reduction onsite so that type checking in sub terms can leverage the
+              // more specific type. More importantly, this way we do not need to reference
+              // the result of a computation in the inferred type.
+              for
+                t <- reduce(t)
+                newBody = t match
+                  case Return(v) => body.substLowers(v)
+                  case c         => body.substLowers(Collapse(c))
+                r <- bodyTy match
+                  case Some(bodyTy) => checkType(newBody, bodyTy).map(u => (bodyTy, u))
+                  case None         => inferType(newBody)
+              yield r
+            // Otherwise, just add the binding to the context and continue type checking.
+            else
+              for
+                case (bodyTy, usagesInBody) <- bodyTy match
+                  case None => inferType(body)(using Γ :+ Binding(ty, tyUsage)(gn"v"))
+                  case Some(bodyTy) =>
+                    checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, tyUsage)(gn"v"))
+                      .map((bodyTy, _))
+                // Report an error if the type of `body` needs to reference the effectful
+                // computation. User should use a dependent sum type to wrap such
+                // references manually to avoid the leak.
+                // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
+                //  the bound variable
+                _ <- checkVar0Leak(
+                  bodyTy,
+                  LeakedReferenceToEffectfulComputationResult(t),
+                )
+                _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
+                  SUBSUMPTION,
+                )
+                usagesInContinuation <- effects match
+                  // Join with U1 for normal execution without any call to effect handlers
+                  case v: Var                           => Right(getEffVarContinuationUsage(v))
+                  case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
+                  case _ =>
+                    throw IllegalStateException(s"expect to be of Effects type: $tm")
+              yield (
+                bodyTy.strengthened,
+                usagesInBody
+                  .dropRight(1) // drop this binding
+                  .map(_.strengthened) *
+                  (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
+              )
+        yield (augmentEffect(effects, bodyTy), usages)
+      case _ => Left(ExpectFType(tTy))
+  yield r
+
+def checkHandler
+  (h: Handler, inputTy: Option[CTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, (CTerm, Usages)] =
+  val eff = h.eff
+  val parameter = h.parameter
+  val parameterBinding = h.parameterBinding
+  val parameterDisposer = h.parameterDisposer
+  val parameterReplicator = h.parameterReplicator
+  val outputEffects = h.outputEffects
+  val outputUsage = h.outputUsage
+  val outputType = h.outputType
+  val transform = h.transform
+  val handlers = h.handlers
+  val input = h.input
+  def filterSimpleEffects(normalizedEffects: VTerm): Either[IrError, VTerm] =
+    normalizedEffects match
+      case v: Var => filterSimpleEffects(Effects(Set(), Set(v)))
+      case Effects(literal, vars) =>
+        Right(
+          Effects(
+            literal.filter { case (effQn, _) =>
+              Σ.getEffect(effQn).continuationUsage match
+                // `None` means the effect is simple
+                case None => true
+                // Any other value means the effect is not simple and hence needs to be
+                // filtered out
+                case _ => false
+            },
+            vars.filter { v =>
+              Γ.resolve(v.asInstanceOf[Var]) match
+                // Only keep variables that are limited to simple effects
+                case Binding(EffectsType(None), _) => true
+                case _                             => false
+            },
+          ),
+        )
+      case _ => Left(EffectTermToComplex(normalizedEffects))
+  for
+    eff <- eff.normalized
+    effs <- eff match
+      case Effects(effs, s) if s.isEmpty => Right(effs)
+      case _                             => Left(EffectTermToComplex(eff))
+    effUsages <- checkType(eff, EffectsType())
+    singleParameterUsages <- checkType(parameter, parameterBinding.ty)
+    parameterUsages = singleParameterUsages * parameterBinding.usage
+    _ <- parameterReplicator match
+      case Some(_) => checkType(outputEffects, EffectsType())
+      // parameterReplicator is not specified, in this case, the outputEffects must not be
+      // re-entrant.
+      case None => checkType(outputEffects, EffectsType(Some(Usage.UAff)))
+    outputEffects <- outputEffects.normalized
+    parameterOpsEffects <- filterSimpleEffects(outputEffects)
+    parameterOpsΓ = Γ :+ parameterBinding
+    parameterDisposerUsages <- checkType(
+      parameterDisposer,
+      F(DataType(Builtins.UnitQn), parameterOpsEffects),
+    )(using parameterOpsΓ)
+    parameterTypeLevel <- inferLevel(parameterBinding.ty)
+    parameterTypeLevel <- parameterTypeLevel match
+      case ULevel.USimpleLevel(l) => Right(l)
+      case _                      => Left(LevelTooBig(parameterTypeLevel))
+    parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
+    parameterReplicatorUsages <- parameterReplicator match
+      case Some(parameterReplicator) =>
+        for
+          parameterReplicatorUsages <- checkType(
+            parameterReplicator,
+            F(
+              DataType(
+                Builtins.PairQn,
+                List(
+                  parameterTypeLevel,
+                  EqDecidabilityLiteral(EqDecidability.EqUnknown),
+                  parameterBinding.usage,
+                  parameterBinding.ty,
+                  parameterBinding.usage,
+                  parameterBinding.ty,
+                ),
+              ),
+              parameterOpsEffects,
+            ).weakened,
+          )(using parameterOpsΓ)
+          parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
+            parameterOpsΓ,
+          )
+        yield parameterReplicatorUsages
+      case None => Right(List.fill(Γ.size)(UsageLiteral(Usage.U0)))
+    case (inputCTy, inputUsages) <- inputTy match
+      case None          => inferType(input)
+      case Some(inputTy) => checkType(input, inputTy).map((inputTy, _))
+    case (inputTy, inputEff, inputUsage) <- inputCTy match
+      case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
+      case _                                => Left(ExpectFType(inputCTy))
+    inputBinding = Binding(inputTy, inputUsage)(gn"v")
+    outputCType = F(outputType, outputEffects, outputUsage)
+    transformΓ = Γ :+ parameterBinding :+ inputBinding.weakened
+    transformUsages <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
+    transformUsages <- verifyUsages(transformUsages)(2)
+    _ <- checkSubsumption(
+      inputEff,
+      EffectsUnion(outputEffects, eff),
+      Some(EffectsType()),
+    )
+    // Check handler implementations
+    handlerUsages <-
+      def checkHandler(eff: Eff): Either[IrError, Usages] =
+        val (qn, args) = eff
+        for
+          effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
+          operations <- Σ.getOperationsOption(qn).toRight(MissingDeclaration(qn))
+          _ <-
+            val missingOperationQn =
+              operations.map(qn / _.name).filter(qn => !handlers.contains(qn)).toSet
+            if missingOperationQn.isEmpty then Right(())
+            else Left(MissingHandlerImplementation(missingOperationQn, h.sourceInfo))
+          handlerUsages <- transpose(
+            operations.map { opDecl =>
+              val handlerBody = handlers(qn / opDecl.name)
+              val (argNames, resumeNameOption) = h.handlersBoundNames(qn / opDecl.name)
+              // All of the following opXXX are weakened for handler parameter
+              val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
+              val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
+              val opParamTys = parameterBinding +: opDecl.paramTys
+                .substLowers(args: _*)
+                .zip(argNames)
+                .map { case (binding, argName) =>
+                  Binding(binding.ty, binding.usage)(argName)
+                }
+                .weakened
+              for
+                opResultTyLevel <- inferLevel(opResultTy)
+                opResultTyLevel <- opResultTyLevel match
+                  case ULevel.USimpleLevel(l) => Right(l)
+                  case _                      => Left(LevelTooBig(opResultTyLevel))
+                case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
+                  case Some(continuationUsage) =>
+                    resumeNameOption match
+                      case Some(resumeName) =>
+                        for
+                          outputTypeLevel <- inferLevel(outputType)
+                          level <- outputTypeLevel match
+                            case ULevel.USimpleLevel(o) =>
+                              Right(LevelMax(parameterTypeLevel, opResultTyLevel, o))
+                            case l: ULevel.UωLevel => Left(LevelTooBig(l))
+                        yield (
+                          opParamTys :+
+                            Binding(
+                              U(
+                                RecordType(
+                                  Builtins.ContinuationQn,
+                                  List(
+                                    level,
+                                    UsageLiteral(continuationUsage),
+                                    parameterBinding.usage,
+                                    parameterBinding.ty,
+                                    opResultUsage,
+                                    opResultTy,
+                                    parameterOpsEffects,
+                                    outputEffects,
+                                    outputUsage,
+                                    outputType,
+                                  ),
+                                ).weaken(opDecl.paramTys.size + 1, 0),
+                              ),
+                            )(resumeName),
+                          outputCType.weaken(opParamTys.size + 1, 0),
+                        )
+                      case None =>
+                        throw IllegalArgumentException("missing name for continuation")
+                  case None =>
+                    Right(
+                      (
+                        opParamTys,
+                        F(
+                          DataType(
+                            Builtins.PairQn,
+                            List(
+                              opResultTyLevel,
+                              EqDecidabilityLiteral(EqDecidability.EqUnknown),
+                              parameterBinding.usage,
+                              parameterBinding.ty,
+                              opResultUsage,
+                              opResultTy,
+                            ),
+                          ),
+                          outputEffects,
+                          opResultUsage,
+                        ).weaken(opDecl.paramTys.size, 0),
+                      ),
+                    )
+                bodyUsages <- checkType(handlerBody, opOutputTy)(using Γ ++ opParamTys)
+                bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
+              yield bodyUsages
+            },
+          )
+        yield handlerUsages.reduce(_ + _)
+      eff match
+        case Effects(effs, s) if s.isEmpty =>
+          val effQns = effs.map(_._1)
+          for
+            _ <-
+              val unknownOperationQns = handlers.keySet
+                .filter {
+                  case QualifiedName.Node(parent, _) => !effQns.contains(parent)
+                  case qn => throw IllegalStateException(s"bad operation name $qn")
+                }
+              if unknownOperationQns.isEmpty
+              then Right(())
+              else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
+            r <- transpose(effs.map(checkHandler(_)))
+          yield r
+
+        case _ => Left(EffectTermToComplex(eff))
+  yield (
+    outputCType,
+    // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
+    (handlerUsages.reduce(_ + _) + transformUsages
+      .dropRight(1)
+      .map(_.strengthened) + effUsages) * UUnres + inputUsages,
+  )
+
+def checkHeapHandler
+  (h: HeapHandler, inputTy: Option[CTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, (CTerm, Usages)] =
+  val input = h.input
+  val heapVarBinding =
+    Binding[VTerm](HeapType(), UsageLiteral(UUnres))(h.boundName)
+
+  given Context = Γ :+ heapVarBinding
+
+  for
+    case (inputCTy, inputUsages) <- inputTy match
+      case None          => inferType(input)
+      case Some(inputTy) => checkType(input, inputTy).map((inputTy, _))
+    r <- inputCTy match
+      case F(inputTy, eff, _) =>
+        for
+          // TODO[P2]: Use more sophisticated check here to catch leak through wrapping heap
+          //  variable inside things. If it's leaked, there is no point using this handler at
+          //  all. Simply using GlobalHeapKey is the right thing to do. This is because a
+          //  creating a leaked heap key itself is performing a side effect with global heap.
+          _ <- checkVar0Leak(
+            inputTy,
+            LeakedReferenceToHeapVariable(input),
+          )
+          outputEff = eff match
+            case Effects(literal, vars) =>
+              Effects(
+                literal.filter {
+                  // Filter out current heap effect. `Var(0)` binds to the heap key of this
+                  // handler.
+                  case (qn, args) => qn != Builtins.HeapEffQn && args != List(Var(0))
+                },
+                vars,
+              )
+            case _ => eff
+        yield F(inputTy.strengthened, outputEff)
+      case _ => Left(ExpectFType(inputCTy))
+  yield (r, inputUsages)
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[ULevel] = None)
