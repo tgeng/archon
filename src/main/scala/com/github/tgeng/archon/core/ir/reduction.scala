@@ -126,7 +126,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case Right(_: Var | _: Collapse) =>
             Right(reconstructTermFromStack(pc))
           case _ => throw IllegalArgumentException("type error")
-      case Let(t, ctx) =>
+      case Let(t, _, ctx) =>
         t match
           case Return(v)    => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
@@ -424,7 +424,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     given SourceInfo = ctx.sourceInfo
 
     ctx match
-      case l @ Let(t, ctx)       => Let(c, ctx)(l.boundName)
+      case l @ Let(t, ty, ctx)       => Let(c, ty, ctx)(l.boundName)
       case Application(fun, arg) => Application(c, arg)
       case Projection(rec, name) => Projection(c, name)
       case h @ Handler(

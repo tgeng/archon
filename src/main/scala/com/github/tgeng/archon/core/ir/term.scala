@@ -349,7 +349,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
   case Let
-    (t: CTerm, /* binding offset = 1 */ ctx: CTerm)
+    (t: CTerm, ty: Option[CTerm], /* binding offset = 1 */ ctx: CTerm)
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
@@ -524,7 +524,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case Force(v)                   => Force(v)
       case F(vTy, effects, u)         => F(vTy, effects, u)
       case Return(v)                  => Return(v)
-      case l @ Let(t, ctx)            => Let(t, ctx)(l.boundName)
+      case l @ Let(t, ty, ctx)        => Let(t, ty, ctx)(l.boundName)
       case FunctionType(binding, bodyTy, effects) =>
         FunctionType(binding, bodyTy, effects)
       case Application(fun, args)         => Application(fun, args)

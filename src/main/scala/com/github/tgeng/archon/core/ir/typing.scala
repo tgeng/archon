@@ -616,9 +616,11 @@ def inferType
       case Return(v) =>
         for case (vTy, vUsages) <- inferType(v)
         yield (F(vTy, Total), vUsages)
-      case Let(t, body) =>
+      case Let(t, ty, body) =>
         for
-          case (tTy, tUsages) <- inferType(t)
+          case (tTy, tUsages) <- ty match
+            case None => inferType(t)
+            case Some(ty) => checkType(t, ty).map((ty, _))
           r <- tTy match
             case F(ty, effects, tyUsage) =>
               for
@@ -1307,13 +1309,17 @@ def checkSubsumption
           yield r
         case (Return(v1), Return(v2), Some(F(ty, _, _))) =>
           checkSubsumption(v1, v2, Some(ty))(using CONVERSION)
-        case (Let(t1, ctx1), Let(t2, ctx2), ty) =>
+        case (Let(t1, ty1, ctx1), Let(t2, ty2, ctx2), ty) =>
           for
-            case (t1CTy, _) <- inferType(t1)
+            t1CTy <- ty1 match
+              case Some(ty1) => Right(ty1)
+              case None => inferType(t1).map(_._1)
             r <- t1CTy match
               case F(t1Ty, _, _) =>
                 for
-                  case (t2CTy, _) <- inferType(t2)
+                  t2CTy <- ty1 match
+                    case Some(ty2) => Right(ty2)
+                    case None => inferType(t2).map(_._1)
                   _ <- checkSubsumption(t1CTy, t2CTy, None)(using CONVERSION)
                   _ <- checkSubsumption(t1, t2, Some(t2CTy))(using CONVERSION)
                   r <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using CONVERSION)(using
@@ -1436,9 +1442,11 @@ private def simplifyLet
   successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}",
 ) {
   t match
-    case Let(t, ctx) =>
+    case Let(t, ty, ctx) =>
       for
-        case (tTy, _) <- inferType(t)
+        tTy <- ty match
+          case None => inferType(t).map(_._1)
+          case Some(ty) => Right(ty)
         r <- tTy match
           case F(_, eff, _) if eff == Total =>
             simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
@@ -1953,7 +1961,7 @@ def reduceCType
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
                 case Return(vty) => Right(F(vty)(using cTy.sourceInfo))
-                case Let(t, ctx) =>
+                case Let(t, _, ctx) =>
                   reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
                 case c =>
                   throw IllegalStateException(

@@ -723,12 +723,20 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             Seq(h.boundName),
           ),
         )
-      case l @ Let(t, body) =>
-        Left(
-          Block(".let", l.boundName, "=", visitCTerm(t)),
-          body,
-          Seq(l.boundName),
-        )
+      case l @ Let(t, ty, body) =>
+        ty match
+          case None =>
+            Left(
+              Block(".let", l.boundName, "=", visitCTerm(t)),
+              body,
+              Seq(l.boundName),
+            )
+          case Some(ty) =>
+            Left(
+              Block(".let", l.boundName, ":", ty, "=", visitCTerm(t)),
+              body,
+              Seq(l.boundName),
+            )
       case c => Right(visitCTerm(c))
     }
 
