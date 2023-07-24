@@ -616,87 +616,7 @@ def inferType
       case Return(v) =>
         for case (vTy, vUsages) <- inferType(v)
         yield (F(vTy, Total), vUsages)
-      case Let(t, ty, body) =>
-        for
-          case (tTy, tUsages) <- ty match
-            case None => inferType(t)
-            case Some(ty) => checkType(t, ty).map((ty, _))
-          r <- tTy match
-            case F(ty, effects, tyUsage) =>
-              for
-                effects <- effects.normalized
-                tUsages <- transpose(tUsages.map(_.normalized))
-                (bodyTy, usages) <-
-                  // If some usages are not zero or unres, inlining `t` would change usage checking
-                  // result because
-                  //
-                  // * either some linear or relevant usages becomes zero because the computation
-                  //   gets removed
-                  //
-                  // * or if the term is wrapped inside a `Collapse` and get multiplied
-                  //
-                  // Such changes would alter usage checking result, which can be confusing for
-                  // users. Note that, it's still possible that with inlining causes usages to be
-                  // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
-                  // unrestricted usage. Hence, usage checking would still pass. On the other hand,
-                  // it's not possible for inlining to create usage out of nowhere.
-                  def areTUsagesZeroOrUnrestricted: Boolean =
-                    tUsages.forall { usage =>
-                      toBoolean(
-                        checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
-                          CheckSubsumptionMode.CONVERSION,
-                        ),
-                      ) ||
-                      toBoolean(
-                        checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
-                          CheckSubsumptionMode.CONVERSION,
-                        ),
-                      )
-                    }
-                  if effects == Total && areTUsagesZeroOrUnrestricted then
-                    // Do the reduction onsite so that type checking in sub terms can leverage the
-                    // more specific type. More importantly, this way we do not need to reference
-                    // the result of a computation in the inferred type.
-                    for
-                      t <- reduce(t)
-                      r <- t match
-                        case Return(v) => inferType(body.substLowers(v))
-                        case c         => inferType(body.substLowers(Collapse(c)))
-                    yield r
-                  // Otherwise, just add the binding to the context and continue type checking.
-                  else
-                    for
-                      case (bodyTy, usagesInBody) <- inferType(body)(using
-                        Γ :+ Binding(ty, tyUsage)(gn"v"),
-                      )
-                      // Report an error if the type of `body` needs to reference the effectful
-                      // computation. User should use a dependent sum type to wrap such
-                      // references manually to avoid the leak.
-                      // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
-                      //  the bound variable
-                      _ <- checkVar0Leak(
-                        bodyTy,
-                        LeakedReferenceToEffectfulComputationResult(t),
-                      )
-                      _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
-                        SUBSUMPTION,
-                      )
-                      usagesInContinuation <- effects match
-                        // Join with U1 for normal execution without any call to effect handlers
-                        case v: Var => Right(getEffVarContinuationUsage(v))
-                        case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
-                        case _ =>
-                          throw IllegalStateException(s"expect to be of Effects type: $tm")
-                    yield (
-                      bodyTy.strengthened,
-                      usagesInBody
-                        .dropRight(1) // drop this binding
-                        .map(_.strengthened) *
-                        (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
-                    )
-              yield (augmentEffect(effects, bodyTy), usages)
-            case _ => Left(ExpectFType(tTy))
-        yield r
+      case tm: Let => checkLet(tm, None)
       case FunctionType(binding, bodyTy, effects) =>
         for
           effUsages <- checkType(effects, EffectsType())
@@ -1100,6 +1020,7 @@ def checkType
       ty match
         case F(ty, _, usage) => checkType(v, ty).map(_ * usage)
         case _               => Left(ExpectFType(ty))
+    case tm: Let => checkLet(tm, Some(ty)).map(_._2)
     // TODO: check let, handler, and heap-handler
     case _ =>
       for
@@ -1852,6 +1773,101 @@ def checkTypes
         },
       ).map(_.reduce(_ + _))
   }
+
+private def checkLet(tm: Let, bodyTy: Option[CTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext): Either[IrError, (CTerm, Usages)] =
+    val t = tm.t
+    val ty = tm.ty
+    val body = tm.ctx
+    for
+      case (tTy, tUsages) <- ty match
+        case None => inferType(t)
+        case Some(ty) => checkType(t, ty).map((ty, _))
+      r <- tTy match
+        case F(ty, effects, tyUsage) =>
+          for
+            effects <- effects.normalized
+            tUsages <- transpose(tUsages.map(_.normalized))
+            (bodyTy, usages) <-
+              // If some usages are not zero or unres, inlining `t` would change usage checking
+              // result because
+              //
+              // * either some linear or relevant usages becomes zero because the computation
+              //   gets removed
+              //
+              // * or if the term is wrapped inside a `Collapse` and get multiplied
+              //
+              // Such changes would alter usage checking result, which can be confusing for
+              // users. Note that, it's still possible that with inlining causes usages to be
+              // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
+              // unrestricted usage. Hence, usage checking would still pass. On the other hand,
+              // it's not possible for inlining to create usage out of nowhere.
+              def areTUsagesZeroOrUnrestricted: Boolean =
+                tUsages.forall { usage =>
+                  toBoolean(
+                    checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
+                      CheckSubsumptionMode.CONVERSION,
+                    ),
+                  ) ||
+                  toBoolean(
+                    checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
+                      CheckSubsumptionMode.CONVERSION,
+                    ),
+                  )
+                }
+              if effects == Total && areTUsagesZeroOrUnrestricted then
+                // Do the reduction onsite so that type checking in sub terms can leverage the
+                // more specific type. More importantly, this way we do not need to reference
+                // the result of a computation in the inferred type.
+                for
+                  t <- reduce(t)
+                  newBody = t match
+                    case Return(v) => body.substLowers(v)
+                    case c         => body.substLowers(Collapse(c))
+                  r <- bodyTy match
+                    case Some(bodyTy) => checkType(newBody, bodyTy).map(u => (bodyTy, u))
+                    case None => inferType(newBody)
+                yield r
+              // Otherwise, just add the binding to the context and continue type checking.
+              else
+                for
+                  case (bodyTy, usagesInBody) <- bodyTy match
+                    case None => inferType(body)(using
+                        Γ :+ Binding(ty, tyUsage)(gn"v"),
+                      )
+                    case Some(bodyTy) => checkType(body, bodyTy.weakened)(using
+                        Γ :+ Binding(ty, tyUsage)(gn"v"),
+                      ).map((bodyTy, _))
+                  // Report an error if the type of `body` needs to reference the effectful
+                  // computation. User should use a dependent sum type to wrap such
+                  // references manually to avoid the leak.
+                  // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
+                  //  the bound variable
+                  _ <- checkVar0Leak(
+                    bodyTy,
+                    LeakedReferenceToEffectfulComputationResult(t),
+                  )
+                  _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
+                    SUBSUMPTION,
+                  )
+                  usagesInContinuation <- effects match
+                    // Join with U1 for normal execution without any call to effect handlers
+                    case v: Var => Right(getEffVarContinuationUsage(v))
+                    case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
+                    case _ =>
+                      throw IllegalStateException(s"expect to be of Effects type: $tm")
+                yield (
+                  bodyTy.strengthened,
+                  usagesInBody
+                    .dropRight(1) // drop this binding
+                    .map(_.strengthened) *
+                    (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
+                )
+          yield (augmentEffect(effects, bodyTy), usages)
+        case _ => Left(ExpectFType(tTy))
+    yield r
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[ULevel] = None)
