@@ -55,6 +55,9 @@ trait DerivedSignature extends Signature:
   given SourceInfo = SiEmpty
   given Signature = this
 
+  /** Usage paramter itself is only used in typing and hence has U0 */
+  private def usageBinding = Binding(UsageType(), UsageLiteral(U0))(n"u")
+
   private def getBigType
     (qn: QualifiedName)
     : Option[(Definition, IndexedSeq[Clause], CaseTree)] =
@@ -90,27 +93,41 @@ trait DerivedSignature extends Signature:
       else CtTerm(Return(Type(Top(UωLevel(layer))))),
     )
 
-  def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    for data <- getDataOption(qn)
+  def getDataDerivedDefinitionOption
+    (qn: QualifiedName)
+    : Option[Declaration.Definition] =
+    // First parameter is usage type. Declared paramters and indexes follow after.
+    for
+      data <- getDataOption(qn)
+      allParams = data.tParamTys.map(_._1) ++ data.tIndexTys
     yield Definition(qn)(
-      data.tParamTys.foldRight[CTerm](
-        F(Type(DataType(qn, vars(data.tParamTys.size - 1)))),
-      ) { (bindingAndVariance, bodyTy) =>
-        bindingAndVariance match
-          case (binding, _) => FunctionType(binding, bodyTy)
-      },
+      FunctionType(
+        usageBinding,
+        allParams.zipWithIndex.foldRight[CTerm](
+          F(Type(DataType(qn, vars(allParams.size - 1))), Var(allParams.size)),
+        ) { (bindingAndUsage, bodyTy) =>
+          bindingAndUsage match
+            case (binding, i) =>
+              FunctionType(
+                Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name),
+                bodyTy,
+              )
+        },
+      ),
     )
 
   def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for data <- getDataOption(qn)
     yield
-      val highestDbIndex = data.tParamTys.size - 1
+      val highestDbIndex = data.tParamTys.size
       IndexedSeq(
         Clause(
-          data.tParamTys.map(_._1),
+          usageBinding +: (data.tParamTys.map(_._1) ++ data.tIndexTys).zipWithIndex.map {
+            case (binding, i) => Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name)
+          },
           qVars(highestDbIndex),
-          Return(DataType(qn, vars(highestDbIndex))),
-          F(Type(DataType(qn, vars(highestDbIndex)))),
+          Return(DataType(qn, vars(highestDbIndex - 1))),
+          F(Type(DataType(qn, vars(highestDbIndex - 1))), Var(highestDbIndex)),
         ),
       )
 
@@ -121,19 +138,29 @@ trait DerivedSignature extends Signature:
           data <- getDataOption(dataQn)
           constructor <- getConstructorOption(dataQn, conName)
         yield
-          val numIndexArgs = data.tParamTys.size
+          val typeParams = data.tParamTys.map(_._1)
+          val numTypeParams = typeParams.size
+          val constructorParams = constructor.paramTys
+          val numAllParams = typeParams.size + constructor.paramTys.size
+          val constructorType = constructorParams.foldRight[CTerm](
+            F(
+              DataType(dataQn, vars(numAllParams - 1, constructorParams.size) ++ constructor.tArgs),
+              Var(numTypeParams + constructorParams.size),
+            ),
+          ) { (binding, ty) =>
+            FunctionType(binding, ty)
+          }
           Definition(qn)(
-            (data.tParamTys.map(_._1) ++ constructor.paramTys)
-              .foldRight[CTerm](
-                F(
-                  DataType(
-                    dataQn,
-                    vars(data.tParamTys.size + constructor.paramTys.size - 1) ++ constructor.tArgs,
-                  ),
-                ),
-              ) { (binding, ty) =>
-                FunctionType(binding, ty)
-              },
+            FunctionType(
+              usageBinding,
+              typeParams
+                .foldRight[CTerm](
+                  constructorType,
+                ) { (binding, ty) =>
+                  // Constructor does not consume any type parameters since they only appear in types
+                  FunctionType(Binding(binding.ty, U0)(binding.name), ty)
+                },
+            ),
           )
       case _ => None
 
@@ -144,19 +171,21 @@ trait DerivedSignature extends Signature:
           data <- getDataOption(dataQn)
           constructor <- getConstructorOption(dataQn, conName)
         yield
-          val numIndexArgs = data.tParamTys.size
-          val allBindings = data.tParamTys.map(_._1) ++
-            constructor.paramTys.strengthen(numIndexArgs, 0)
+          val typeParams = data.tParamTys.map(_._1)
+          val constructorParams = constructor.paramTys
+          val numAllParams = typeParams.size + constructor.paramTys.size
           IndexedSeq(
             Clause(
-              allBindings,
-              qVars(allBindings.size - 1),
+              usageBinding +: (typeParams.map(b => Binding(b.ty, U0)(b.name),
+              ) ++ constructor.paramTys),
+              qVars(numAllParams),
               Return(Con(conName, vars(constructor.paramTys.size - 1))),
               F(
                 DataType(
                   dataQn,
-                  vars(data.tParamTys.size + constructor.paramTys.size - 1) ++ constructor.tArgs,
+                  vars(numAllParams - 1, constructorParams.size) ++ constructor.tArgs,
                 ),
+                Var(numAllParams),
               ),
             ),
           )
@@ -236,21 +265,31 @@ trait DerivedSignature extends Signature:
   def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     for effect <- getEffectOption(qn)
     yield Definition(qn)(
-      effect.tParamTys.foldRight[CTerm](F(EffectsType())) { case (binding, bodyTy) =>
-        FunctionType(binding, bodyTy)
-      },
+      FunctionType(
+        usageBinding,
+        effect.tParamTys.zipWithIndex
+          .foldRight[CTerm](F(EffectsType(), Var(effect.tParamTys.size))) {
+            case ((binding, i), bodyTy) =>
+              FunctionType(
+                Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name),
+                bodyTy,
+              )
+          },
+      ),
     )
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for effect <- getEffectOption(qn)
     yield {
-      val highestDbIndex = effect.tParamTys.size - 1
+      val highestDbIndex = effect.tParamTys.size
       IndexedSeq(
         Clause(
-          effect.tParamTys,
+          usageBinding +: effect.tParamTys.zipWithIndex.map((binding, i) =>
+            Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name),
+          ),
           qVars(highestDbIndex),
-          Return(EffectsLiteral(Set((qn, vars(highestDbIndex))))),
-          F(EffectsType()),
+          Return(EffectsLiteral(Set((qn, vars(highestDbIndex - 1))))),
+          F(EffectsType(), Var(highestDbIndex)),
         ),
       )
     }
