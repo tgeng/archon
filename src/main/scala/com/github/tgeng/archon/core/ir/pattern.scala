@@ -7,7 +7,6 @@ import SourceInfo.*
 
 enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern]:
   case PVar(idx: Nat)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
-  case PRefl()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
   /** Note that matching computation type is prohibited. This should simplify compilation. In
     * addition, it's unclear how type checking of effects can work if we allow matching
@@ -30,7 +29,6 @@ enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern]:
     given SourceInfo = sourceInfo
     this match
       case PVar(idx)                      => PVar(idx)
-      case PRefl()                        => PRefl()
       case PDataType(qn, args)            => PDataType(qn, args)
       case PForcedDataType(qn, args)      => PForcedDataType(qn, args)
       case PConstructor(name, args)       => PConstructor(name, args)
@@ -58,7 +56,6 @@ extension(p: Pattern)
 
     p match
       case PVar(idx) => Some(Var(idx))
-      case PRefl()   => Some(Refl())
       case PDataType(qn, args) =>
         for args <- transpose(args.map(_.toTerm))
         yield DataType(qn, args)

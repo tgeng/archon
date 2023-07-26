@@ -147,16 +147,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
-  // TODO[P2]: remove this since inductive type is generalized and no longer depend on this during unification
-  case EqualityType
-    (
-      ty: VTerm,
-      left: VTerm,
-      right: VTerm,
-    )
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo) // , QualifiedNameOwner(EqualityQn)
-  case Refl()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-
   // Note, `upper` here is in the sense of typing subsumption, not the usage lattice. This is the
   // lower bound in the usage lattice. Hence Option.None is used to represent unbounded case, as the
   // lattice is not bounded below. Note that the semantic of this `upperBound` is different from
@@ -235,8 +225,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case Thunk(c)                        => Thunk(c)
       case DataType(qn, args)              => DataType(qn, args)
       case Con(name, args)                 => Con(name, args)
-      case EqualityType(ty, left, right)   => EqualityType(ty, left, right)
-      case Refl()                          => Refl()
       case UsageType(u)                    => UsageType(u)
       case UsageLiteral(u)                 => UsageLiteral(u)
       case UsageCompound(op, operands)     => UsageCompound(op, operands)

@@ -357,7 +357,6 @@ private def inferLevel
     case Collapse(cTm)                 => inferLevel(cTm)
     case U(cty)                        => inferLevel(cty)
     case DataType(qn, args)            => Right(Σ.getData(qn).ul.substLowers(args: _*))
-    case EqualityType(ty, left, right) => inferLevel(ty)
     case _: UsageType | _: EqDecidabilityType | _: EqDecidabilityLiteral | _: EffectsType |
       _: HeapType =>
       Right(ULevel.USimpleLevel(LevelLiteral(0)))
@@ -412,18 +411,6 @@ def inferType
             for usage <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
             yield (Type(tm), usage * UUnres)
       case _: Con => throw IllegalArgumentException("cannot infer type")
-      case EqualityType(ty, left, right) =>
-        for
-          case (tyTy, tyUsage) <- inferType(ty)
-          r <- tyTy match
-            case Type(_) =>
-              for
-                leftUsage <- checkType(left, ty)
-                rightUsage <- checkType(right, ty)
-              yield (Type(tm), (tyUsage + leftUsage + rightUsage) * UUnres)
-            case _ => Left(NotTypeError(ty))
-        yield r
-      case Refl()          => throw IllegalArgumentException("cannot infer type")
       case u: UsageLiteral => Right(UsageType(Some(u)), Usages.zero)
       case UsageCompound(_, operands) =>
         for
@@ -515,14 +502,8 @@ def checkType
           Σ.getConstructorOption(qn, name) match
             case None => Left(MissingConstructor(name, qn))
             case Some(con) =>
-              checkTypes(args, con.paramTys.substLowers(tArgs: _*))
+              checkTypes(args, con.paramTys.substLowers(tArgs: _*)) >> ??? // TODO: check constructor tArgs are convertible with the one specified in DataType
         case _ => Left(ExpectDataType(ty))
-    case Refl() =>
-      ty match
-        case EqualityType(ty, left, right) =>
-          for _ <- checkSubsumption(left, right, Some(ty))(using CONVERSION)
-          yield Usages.zero
-        case _ => Left(ExpectEqualityType(ty))
     case Cell(heapKey, _) =>
       ty match
         case CellType(heap, _, _) if Heap(heapKey) == heap => Right(Usages.zero)
@@ -892,10 +873,6 @@ def checkSubsumption
             checkUsageSubsumption(u1, u2)
           case (UsageType(Some(_)), UsageType(None), _) if mode == SUBSUMPTION =>
             Right(())
-          case (EqualityType(ty1, a1, b1), EqualityType(ty2, a2, b2), _) =>
-            checkSubsumption(ty1, ty2, None) >>
-              checkSubsumption(a1, a2, Some(ty1)) >>
-              checkSubsumption(b1, b2, Some(ty1))
           case (
               CellType(heap1, ty1, status1),
               CellType(heap2, ty2, status2),
@@ -1292,7 +1269,7 @@ private def deriveTypeInherentEqDecidability
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] = ty match
-  case _: Type | _: EqualityType | _: UsageType | _: EqDecidabilityType | _: EffectsType |
+  case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType |
     _: LevelType | _: HeapType | _: CellType =>
     Right(EqDecidabilityLiteral(EqDecidable))
   case Top(_, eqDecidability) => Right(eqDecidability)

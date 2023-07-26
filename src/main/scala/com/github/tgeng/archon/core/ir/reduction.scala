@@ -615,7 +615,6 @@ def matchPattern
       var constraints = rest
       elim match
         case (PVar(idx), v) => mapping(idx) = v
-        case (PRefl(), Refl()) | (PForced(_), _) =>
         // TODO[P4]: matching type doesn't seem to be useful.
         // TODO[P4]: matching cell type is probably not a good idea because it's unknown at what
         //  level `tyP` should be. In order to allow this, we need to make each `Cell`

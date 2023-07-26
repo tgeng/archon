@@ -80,7 +80,6 @@ trait Visitor[C, R]:
   def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R =
     pattern match
       case pVar: PVar           => visitPVar(pVar)
-      case pRefl: PRefl         => visitPRefl(pRefl)
       case pDataType: PDataType => visitPDataType(pDataType)
       case pForcedDataType: PForcedDataType =>
         visitPForcedDataType(pForcedDataType)
@@ -91,8 +90,6 @@ trait Visitor[C, R]:
       case pAbsurd: PAbsurd => visitPAbsurd(pAbsurd)
 
   def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature): R = combine()
-
-  def visitPRefl(PRefl: PRefl)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -211,8 +208,6 @@ trait Visitor[C, R]:
     case thunk: Thunk                 => visitThunk(thunk)
     case dataType: DataType           => visitDataType(dataType)
     case con: Con                     => visitCon(con)
-    case equalityType: EqualityType   => visitEqualityType(equalityType)
-    case refl: Refl                   => visitRefl(refl)
     case usageType: UsageType         => visitUsageType(usageType)
     case usageLiteral: UsageLiteral   => visitUsageLiteral(usageLiteral)
     case usageCompound: UsageCompound => visitUsageCompound(usageCompound)
@@ -260,15 +255,6 @@ trait Visitor[C, R]:
       visitName(con.name) +:
         con.args.map(visitVTerm): _*,
     )
-
-  def visitEqualityType(equalityType: EqualityType)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(equalityType.ty),
-      visitVTerm(equalityType.left),
-      visitVTerm(equalityType.right),
-    )
-
-  def visitRefl(refl: Refl)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitUsageType(usageType: UsageType)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(Builtins.UsageQn)
@@ -605,7 +591,6 @@ trait Transformer[C]:
   def transformPattern(p: Pattern)(using ctx: C)(using Σ: Signature): Pattern =
     p match
       case v: PVar               => transformPVar(v)
-      case r: PRefl              => transformPRefl(r)
       case d: PDataType          => transformPDataType(d)
       case d: PForcedDataType    => transformPForcedDataType(d)
       case c: PConstructor       => transformPConstructor(c)
@@ -614,8 +599,6 @@ trait Transformer[C]:
       case a: PAbsurd            => transformPAbsurd(a)
 
   def transformPVar(v: PVar)(using ctx: C)(using Σ: Signature): Pattern = v
-
-  def transformPRefl(r: PRefl)(using ctx: C)(using Σ: Signature): Pattern = r
 
   def transformPDataType(d: PDataType)(using ctx: C)(using Σ: Signature): Pattern =
     PDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
@@ -648,8 +631,6 @@ trait Transformer[C]:
       case thunk: Thunk                 => transformThunk(thunk)
       case dataType: DataType           => transformDataType(dataType)
       case con: Con                     => transformCon(con)
-      case equalityType: EqualityType   => transformEqualityType(equalityType)
-      case refl: Refl                   => transformRefl(refl)
       case usageLiteral: UsageLiteral   => transformUsageLiteral(usageLiteral)
       case usageCompound: UsageCompound => transformUsageCompound(usageCompound)
       case usageType: UsageType         => transformUsageType(usageType)
@@ -697,15 +678,6 @@ trait Transformer[C]:
 
   def transformCon(con: Con)(using ctx: C)(using Σ: Signature): VTerm =
     Con(transformName(con.name), con.args.map(transformVTerm))(using con.sourceInfo)
-
-  def transformEqualityType(equalityType: EqualityType)(using ctx: C)(using Σ: Signature): VTerm =
-    EqualityType(
-      transformVTerm(equalityType.ty),
-      transformVTerm(equalityType.left),
-      transformVTerm(equalityType.right),
-    )(using equalityType.sourceInfo)
-
-  def transformRefl(refl: Refl)(using ctx: C)(using Σ: Signature): VTerm = refl
 
   def transformUsageType(usageType: UsageType)(using ctx: C)(using Σ: Signature): VTerm =
     usageType

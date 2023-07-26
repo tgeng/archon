@@ -180,9 +180,8 @@ private def elaborateHead
             Right((Nil, ul, eqDecidability))
           case F(t, _, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map {
-              case (telescope, ul, eqDecidability) =>
-                (binding +: telescope, ul, eqDecidability)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, eqDecidability) =>
+              (binding +: telescope, ul, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -447,11 +446,6 @@ private def elaborateBody
           val _As = constructor.paramTys.substLowers(dataType.args: _*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
-        case (Refl(), PRefl()) =>
-          // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
-          // can cause it to happen.
-          assert(_A.isInstanceOf[EqualityType])
-          Right(Some(Nil))
         case _ => Right(Some(List((v, p, _A))))
 
     def simplifyAll
@@ -477,19 +471,9 @@ private def elaborateBody
             case None => subst(problem, σ)
         yield r
 
-  def isEmpty(_A: VTerm)(using Γ: Context)(using Σ: Signature): Either[IrError, Boolean] =
-    _A match
-      case DataType(qn, _) => Right(Σ.getConstructors(qn).isEmpty)
-      case EqualityType(_A, u, v) =>
-        for u <- unify(u, v, _A)
-        yield u match
-          case _: UNo => true
-          case _      => false
-      case _ => Right(false)
-
   def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm =
     q̅.foldLeft[CTerm](Def(qn)) {
-      case (f, CPattern(p)) => Application(f, p.toTerm.getOrElse(throw IllegalStateException()))
+      case (f, CPattern(p))    => Application(f, p.toTerm.getOrElse(throw IllegalStateException()))
       case (f, CProjection(n)) => Projection(f, n)
     }
 
@@ -729,45 +713,59 @@ private def elaborateBody
                     .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
               // split equality type
-              case (_, (x: Var, PRefl(), _A: EqualityType)) =>
-                val (_Γ1, binding, _Γ2) = Γ.split(x)
-                assert(
-                  binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-                  "these types should be identical because they are created by [intro]",
-                )
-                val EqualityType(_B, u, v) = binding.ty.asInstanceOf[EqualityType]
-                for
-                  unificationResult <- unify(u, v, _B)(using _Γ1)
-                  r <- unificationResult match
-                    case UnificationResult.UYes(_Γ1, ρ, τ) =>
-                      val ρ2 = ρ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
-                      val τ2 = τ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
-                      given Context = _Γ1 ++ _Γ2.subst(ρ.toTermSubstitutor)
-                      for
-                        problem <- subst(problem, ρ2)
-                        case (_Σ, branch) <- split(
-                          q̅.map(_.substTerm(ρ2)),
-                          _C.subst(ρ2),
-                          problem,
-                        )
-                      yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
-                    case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
-                      Left(UnificationFailure(unificationResult))
-                yield r
+              // TODO: implement this part in split con
+              // case (_, (x: Var, PRefl(), _A: EqualityType)) =>
+              //   val (_Γ1, binding, _Γ2) = Γ.split(x)
+              //   assert(
+              //     binding.ty.weaken(_Γ2.size + 1, 0) == _A,
+              //     "these types should be identical because they are created by [intro]",
+              //   )
+              //   val EqualityType(_B, u, v) = binding.ty.asInstanceOf[EqualityType]
+              //   for
+              //     unificationResult <- unify(u, v, _B)(using _Γ1)
+              //     r <- unificationResult match
+              //       case UnificationResult.UYes(_Γ1, ρ, τ) =>
+              //         val ρ2 = ρ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
+              //         val τ2 = τ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
+              //         given Context = _Γ1 ++ _Γ2.subst(ρ.toTermSubstitutor)
+              //         for
+              //           problem <- subst(problem, ρ2)
+              //           case (_Σ, branch) <- split(
+              //             q̅.map(_.substTerm(ρ2)),
+              //             _C.subst(ρ2),
+              //             problem,
+              //           )
+              //         yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
+              //       case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
+              //         Left(UnificationFailure(unificationResult))
+              //   yield r
 
               // split empty
               case (_, (x: Var, PAbsurd(), _A)) =>
                 _A match
-                  case DataType(qn, _) =>
-                    if Σ.getConstructors(qn).isEmpty then Right(Σ, CtDataCase(x, qn, Map()))
+                  case DataType(qn, args) =>
+                    val data = Σ.getData(qn)
+                    val isEmpty = Σ
+                      .getConstructors(qn)
+                      .forall(constructor => {
+                        // all constructor arg unification fails
+                        val tParamArgs = args.take(data.tParamTys.size)
+                        val tIndexArgs = args.drop(data.tParamTys.size)
+                        val conTArgs = constructor.tArgs.map(_.substLowers(tParamArgs: _*))
+                        val newΓ = Γ ++ constructor.paramTys.substLowers(tParamArgs: _*)
+                        // All unification should be successful or inconclusive. That is, no failure is found.
+                        unifyAll(
+                          tIndexArgs.map(_.weaken(constructor.paramTys.size, 0)),
+                          conTArgs,
+                          data.tIndexTys
+                            .substLowers(tParamArgs: _*)
+                            .weaken(constructor.paramTys.size, 0),
+                        )(using newΓ) match
+                          case Right(_: UNo) => true
+                          case _             => false
+                      })
+                    if isEmpty then Right(Σ, CtDataCase(x, qn, Map()))
                     else Left(NonEmptyType(_A, source1))
-                  case EqualityType(_A, u, v) =>
-                    for
-                      u <- unify(u, v, _A)
-                      r <- u match
-                        case _: UNo => Right(Σ, CtEqualityEmpty(x))
-                        case _      => Left(NonEmptyType(_A, source1))
-                    yield r
                   case _ => Left(NonEmptyType(_A, source1))
               // No action to do, just forward the previous error
               case (l, _) => l
@@ -816,8 +814,8 @@ private def elaborateHead
         effect.operations.map(_.continuationUsage).foldLeft[Option[Usage]](None) {
           case (None, None) => None
           // None continuation usage is approximated as U1.
-          case (Some(u), None) => Some(Usage.U1 | u)
-          case (None, Some(u)) => Some(Usage.U1 | u)
+          case (Some(u), None)      => Some(Usage.U1 | u)
+          case (None, Some(u))      => Some(Usage.U1 | u)
           case (Some(u1), Some(u2)) => Some(u1 | u2)
         },
       )

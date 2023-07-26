@@ -253,9 +253,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     ctx.resolve(pVar.idx).value.toString,
   )
 
-  override def visitPRefl(PRefl: PRefl)(using gctx: PPrintContext)(using Σ: Signature): Block =
-    Block("Refl{}")
-
   override def visitPDataType
     (pDataType: PDataType)
     (using ctx: PPrintContext)
@@ -330,21 +327,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   override def visitCon(con: Con)(using ctx: PPrintContext)(using Σ: Signature): Block =
     bracketAndSpace(con.name, con.args.map(visitVTerm))
-
-  override def visitEqualityType
-    (equalityType: EqualityType)
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block = app(
-    "Equality",
-    equalityType.ty,
-    equalityType.left,
-    equalityType.right,
-  )
-
-  override def visitRefl(refl: Refl)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
-    "Refl{}",
-  )
 
   override def visitEffects(effects: Effects)(using ctx: PPrintContext)(using Σ: Signature): Block =
     if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")

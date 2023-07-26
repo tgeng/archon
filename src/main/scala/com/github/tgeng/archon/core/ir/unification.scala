@@ -137,12 +137,6 @@ def unify
         unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
       case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
         unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
-      case (EqualityType(ty1, left1, right1), EqualityType(ty2, left2, right2), _) =>
-        unifyAll(
-          List(ty1, left1, right1),
-          List(ty2, left2, right2),
-          telescope(Type(ty1), ty1, ty1),
-        )
       case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _)
         if status1 == status2 =>
         unifyAll(List(heap1, ty1), List(heap2, ty2), telescope(HeapType(), Type(ty1)))
@@ -208,15 +202,6 @@ private object CycleVisitor
   override def visitCon(con: Con)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
     super.visitCon(con)(using (ctx._1, true))
 
-  override def visitEqualityType
-    (equalityType: EqualityType)
-    (using ctx: (Nat, Boolean))
-    (using Σ: Signature)
-    : Boolean =
-    super.visitEqualityType(equalityType)(using (ctx._1, true))
-
-  // visitRefl is not needed since Refl does not contain any nested terms.
-
   override def visitUsageType
     (usageType: UsageType)
     (using ctx: (Nat, Boolean))
@@ -268,7 +253,9 @@ private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.si
 }.toList
 
 /** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`.
-  * Note
+  * Note,u̅ and v̅ are at the same level as the leftmost element of telescope. That is, processing
+  * further elements of telescope requires first substituting left elements of telescope with first value
+  * of u̅ (after unification succeeds between first element of u̅ and v̅).
   */
 def unifyAll
   (u̅ : List[VTerm], v̅ : List[VTerm], telescope: Telescope)
