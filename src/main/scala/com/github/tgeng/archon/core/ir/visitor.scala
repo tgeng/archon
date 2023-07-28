@@ -141,8 +141,6 @@ trait Visitor[C, R]:
     case r: CtRecord         => visitCtRecord(r)
     case tc: CtTypeCase      => visitCtTypeCase(tc)
     case dc: CtDataCase      => visitCtDataCase(dc)
-    case ec: CtEqualityCase  => visitCtEqualityCase(ec)
-    case ee: CtEqualityEmpty => visitCtEqualityEmpty(ee)
 
   def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
 
@@ -189,15 +187,6 @@ trait Visitor[C, R]:
           )
         }.toSeq: _*,
     )
-
-  def visitCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(ec.operand),
-      visitCaseTree(ec.body),
-    )
-
-  def visitCtEqualityEmpty(ee: CtEqualityEmpty)(using ctx: C)(using Σ: Signature): R =
-    visitVTerm(ee.operand)
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type                     => visitType(ty)
@@ -523,8 +512,6 @@ trait Transformer[C]:
       case r: CtRecord         => transformCtRecord(r)
       case tc: CtTypeCase      => transformCtTypeCase(tc)
       case dc: CtDataCase      => transformCtDataCase(dc)
-      case ec: CtEqualityCase  => transformCtEqualityCase(ec)
-      case ee: CtEqualityEmpty => transformCtEqualityEmpty(ee)
 
   def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature): CaseTree =
     CtTerm(transformCTerm(ct.term))
@@ -570,12 +557,6 @@ trait Transformer[C]:
         (name, withBindings(constructor.paramTys.map(_.name)) { body })
       },
     )
-
-  def transformCtEqualityCase(ec: CtEqualityCase)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtEqualityCase(transformVTerm(ec.operand), transformCaseTree(ec.body))
-
-  def transformCtEqualityEmpty(ee: CtEqualityEmpty)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtEqualityEmpty(transformVTerm(ee.operand))
 
   def transformCoPattern(q: CoPattern)(using ctx: C)(using Σ: Signature): CoPattern =
     q match

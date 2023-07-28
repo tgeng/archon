@@ -707,38 +707,10 @@ private def elaborateBody
                             case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
                               Left(UnificationFailure(unificationResult))
                         yield r
-
                       case (Left(e), _) => Left(e)
                     }
                     .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
-              // split equality type
-              // TODO: implement this part in split con
-              // case (_, (x: Var, PRefl(), _A: EqualityType)) =>
-              //   val (_Γ1, binding, _Γ2) = Γ.split(x)
-              //   assert(
-              //     binding.ty.weaken(_Γ2.size + 1, 0) == _A,
-              //     "these types should be identical because they are created by [intro]",
-              //   )
-              //   val EqualityType(_B, u, v) = binding.ty.asInstanceOf[EqualityType]
-              //   for
-              //     unificationResult <- unify(u, v, _B)(using _Γ1)
-              //     r <- unificationResult match
-              //       case UnificationResult.UYes(_Γ1, ρ, τ) =>
-              //         val ρ2 = ρ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
-              //         val τ2 = τ.toTermSubstitutor ⊎ Substitutor.id(_Γ2.size)
-              //         given Context = _Γ1 ++ _Γ2.subst(ρ.toTermSubstitutor)
-              //         for
-              //           problem <- subst(problem, ρ2)
-              //           case (_Σ, branch) <- split(
-              //             q̅.map(_.substTerm(ρ2)),
-              //             _C.subst(ρ2),
-              //             problem,
-              //           )
-              //         yield (_Σ, CtEqualityCase(x, branch.subst(τ2)))
-              //       case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
-              //         Left(UnificationFailure(unificationResult))
-              //   yield r
 
               // split empty
               case (_, (x: Var, PAbsurd(), _A)) =>

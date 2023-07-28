@@ -354,9 +354,9 @@ private def inferLevel
       Γ.resolve(r).ty match
         case Type(upperBound) => inferLevel(upperBound)
         case _                => Left(NotTypeError(tm))
-    case Collapse(cTm)                 => inferLevel(cTm)
-    case U(cty)                        => inferLevel(cty)
-    case DataType(qn, args)            => Right(Σ.getData(qn).ul.substLowers(args: _*))
+    case Collapse(cTm)      => inferLevel(cTm)
+    case U(cty)             => inferLevel(cty)
+    case DataType(qn, args) => Right(Σ.getData(qn).ul.substLowers(args: _*))
     case _: UsageType | _: EqDecidabilityType | _: EqDecidabilityLiteral | _: EffectsType |
       _: HeapType =>
       Right(ULevel.USimpleLevel(LevelLiteral(0)))
@@ -410,7 +410,7 @@ def inferType
           case Some(data) =>
             for usage <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
             yield (Type(tm), usage * UUnres)
-      case _: Con => throw IllegalArgumentException("cannot infer type")
+      case _: Con          => throw IllegalArgumentException("cannot infer type")
       case u: UsageLiteral => Right(UsageType(Some(u)), Usages.zero)
       case UsageCompound(_, operands) =>
         for
@@ -502,7 +502,17 @@ def checkType
           Σ.getConstructorOption(qn, name) match
             case None => Left(MissingConstructor(name, qn))
             case Some(con) =>
-              checkTypes(args, con.paramTys.substLowers(tArgs: _*)) >> ??? // TODO: check constructor tArgs are convertible with the one specified in DataType
+              val data = Σ.getData(qn)
+              val tParamArgs = tArgs.take(data.tParamTys.size)
+              val tIndexArgs = tArgs.drop(data.tParamTys.size)
+              for
+                r <- checkTypes(args, con.paramTys.substLowers(tParamArgs: _*))
+                _ <- checkSubsumptions(
+                  con.tArgs.map(_.substLowers(tParamArgs ++ args: _*)),
+                  tIndexArgs,
+                  data.tIndexTys.substLowers(tParamArgs: _*),
+                )(using CONVERSION)
+              yield r
         case _ => Left(ExpectDataType(ty))
     case Cell(heapKey, _) =>
       ty match
@@ -753,8 +763,8 @@ def checkType
       ty match
         case F(ty, _, usage) => checkType(v, ty).map(_ * usage)
         case _               => Left(ExpectFType(ty))
-    case l: Let     => checkLet(l, Some(ty)).map(_._2)
-    case h: Handler => checkHandler(h, Some(ty)).map(_._2)
+    case l: Let         => checkLet(l, Some(ty)).map(_._2)
+    case h: Handler     => checkHandler(h, Some(ty)).map(_._2)
     case h: HeapHandler => checkHeapHandler(h, Some(ty)).map(_._2)
     case _ =>
       for
@@ -770,6 +780,22 @@ enum CheckSubsumptionMode:
 import CheckSubsumptionMode.*
 
 given CheckSubsumptionMode = SUBSUMPTION
+
+def checkSubsumptions
+  (subs: List[VTerm], sups: List[VTerm], tys: Telescope)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Unit] =
+  (subs, sups, tys) match
+    case (Nil, Nil, Nil) => Right(())
+    case (sub :: subs, sup :: sups, ty :: tys) =>
+      for
+        _ <- checkSubsumption(sub, sup, Some(ty.ty))
+        _ <- checkSubsumptions(subs, sups, tys.substLowers(sub))
+      yield ()
+    case _ => throw IllegalArgumentException("length mismatch")
 
 /** @param ty
   *   can be [[None]] if `a` and `b` are types
@@ -1269,8 +1295,8 @@ private def deriveTypeInherentEqDecidability
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] = ty match
-  case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType |
-    _: LevelType | _: HeapType | _: CellType =>
+  case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType | _: LevelType |
+    _: HeapType | _: CellType =>
     Right(EqDecidabilityLiteral(EqDecidable))
   case Top(_, eqDecidability) => Right(eqDecidability)
   case _: Var | _: Collapse =>
