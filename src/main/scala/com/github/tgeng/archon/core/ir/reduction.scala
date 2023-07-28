@@ -343,7 +343,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 )(h.transformBoundName, h.handlersBoundNames),
               )
               run(input)
-      case AllocOp(heap, ty) =>
+      case AllocOp(heap, ty, value) =>
         heap.normalized match
           case Left(e) => Left(e)
           case Right(_: Var | _: Collapse) =>
@@ -355,7 +355,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                 val cell = Cell(heapKey, heapContent.size)
                 stack(heapHandlerIndex) = HeapHandler(
                   key,
-                  heapContent :+ None,
+                  heapContent :+ value,
                   input,
                 )(h.boundName)
                 run(Return(cell))
@@ -379,7 +379,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
                     ) =>
                     stack(heapHandlerIndex) = HeapHandler(
                       key,
-                      heapContent.updated(index, Some(value)),
+                      heapContent.updated(index, value),
                       input,
                     )(h.boundName)
                     run(Return(Cell(heapKey, index)))
@@ -395,12 +395,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
             stack(heapHandlerIndex) match
               case HeapHandler(_, heapContent, _) =>
-                heapContent(index) match
-                  case None =>
-                    Left(
-                      IrError.UninitializedCell(reconstructTermFromStack(pc)),
-                    )
-                  case Some(value) => run(Return(value))
+                Right(Return(heapContent(index)))
               case _ => throw IllegalStateException("corrupted heap key index")
           case _ => throw IllegalArgumentException("type error")
       case h @ HeapHandler(currentKey, heapContent, input) =>

@@ -712,7 +712,6 @@ trait Transformer[C]:
     CellType(
       transformVTerm(cellType.heap),
       transformVTerm(cellType.ty),
-      cellType.status,
     )(using cellType.sourceInfo)
 
   def transformCell(cell: Cell)(using ctx: C)(using Σ: Signature): VTerm = cell
@@ -860,6 +859,7 @@ trait Transformer[C]:
     AllocOp(
       transformVTerm(allocOp.heap),
       transformVTerm(allocOp.ty),
+      transformVTerm(allocOp.value),
     )(using allocOp.sourceInfo)
 
   def transformSetOp(setOp: SetOp)(using ctx: C)(using Σ: Signature): CTerm =

@@ -86,14 +86,6 @@ object ULevel:
       case (_, u: UωLevel) => u
       case (u, _)          => u
 
-enum CellStatus extends Comparable[CellStatus]:
-  case Initialized, Uninitialized
-
-  override def compareTo(that: CellStatus): Int =
-    if this == that then 0
-    else if this == CellStatus.Initialized then -1
-    else 1
-
 enum UsageOperation:
   case USum, UProd, UJoin
 
@@ -199,8 +191,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Heap(key: HeapKey)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Cell */
-  case CellType(heap: VTerm, ty: VTerm, status: CellStatus)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo) // , QualifiedNameOwner(CellQn)
+  case CellType(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** Internal only, created by [[CTerm.AllocOp]]
     */
@@ -236,7 +227,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case Level(literal, maxOperands)     => Level(literal, maxOperands)
       case HeapType()                      => HeapType()
       case Heap(key)                       => Heap(key)
-      case CellType(heap, ty, status)      => CellType(heap, ty, status)
+      case CellType(heap, ty)              => CellType(heap, ty)
       case Cell(heapKey, index)            => Cell(heapKey, index)
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
@@ -480,7 +471,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  case AllocOp(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case AllocOp(heap: VTerm, ty: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case SetOp(cell: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case HeapHandler
@@ -489,7 +480,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * during reduction to a fresh value.
         */
       key: Option[HeapKey],
-      heapContent: IndexedSeq[Option[VTerm]],
+      heapContent: IndexedSeq[VTerm],
 
       /** Note that the logic here should not expose the heap variable (i.e. `var 0`) through
         * existential types like (t: Type, x: t) where `t` can be `HeapType`. A syntax-based check
@@ -551,7 +542,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           h.transformBoundName,
           h.handlersBoundNames,
         )
-      case AllocOp(heap, ty)  => AllocOp(heap, ty)
+      case AllocOp(heap, ty, value)  => AllocOp(heap, ty, value)
       case SetOp(cell, value) => SetOp(cell, value)
       case GetOp(cell)        => GetOp(cell)
       case h @ HeapHandler(key, heapContent, input) =>

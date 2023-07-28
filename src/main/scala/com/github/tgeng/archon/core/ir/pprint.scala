@@ -371,9 +371,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using
       Σ: Signature,
     )
-    : Block = cellType.status match
-    case CellStatus.Initialized   => app("Cell", cellType.heap, cellType.ty)
-    case CellStatus.Uninitialized => app("UCell", cellType.heap, cellType.ty)
+    : Block = app("Cell", cellType.heap, cellType.ty)
 
   override def visitCell
     (cell: Cell)

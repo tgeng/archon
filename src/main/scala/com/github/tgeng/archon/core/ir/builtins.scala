@@ -507,12 +507,12 @@ object Builtins:
         binding(n"heap", HeapType()),
         binding(n"A", Type(Top(Var(1)))),
       ),
-      ty = F(Type(CellType(Var(1), Var(0), CellStatus.Initialized))),
+      ty = F(Type(CellType(Var(1), Var(0)))),
       clauses = List(
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(CellType(Var(1), Var(0), CellStatus.Initialized))),
+          rhs = Some(Return(CellType(Var(1), Var(0)))),
         ),
       ),
     ),
@@ -522,12 +522,12 @@ object Builtins:
         binding(n"heap", HeapType()),
         binding(n"A", Type(Top(Var(1)))),
       ),
-      ty = F(Type(CellType(Var(1), Var(0), CellStatus.Uninitialized))),
+      ty = F(Type(CellType(Var(1), Var(0)))),
       clauses = List(
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(CellType(Var(1), Var(0), CellStatus.Uninitialized))),
+          rhs = Some(Return(CellType(Var(1), Var(0)))),
         ),
       ),
     ),
@@ -536,13 +536,14 @@ object Builtins:
         binding(n"level", LevelType()),
         binding(n"heap", HeapType()),
         binding(n"A", Type(Top(Var(1)))),
+        binding(n"value", Var(0)),
       ),
-      ty = F(CellType(Var(1), Var(0), CellStatus.Uninitialized)),
+      ty = F(CellType(Var(2), Var(1))),
       clauses = List(
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(AllocOp(Var(1), Var(0))),
+          rhs = Some(AllocOp(Var(2), Var(1), Var(0))),
         ),
       ),
     ),
@@ -551,7 +552,7 @@ object Builtins:
         binding(n"level", LevelType()),
         binding(n"heap", HeapType()),
         binding(n"A", Type(Top(Var(1)))),
-        binding(n"cell", CellType(Var(1), Var(0), CellStatus.Initialized)),
+        binding(n"cell", CellType(Var(1), Var(0))),
       ),
       ty =
         F(Var(1), EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(2))))), UsageLiteral(UUnres)),
@@ -568,11 +569,11 @@ object Builtins:
         binding(n"level", LevelType()),
         binding(n"heap", HeapType()),
         binding(n"A", Type(Top(Var(1)))),
-        binding(n"cell", CellType(Var(1), Var(0), CellStatus.Uninitialized)),
+        binding(n"cell", CellType(Var(1), Var(0))),
         binding(n"value", Var(1)),
       ),
       ty = F(
-        CellType(Var(3), Var(2), CellStatus.Initialized),
+        CellType(Var(3), Var(2)),
         EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(3))))),
       ),
       clauses = List(

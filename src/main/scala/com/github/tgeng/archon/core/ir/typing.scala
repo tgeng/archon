@@ -360,8 +360,8 @@ private def inferLevel
     case _: UsageType | _: EqDecidabilityType | _: EqDecidabilityLiteral | _: EffectsType |
       _: HeapType =>
       Right(ULevel.USimpleLevel(LevelLiteral(0)))
-    case _: LevelType       => Right(ULevel.UωLevel(0))
-    case CellType(_, ty, _) => inferLevel(ty)
+    case _: LevelType    => Right(ULevel.UωLevel(0))
+    case CellType(_, ty) => inferLevel(ty)
     case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
 def inferType
@@ -451,7 +451,7 @@ def inferType
         yield (LevelType(), usages)
       case HeapType() => Right((Type(HeapType())), Usages.zero)
       case _: Heap    => Right(HeapType(), Usages.zero)
-      case cellType @ CellType(heap, ty, _) =>
+      case cellType @ CellType(heap, ty) =>
         for
           heapUsages <- checkType(heap, HeapType())
           case (tyTy, tyUsages) <- inferType(ty)
@@ -516,9 +516,9 @@ def checkType
         case _ => Left(ExpectDataType(ty))
     case Cell(heapKey, _) =>
       ty match
-        case CellType(heap, _, _) if Heap(heapKey) == heap => Right(Usages.zero)
-        case _: CellType                                   => Left(ExpectCellTypeWithHeap(heapKey))
-        case _                                             => Left(ExpectCellType(ty))
+        case CellType(heap, _) if Heap(heapKey) == heap => Right(Usages.zero)
+        case _: CellType                                => Left(ExpectCellTypeWithHeap(heapKey))
+        case _                                          => Left(ExpectCellType(ty))
     case _ =>
       for
         case (inferred, usages) <- inferType(tm)
@@ -700,26 +700,27 @@ def inferType
           "continuation is only created in reduction and hence should not be type checked.",
         )
       case h: Handler => checkHandler(h, None)
-      case AllocOp(heap, vTy) =>
+      case AllocOp(heap, vTy, value) =>
         for
           heapUsages <- checkType(heap, HeapType())
+          valueUsages <- checkType(value, vTy)
           _ <- checkIsType(vTy)
         yield (
           F(
-            CellType(heap, vTy, CellStatus.Uninitialized),
+            CellType(heap, vTy),
             EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
           ),
-          heapUsages,
+          heapUsages + valueUsages,
         )
       case SetOp(cell, value) =>
         for
           case (cellTy, cellUsages) <- inferType(cell)
           r <- cellTy match
-            case CellType(heap, vTy, _) =>
+            case CellType(heap, vTy) =>
               for valueUsages <- checkType(value, vTy)
               yield (
                 F(
-                  CellType(heap, vTy, CellStatus.Initialized),
+                  CellType(heap, vTy),
                   EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
                 ),
                 cellUsages + valueUsages,
@@ -730,15 +731,9 @@ def inferType
         for
           case (cellTy, cellUsages) <- inferType(cell)
           r <- cellTy match
-            case CellType(heap, vTy, status) if status == CellStatus.Initialized =>
-              Right(
-                F(
-                  vTy,
-                  EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
-                ),
-              )
-            case _: CellType => Left(UninitializedCell(tm))
-            case _           => Left(ExpectCell(cell))
+            case CellType(heap, vTy) =>
+              Right(F(vTy, EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil)))))
+            case _ => Left(ExpectCell(cell))
         yield (r, cellUsages)
       case h: HeapHandler => checkHeapHandler(h, None),
   )
@@ -900,18 +895,12 @@ def checkSubsumption
           case (UsageType(Some(_)), UsageType(None), _) if mode == SUBSUMPTION =>
             Right(())
           case (
-              CellType(heap1, ty1, status1),
-              CellType(heap2, ty2, status2),
+              CellType(heap1, ty1),
+              CellType(heap2, ty2),
               _,
             ) =>
             for r <- checkSubsumption(heap1, heap2, Some(HeapType())) >>
-                checkSubsumption(ty1, ty2, None)(using CONVERSION) >>
-                (if status1 == status2 || status1 == CellStatus.Initialized then Right(())
-                 else
-                   Left(
-                     NotVSubsumption(sub, sup, ty, mode),
-                   )
-                )
+                checkSubsumption(ty1, ty2, None)(using CONVERSION)
             yield r
           case (_, Heap(GlobalHeapKey), Some(HeapType())) if mode == SUBSUMPTION =>
             Right(())

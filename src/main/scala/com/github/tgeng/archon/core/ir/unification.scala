@@ -137,10 +137,8 @@ def unify
         unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
       case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
         unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
-      case (CellType(heap1, ty1, status1), CellType(heap2, ty2, status2), _)
-        if status1 == status2 =>
+      case (CellType(heap1, ty1), CellType(heap2, ty2), _) =>
         unifyAll(List(heap1, ty1), List(heap2, ty2), telescope(HeapType(), Type(ty1)))
-
       // stuck
       case (_: Collapse | _: Thunk, _, _) => Right(UUndecided(u, v, ty))
       case (_, _: Collapse | _: Thunk, _) => Right(UUndecided(u, v, ty))
