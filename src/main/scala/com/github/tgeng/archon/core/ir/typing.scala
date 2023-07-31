@@ -375,12 +375,12 @@ def inferType
     tm match
       case Type(upperBound) =>
         for case (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
-        yield (Type(tm), upperBoundUsages * UUnres)
+        yield (Type(tm), upperBoundUsages)
       case Top(ul, eqD) =>
         for
           ulUsage <- checkULevel(ul)
           eqDUsage <- checkType(eqD, EqDecidabilityType())
-        yield (Type(tm), (ulUsage + eqDUsage) * UUnres)
+        yield (Type(tm), (ulUsage + eqDUsage))
       case r: Var => Right((Γ.resolve(r).ty), Usages.single(r))
       case Collapse(cTm) =>
         for
@@ -400,7 +400,7 @@ def inferType
             case CType(_, _) | F(Type(_), _, _) =>
               Left(EffectfulCTermAsType(cty))
             case _ => Left(NotTypeError(tm))
-        yield (r, usage * UUnres)
+        yield (r, usage)
       case Thunk(c) =>
         for case (cty, usage) <- inferType(c)
         yield (U(cty), usage)
@@ -409,7 +409,7 @@ def inferType
           case None => Left(MissingDeclaration(qn))
           case Some(data) =>
             for usage <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
-            yield (Type(tm), usage * UUnres)
+            yield (Type(tm), usage)
       case _: Con          => throw IllegalArgumentException("cannot infer type")
       case u: UsageLiteral => Right(UsageType(Some(u)), Usages.zero)
       case UsageCompound(_, operands) =>
@@ -458,7 +458,7 @@ def inferType
           r <- tyTy match
             case Type(_) => Right(Type(cellType))
             case _       => Left(NotTypeError(ty))
-        yield (r, (heapUsages + tyUsages) * UUnres)
+        yield (r, (heapUsages + tyUsages))
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type"),
   )
 
@@ -570,13 +570,13 @@ def inferType
           case (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
         yield (
           CType(tm, Total),
-          (effUsages + upperBoundUsages) * UUnres,
+          (effUsages + upperBoundUsages),
         )
       case CTop(ul, effects) =>
         for
           uUsages <- checkType(effects, EffectsType())
           ulUsages <- checkULevel(ul)
-        yield (CType(tm, Total), (uUsages + ulUsages) * UUnres)
+        yield (CType(tm, Total), (uUsages + ulUsages))
       case Def(qn) =>
         Σ.getDefinitionOption(qn) match
           case None    => Left(MissingDeclaration(qn))
@@ -603,7 +603,7 @@ def inferType
           cTyTy <- vTyTy match
             case Type(_) => Right(CType(tm, Total))
             case _       => Left(NotTypeError(vTy))
-        yield (cTyTy, (effUsages + uUsages + vTyUsages) * UUnres)
+        yield (cTyTy, (effUsages + uUsages + vTyUsages))
       case Return(v) =>
         for case (vTy, vUsages) <- inferType(v)
         yield (F(vTy, Total), vUsages)
@@ -639,7 +639,7 @@ def inferType
                   case _ => Left(NotCTypeError(bodyTy))
               yield r
             case _ => Left(NotTypeError(binding.ty))
-        yield (funTyTy, (effUsages + tyUsages + bodyTyUsages) * UUnres)
+        yield (funTyTy, (effUsages + tyUsages + bodyTyUsages))
       case Application(fun, arg) =>
         for
           case (funTy, funUsages) <- inferType(fun)
@@ -661,7 +661,7 @@ def inferType
             for
               effUsages <- checkType(effects, EffectsType())
               argsUsages <- checkTypes(args, record.tParamTys.map(_._1).toList)
-            yield (CType(tm, Total), (effUsages + argsUsages) * UUnres)
+            yield (CType(tm, Total), (effUsages + argsUsages))
       case Projection(rec, name) =>
         for
           case (recTy, recUsages) <- inferType(rec)
@@ -1120,66 +1120,6 @@ private def simplifyLet
       yield r
     case _ => Right(t)
 }
-
-// private def checkInherentUsage
-//   (data: Data, constructor: Constructor)
-//   (using Σ: Signature)
-//   (using ctx: TypingContext)
-//   : Either[IrError, Unit] =
-//   data.inherentUsage match
-//     case UsageLiteral(U1) => Right(())
-//     case _ =>
-//       given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
-
-//       def checkTelescope
-//         (telescope: Telescope, dataInherentUsage: VTerm)
-//         (using Γ: Context)
-//         : Either[IrError, Unit] = telescope match
-//         case Nil => Right(())
-//         case (b @ Binding(ty, declaredUsage)) :: telescope =>
-//           for
-//             inherentUsage <- deriveTypeInherentUsage(ty)
-//             providedUsage = UsageProd(inherentUsage, declaredUsage)
-//             consumedUsage = UsageProd(
-//               inherentUsage,
-//               declaredUsage,
-//               dataInherentUsage,
-//             )
-//             _ <- checkSubsumption(
-//               providedUsage,
-//               consumedUsage,
-//               Some(UsageType(None)(using SiEmpty)),
-//             )(using SUBSUMPTION)
-//             _ <- checkTelescope(telescope, dataInherentUsage.weakened)(using Γ :+ b)
-//           yield ()
-//       checkTelescope(constructor.paramTys, data.inherentUsage)
-// end checkInherentUsage
-
-// private def deriveTypeInherentUsage
-//   (ty: VTerm)
-//   (using Γ: Context)
-//   (using Σ: Signature)
-//   (using ctx: TypingContext)
-//   : Either[IrError, VTerm] = ty match
-//   case _: LevelType => Right(UsageLiteral(U0))
-//   case _: Type | _: UsageType | _: EffectsType | _: HeapType | _: CellType =>
-//     Right(UsageLiteral(UUnres))
-//   case _: EqualityType => Right(UsageLiteral(U0))
-//   case _: U            => Right(UsageLiteral(U1))
-//   case Top(_, u, _)    => Right(u)
-//   case _: Var | _: Collapse =>
-//     for
-//       case (tyTy, _) <- inferType(ty)
-//       r <- tyTy match
-//         case Type(upperBound) => deriveTypeInherentUsage(upperBound)
-//         case _                => Left(ExpectVType(ty))
-//     yield r
-//   case d: DataType =>
-//     Σ.getDataOption(d.qn) match
-//       case Some(data) => Right(data.inherentUsage.substLowers(d.args: _*))
-//       case _          => Left(MissingDeclaration(d.qn))
-//   case _ => Left(ExpectVType(ty))
-// end deriveTypeInherentUsage
 
 private def checkInherentEqDecidable
   (data: Data, constructor: Constructor)
