@@ -242,7 +242,7 @@ def checkDef
   ctx.trace(s"checking def signature ${definition.qn}") {
     given Context = IndexedSeq()
 
-    checkIsCType(definition.ty)
+    checkIsCType(definition.ty) >> Right(())
   }
 
 def checkClause
@@ -444,7 +444,7 @@ def inferType
           (operands, operandsUsages) <- transposeCheckTypeResults(
             operands.map { ref => checkType(ref, EffectsType()) }.toList,
           )
-          newTm = Effects(literal, operands.toSet)(using tm.sourceInfo)
+          newTm: Effects = Effects(literal, operands.toSet)(using tm.sourceInfo)
           usage <- getEffectsContinuationUsage(newTm)
         yield (
           newTm,
@@ -505,7 +505,7 @@ def checkType
     case Collapse(c) => checkType(c, F(ty)).map((tm, usages) => (Collapse(tm), usages))
     case Thunk(c) =>
       ty match
-        case U(cty) => checkType(c, cty)
+        case U(cty) => checkType(c, cty).map((tm, usages) => (Thunk(tm), usages))
         case _      => Left(ExpectUType(ty))
     case Con(name, args) =>
       ty match
@@ -517,24 +517,24 @@ def checkType
               val tParamArgs = tArgs.take(data.tParamTys.size)
               val tIndexArgs = tArgs.drop(data.tParamTys.size)
               for
-                r <- checkTypes(args, con.paramTys.substLowers(tParamArgs: _*))
+                (args, usages) <- checkTypes(args, con.paramTys.substLowers(tParamArgs: _*))
                 _ <- checkSubsumptions(
                   con.tArgs.map(_.substLowers(tParamArgs ++ args: _*)),
                   tIndexArgs,
                   data.tIndexTys.substLowers(tParamArgs: _*),
                 )(using CONVERSION)
-              yield r
+              yield (DataType(qn, args), usages)
         case _ => Left(ExpectDataType(ty))
     case Cell(heapKey, _) =>
       ty match
-        case CellType(heap, _) if Heap(heapKey) == heap => Right(Usages.zero)
+        case CellType(heap, _) if Heap(heapKey) == heap => Right(tm, Usages.zero)
         case _: CellType                                => Left(ExpectCellTypeWithHeap(heapKey))
         case _                                          => Left(ExpectCellType(ty))
     case _ =>
       for
-        case (inferred, usages) <- inferType(tm)
+        case (newTm, inferred, usages) <- inferType(tm)
         _ <- checkSubsumption(inferred, ty, None)
-      yield usages,
+      yield (newTm, usages)
 )
 
 // Precondition: tm is already type-checked
@@ -778,20 +778,20 @@ def checkType
   tm,
   ty,
   tm match
-    case Force(v) => checkType(v, U(ty))
+    case Force(v) => checkType(v, U(ty)).map((v, usages) => (Force(v), usages))
     case Return(v) =>
       ty match
-        case F(ty, _, usage) => checkType(v, ty).map(_ * usage)
+        case F(ty, _, usage) => checkType(v, ty).map((v, usages) => (Return(v), usages * usage))
         case _               => Left(ExpectFType(ty))
-    case l: Let         => checkLet(l, Some(ty)).map(_._2)
-    case h: Handler     => checkHandler(h, Some(ty)).map(_._2)
-    case h: HeapHandler => checkHeapHandler(h, Some(ty)).map(_._2)
+    case l: Let         => checkLet(l, Some(ty)).map((v, _, usages) => (v, usages))
+    case h: Handler     => checkHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
+    case h: HeapHandler => checkHeapHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
     case _ =>
       for
-        case (tmTy, usages) <- inferType(tm)
+        case (tm, tmTy, usages) <- inferType(tm)
         ty <- reduceCType(ty)
         _ <- checkSubsumption(tmTy, ty, None)
-      yield usages,
+      yield (tm, usages)
 )
 
 enum CheckSubsumptionMode:
@@ -1029,8 +1029,8 @@ def checkSubsumption
             checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
         case (Application(fun1, arg1), Application(fun2, arg2), _) =>
           for
-            case (fun1Ty, _) <- inferType(fun1)
-            case (fun2Ty, _) <- inferType(fun2)
+            case (fun1, fun1Ty, _) <- inferType(fun1)
+            case (fun2, fun2Ty, _) <- inferType(fun2)
             _ <- checkSubsumption(fun1Ty, fun2Ty, None)(using CONVERSION)
             _ <- checkSubsumption(fun1, fun2, Some(fun1Ty))(using CONVERSION)
             r <- fun1Ty match
@@ -1082,8 +1082,8 @@ def checkSubsumption
                 )
         case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
           for
-            case (rec1Ty, _) <- inferType(rec1)
-            case (rec2Ty, _) <- inferType(rec2)
+            case (rec1, rec1Ty, _) <- inferType(rec1)
+            case (rec2, rec2Ty, _) <- inferType(rec2)
             r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
           yield r
         case (
@@ -1255,7 +1255,7 @@ private def deriveTypeInherentEqDecidability
   case Top(_, eqDecidability) => Right(eqDecidability)
   case _: Var | _: Collapse =>
     for
-      case (tyTy, _) <- inferType(ty)
+      case (ty, tyTy, _) <- inferType(ty)
       r <- tyTy match
         case Type(upperBound) => deriveTypeInherentEqDecidability(upperBound)
         case _                => Left(ExpectVType(ty))
@@ -1579,7 +1579,7 @@ private def checkLet
                   case _ =>
                     throw IllegalStateException(s"expect to be of Effects type: $tm")
               yield (
-                Let(t, Some(tTy), body),
+                Let(t, Some(tTy), body)(tm.boundName)(using tm.sourceInfo),
                 bodyTy.strengthened,
                 usagesInBody
                   .dropRight(1) // drop this binding
@@ -1849,7 +1849,7 @@ def checkHeapHandler
   given Context = Γ :+ heapVarBinding
 
   for
-    case (inputCTy, inputUsages) <- inputTy match
+    case (input, inputCTy, inputUsages) <- inputTy match
       case None          => inferType(input)
       case Some(inputTy) => checkType(input, inputTy).map((inputTy, _))
     r <- inputCTy match
@@ -1876,7 +1876,7 @@ def checkHeapHandler
             case _ => eff
         yield F(inputTy.strengthened, outputEff)
       case _ => Left(ExpectFType(inputCTy))
-  yield (r, inputUsages)
+  yield (input, r, inputUsages)
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[ULevel] = None)
@@ -1905,11 +1905,11 @@ def checkIsCType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, CTerm] =
   ctx.trace("checking is C type") {
     for
-      case (cTyTy, _) <- inferType(cTy)
-      r <- cTyTy match
+      case (cty, cTyTy, _) <- inferType(cTy)
+      _ <- cTyTy match
         case CType(_, eff) if eff == Total =>
           levelBound match
             case Some(bound) =>
@@ -1920,7 +1920,7 @@ def checkIsCType
             case _ => Right(())
         case _: CType => Left(EffectfulCTermAsType(cTy))
         case _        => Left(NotCTypeError(cTy))
-    yield r
+    yield cty
   }
 
 def reduceUsage
@@ -1950,7 +1950,7 @@ def reduceVType
   : Either[IrError, VTerm] =
   ctx.trace("reduce V type", Block(yellow(vTy.sourceInfo), pprint(vTy))) {
     for
-      case (tyTy, _) <- inferType(vTy)
+      case (vTy, tyTy, _) <- inferType(vTy)
       r <- tyTy match
         case F(Type(_), effect, _) if effect == Total =>
           for
@@ -1979,7 +1979,7 @@ def reduceCType
         Right(cTy)
       case _ =>
         for
-          case (cTyTy, _) <- inferType(cTy)
+          case (cTy, cTyTy, _) <- inferType(cTy)
           r <- cTyTy match
             case CType(_, eff) if eff == Total => reduce(cTy)
             case F(_, eff, _) if eff == Total =>
