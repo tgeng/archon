@@ -249,7 +249,7 @@ def checkClause
   (qn: QualifiedName, clause: Clause)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] = ctx.trace(s"checking def clause $qn") {
+  : Either[IrError, Clause] = ctx.trace(s"checking def clause $qn") {
   val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
     case (Some(f), p) =>
       p.toElimination match
@@ -259,16 +259,15 @@ def checkClause
     case (None, _) => None
   }
   lhs match
-    case None => Right(()) // skip checking absurd clauses
+    case None => Right(clause) // skip checking absurd clauses
     case Some(lhs) =>
       given Context = clause.bindings
-
       for
-        lhsUsages <- checkType(lhs, clause.ty)
+        (_, lhsUsages) <- checkType(lhs, clause.ty)
         _ <- checkUsagesSubsumption(lhsUsages, true)
-        rhsUsages <- checkType(clause.rhs, clause.ty)
+        (rhs, rhsUsages) <- checkType(clause.rhs, clause.ty)
         _ <- checkUsagesSubsumption(rhsUsages)
-      yield ()
+      yield clause.copy(rhs = rhs)
 }
 
 def checkEffect
@@ -298,7 +297,7 @@ def checkOperation
         val Γ = effect.tParamTys.toIndexedSeq
 
         checkParameterTypeDeclarations(operation.paramTys)(using Γ) >>
-          checkIsType(operation.resultTy)(using Γ ++ operation.paramTys)
+          checkIsType(operation.resultTy)(using Γ ++ operation.paramTys) >> Right(())
   }
 
 private def checkTParamsAreUnrestricted
@@ -336,9 +335,10 @@ private def checkULevel
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Usages] = ul match
-  case ULevel.USimpleLevel(l) => checkType(l, LevelType())
-  case ULevel.UωLevel(_)      => Right(Usages.zero)
+  : Either[IrError, (ULevel, Usages)] = ul match
+  case ULevel.USimpleLevel(l) =>
+    checkType(l, LevelType()).map((l, usages) => (ULevel.USimpleLevel(l), usages))
+  case ULevel.UωLevel(_) => Right(ul, Usages.zero)
 
 // Precondition: tm is already type-checked
 private def inferLevel
@@ -369,96 +369,107 @@ def inferType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (VTerm, Usages)] =
+  : Either[IrError, (VTerm, VTerm, Usages)] =
   debugInfer(
     tm,
     tm match
       case Type(upperBound) =>
-        for case (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
-        yield (Type(tm), upperBoundUsages)
+        for
+          case (upperBound, _, upperBoundUsages) <- inferType(upperBound)
+          newTm = Type(upperBound)(using tm.sourceInfo)
+        yield (newTm, Type(newTm), upperBoundUsages)
       case Top(ul, eqD) =>
         for
-          ulUsage <- checkULevel(ul)
-          eqDUsage <- checkType(eqD, EqDecidabilityType())
-        yield (Type(tm), (ulUsage + eqDUsage))
-      case r: Var => Right((Γ.resolve(r).ty), Usages.single(r))
+          (ul, ulUsage) <- checkULevel(ul)
+          (eqD, eqDUsage) <- checkType(eqD, EqDecidabilityType())
+          newTm = Top(ul, eqD)(using tm.sourceInfo)
+        yield (newTm, Type(newTm), (ulUsage + eqDUsage))
+      case r: Var => Right(r, Γ.resolve(r).ty, Usages.single(r))
       case Collapse(cTm) =>
         for
-          case (cTy, usage) <- inferType(cTm)
+          case (cTm, cTy, usage) <- inferType(cTm)
           case (vTy, u) <- cTy match
             case F(vTy, eff, u) if eff == Total => Right((vTy, u))
             case F(_, _, _)                     => Left(CollapsingEffectfulTerm(cTm))
             case _                              => Left(NotCollapsable(cTm))
-        yield (vTy, usage)
+        yield (Collapse(cTm), vTy, usage)
       case U(cty) =>
         for
-          case (ctyTy, usage) <- inferType(cty)
+          case (cty, ctyTy, usage) <- inferType(cty)
+          newTm = Collapse(cty)(using tm.sourceInfo)
           r <- ctyTy match
-            case CType(_, eff) if eff == Total => Right(Type(tm))
+            case CType(_, eff) if eff == Total => Right(Type(newTm))
             // Automatically promote SomeVType to F(SomeVType)
-            case F(Type(_), eff, _) if eff == Total => Right(Type(tm))
+            case F(Type(_), eff, _) if eff == Total => Right(Type(newTm))
             case CType(_, _) | F(Type(_), _, _) =>
               Left(EffectfulCTermAsType(cty))
             case _ => Left(NotTypeError(tm))
-        yield (r, usage)
+        yield (newTm, r, usage)
       case Thunk(c) =>
-        for case (cty, usage) <- inferType(c)
-        yield (U(cty), usage)
+        for case (c, cty, usage) <- inferType(c)
+        yield (Thunk(c), U(cty), usage)
       case DataType(qn, args) =>
         Σ.getDataOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(data) =>
-            for usage <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
-            yield (Type(tm), usage)
+            for
+              (args, usage) <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
+              newTm = DataType(qn, args)(using tm.sourceInfo)
+            yield (newTm, Type(newTm), usage)
       case _: Con          => throw IllegalArgumentException("cannot infer type")
-      case u: UsageLiteral => Right(UsageType(Some(u)), Usages.zero)
-      case UsageCompound(_, operands) =>
+      case u: UsageLiteral => Right(u, UsageType(Some(u)), Usages.zero)
+      case UsageCompound(op, operands) =>
         for
-          usagesSeq <- transpose(
+          (operands, usages) <- transposeCheckTypeResults(
             operands.multiToSeq.map(o => checkType(o, UsageType(None))),
           )
-          usages = usagesSeq.reduce(_ + _)
-          bound <- tm.normalized match
+          newTm = UsageCompound(op, operands.toMultiset)(using tm.sourceInfo)
+          bound <- newTm.normalized match
             case Right(u) => Right(Some(u))
             case _        => Right(None)
-        yield (UsageType(bound), usages)
-      case u: UsageType             => Right(Type(u), Usages.zero)
-      case eqD: EqDecidabilityType  => Right(Type(eqD), Usages.zero)
-      case _: EqDecidabilityLiteral => Right(EqDecidabilityType(), Usages.zero)
-      case e: EffectsType           => Right(Type(e), Usages.zero)
-      case eff @ Effects(literal, operands) =>
+        yield (newTm, UsageType(bound), usages)
+      case u: UsageType               => Right(u, Type(u), Usages.zero)
+      case eqD: EqDecidabilityType    => Right(eqD, Type(eqD), Usages.zero)
+      case eqD: EqDecidabilityLiteral => Right(eqD, EqDecidabilityType(), Usages.zero)
+      case e: EffectsType             => Right(e, Type(e), Usages.zero)
+      case Effects(literal, operands) =>
         for
-          literalUsages <- transpose(
+          (_, literalUsages) <- transposeCheckTypeResults(
             literal.map { (qn, args) =>
               Σ.getEffectOption(qn) match
                 case None         => Left(MissingDeclaration(qn))
                 case Some(effect) => checkTypes(args, effect.tParamTys.toList)
             },
-          ).map(_.reduce(_ + _))
-          operandsUsages <- transpose(
+          )
+          (operands, operandsUsages) <- transposeCheckTypeResults(
             operands.map { ref => checkType(ref, EffectsType()) }.toList,
-          ).map(_.reduce(_ + _))
-          usage <- getEffectsContinuationUsage(eff)
+          )
+          newTm = Effects(literal, operands.toSet)(using tm.sourceInfo)
+          usage <- getEffectsContinuationUsage(newTm)
         yield (
+          newTm,
           EffectsType(usage),
           literalUsages + operandsUsages,
         )
-      case LevelType() => Right((Type(LevelType())), Usages.zero)
-      case Level(_, maxOperands) =>
-        for usages <- transpose(maxOperands.map { (ref, _) =>
-            checkType(ref, LevelType())
-          }.toList).map(_.reduce(_ + _))
-        yield (LevelType(), usages)
-      case HeapType() => Right((Type(HeapType())), Usages.zero)
-      case _: Heap    => Right(HeapType(), Usages.zero)
-      case cellType @ CellType(heap, ty) =>
+      case LevelType() => Right(LevelType(), (Type(LevelType())), Usages.zero)
+      case Level(op, maxOperands) =>
         for
-          heapUsages <- checkType(heap, HeapType())
-          case (tyTy, tyUsages) <- inferType(ty)
+          (operands, usages) <- transposeCheckTypeResults(maxOperands.map { (ref, _) =>
+            checkType(ref, LevelType())
+          })
+          newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
+        yield (newTm, LevelType(), usages)
+      case HeapType() => Right(HeapType(), (Type(HeapType())), Usages.zero)
+      case h: Heap    => Right(h, HeapType(), Usages.zero)
+      case CellType(heap, ty) =>
+        for
+          (heap, heapUsages) <- checkType(heap, HeapType())
+          case (ty, tyTy, tyUsages) <- inferType(ty)
+          newTm = CellType(heap, ty)(using tm.sourceInfo)
           r <- tyTy match
-            case Type(_) => Right(Type(cellType))
+            case Type(_) => Right(Type(newTm))
             case _       => Left(NotTypeError(ty))
-        yield (r, (heapUsages + tyUsages))
+        yield (newTm, r, (heapUsages + tyUsages))
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type"),
   )
 
@@ -487,11 +498,11 @@ def checkType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Usages] = debugCheck(
+  : Either[IrError, (VTerm, Usages)] = debugCheck(
   tm,
   ty,
   tm match
-    case Collapse(c) => checkType(c, F(ty))
+    case Collapse(c) => checkType(c, F(ty)).map((tm, usages) => (Collapse(tm), usages))
     case Thunk(c) =>
       ty match
         case U(cty) => checkType(c, cty)
@@ -556,7 +567,7 @@ def inferType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (CTerm, Usages)] =
+  : Either[IrError, (CTerm, CTerm, Usages)] =
   debugInfer(
     tm,
     tm match
@@ -566,24 +577,26 @@ def inferType
         )
       case CType(upperBound, effects) =>
         for
-          effUsages <- checkType(effects, EffectsType())
-          case (upperBoundTy, upperBoundUsages) <- inferType(upperBound)
+          (effects, effUsages) <- checkType(effects, EffectsType())
+          (upperBound, upperBoundTy, upperBoundUsages) <- inferType(upperBound)
         yield (
+          CType(upperBound, effects),
           CType(tm, Total),
           (effUsages + upperBoundUsages),
         )
       case CTop(ul, effects) =>
         for
-          uUsages <- checkType(effects, EffectsType())
-          ulUsages <- checkULevel(ul)
-        yield (CType(tm, Total), (uUsages + ulUsages))
-      case Def(qn) =>
+          (effects, uUsages) <- checkType(effects, EffectsType())
+          (ul, ulUsages) <- checkULevel(ul)
+          newTm = CTop(ul, effects)(using tm.sourceInfo)
+        yield (newTm, CType(newTm, Total), (uUsages + ulUsages))
+      case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
-          case None    => Left(MissingDeclaration(qn))
-          case Some(d) => Right((d.ty, Usages.zero))
+          case None             => Left(MissingDeclaration(qn))
+          case Some(definition) => Right((d, definition.ty, Usages.zero))
       case Force(v) =>
         for
-          case (vTy, vUsages) <- inferType(v)
+          (v, vTy, vUsages) <- inferType(v)
           cTy <- vTy match
             // TODO: think about whether this is good enough.
             // Annotating all force as maybe-divergent because the computations may be dynamically
@@ -592,30 +605,33 @@ def inferType
             // complicated to somehow tracking possible call-hierarchy.
             case U(cty) => Right(augmentEffect(MaybeDiv, cty))
             case _      => Left(ExpectUType(vTy))
-        yield (cTy, vUsages)
+        yield (Force(v), cTy, vUsages)
       case F(vTy, effects, usage) =>
         for
-          effUsages <- checkType(effects, EffectsType())
-          uUsages <- checkType(usage, UsageType(None))
+          (effects, effUsages) <- checkType(effects, EffectsType())
+          (usage, uUsages) <- checkType(usage, UsageType(None))
           // Prevent returning value of U0 usage, which does not make sense.
           _ <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
-          case (vTyTy, vTyUsages) <- inferType(vTy)
+          case (vTy, vTyTy, vTyUsages) <- inferType(vTy)
+          newTm = F(vTy, effects, usage)(using tm.sourceInfo)
           cTyTy <- vTyTy match
-            case Type(_) => Right(CType(tm, Total))
+            case Type(_) => Right(CType(newTm, Total))
             case _       => Left(NotTypeError(vTy))
-        yield (cTyTy, (effUsages + uUsages + vTyUsages))
+        yield (newTm, cTyTy, (effUsages + uUsages + vTyUsages))
       case Return(v) =>
-        for case (vTy, vUsages) <- inferType(v)
-        yield (F(vTy, Total), vUsages)
+        for case (v, vTy, vUsages) <- inferType(v)
+        yield (Return(v), F(vTy, Total), vUsages)
       case tm: Let => checkLet(tm, None)
       case FunctionType(binding, bodyTy, effects) =>
         for
-          effUsages <- checkType(effects, EffectsType())
-          case (tyTy, tyUsages) <- inferType(binding.ty)
-          case (funTyTy, bodyTyUsages) <- tyTy match
+          (effects, effUsages) <- checkType(effects, EffectsType())
+          (ty, tyTy, tyUsages) <- inferType(binding.ty)
+          (bindingUsage, bindingUsageUsages) <- checkType(binding.usage, UsageType(None))
+          (newTm, funTyTy, bodyTyUsages) <- tyTy match
             case Type(_) =>
               for
-                case (bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using Γ :+ binding)
+                (bodyTy, bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using Γ :+ binding)
+                newTm = FunctionType(Binding(ty, bindingUsage)(binding.name), bodyTy, effects)(using tm.sourceInfo)
                 r <- bodyTyTy match
                   case CType(_, eff) if eff == Total =>
                     // Strengthen is safe here because if it references the binding, then the
@@ -623,7 +639,8 @@ def inferType
                     // Also, there is no need to check the dropped usage because usages in types
                     // is always multiplied by U0.
                     Right(
-                      CType(tm, Total),
+                      newTm,
+                      CType(newTm, Total),
                       bodyTyUsages.dropRight(1).map(_.strengthened),
                     )
                   // TODO[P3]: think about whether the following is actually desirable
@@ -631,7 +648,8 @@ def inferType
                   // inference.
                   case F(Type(_), eff, _) if eff == Total =>
                     Right(
-                      CType(tm, Total),
+                      newTm,
+                      CType(newTm, Total),
                       bodyTyUsages.dropRight(1).map(_.strengthened),
                     )
                   case CType(_, _) | F(Type(_), _, _) =>
@@ -639,16 +657,17 @@ def inferType
                   case _ => Left(NotCTypeError(bodyTy))
               yield r
             case _ => Left(NotTypeError(binding.ty))
-        yield (funTyTy, (effUsages + tyUsages + bodyTyUsages))
+        yield (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
       case Application(fun, arg) =>
         for
-          case (funTy, funUsages) <- inferType(fun)
+          case (fun, funTy, funUsages) <- inferType(fun)
           r <- funTy match
             case FunctionType(binding, bodyTy, effects) =>
               for
-                argUsages <- checkType(arg, binding.ty)
+                (arg, argUsages) <- checkType(arg, binding.ty)
                 bodyTy <- reduceCType(bodyTy.substLowers(arg))
               yield (
+                Application(fun, arg),
                 augmentEffect(effects, bodyTy),
                 funUsages + argUsages * binding.usage,
               )
@@ -659,12 +678,13 @@ def inferType
           case None => Left(MissingDeclaration(qn))
           case Some(record) =>
             for
-              effUsages <- checkType(effects, EffectsType())
-              argsUsages <- checkTypes(args, record.tParamTys.map(_._1).toList)
-            yield (CType(tm, Total), (effUsages + argsUsages))
+              (effects, effUsages) <- checkType(effects, EffectsType())
+              (args, argsUsages) <- checkTypes(args, record.tParamTys.map(_._1).toList)
+            yield (RecordType(qn, args, effects), CType(tm, Total), (effUsages + argsUsages))
       case Projection(rec, name) =>
         for
-          case (recTy, recUsages) <- inferType(rec)
+          (rec, recTy, recUsages) <- inferType(rec)
+          newTm = Projection(rec, name)(using tm.sourceInfo)
           ty <- recTy match
             case RecordType(qn, args, effects) =>
               Σ.getFieldOption(qn, name) match
@@ -672,8 +692,8 @@ def inferType
                 case Some(f) =>
                   Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(rec): _*)))
             case _ => Left(ExpectRecord(rec))
-        yield (ty, recUsages)
-      case OperationCall(eff @ (qn, tArgs), name, args) =>
+        yield (newTm, ty, recUsages)
+      case OperationCall((qn, tArgs), name, args) =>
         Σ.getEffectOption(qn) match
           case None => Left(MissingDeclaration(qn))
           case Some(effect) =>
@@ -681,16 +701,19 @@ def inferType
               case None => Left(MissingDefinition(qn))
               case Some(op) =>
                 for
-                  effUsages <- checkTypes(tArgs, effect.tParamTys.toList)
-                  argsUsages <- checkTypes(args, op.paramTys.substLowers(tArgs: _*))
+                  (tArgs, effUsages) <- checkTypes(tArgs, effect.tParamTys.toList)
+                  (args, argsUsages) <- checkTypes(args, op.paramTys.substLowers(tArgs: _*))
+                  newEff = (qn, tArgs)
+                  newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
                 yield (
+                  newTm,
                   F(
                     op.resultTy.substLowers(tArgs ++ args: _*),
                     // TODO[p4]: figure out if there is way to better manage divergence for handler
                     // operations. The dynamic nature of handler dispatching makes it impossible to
                     // know at compile time whether this would lead to a cyclic reference in
                     // computations.
-                    EffectsLiteral(Set(eff, (Builtins.MaybeDivQn, Nil))),
+                    EffectsLiteral(Set(newEff, (Builtins.MaybeDivQn, Nil))),
                   ),
                   effUsages + argsUsages,
                 )
@@ -702,10 +725,11 @@ def inferType
       case h: Handler => checkHandler(h, None)
       case AllocOp(heap, vTy, value) =>
         for
-          heapUsages <- checkType(heap, HeapType())
-          valueUsages <- checkType(value, vTy)
-          _ <- checkIsType(vTy)
+          (heap, heapUsages) <- checkType(heap, HeapType())
+          (value, valueUsages) <- checkType(value, vTy)
+          vTy <- checkIsType(vTy)
         yield (
+          AllocOp(heap, vTy, value),
           F(
             CellType(heap, vTy),
             EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
@@ -714,11 +738,12 @@ def inferType
         )
       case SetOp(cell, value) =>
         for
-          case (cellTy, cellUsages) <- inferType(cell)
+          (cell, cellTy, cellUsages) <- inferType(cell)
           r <- cellTy match
             case CellType(heap, vTy) =>
-              for valueUsages <- checkType(value, vTy)
+              for (value, valueUsages) <- checkType(value, vTy)
               yield (
+                SetOp(cell, value),
                 F(
                   CellType(heap, vTy),
                   EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
@@ -729,12 +754,12 @@ def inferType
         yield r
       case GetOp(cell) =>
         for
-          case (cellTy, cellUsages) <- inferType(cell)
+          case (cell, cellTy, cellUsages) <- inferType(cell)
           r <- cellTy match
             case CellType(heap, vTy) =>
               Right(F(vTy, EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil)))))
             case _ => Left(ExpectCell(cell))
-        yield (r, cellUsages)
+        yield (GetOp(cell), r, cellUsages)
       case h: HeapHandler => checkHeapHandler(h, None),
   )
 
@@ -749,7 +774,7 @@ def checkType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Usages] = debugCheck(
+  : Either[IrError, (CTerm, Usages)] = debugCheck(
   tm,
   ty,
   tm match
@@ -1448,36 +1473,45 @@ def checkTypes
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Usages] =
+  : Either[IrError, (List[VTerm], Usages)] =
   ctx.trace("checking multiple terms") {
     if tms.length != tys.length then Left(TelescopeLengthMismatch(tms, tys))
     else
-      transpose(
+      transposeCheckTypeResults(
         tms.zip(tys).zipWithIndex.map { case ((tm, binding), index) =>
           checkType(tm, binding.ty.substLowers(tms.take(index): _*))
         },
-      ).map(_.reduce(_ + _))
+      )
   }
+
+private def transposeCheckTypeResults[R]
+  (
+    resultsAndUsages: Iterable[Either[IrError, (R, Usages)]],
+  )
+  : Either[IrError, (List[R], Usages)] =
+  transpose(resultsAndUsages).map(resultsAndUsages =>
+    (resultsAndUsages.map(_._1).toList, resultsAndUsages.map(_._2).reduce(_ + _)),
+  )
 
 private def checkLet
   (tm: Let, bodyTy: Option[CTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (CTerm, Usages)] =
+  : Either[IrError, (CTerm, CTerm, Usages)] =
   val t = tm.t
   val ty = tm.ty
   val body = tm.ctx
   for
-    case (tTy, tUsages) <- ty match
+    case (t, tTy, tUsages) <- ty match
       case None     => inferType(t)
-      case Some(ty) => checkType(t, ty).map((ty, _))
+      case Some(ty) => checkType(t, ty).map((t, usages) => (t, ty, usages))
     r <- tTy match
       case F(ty, effects, tyUsage) =>
         for
           effects <- effects.normalized
           tUsages <- transpose(tUsages.map(_.normalized))
-          (bodyTy, usages) <-
+          (newTm, bodyTy, usages) <-
             // If some usages are not zero or unres, inlining `t` would change usage checking
             // result because
             //
@@ -1514,17 +1548,18 @@ private def checkLet
                   case Return(v) => body.substLowers(v)
                   case c         => body.substLowers(Collapse(c))
                 r <- bodyTy match
-                  case Some(bodyTy) => checkType(newBody, bodyTy).map(u => (bodyTy, u))
-                  case None         => inferType(newBody)
+                  case Some(bodyTy) =>
+                    checkType(newBody, bodyTy).map((newBody, usages) => (newBody, bodyTy, usages))
+                  case None => inferType(newBody)
               yield r
             // Otherwise, just add the binding to the context and continue type checking.
             else
               for
-                case (bodyTy, usagesInBody) <- bodyTy match
+                case (body, bodyTy, usagesInBody) <- bodyTy match
                   case None => inferType(body)(using Γ :+ Binding(ty, tyUsage)(gn"v"))
                   case Some(bodyTy) =>
                     checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, tyUsage)(gn"v"))
-                      .map((bodyTy, _))
+                      .map((body, usages) => (body, bodyTy, usages))
                 // Report an error if the type of `body` needs to reference the effectful
                 // computation. User should use a dependent sum type to wrap such
                 // references manually to avoid the leak.
@@ -1544,13 +1579,14 @@ private def checkLet
                   case _ =>
                     throw IllegalStateException(s"expect to be of Effects type: $tm")
               yield (
+                Let(t, Some(tTy), body),
                 bodyTy.strengthened,
                 usagesInBody
                   .dropRight(1) // drop this binding
                   .map(_.strengthened) *
                   (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
               )
-        yield (augmentEffect(effects, bodyTy), usages)
+        yield (newTm, augmentEffect(effects, bodyTy), usages)
       case _ => Left(ExpectFType(tTy))
   yield r
 
@@ -1559,7 +1595,7 @@ def checkHandler
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (CTerm, Usages)] =
+  : Either[IrError, (CTerm, CTerm, Usages)] =
   val eff = h.eff
   val parameter = h.parameter
   val parameterBinding = h.parameterBinding
@@ -1599,30 +1635,33 @@ def checkHandler
     effs <- eff match
       case Effects(effs, s) if s.isEmpty => Right(effs)
       case _                             => Left(EffectTermToComplex(eff))
-    effUsages <- checkType(eff, EffectsType())
-    singleParameterUsages <- checkType(parameter, parameterBinding.ty)
-    parameterUsages = singleParameterUsages * parameterBinding.usage
-    _ <- parameterReplicator match
+    (eff, effUsages) <- checkType(eff, EffectsType())
+    parameterBindingTy <- checkIsType(parameterBinding.ty)
+    (parameterBindingUsage, _) <- checkType(parameterBinding.usage, UsageType(None))
+    newParameterBinding = Binding(parameterBindingTy, parameterBindingUsage)(parameterBinding.name)
+    (parameter, singleParameterUsages) <- checkType(parameter, parameterBindingTy)
+    parameterUsages = singleParameterUsages * parameterBindingUsage
+    (outputEffects, _) <- parameterReplicator match
       case Some(_) => checkType(outputEffects, EffectsType())
       // parameterReplicator is not specified, in this case, the outputEffects must not be
       // re-entrant.
       case None => checkType(outputEffects, EffectsType(Some(Usage.UAff)))
     outputEffects <- outputEffects.normalized
     parameterOpsEffects <- filterSimpleEffects(outputEffects)
-    parameterOpsΓ = Γ :+ parameterBinding
-    parameterDisposerUsages <- checkType(
+    parameterOpsΓ = Γ :+ newParameterBinding
+    (parameterDisposer, parameterDisposerUsages) <- checkType(
       parameterDisposer,
       F(DataType(Builtins.UnitQn), parameterOpsEffects),
     )(using parameterOpsΓ)
-    parameterTypeLevel <- inferLevel(parameterBinding.ty)
+    parameterTypeLevel <- inferLevel(newParameterBinding.ty)
     parameterTypeLevel <- parameterTypeLevel match
       case ULevel.USimpleLevel(l) => Right(l)
       case _                      => Left(LevelTooBig(parameterTypeLevel))
     parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
-    parameterReplicatorUsages <- parameterReplicator match
+    (parameterReplicator, parameterReplicatorUsages) <- parameterReplicator match
       case Some(parameterReplicator) =>
         for
-          parameterReplicatorUsages <- checkType(
+          (parameterReplicator, parameterReplicatorUsages) <- checkType(
             parameterReplicator,
             F(
               DataType(
@@ -1630,10 +1669,10 @@ def checkHandler
                 List(
                   parameterTypeLevel,
                   EqDecidabilityLiteral(EqDecidability.EqUnknown),
-                  parameterBinding.usage,
-                  parameterBinding.ty,
-                  parameterBinding.usage,
-                  parameterBinding.ty,
+                  newParameterBinding.usage,
+                  newParameterBinding.ty,
+                  newParameterBinding.usage,
+                  newParameterBinding.ty,
                 ),
               ),
               parameterOpsEffects,
@@ -1642,18 +1681,21 @@ def checkHandler
           parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
             parameterOpsΓ,
           )
-        yield parameterReplicatorUsages
-      case None => Right(List.fill(Γ.size)(UsageLiteral(Usage.U0)))
-    case (inputCTy, inputUsages) <- inputTy match
-      case None          => inferType(input)
-      case Some(inputTy) => checkType(input, inputTy).map((inputTy, _))
+        yield (Some(parameterReplicator), parameterReplicatorUsages)
+      case None => Right(None, List.fill(Γ.size)(UsageLiteral(Usage.U0)))
+    case (input, inputCTy, inputUsages) <- inputTy match
+      case None => inferType(input)
+      case Some(inputTy) =>
+        checkType(input, inputTy).map((input, usages) => (input, inputTy, usages))
     case (inputTy, inputEff, inputUsage) <- inputCTy match
       case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
       case _                                => Left(ExpectFType(inputCTy))
     inputBinding = Binding(inputTy, inputUsage)(gn"v")
+    outputType <- checkIsType(outputType)
     outputCType = F(outputType, outputEffects, outputUsage)
-    transformΓ = Γ :+ parameterBinding :+ inputBinding.weakened
-    transformUsages <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
+    transformΓ = Γ :+ newParameterBinding :+ inputBinding.weakened
+    (outputUsage, _) <- checkType(outputUsage, UsageType(None))
+    (transform, transformUsages) <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
     transformUsages <- verifyUsages(transformUsages)(2)
     _ <- checkSubsumption(
       inputEff,
@@ -1661,8 +1703,8 @@ def checkHandler
       Some(EffectsType()),
     )
     // Check handler implementations
-    handlerUsages <-
-      def checkHandler(eff: Eff): Either[IrError, Usages] =
+    (handlerEntries, handlerUsages) <-
+      def checkHandler(eff: Eff): Either[IrError, (List[(QualifiedName, CTerm)], Usages)] =
         val (qn, args) = eff
         for
           effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
@@ -1672,14 +1714,15 @@ def checkHandler
               operations.map(qn / _.name).filter(qn => !handlers.contains(qn)).toSet
             if missingOperationQn.isEmpty then Right(())
             else Left(MissingHandlerImplementation(missingOperationQn, h.sourceInfo))
-          handlerUsages <- transpose(
+          (handlerEntries, handlerUsages) <- transposeCheckTypeResults(
             operations.map { opDecl =>
-              val handlerBody = handlers(qn / opDecl.name)
-              val (argNames, resumeNameOption) = h.handlersBoundNames(qn / opDecl.name)
+              val handlerQn = qn / opDecl.name
+              val handlerBody = handlers(handlerQn)
+              val (argNames, resumeNameOption) = h.handlersBoundNames(handlerQn)
               // All of the following opXXX are weakened for handler parameter
               val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
               val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
-              val opParamTys = parameterBinding +: opDecl.paramTys
+              val opParamTys = newParameterBinding +: opDecl.paramTys
                 .substLowers(args: _*)
                 .zip(argNames)
                 .map { case (binding, argName) =>
@@ -1710,8 +1753,8 @@ def checkHandler
                                   List(
                                     level,
                                     UsageLiteral(continuationUsage),
-                                    parameterBinding.usage,
-                                    parameterBinding.ty,
+                                    newParameterBinding.usage,
+                                    newParameterBinding.ty,
                                     opResultUsage,
                                     opResultTy,
                                     parameterOpsEffects,
@@ -1736,8 +1779,8 @@ def checkHandler
                             List(
                               opResultTyLevel,
                               EqDecidabilityLiteral(EqDecidability.EqUnknown),
-                              parameterBinding.usage,
-                              parameterBinding.ty,
+                              newParameterBinding.usage,
+                              newParameterBinding.ty,
                               opResultUsage,
                               opResultTy,
                             ),
@@ -1747,12 +1790,14 @@ def checkHandler
                         ).weaken(opDecl.paramTys.size, 0),
                       ),
                     )
-                bodyUsages <- checkType(handlerBody, opOutputTy)(using Γ ++ opParamTys)
+                (handlerBody, bodyUsages) <- checkType(handlerBody, opOutputTy)(using
+                  Γ ++ opParamTys,
+                )
                 bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
-              yield bodyUsages
+              yield ((handlerQn -> handlerBody), bodyUsages)
             },
           )
-        yield handlerUsages.reduce(_ + _)
+        yield (handlerEntries, handlerUsages)
       eff match
         case Effects(effs, s) if s.isEmpty =>
           val effQns = effs.map(_._1)
@@ -1766,14 +1811,27 @@ def checkHandler
               if unknownOperationQns.isEmpty
               then Right(())
               else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
-            r <- transpose(effs.map(checkHandler(_)))
+            r <- transposeCheckTypeResults(effs.map(checkHandler(_)))
           yield r
 
         case _ => Left(EffectTermToComplex(eff))
   yield (
+    Handler(
+      eff,
+      parameter,
+      newParameterBinding,
+      parameterDisposer,
+      parameterReplicator,
+      outputEffects,
+      outputUsage,
+      outputType,
+      transform,
+      Map(handlerEntries.flatten: _*),
+      input,
+    )(h.transformBoundName, h.handlersBoundNames)(using h.sourceInfo),
     outputCType,
     // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
-    (handlerUsages.reduce(_ + _) + transformUsages
+    (handlerUsages + transformUsages
       .dropRight(1)
       .map(_.strengthened) + effUsages) * UUnres + inputUsages,
   )
@@ -1783,7 +1841,7 @@ def checkHeapHandler
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (CTerm, Usages)] =
+  : Either[IrError, (CTerm, CTerm, Usages)] =
   val input = h.input
   val heapVarBinding =
     Binding[VTerm](HeapType(), UsageLiteral(UUnres))(h.boundName)
@@ -1825,10 +1883,10 @@ def checkIsType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, VTerm] =
   ctx.trace("checking is type") {
     for
-      case (vTyTy, _) <- inferType(vTy) // inferType also checks term is correctly constructed
+      (vTy, vTyTy, _) <- inferType(vTy) // inferType also checks term is correctly constructed
       r <- vTyTy match
         case Type(_) =>
           levelBound match
@@ -1839,7 +1897,7 @@ def checkIsType
               yield ()
             case _ => Right(())
         case _ => Left(NotTypeError(vTy))
-    yield ()
+    yield vTy
   }
 
 def checkIsCType
@@ -2000,17 +2058,17 @@ private def debugCheck[L, R]
   )
 
 private inline def debugInfer[L, R <: (CTerm | VTerm)]
-  (tm: R, result: => Either[L, (R, Usages)])
+  (tm: R, result: => Either[L, (R, R, Usages)])
   (using Context)
   (using Signature)
   (using ctx: TypingContext)
-  : Either[L, (R, Usages)] =
-  ctx.trace[L, (R, Usages)](
+  : Either[L, (R, R, Usages)] =
+  ctx.trace[L, (R, R, Usages)](
     s"inferring type",
     Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
     ty => Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty._1))),
-  )(result.map { case (r, u) =>
-    (r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
+  )(result.map { case (v, r, u) =>
+    (v, r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
   })
 
 private inline def debugSubsumption[L, R]
