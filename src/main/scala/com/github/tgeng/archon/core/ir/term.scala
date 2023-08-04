@@ -311,6 +311,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     extends CTerm(sourceInfo),
     IType
 
+  /** Represents either a metavariable or a guarded constant in [2].
+    */
+  case Meta(index: Nat)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case Def(qn: QualifiedName)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case Force(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -471,7 +474,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  case AllocOp(heap: VTerm, ty: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case AllocOp(heap: VTerm, ty: VTerm, value: VTerm)(using sourceInfo: SourceInfo)
+    extends CTerm(sourceInfo)
   case SetOp(cell: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case HeapHandler
@@ -499,6 +503,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case Hole                       => Hole
       case CType(upperBound, effects) => CType(upperBound, effects)
       case CTop(ul, effects)          => CTop(ul, effects)
+      case Meta(index)                => Meta(index)
       case Def(qn)                    => Def(qn)
       case Force(v)                   => Force(v)
       case F(vTy, effects, u)         => F(vTy, effects, u)
@@ -542,9 +547,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           h.transformBoundName,
           h.handlersBoundNames,
         )
-      case AllocOp(heap, ty, value)  => AllocOp(heap, ty, value)
-      case SetOp(cell, value) => SetOp(cell, value)
-      case GetOp(cell)        => GetOp(cell)
+      case AllocOp(heap, ty, value) => AllocOp(heap, ty, value)
+      case SetOp(cell, value)       => SetOp(cell, value)
+      case GetOp(cell)              => GetOp(cell)
       case h @ HeapHandler(key, heapContent, input) =>
         HeapHandler(
           key,
@@ -576,4 +581,5 @@ object CTerm:
       2020), 28 pages. DOI:https://doi.org/10.1145/3371126
  [1]  Danel Ahman. 2017. Handling fibred algebraic effects. Proc. ACM Program. Lang. 2, POPL,
       Article 7 (January 2018), 29 pages. DOI:https://doi.org/10.1145/3158095
+ [2]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).
  */

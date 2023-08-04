@@ -136,11 +136,11 @@ trait Visitor[C, R]:
     visitName(p.name)
 
   def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
-    case t: CtTerm           => visitCtTerm(t)
-    case l: CtLambda         => visitCtLambda(l)
-    case r: CtRecord         => visitCtRecord(r)
-    case tc: CtTypeCase      => visitCtTypeCase(tc)
-    case dc: CtDataCase      => visitCtDataCase(dc)
+    case t: CtTerm      => visitCtTerm(t)
+    case l: CtLambda    => visitCtLambda(l)
+    case r: CtRecord    => visitCtRecord(r)
+    case tc: CtTypeCase => visitCtTypeCase(tc)
+    case dc: CtDataCase => visitCtDataCase(dc)
 
   def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
 
@@ -317,6 +317,8 @@ trait Visitor[C, R]:
       visitVTerm(cTop.effects),
     )
 
+  def visitMeta(m: Meta)(using ctx: C)(using Σ: Signature): R = combine()
+
   def visitDef(d: Def)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(d.qn)
 
@@ -476,6 +478,7 @@ trait Visitor[C, R]:
     case Hole                                    => visitHole
     case cType: CType                            => visitCType(cType)
     case cTop: CTop                              => visitCTop(cTop)
+    case m: Meta                                 => visitMeta(m)
     case d: Def                                  => visitDef(d)
     case force: Force                            => visitForce(force)
     case f: F                                    => visitF(f)
@@ -507,11 +510,11 @@ trait Transformer[C]:
 
   def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
     ct match
-      case t: CtTerm           => transformCtTerm(t)
-      case l: CtLambda         => transformCtLambda(l)
-      case r: CtRecord         => transformCtRecord(r)
-      case tc: CtTypeCase      => transformCtTypeCase(tc)
-      case dc: CtDataCase      => transformCtDataCase(dc)
+      case t: CtTerm      => transformCtTerm(t)
+      case l: CtLambda    => transformCtLambda(l)
+      case r: CtRecord    => transformCtRecord(r)
+      case tc: CtTypeCase => transformCtTypeCase(tc)
+      case dc: CtDataCase => transformCtDataCase(dc)
 
   def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature): CaseTree =
     CtTerm(transformCTerm(ct.term))
@@ -727,6 +730,9 @@ trait Transformer[C]:
       transformVTerm(cTop.effects),
     )(using cTop.sourceInfo)
 
+  def transformMeta(m: Meta)(using ctx: C)(using Σ: Signature): CTerm =
+    Meta(m.index)(using m.sourceInfo)
+
   def transformDef(d: Def)(using ctx: C)(using Σ: Signature): CTerm = Def(
     transformQualifiedName(d.qn),
   )(using d.sourceInfo)
@@ -902,6 +908,7 @@ trait Transformer[C]:
       case Hole                            => transformHole
       case cType: CType                    => transformCType(cType)
       case cTop: CTop                      => transformCTop(cTop)
+      case m: Meta                         => transformMeta(m)
       case d: Def                          => transformDef(d)
       case force: Force                    => transformForce(force)
       case f: F                            => transformF(f)

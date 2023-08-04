@@ -15,6 +15,7 @@ import IndentPolicy.*
 import DelimitPolicy.*
 import Usage.*
 import IrError.*
+import MetaVariable.*
 
 trait Reducible[T]:
   def reduce
@@ -87,6 +88,17 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.isEmpty then Right(pc)
         else run(substHole(stack.pop(), pc), true)
+      case Meta(index) =>
+        ctx.metaVars(index) match
+          case Solved(context, ty, value) =>
+            val args = stack.takeRight(context.size).map {
+              case Application(_, arg) => arg
+              case _ => throw IllegalStateException("bad meta variable application")
+            }
+            stack.dropRightInPlace(context.size)
+            run(Return(value.substLowers(args.toSeq: _*)), true)
+          // stuck for unresolved meta variables
+          case _ => Right(pc)
       case Def(qn) =>
         Σ.getClausesOption(qn) match
           // This is allowed because it could be that the body is not defined yet.
@@ -128,7 +140,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case _ => throw IllegalArgumentException("type error")
       case Let(t, _, ctx) =>
         t match
-          case Return(v)    => run(ctx.substLowers(v))
+          case Return(v)       => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -324,7 +336,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               updateHandlerIndex(eff, stack.length)
               input match
                 case Return(v) => run(transform.substLowers(parameter, v))
-                case _            => throw IllegalArgumentException("type error")
+                case _         => throw IllegalArgumentException("type error")
             else
               updateHandlerIndex(eff, stack.length)
               stack.push(
@@ -419,7 +431,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     given SourceInfo = ctx.sourceInfo
 
     ctx match
-      case l @ Let(t, ty, ctx)       => Let(c, ty, ctx)(l.boundName)
+      case l @ Let(t, ty, ctx)   => Let(c, ty, ctx)(l.boundName)
       case Application(fun, arg) => Application(c, arg)
       case Projection(rec, name) => Projection(c, name)
       case h @ Handler(
@@ -472,7 +484,7 @@ extension(v: VTerm)
         reduced <- Reducible.reduce(cTm)
         r <- reduced match
           case Return(v) => Right(v)
-          case stuckC       => Right(Collapse(stuckC)(using v.sourceInfo))
+          case stuckC    => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case u: UsageCompound =>
       def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match

@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 import scala.collection.immutable.{Map, Set}
+import scala.collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
@@ -37,7 +38,41 @@ private val ANSI_WHITE = "\u001b[37m"
 def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
-trait TypingContext(var traceLevel: Int, var enableDebugging: Boolean):
+case class Constraint(context: Context, lhs: VTerm, rhs: VTerm, ty: VTerm)
+
+enum MetaVariable(val context: Context, val ty: VTerm):
+  case Unsolved(override val context: Context, override val ty: VTerm)
+    extends MetaVariable(context, ty)
+  case Solved(override val context: Context, override val ty: VTerm, value: VTerm)
+    extends MetaVariable(context, ty)
+
+  /** @param constraints:
+    *   must be non-empty since otherwise the meta variable would be solved.
+    */
+  case Guarded
+    (
+      override val context: Context,
+      override val ty: VTerm,
+      value: VTerm,
+      constraints: List[Constraint],
+    ) extends MetaVariable(context, ty)
+
+  require(this match
+    case Guarded(_, _, _, constraints) => constraints.nonEmpty
+    case _                          => true,
+  )
+
+extension(mv: MetaVariable)
+  def contextFreeType: CTerm = mv.context.foldRight[CTerm](F(mv.ty)) { (elem, acc) =>
+    FunctionType(elem, acc)
+  }
+
+trait TypingContext
+  (
+    var traceLevel: Int,
+    var enableDebugging: Boolean,
+    val metaVars: mutable.ArrayBuffer[MetaVariable],
+  ):
 
   inline def trace[L, R]
     (
@@ -534,7 +569,7 @@ def checkType
       for
         case (newTm, inferred, usages) <- inferType(tm)
         _ <- checkSubsumption(inferred, ty, None)
-      yield (newTm, usages)
+      yield (newTm, usages),
 )
 
 // Precondition: tm is already type-checked
@@ -590,6 +625,7 @@ def inferType
           (ul, ulUsages) <- checkULevel(ul)
           newTm = CTop(ul, effects)(using tm.sourceInfo)
         yield (newTm, CType(newTm, Total), (uUsages + ulUsages))
+      case m @ Meta(index) => Right(m, ctx.metaVars(index).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
           case None             => Left(MissingDeclaration(qn))
@@ -631,7 +667,9 @@ def inferType
             case Type(_) =>
               for
                 (bodyTy, bodyTyTy, bodyTyUsages) <- inferType(bodyTy)(using Γ :+ binding)
-                newTm = FunctionType(Binding(ty, bindingUsage)(binding.name), bodyTy, effects)(using tm.sourceInfo)
+                newTm = FunctionType(Binding(ty, bindingUsage)(binding.name), bodyTy, effects)(using
+                  tm.sourceInfo,
+                )
                 r <- bodyTyTy match
                   case CType(_, eff) if eff == Total =>
                     // Strengthen is safe here because if it references the binding, then the
@@ -791,7 +829,7 @@ def checkType
         case (tm, tmTy, usages) <- inferType(tm)
         ty <- reduceCType(ty)
         _ <- checkSubsumption(tmTy, ty, None)
-      yield (tm, usages)
+      yield (tm, usages),
 )
 
 enum CheckSubsumptionMode:
