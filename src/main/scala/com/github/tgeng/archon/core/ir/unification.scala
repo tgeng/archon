@@ -1,3 +1,8 @@
+/** This file contains unification used during elboration (aka pattern matching clause elaboration).
+  * Meta-variable unification is done separately in `typing.scala`. The major difference is that
+  * unificaiton here creates substitutors that unifies a `Var` with a concrete terms, while
+  * meta-variable unification solves meta-variables in the typing context.
+  */
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
@@ -22,8 +27,8 @@ enum UnificationResult:
         *
         * Note that, comparing with [0], our source context Γ does not contain any equality types.
         * Hence, the recovering substitution τ does not contain any trailing `Refl` terms. This
-        * simplifies implementation and usage, but could be difficult to extend in order to
-        * support more sophisticated unification outlined in section 6 of [0].
+        * simplifies implementation and usage, but could be difficult to extend in order to support
+        * more sophisticated unification outlined in section 6 of [0].
         */
       Δ: Context,
       /** * The solution substitution σ: Δ -> Γ.
@@ -47,8 +52,8 @@ import ULevel.*
   * semantics. The downsides are
   *
   *   - incompatible with univalence
-  *   - incompatible with law of excluded middle and impredictivity But none of these downsides
-  *     are important for our propose of making a practical language with efficient operational
+  *   - incompatible with law of excluded middle and impredictivity But none of these downsides are
+  *     important for our propose of making a practical language with efficient operational
   *     semantic.
   *
   * In future, it's possible to apply type-driven unification for erased terms and hence the type
@@ -252,8 +257,8 @@ private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.si
 
 /** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`.
   * Note,u̅ and v̅ are at the same level as the leftmost element of telescope. That is, processing
-  * further elements of telescope requires first substituting left elements of telescope with first value
-  * of u̅ (after unification succeeds between first element of u̅ and v̅).
+  * further elements of telescope requires first substituting left elements of telescope with first
+  * value of u̅ (after unification succeeds between first element of u̅ and v̅).
   */
 def unifyAll
   (u̅ : List[VTerm], v̅ : List[VTerm], telescope: Telescope)

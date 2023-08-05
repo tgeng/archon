@@ -52,6 +52,7 @@ enum DeclarationPart:
   case HEAD, BODY
 
 import DeclarationPart.*
+import com.github.tgeng.archon.core.ir.{UnificationResult, unifyAll}
 
 def sortPreDeclarations
   (declarations: Seq[PreDeclaration])

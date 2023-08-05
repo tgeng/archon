@@ -197,6 +197,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     */
   case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
+    * replaced with `Collapse(Application...(Meta(...)))` and solved through meta-variable
+    * unification.
+    */
+  case Auto()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+
   this match
     case UsageCompound(UsageOperation.UJoin, operands) if operands.isEmpty =>
       throw IllegalArgumentException(
@@ -229,6 +235,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case Heap(key)                       => Heap(key)
       case CellType(heap, ty)              => CellType(heap, ty)
       case Cell(heapKey, index)            => Cell(heapKey, index)
+      case Auto()                          => Auto()
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
     visitor.visitVTerm(this)
@@ -311,7 +318,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     extends CTerm(sourceInfo),
     IType
 
-  /** Represents either a metavariable or a guarded constant in [2].
+  /** Represents either a metavariable or a guarded constant in [2]. This is always created during
+    * type checking and user-term won't include this. Rather, user terms should contain `Auto` where
+    * needed.
     */
   case Meta(index: Nat)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case Def(qn: QualifiedName)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)

@@ -505,7 +505,8 @@ def inferType
             case Type(_) => Right(Type(newTm))
             case _       => Left(NotTypeError(ty))
         yield (newTm, r, (heapUsages + tyUsages))
-      case Cell(_, _) => throw IllegalArgumentException("cannot infer type"),
+      case Cell(_, _) => throw IllegalArgumentException("cannot infer type")
+      case Auto() => throw IllegalArgumentException("cannot infer type")
   )
 
 def getEffectsContinuationUsage
@@ -565,6 +566,11 @@ def checkType
         case CellType(heap, _) if Heap(heapKey) == heap => Right(tm, Usages.zero)
         case _: CellType                                => Left(ExpectCellTypeWithHeap(heapKey))
         case _                                          => Left(ExpectCellType(ty))
+    case Auto() =>
+      val metaVariable = MetaVariable.Unsolved(Γ, ty)
+      val meta = Meta(ctx.metaVars.size)
+      ctx.metaVars.addOne(metaVariable)
+      Right((Collapse(vars(Γ.size - 1).foldLeft[CTerm](meta)((acc, v) => Application(acc, v))), Usages.zero))
     case _ =>
       for
         case (newTm, inferred, usages) <- inferType(tm)

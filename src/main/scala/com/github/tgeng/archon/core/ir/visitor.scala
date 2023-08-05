@@ -214,6 +214,7 @@ trait Visitor[C, R]:
     case heap: Heap               => visitHeap(heap)
     case cellType: CellType       => visitCellType(cellType)
     case cell: Cell               => visitCell(cell)
+    case auto: Auto               => visitAuto(auto)
 
   def visitType(ty: Type)(using ctx: C)(using Σ: Signature): R =
     visitVTerm(ty.upperBound)
@@ -302,6 +303,8 @@ trait Visitor[C, R]:
     )
 
   def visitCell(cell: Cell)(using ctx: C)(using Σ: Signature): R = combine()
+
+  def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitHole(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -632,6 +635,7 @@ trait Transformer[C]:
       case heap: Heap               => transformHeap(heap)
       case cellType: CellType       => transformCellType(cellType)
       case cell: Cell               => transformCell(cell)
+      case auto: Auto               => transformAuto(auto)
 
   def transformType(ty: Type)(using ctx: C)(using Σ: Signature): VTerm =
     Type(transformVTerm(ty.upperBound))(using ty.sourceInfo)
@@ -718,6 +722,8 @@ trait Transformer[C]:
     )(using cellType.sourceInfo)
 
   def transformCell(cell: Cell)(using ctx: C)(using Σ: Signature): VTerm = cell
+
+  def transformAuto(auto: Auto)(using ctx: C)(using Σ: Signature): VTerm = auto
 
   def transformHole(using ctx: C)(using Σ: Signature): CTerm = Hole
 

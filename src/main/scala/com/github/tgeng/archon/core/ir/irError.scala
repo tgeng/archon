@@ -4,6 +4,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence
+import com.github.tgeng.archon.core.ir.UnificationResult
 
 enum IrError extends HasException:
   case Unknown
