@@ -165,9 +165,17 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           (ts1, ts2, tys) match
             case (Nil, Nil, Nil) => true
             case (t1 :: ts1, t2 :: ts2, ty :: tys) =>
-              checkSubsumption(t1, t2, Some(ty.ty))(using CheckSubsumptionMode.CONVERSION) match
-                case Right(_) => areEffArgsConvertible(ts1, ts2, tys.substLowers(t1))
-                case _        => false
+              (for
+                t1 <- t1.normalized
+                t2 <- t2.normalized
+              // Here we don't use checkSubsumption because that has side effect on the typing context (instantiating
+              // meta variables). Also, during type checking, the conversion check on effect args is also done by simply
+              // normalizing the terms and comparing their equality.
+              // In addition, the language has the `decidable-equality` concept, which corresponds to simple equality
+              // checks (hence efficient to implement at runtime).
+              yield t1 == t2) match
+                case Right(true) => areEffArgsConvertible(ts1, ts2, tys.substLowers(t1))
+                case _           => false
             case _ => throw IllegalArgumentException()
 
         Σ.getEffectOption(effQn) match
