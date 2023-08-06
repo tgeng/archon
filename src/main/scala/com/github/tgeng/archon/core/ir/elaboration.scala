@@ -753,9 +753,10 @@ private def elaborateBody
                     case Some(rhs1) => Right(rhs1)
                     case None       => Left(e)
                   σOption <- solve(_E1)
-                  _ <- σOption match
+                  (rhs1, usages) <- σOption match
                     case Some(σ) => checkType(rhs1.subst(σ), _C)
                     case None    => Left(e)
+                  _ <- checkUsagesSubsumption(usages)
                 yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
           split(q̅, _C, problem)
         case (Nil, _) => Left(IncompleteClauses(preDefinition.qn))
