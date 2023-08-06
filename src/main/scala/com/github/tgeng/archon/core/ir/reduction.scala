@@ -655,7 +655,7 @@ def matchPattern
           constraints = pArgs.zip(args) ++ constraints
         case (PAbsurd(), _) =>
           throw IllegalArgumentException("type error")
-        case (_, Var(_)) => status = MatchingStatus.Stuck
+        case (_, Var(_)) | (_, Auto()) => status = MatchingStatus.Stuck
         // Note that we make mismatch dominating stuck because we do not eval by case tree during
         // type checking.
         case _ => return MatchingStatus.Mismatch
