@@ -38,7 +38,7 @@ private val ANSI_WHITE = "\u001b[37m"
 def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
-case class Constraint(context: Context, lhs: VTerm, rhs: VTerm, ty: VTerm)
+case class Constraint(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope)
 
 /** @param context:
   *   context of this meta-variable
@@ -865,14 +865,24 @@ def checkSubsumptions
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Set[Constraint]] =
+  // See [0] Figure 3.8
   (subs, sups, tys) match
-    case (Nil, Nil, Nil) => Right(())
-    case (sub :: subs, sup :: sups, ty :: tys) =>
+    case (Nil, Nil, Nil) => Right(Set.empty)
+    case (sub :: tailSubs, sup :: tailSups, ty :: tys) =>
       for
-        _ <- checkSubsumption(sub, sup, Some(ty.ty))
-        _ <- checkSubsumptions(subs, sups, tys.substLowers(sub))
-      yield ()
+        headConstraints <- checkSubsumption(sub, sup, Some(ty.ty))
+        r <- if headConstraints.isEmpty
+           then checkSubsumptions(tailSubs, tailSups, tys.substLowers(sub))
+           else
+            val (a, b) = getFreeVars(tys)(using 0)
+            if a(0) || b(0)
+              // if the head term is referenced in the tail, add the whole thing as a constraint
+              then Right(Set(Constraint(Γ, subs, sups, tys)))
+              // the head term is not referenced in the tail, add the tail constraint in addition to the head
+              // constraints
+              else checkSubsumptions(tailSubs, tailSups, tys.strengthened).map(headConstraints ++ _)
+      yield r
     case _ => throw IllegalArgumentException("length mismatch")
 
 /** @param ty
@@ -2186,3 +2196,7 @@ private inline def debugSubsumption[L, R]
       rawTy.map(pprint),
     ),
   )(result)
+
+/* References
+ [0]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).
+*/
