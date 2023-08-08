@@ -52,9 +52,10 @@ import ULevel.*
   * semantics. The downsides are
   *
   *   - incompatible with univalence
-  *   - incompatible with law of excluded middle and impredictivity But none of these downsides are
-  *     important for our propose of making a practical language with efficient operational
-  *     semantic.
+  *   - incompatible with law of excluded middle and impredictivity
+  *
+  * But none of these downsides are important for our propose of making a practical language with
+  * efficient operational semantic.
   *
   * In future, it's possible to apply type-driven unification for erased terms and hence the type
   * parameter is retained here for future extension.

@@ -14,7 +14,7 @@ def getFreeVars
   (using bar: Nat)
   (using Σ: Signature)
   : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = tele match
-  case Nil => (Set(), Set())
+  case Nil => (Set.empty, Set.empty)
   case binding :: rest =>
     union(getFreeVars(binding.ty), getFreeVars(rest)(using bar + 1) - 1)
 
@@ -38,14 +38,14 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
     (using bar: Nat)
     (using Σ: Signature)
     : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-    freeVars.fold((Set(), Set()))(union)
+    freeVars.fold((Set.empty, Set.empty))(union)
 
   override def visitVar
     (v: Var)
     (using bar: Nat)
     (using Σ: Signature)
     : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-    if v.idx < bar then (Set(), Set()) else (Set(v.idx - bar), Set())
+    if v.idx < bar then (Set.empty, Set.empty) else (Set(v.idx - bar), Set.empty)
 
   override def visitDataType
     (dataType: DataType)
@@ -129,7 +129,7 @@ def getFreeVars
   import ULevel.*
   ul match
     case USimpleLevel(l) => getFreeVars(l)
-    case UωLevel(_)      => (Set(), Set())
+    case UωLevel(_)      => (Set.empty, Set.empty)
 
 def getFreeVars
   (eff: Eff)

@@ -57,7 +57,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
   private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
     stack.view.zipWithIndex.drop(startIndex).foreach {
       case (HeapHandler(Some(heapKey), _, _), index) =>
-        updateHandlerIndex(Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set()), index)
+        updateHandlerIndex(Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set.empty), index)
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
       case _                         =>
     }
@@ -96,7 +96,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               case _ => throw IllegalStateException("bad meta variable application")
             }
             stack.dropRightInPlace(context.size)
-            run(Return(value.substLowers(args.toSeq: _*)), true)
+            run(value.substLowers(args.toSeq: _*), true)
           // stuck for unresolved meta variables
           case _ => Right(pc)
       case Def(qn) =>
@@ -429,7 +429,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           ) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHandlerIndex(
-            Effects(Set((Builtins.HeapEffQn, List(Heap(key)))), Set()),
+            Effects(Set((Builtins.HeapEffQn, List(Heap(key)))), Set.empty),
             stack.length,
           )
           stack.push(HeapHandler(Some(key), heapContent, input)(h.boundName))
@@ -544,7 +544,7 @@ extension(v: VTerm)
             literalsAndOperands.flatMap { case (_, o) => o },
           )
         case c: Collapse => c.normalized.flatMap(dfs)
-        case v: Var      => Right((Set(), Set(v)))
+        case v: Var      => Right((Set.empty, Set(v)))
         case _ =>
           throw IllegalStateException(s"expect to be of Effects type: $tm")
 

@@ -45,7 +45,7 @@ class PrecedenceGraphBuilder
     )
 
     val loop = precedenceMap.keys.detectLoop(op =>
-      val neighbors = precedenceMap.getOrElse(op, Set()).to(mutable.Set)
+      val neighbors = precedenceMap.getOrElse(op, Set.empty).to(mutable.Set)
       if op == representative then neighbors.addAll(looserThanOperators)
       if tighterThanOperators.contains(op) then neighbors.add(representative)
       neighbors
