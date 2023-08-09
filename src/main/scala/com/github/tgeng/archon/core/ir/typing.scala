@@ -387,7 +387,10 @@ private def checkULevel
   (using ctx: TypingContext)
   : Either[IrError, (ULevel, Usages)] = ul match
   case ULevel.USimpleLevel(l) =>
-    checkType(l, LevelType()).map((l, usages) => (ULevel.USimpleLevel(l), usages))
+    for
+      (l, usages) <- checkType(l, LevelType())
+      l <- l.normalized
+    yield (ULevel.USimpleLevel(l), usages)
   case ULevel.UωLevel(_) => Right(ul, Usages.zero)
 
 // Precondition: tm is already type-checked
@@ -424,13 +427,15 @@ def inferType
     tm match
       case Type(upperBound) =>
         for
-          case (upperBound, _, upperBoundUsages) <- inferType(upperBound)
+          (upperBound, upperBoundUsages) <- checkIsType(upperBound)
+          upperBound <- upperBound.normalized
           newTm = Type(upperBound)(using tm.sourceInfo)
         yield (newTm, Type(newTm), upperBoundUsages)
       case Top(ul, eqD) =>
         for
           (ul, ulUsage) <- checkULevel(ul)
           (eqD, eqDUsage) <- checkType(eqD, EqDecidabilityType())
+          eqD <- eqD.normalized
           newTm = Top(ul, eqD)(using tm.sourceInfo)
         yield (newTm, Type(newTm), (ulUsage + eqDUsage))
       case r: Var => Right(r, Γ.resolve(r).ty, Usages.single(r))
@@ -445,7 +450,7 @@ def inferType
       case U(cty) =>
         for
           case (cty, ctyTy, usage) <- inferType(cty)
-          newTm = Collapse(cty)(using tm.sourceInfo)
+          newTm <- Collapse(cty)(using tm.sourceInfo).normalized
           r <- ctyTy match
             case CType(_, eff) if eff == Total => Right(Type(newTm))
             // Automatically promote SomeVType to F(SomeVType)
@@ -463,6 +468,7 @@ def inferType
           case Some(data) =>
             for
               (args, usage) <- checkTypes(args, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
+              args <- transpose(args.map(_.normalized))
               newTm = DataType(qn, args)(using tm.sourceInfo)
             yield (newTm, Type(newTm), usage)
       case _: Con          => throw IllegalArgumentException("cannot infer type")
@@ -477,7 +483,12 @@ def inferType
             case Right(u) => Right(Some(u))
             case _        => Right(None)
         yield (newTm, UsageType(bound), usages)
-      case u: UsageType               => Right(u, Type(u), Usages.zero)
+      case u: UsageType               => 
+        for
+          result <- transpose(u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))))
+        yield result match
+          case Some(upperBound, usages) => (u, Type(UsageType(Some(upperBound))), usages)
+          case _ => (u, Type(u), Usages.zero)
       case eqD: EqDecidabilityType    => Right(eqD, Type(eqD), Usages.zero)
       case eqD: EqDecidabilityLiteral => Right(eqD, EqDecidabilityType(), Usages.zero)
       case e: EffectsType             => Right(e, Type(e), Usages.zero)
@@ -514,6 +525,8 @@ def inferType
         for
           (heap, heapUsages) <- checkType(heap, HeapType())
           case (ty, tyTy, tyUsages) <- inferType(ty)
+          heap <- heap.normalized
+          ty <- ty.normalized
           newTm = CellType(heap, ty)(using tm.sourceInfo)
           r <- tyTy match
             case Type(_) => Right(Type(newTm))
@@ -788,7 +801,7 @@ def inferType
         for
           (heap, heapUsages) <- checkType(heap, HeapType())
           (value, valueUsages) <- checkType(value, vTy)
-          vTy <- checkIsType(vTy)
+          (vTy, _) <- checkIsType(vTy)
         yield (
           AllocOp(heap, vTy, value),
           F(
@@ -1621,7 +1634,7 @@ private def checkLet
   val usage = tm.usage
   val body = tm.ctx
   for
-    ty <- checkIsType(ty)
+    (ty, _) <- checkIsType(ty)
     (effects, _) <- checkType(effects, EffectsType())
     (usage, _) <- checkType(usage, UsageType())
     (t, tUsages) <- checkType(t, F(ty, effects, usage))
@@ -1748,7 +1761,7 @@ def checkHandler
       case Effects(effs, s) if s.isEmpty => Right(effs)
       case _                             => Left(EffectTermToComplex(eff))
     (eff, effUsages) <- checkType(eff, EffectsType())
-    parameterBindingTy <- checkIsType(parameterBinding.ty)
+    (parameterBindingTy, _) <- checkIsType(parameterBinding.ty)
     (parameterBindingUsage, _) <- checkType(parameterBinding.usage, UsageType(None))
     newParameterBinding = Binding(parameterBindingTy, parameterBindingUsage)(parameterBinding.name)
     (parameter, singleParameterUsages) <- checkType(parameter, parameterBindingTy)
@@ -1803,7 +1816,7 @@ def checkHandler
       case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
       case _                                => Left(ExpectFType(inputCTy))
     inputBinding = Binding(inputTy, inputUsage)(gn"v")
-    outputType <- checkIsType(outputType)
+    (outputType, _) <- checkIsType(outputType)
     outputCType = F(outputType, outputEffects, outputUsage)
     transformΓ = Γ :+ newParameterBinding :+ inputBinding.weakened
     (outputUsage, _) <- checkType(outputUsage, UsageType(None))
@@ -1995,10 +2008,10 @@ def checkIsType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, VTerm] =
+  : Either[IrError, (VTerm, Usages)] =
   ctx.trace("checking is type") {
     for
-      (vTy, vTyTy, _) <- inferType(vTy) // inferType also checks term is correctly constructed
+      (vTy, vTyTy, usages) <- inferType(vTy) // inferType also checks term is correctly constructed
       r <- vTyTy match
         case Type(_) =>
           levelBound match
@@ -2009,7 +2022,7 @@ def checkIsType
               yield ()
             case _ => Right(())
         case _ => Left(NotTypeError(vTy))
-    yield vTy
+    yield (vTy, usages)
   }
 
 def checkIsCType
@@ -2145,6 +2158,7 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
     case _       => Right(())
 
 extension [L, R1](e1: Either[L, R1])
+  // TODO[P1]: remove this since it hides typing issues
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] =
     e1.flatMap(_ => e2)
 

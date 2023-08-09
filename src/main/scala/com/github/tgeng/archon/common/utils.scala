@@ -176,6 +176,13 @@ def transpose[L, R](l: List[Either[L, R]]): Either[L, List[R]] = l match
       case Left(l)  => Left(l)
       case Right(r) => transpose(l).map(l => r :: l)
 
+def transpose[L, R](l: Option[Either[L, R]]): Either[L, Option[R]] =
+  l match
+    case None => Right(None)
+    case Some(l) => l match
+      case Left(l)  => Left(l)
+      case Right(r) => Right(Some(r))
+
 def transpose[L, R](l: Iterable[Either[L, R]]): Either[L, Seq[R]] =
   transpose(l.toList).map(Seq(_: _*))
 
