@@ -15,6 +15,7 @@ import Elimination.*
 import SourceInfo.*
 import Usage.*
 import EqDecidability.*
+import MetaVariable.*
 
 import scala.annotation.tailrec
 import PrettyPrinter.pprint
@@ -82,6 +83,11 @@ trait TypingContext
     var enableDebugging: Boolean,
     val metaVars: mutable.ArrayBuffer[MetaVariable],
   ):
+
+  def addMetaVar(mv: MetaVariable): Meta =
+    val index = metaVars.size
+    metaVars += mv
+    Meta(index)
 
   inline def trace[L, R]
     (
@@ -401,8 +407,7 @@ private def inferLevel
     case Collapse(cTm)      => inferLevel(cTm)
     case U(cty)             => inferLevel(cty)
     case DataType(qn, args) => Right(Σ.getData(qn).ul.substLowers(args: _*))
-    case _: UsageType | _: EqDecidabilityType | _: EffectsType |
-      _: HeapType =>
+    case _: UsageType | _: EqDecidabilityType | _: EffectsType | _: HeapType =>
       Right(ULevel.USimpleLevel(LevelLiteral(0)))
     case _: LevelType    => Right(ULevel.UωLevel(0))
     case CellType(_, ty) => inferLevel(ty)
@@ -576,12 +581,10 @@ def checkType
         case _: CellType                                => Left(ExpectCellTypeWithHeap(heapKey))
         case _                                          => Left(ExpectCellType(ty))
     case Auto() =>
-      val metaVariable = MetaVariable.Unsolved(Γ, F(ty))
-      val meta = Meta(ctx.metaVars.size)
-      ctx.metaVars.addOne(metaVariable)
+      val meta = ctx.addMetaVar(MetaVariable.Unsolved(Γ, F(ty)))
       Right(
         (
-          Collapse(vars(Γ.size - 1).foldLeft[CTerm](meta)((acc, v) => Application(acc, v))),
+          Collapse(vars(Γ.size - 1).foldLeft[CTerm](meta)(Application(_, _))),
           Usages.zero,
         ),
       )
@@ -1083,7 +1086,7 @@ def checkSubsumption
             tConstraint <- checkSubsumption(
               t1,
               t2,
-              // Note on type used here
+              // Note on type used heres
               // * The concrete type passed here does not affect correctness of type checking.
               // * A combined effect is used to be safe (e.g. we don't want to normalize potentially diverging terms)
               // * Usage is not important during subsumption checking, hence we just pass UUnres.
@@ -1101,12 +1104,28 @@ def checkSubsumption
             _,
           ) =>
           for
-            // TODO: if tyConstraint is not empty and it's referenced in body types, we need to add a guarded constant.
             effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
             tyConstraint <- checkSubsumption(binding2.ty, binding1.ty, None)
-            bodyConstraint <- checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using
-              Γ :+ binding2,
-            )
+            bodyConstraint <-
+              if tyConstraint.isEmpty
+              then checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
+              else
+                val meta = ctx.addMetaVar(
+                  Guarded(
+                    Γ :+ binding2,
+                    F(binding1.ty.weakened, Total, binding1.usage.weakened),
+                    Return(Var(0)),
+                    tyConstraint,
+                  ),
+                )
+                checkSubsumption(
+                  bodyTy1,
+                  bodyTy2.subst {
+                    case 0 => Some(Collapse(vars(Γ.size).foldLeft[CTerm](meta)(Application(_, _))))
+                    case _ => None
+                  },
+                  None,
+                )(using mode)(using Γ :+ binding2)
           yield effConstraint ++ tyConstraint ++ bodyConstraint
         case (Application(fun1, arg1), Application(fun2, arg2), _) =>
           for
@@ -1227,8 +1246,9 @@ private def simplifyLet
 ) {
   t match
     case Let(t, ty, eff, usage, ctx) =>
-      for r <-
-          // TODO: Also check if usage is meta variable that references a Total value.
+      for
+        eff <- eff.normalized
+        r <-
           if eff == Total then simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
           else Right(t)
       yield r
