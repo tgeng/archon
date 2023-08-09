@@ -2,7 +2,7 @@
   "files.watcherExclude": {
     "**/target": true
   },
-  "window.title": "${activeEditorShort}${separator}${rootName} ${separator} [Branch: main]",
+  "window.title": "${activeEditorShort}${separator}${rootName} ${separator} [Branch: main]${separator}[Branch: main]",
   "cSpell.words": [
     "Ahman",
     "Alloc",

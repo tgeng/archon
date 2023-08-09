@@ -338,23 +338,15 @@ trait Visitor[C, R]:
   def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R =
     combine(visitVTerm(r.v))
 
-  def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R =
-    let.ty match
-      case None =>
-        combine(
-          visitCTerm(let.t),
-          withBindings(Seq(let.boundName)) {
-            visitCTerm(let.ctx)
-          },
-        )
-      case Some(ty) =>
-        combine(
-          visitCTerm(let.t),
-          visitCTerm(ty),
-          withBindings(Seq(let.boundName)) {
-            visitCTerm(let.ctx)
-          },
-        )
+  def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R = combine(
+    visitCTerm(let.t),
+    visitVTerm(let.ty),
+    visitVTerm(let.eff),
+    visitVTerm(let.usage),
+    withBindings(Seq(let.boundName)) {
+      visitCTerm(let.ctx)
+    },
+  )
 
   def visitFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -759,7 +751,9 @@ trait Transformer[C]:
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(
       transformCTerm(let.t),
-      let.ty.map(transformCTerm),
+      transformVTerm(let.ty),
+      transformVTerm(let.eff),
+      transformVTerm(let.usage),
       withBindings(Seq(let.boundName)) {
         transformCTerm(let.ctx)
       },

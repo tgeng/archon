@@ -340,7 +340,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
   case Let
-    (t: CTerm, ty: Option[CTerm], /* binding offset = 1 */ ctx: CTerm)
+    (t: CTerm, ty: VTerm, eff: VTerm, usage: VTerm, ctx: CTerm /* binding += 1 */ )
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
@@ -509,15 +509,15 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Hole                       => Hole
-      case CType(upperBound, effects) => CType(upperBound, effects)
-      case CTop(ul, effects)          => CTop(ul, effects)
-      case Meta(index)                => Meta(index)
-      case Def(qn)                    => Def(qn)
-      case Force(v)                   => Force(v)
-      case F(vTy, effects, u)         => F(vTy, effects, u)
-      case Return(v)                  => Return(v)
-      case l @ Let(t, ty, ctx)        => Let(t, ty, ctx)(l.boundName)
+      case Hole                            => Hole
+      case CType(upperBound, effects)      => CType(upperBound, effects)
+      case CTop(ul, effects)               => CTop(ul, effects)
+      case Meta(index)                     => Meta(index)
+      case Def(qn)                         => Def(qn)
+      case Force(v)                        => Force(v)
+      case F(vTy, effects, u)              => F(vTy, effects, u)
+      case Return(v)                       => Return(v)
+      case l @ Let(t, ty, eff, usage, ctx) => Let(t, ty, eff, usage, ctx)(l.boundName)
       case FunctionType(binding, bodyTy, effects) =>
         FunctionType(binding, bodyTy, effects)
       case Application(fun, args)         => Application(fun, args)

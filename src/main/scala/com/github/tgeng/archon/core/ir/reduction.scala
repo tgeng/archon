@@ -84,6 +84,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     : Either[IrError, CTerm] =
     pc match
       case Hole => throw IllegalStateException()
+      // Take a shortcut when returning a collapsable computation
+      case Return(Collapse(c)) => run(c, reduceDown)
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.isEmpty then Right(pc)
@@ -138,7 +140,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case Right(_: Var | _: Collapse) =>
             Right(reconstructTermFromStack(pc))
           case _ => throw IllegalArgumentException("type error")
-      case Let(t, _, ctx) =>
+      case Let(t, _, _, _, ctx) =>
         t match
           case Return(v)       => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
@@ -439,7 +441,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     given SourceInfo = ctx.sourceInfo
 
     ctx match
-      case l @ Let(t, ty, ctx)   => Let(c, ty, ctx)(l.boundName)
+      case l @ Let(t, ty, effects, usage, ctx)   => Let(c, ty, effects, usage, ctx)(l.boundName)
       case Application(fun, arg) => Application(c, arg)
       case Projection(rec, name) => Projection(c, name)
       case h @ Handler(

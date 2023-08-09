@@ -401,7 +401,7 @@ private def inferLevel
     case Collapse(cTm)      => inferLevel(cTm)
     case U(cty)             => inferLevel(cty)
     case DataType(qn, args) => Right(Σ.getData(qn).ul.substLowers(args: _*))
-    case _: UsageType | _: EqDecidabilityType | _: EqDecidabilityLiteral | _: EffectsType |
+    case _: UsageType | _: EqDecidabilityType | _: EffectsType |
       _: HeapType =>
       Right(ULevel.USimpleLevel(LevelLiteral(0)))
     case _: LevelType    => Right(ULevel.UωLevel(0))
@@ -872,21 +872,22 @@ def checkSubsumptions
     case (sub :: tailSubs, sup :: tailSups, ty :: tys) =>
       for
         headConstraints <- checkSubsumption(sub, sup, Some(ty.ty))
-        r <- if headConstraints.isEmpty
-           then checkSubsumptions(tailSubs, tailSups, tys.substLowers(sub))
-           else
+        r <-
+          if headConstraints.isEmpty
+          then checkSubsumptions(tailSubs, tailSups, tys.substLowers(sub))
+          else
             val (a, b) = getFreeVars(tys)(using 0)
             if a(0) || b(0)
               // if the head term is referenced in the tail, add the whole thing as a constraint
-              then Right(Set(Constraint(Γ, subs, sups, tys)))
-              // the head term is not referenced in the tail, add the tail constraint in addition to the head
-              // constraints
-              else checkSubsumptions(tailSubs, tailSups, tys.strengthened).map(headConstraints ++ _)
+            then Right(Set(Constraint(Γ, subs, sups, tys)))
+            // the head term is not referenced in the tail, add the tail constraint in addition to the head
+            // constraints
+            else checkSubsumptions(tailSubs, tailSups, tys.strengthened).map(headConstraints ++ _)
       yield r
     case _ => throw IllegalArgumentException("length mismatch")
 
 /** @param ty
-  *   can be [[None]] if `a` and `b` are types
+  *   can be [[None]] if `rawSub` and `rawSup` are types
   */
 // Precondition: terms are already type-checked
 def checkSubsumption
@@ -1072,31 +1073,35 @@ def checkSubsumption
           yield effConstraint ++ usageConstraint ++ tyConstraint
         case (Return(v1), Return(v2), Some(F(ty, _, _))) =>
           checkSubsumption(v1, v2, Some(ty))(using CONVERSION)
-        case (Let(t1, ty1, ctx1), Let(t2, ty2, ctx2), ty) =>
+        case (Let(t1, ty1, eff1, usage1, ctx1), Let(t2, ty2, eff2, usage2, ctx2), ty) =>
           for
-            t1CTy <- ty1 match
-              case Some(ty1) => Right(ty1)
-              case None      => inferType(t1).map(_._1)
-            r <- t1CTy match
-              case F(t1Ty, _, _) =>
-                for
-                  t2CTy <- ty1 match
-                    case Some(ty2) => Right(ty2)
-                    case None      => inferType(t2).map(_._1)
-                  ctyConstraint <- checkSubsumption(t1CTy, t2CTy, None)(using CONVERSION)
-                  tConstraint <- checkSubsumption(t1, t2, Some(t2CTy))(using CONVERSION)
-                  ctxConstraint <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using
-                    CONVERSION,
-                  )(using Γ :+ Binding(t1Ty, UsageLiteral(UUnres))(gn"v"))
-                yield ctyConstraint ++ tConstraint ++ ctxConstraint
-              case _ => Left(ExpectFType(t1CTy))
-          yield r
+            tyConstraint <- checkSubsumption(ty1, ty2, None)(using CONVERSION)
+            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))(using CONVERSION)
+            usageConstraint <- checkSubsumption(usage1, usage2, Some(UsageType()))(using CONVERSION)
+            combinedEffects <-
+              if effConstraint.isEmpty then Right(eff1) else EffectsUnion(eff1, eff2).normalized
+            tConstraint <- checkSubsumption(
+              t1,
+              t2,
+              // Note on type used here
+              // * The concrete type passed here does not affect correctness of type checking.
+              // * A combined effect is used to be safe (e.g. we don't want to normalize potentially diverging terms)
+              // * Usage is not important during subsumption checking, hence we just pass UUnres.
+              Some(F(ty1, combinedEffects, UsageLiteral(UUnres))),
+            )(using CONVERSION)
+            ctxConstraint <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(
+              // Using ty1 or ty2 doesn't really matter here. We don't need to do any lambda substitution because ty1 or
+              // ty2 are not referenced by anything in ctx1 or ctx2 or ty.
+              using Γ :+ Binding(ty1, UsageLiteral(UUnres))(gn"v"),
+            )
+          yield tyConstraint ++ effConstraint ++ usageConstraint ++ tConstraint ++ ctxConstraint
         case (
             FunctionType(binding1, bodyTy1, eff1),
             FunctionType(binding2, bodyTy2, eff2),
             _,
           ) =>
           for
+            // TODO: if tyConstraint is not empty and it's referenced in body types, we need to add a guarded constant.
             effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
             tyConstraint <- checkSubsumption(binding2.ty, binding1.ty, None)
             bodyConstraint <- checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using
@@ -1221,15 +1226,11 @@ private def simplifyLet
   successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}",
 ) {
   t match
-    case Let(t, ty, ctx) =>
-      for
-        tTy <- ty match
-          case None     => inferType(t).map(_._1)
-          case Some(ty) => Right(ty)
-        r <- tTy match
-          case F(_, eff, _) if eff == Total =>
-            simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
-          case _ => Right(t)
+    case Let(t, ty, eff, usage, ctx) =>
+      for r <-
+          // TODO: Also check if usage is meta variable that references a Total value.
+          if eff == Total then simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
+          else Right(t)
       yield r
     case _ => Right(t)
 }
@@ -1596,94 +1597,90 @@ private def checkLet
   : Either[IrError, (CTerm, CTerm, Usages)] =
   val t = tm.t
   val ty = tm.ty
+  val effects = tm.eff
+  val usage = tm.usage
   val body = tm.ctx
   for
-    case (t, tTy, tUsages) <- ty match
-      case None     => inferType(t)
-      case Some(ty) => checkType(t, ty).map((t, usages) => (t, ty, usages))
-    r <- tTy match
-      case F(ty, effects, tyUsage) =>
+    ty <- checkIsType(ty)
+    (effects, _) <- checkType(effects, EffectsType())
+    (usage, _) <- checkType(usage, UsageType())
+    (t, tUsages) <- checkType(t, F(ty, effects, usage))
+    effects <- effects.normalized
+    tUsages <- transpose(tUsages.map(_.normalized))
+    (newTm, bodyTy, usages) <-
+      // If some usages are not zero or unres, inlining `t` would change usage checking
+      // result because
+      //
+      // * either some linear or relevant usages becomes zero because the computation
+      //   gets removed
+      //
+      // * or if the term is wrapped inside a `Collapse` and get multiplied
+      //
+      // Such changes would alter usage checking result, which can be confusing for
+      // users. Note that, it's still possible that with inlining causes usages to be
+      // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
+      // unrestricted usage. Hence, usage checking would still pass. On the other hand,
+      // it's not possible for inlining to create usage out of nowhere.
+      def areTUsagesZeroOrUnrestricted: Boolean =
+        tUsages.forall { usage =>
+          toBoolean(
+            checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
+              CheckSubsumptionMode.CONVERSION,
+            ),
+          ) ||
+          toBoolean(
+            checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
+              CheckSubsumptionMode.CONVERSION,
+            ),
+          )
+        }
+      if effects == Total && areTUsagesZeroOrUnrestricted then
+        // Do the reduction onsite so that type checking in sub terms can leverage the
+        // more specific type. More importantly, this way we do not need to reference
+        // the result of a computation in the inferred type.
         for
-          effects <- effects.normalized
-          tUsages <- transpose(tUsages.map(_.normalized))
-          (newTm, bodyTy, usages) <-
-            // If some usages are not zero or unres, inlining `t` would change usage checking
-            // result because
-            //
-            // * either some linear or relevant usages becomes zero because the computation
-            //   gets removed
-            //
-            // * or if the term is wrapped inside a `Collapse` and get multiplied
-            //
-            // Such changes would alter usage checking result, which can be confusing for
-            // users. Note that, it's still possible that with inlining causes usages to be
-            // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
-            // unrestricted usage. Hence, usage checking would still pass. On the other hand,
-            // it's not possible for inlining to create usage out of nowhere.
-            def areTUsagesZeroOrUnrestricted: Boolean =
-              tUsages.forall { usage =>
-                toBoolean(
-                  checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
-                    CheckSubsumptionMode.CONVERSION,
-                  ),
-                ) ||
-                toBoolean(
-                  checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
-                    CheckSubsumptionMode.CONVERSION,
-                  ),
-                )
-              }
-            if effects == Total && areTUsagesZeroOrUnrestricted then
-              // Do the reduction onsite so that type checking in sub terms can leverage the
-              // more specific type. More importantly, this way we do not need to reference
-              // the result of a computation in the inferred type.
-              for
-                t <- reduce(t)
-                newBody = t match
-                  case Return(v) => body.substLowers(v)
-                  case c         => body.substLowers(Collapse(c))
-                r <- bodyTy match
-                  case Some(bodyTy) =>
-                    checkType(newBody, bodyTy).map((newBody, usages) => (newBody, bodyTy, usages))
-                  case None => inferType(newBody)
-              yield r
-            // Otherwise, just add the binding to the context and continue type checking.
-            else
-              for
-                case (body, bodyTy, usagesInBody) <- bodyTy match
-                  case None => inferType(body)(using Γ :+ Binding(ty, tyUsage)(gn"v"))
-                  case Some(bodyTy) =>
-                    checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, tyUsage)(gn"v"))
-                      .map((body, usages) => (body, bodyTy, usages))
-                // Report an error if the type of `body` needs to reference the effectful
-                // computation. User should use a dependent sum type to wrap such
-                // references manually to avoid the leak.
-                // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
-                //  the bound variable
-                _ <- checkVar0Leak(
-                  bodyTy,
-                  LeakedReferenceToEffectfulComputationResult(t),
-                )
-                _ <- checkUsageSubsumption(usagesInBody.last.strengthened, tyUsage)(using
-                  SUBSUMPTION,
-                )
-                usagesInContinuation <- effects match
-                  // Join with U1 for normal execution without any call to effect handlers
-                  case v: Var                           => Right(getEffVarContinuationUsage(v))
-                  case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
-                  case _ =>
-                    throw IllegalStateException(s"expect to be of Effects type: $tm")
-              yield (
-                Let(t, Some(tTy), body)(tm.boundName)(using tm.sourceInfo),
-                bodyTy.strengthened,
-                usagesInBody
-                  .dropRight(1) // drop this binding
-                  .map(_.strengthened) *
-                  (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
-              )
-        yield (newTm, augmentEffect(effects, bodyTy), usages)
-      case _ => Left(ExpectFType(tTy))
-  yield r
+          t <- reduce(t)
+          newBody = t match
+            case Return(v) => body.substLowers(v)
+            case c         => body.substLowers(Collapse(c))
+          r <- bodyTy match
+            case Some(bodyTy) =>
+              checkType(newBody, bodyTy).map((newBody, usages) => (newBody, bodyTy, usages))
+            case None => inferType(newBody)
+        yield r
+      // Otherwise, just add the binding to the context and continue type checking.
+      else
+        for
+          case (body, bodyTy, usagesInBody) <- bodyTy match
+            case None => inferType(body)(using Γ :+ Binding(ty, usage)(gn"v"))
+            case Some(bodyTy) =>
+              checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, usage)(gn"v"))
+                .map((body, usages) => (body, bodyTy, usages))
+          // Report an error if the type of `body` needs to reference the effectful
+          // computation. User should use a dependent sum type to wrap such
+          // references manually to avoid the leak.
+          // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
+          //  the bound variable
+          _ <- checkVar0Leak(
+            bodyTy,
+            LeakedReferenceToEffectfulComputationResult(t),
+          )
+          _ <- checkUsageSubsumption(usagesInBody.last.strengthened, usage)(using SUBSUMPTION)
+          usagesInContinuation <- effects match
+            // Join with U1 for normal execution without any call to effect handlers
+            case v: Var                           => Right(getEffVarContinuationUsage(v))
+            case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
+            case _ =>
+              throw IllegalStateException(s"expect to be of Effects type: $tm")
+        yield (
+          Let(t, ty, effects, usage, body)(tm.boundName)(using tm.sourceInfo),
+          bodyTy.strengthened,
+          usagesInBody
+            .dropRight(1) // drop this binding
+            .map(_.strengthened) *
+            (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
+        )
+  yield (newTm, augmentEffect(effects, bodyTy), usages)
 
 def checkHandler
   (h: Handler, inputTy: Option[CTerm])
@@ -2081,7 +2078,7 @@ def reduceCType
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
                 case Return(vty) => Right(F(vty)(using cTy.sourceInfo))
-                case Let(t, _, ctx) =>
+                case Let(t, _, _, _, ctx) =>
                   reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
                 case c =>
                   throw IllegalStateException(
@@ -2199,4 +2196,4 @@ private inline def debugSubsumption[L, R]
 
 /* References
  [0]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).
-*/
+ */
