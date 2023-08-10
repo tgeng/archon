@@ -483,12 +483,13 @@ def inferType
             case Right(u) => Right(Some(u))
             case _        => Right(None)
         yield (newTm, UsageType(bound), usages)
-      case u: UsageType               => 
-        for
-          result <- transpose(u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))))
+      case u: UsageType =>
+        for result <- transpose(
+            u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))),
+          )
         yield result match
           case Some(upperBound, usages) => (u, Type(UsageType(Some(upperBound))), usages)
-          case _ => (u, Type(u), Usages.zero)
+          case _                        => (u, Type(u), Usages.zero)
       case eqD: EqDecidabilityType    => Right(eqD, Type(eqD), Usages.zero)
       case eqD: EqDecidabilityLiteral => Right(eqD, EqDecidabilityType(), Usages.zero)
       case e: EffectsType             => Right(e, Type(e), Usages.zero)
@@ -649,18 +650,23 @@ def inferType
       case CType(upperBound, effects) =>
         for
           (effects, effUsages) <- checkType(effects, EffectsType())
-          (upperBound, upperBoundTy, upperBoundUsages) <- inferType(upperBound)
+          (upperBound, upperBoundUsages) <- checkIsCType(upperBound)
+          upperBound <- reduceCType(upperBound)
+          effects <- effects.normalized
+          newTm = CType(upperBound, effects)
         yield (
-          CType(upperBound, effects),
-          CType(tm, Total),
+          newTm,
+          CType(newTm, Total),
           (effUsages + upperBoundUsages),
         )
       case CTop(ul, effects) =>
         for
           (effects, uUsages) <- checkType(effects, EffectsType())
           (ul, ulUsages) <- checkULevel(ul)
+          effects <- effects.normalized
           newTm = CTop(ul, effects)(using tm.sourceInfo)
         yield (newTm, CType(newTm, Total), (uUsages + ulUsages))
+      // TODO: inline solved meta variables here.
       case m @ Meta(index) => Right(m, ctx.metaVars(index).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
@@ -685,6 +691,8 @@ def inferType
           // Prevent returning value of U0 usage, which does not make sense.
           _ <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
           case (vTy, vTyTy, vTyUsages) <- inferType(vTy)
+          vTy <- vTy.normalized
+          usage <- usage.normalized
           newTm = F(vTy, effects, usage)(using tm.sourceInfo)
           cTyTy <- vTyTy match
             case Type(_) => Right(CType(newTm, Total))
@@ -697,6 +705,7 @@ def inferType
       case FunctionType(binding, bodyTy, effects) =>
         for
           (effects, effUsages) <- checkType(effects, EffectsType())
+          effects <- effects.normalized
           (ty, tyTy, tyUsages) <- inferType(binding.ty)
           (bindingUsage, bindingUsageUsages) <- checkType(binding.usage, UsageType(None))
           (newTm, funTyTy, bodyTyUsages) <- tyTy match
@@ -732,6 +741,7 @@ def inferType
               yield r
             case _ => Left(NotTypeError(binding.ty))
         yield (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
+      // TODO: inline solved meta variables here.
       case Application(fun, arg) =>
         for
           case (fun, funTy, funUsages) <- inferType(fun)
@@ -764,7 +774,8 @@ def inferType
               Σ.getFieldOption(qn, name) match
                 case None => Left(MissingField(name, qn))
                 case Some(f) =>
-                  Right(augmentEffect(effects, f.ty.substLowers(args :+ Thunk(rec): _*)))
+                  for ty <- reduceCType(f.ty.substLowers(args :+ Thunk(rec): _*))
+                  yield augmentEffect(effects, ty)
             case _ => Left(ExpectRecord(rec))
         yield (newTm, ty, recUsages)
       case OperationCall((qn, tArgs), name, args) =>
@@ -776,13 +787,15 @@ def inferType
               case Some(op) =>
                 for
                   (tArgs, effUsages) <- checkTypes(tArgs, effect.tParamTys.toList)
+                  tArgs <- transpose(tArgs.map(_.normalized))
                   (args, argsUsages) <- checkTypes(args, op.paramTys.substLowers(tArgs: _*))
                   newEff = (qn, tArgs)
                   newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
+                  ty <- op.resultTy.substLowers(tArgs ++ args: _*).normalized
                 yield (
                   newTm,
                   F(
-                    op.resultTy.substLowers(tArgs ++ args: _*),
+                    ty,
                     // TODO[p4]: figure out if there is way to better manage divergence for handler
                     // operations. The dynamic nature of handler dispatching makes it impossible to
                     // know at compile time whether this would lead to a cyclic reference in
@@ -800,6 +813,7 @@ def inferType
       case AllocOp(heap, vTy, value) =>
         for
           (heap, heapUsages) <- checkType(heap, HeapType())
+          heap <- heap.normalized
           (value, valueUsages) <- checkType(value, vTy)
           (vTy, _) <- checkIsType(vTy)
         yield (
@@ -1678,7 +1692,10 @@ private def checkLet
             case c         => body.substLowers(Collapse(c))
           r <- bodyTy match
             case Some(bodyTy) =>
-              checkType(newBody, bodyTy).map((newBody, usages) => (newBody, bodyTy, usages))
+              for
+                (bodyTy, _) <- checkIsCType(bodyTy)
+                (newBody, usages) <- checkType(newBody, bodyTy)
+              yield (newBody, bodyTy, usages)
             case None => inferType(newBody)
         yield r
       // Otherwise, just add the binding to the context and continue type checking.
@@ -1687,8 +1704,10 @@ private def checkLet
           case (body, bodyTy, usagesInBody) <- bodyTy match
             case None => inferType(body)(using Γ :+ Binding(ty, usage)(gn"v"))
             case Some(bodyTy) =>
-              checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, usage)(gn"v"))
-                .map((body, usages) => (body, bodyTy, usages))
+              for
+                (bodyTy, _) <- checkIsCType(bodyTy)
+                (body, usages) <- checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, usage)(gn"v"))
+              yield (body, bodyTy, usages)
           // Report an error if the type of `body` needs to reference the effectful
           // computation. User should use a dependent sum type to wrap such
           // references manually to avoid the leak.
@@ -1817,6 +1836,7 @@ def checkHandler
       case _                                => Left(ExpectFType(inputCTy))
     inputBinding = Binding(inputTy, inputUsage)(gn"v")
     (outputType, _) <- checkIsType(outputType)
+    outputUsage <- outputUsage.normalized
     outputCType = F(outputType, outputEffects, outputUsage)
     transformΓ = Γ :+ newParameterBinding :+ inputBinding.weakened
     (outputUsage, _) <- checkType(outputUsage, UsageType(None))
@@ -2030,10 +2050,10 @@ def checkIsCType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, CTerm] =
+  : Either[IrError, (CTerm, Usages)] =
   ctx.trace("checking is C type") {
     for
-      case (cty, cTyTy, _) <- inferType(cTy)
+      case (cty, cTyTy, usages) <- inferType(cTy)
       _ <- cTyTy match
         case CType(_, eff) if eff == Total =>
           levelBound match
@@ -2045,7 +2065,8 @@ def checkIsCType
             case _ => Right(())
         case _: CType => Left(EffectfulCTermAsType(cTy))
         case _        => Left(NotCTypeError(cTy))
-    yield cty
+      cty <- reduceCType(cty)
+    yield (cty, usages)
   }
 
 def reduceUsage
@@ -2157,7 +2178,8 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
     case Some(l) => Left(l)
     case _       => Right(())
 
-extension [L, R1](e1: Either[L, R1])
+extension [L, R1]
+  (e1: Either[L, R1])
   // TODO[P1]: remove this since it hides typing issues
   private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] =
     e1.flatMap(_ => e2)
