@@ -161,38 +161,43 @@ extension(us1: Usages)
   infix def *(scalar: Usage)(using SourceInfo): Usages =
     us1.map(u => UsageProd(u, UsageLiteral(scalar)))
 
-def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Unit] =
+def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Data] =
   ctx.trace(s"checking data signature ${data.qn}") {
     given Context = IndexedSeq()
 
     val tParams = data.tParamTys.map(_._1) ++ data.tIndexTys
     for
-      _ <- checkParameterTypeDeclarations(tParams.toList)
-      _ <- checkTParamsAreUnrestricted(tParams.toList)
-      _ <- checkULevel(data.ul)(using tParams.toIndexedSeq)
-      _ <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using tParams.toIndexedSeq)
-    yield ()
+      tParamsTysTelescope <- checkParameterTypeDeclarations(data.tParamTys.map(_._1).toTelescope)
+      tParamTys = Context.fromTelescope(tParamsTysTelescope)
+      tIndexTys <- checkParameterTypeDeclarations(data.tIndexTys)(using tParamTys)
+      tContext = tParamTys ++ tIndexTys
+      (ul, _) <- checkULevel(data.ul)(using tContext)
+      (inherentEqDecidability, _) <- checkType(data.inherentEqDecidability, EqDecidabilityType())(
+        using tContext,
+      )
+      _ <- checkTParamsAreUnrestricted(tContext.toTelescope)
+    yield Data(data.qn)(
+      tParamTys.zip(data.tParamTys.map(_._2)),
+      tIndexTys,
+      ul,
+      inherentEqDecidability,
+    )
   }
 
 def checkDataConstructor
   (qn: QualifiedName, con: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Constructor] =
   ctx.trace(s"checking data constructor $qn.${con.name}") {
     Σ.getDataOption(qn) match
       case None => Left(MissingDeclaration(qn))
       case Some(data) =>
         given Γ: Context = data.tParamTys.map(_._1)
         for
-          // _ <- checkInherentUsage(Σ.getData(qn), con)
+          paramTys <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
+          (tArgs, _) <- checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
           _ <- checkInherentEqDecidable(Σ.getData(qn), con)
-          _ <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          _ <- {
-            given Γ2: Context = Γ ++ con.paramTys
-
-            checkTypes(con.tArgs, data.tIndexTys.map(_.weaken(con.paramTys.size, 0)))
-          }
           _ <- {
             // binding of positiveVars must be either covariant or invariant
             // binding of negativeVars must be either contravariant or invariant
@@ -215,30 +220,31 @@ def checkDataConstructor
                 ),
               )
           }
-        yield ()
+        yield Constructor(con.name, paramTys, tArgs)
   }
 
 def checkRecord
   (record: Record)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Record] =
   ctx.trace(s"checking record signature ${record.qn}") {
     given Context = IndexedSeq()
 
     val tParams = record.tParamTys.map(_._1)
     for
-      _ <- checkParameterTypeDeclarations(tParams.toList)
+      tParamTysTelescope <- checkParameterTypeDeclarations(tParams.toList)
+      tParamTys = Context.fromTelescope(tParamTysTelescope)
       _ <- checkTParamsAreUnrestricted(tParams.toList)
-      _ <- checkULevel(record.ul)(using tParams.toIndexedSeq)
-    yield ()
+      (ul, _) <- checkULevel(record.ul)(using tParams.toIndexedSeq)
+    yield Record(record.qn)(tParamTys.zip(record.tParamTys.map(_._2)), ul, record.selfName)
   }
 
 def checkRecordField
   (qn: QualifiedName, field: Field)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Field] =
   ctx.trace(s"checking record field $qn.${field.name}") {
     Σ.getRecordOption(qn) match
       case None => Left(MissingDeclaration(qn))
@@ -248,8 +254,8 @@ def checkRecordField
             record,
           )
 
-        for _ <- checkIsCType(field.ty, Some(record.ul.weakened))
-        yield
+        for (ty, _) <- checkIsCType(field.ty, Some(record.ul.weakened))
+        _ <-
           // binding of positiveVars must be either covariant or invariant
           // binding of negativeVars must be either contravariant or invariant
           val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
@@ -263,7 +269,7 @@ def checkRecordField
                 case Variance.COVARIANT     => negativeVars(index)
                 case Variance.CONTRAVARIANT => positiveVars(index)
           }
-          if bindingWithIncorrectUsage.isEmpty then ()
+          if bindingWithIncorrectUsage.isEmpty then Right(())
           else
             Left(
               IllegalVarianceInRecord(
@@ -271,6 +277,7 @@ def checkRecordField
                 bindingWithIncorrectUsage.map(_._2),
               ),
             )
+        yield Field(field.name, ty)
   }
 
 def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
@@ -288,66 +295,45 @@ def checkDef
   (definition: Definition)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Definition] =
   ctx.trace(s"checking def signature ${definition.qn}") {
     given Context = IndexedSeq()
 
-    checkIsCType(definition.ty) >> Right(())
+    for (ty, _) <- checkIsCType(definition.ty)
+    yield Definition(definition.qn)(ty)
   }
-
-def checkClause
-  (qn: QualifiedName, clause: Clause)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Clause] = ctx.trace(s"checking def clause $qn") {
-  val lhs = clause.lhs.foldLeft(Some(Def(qn)): Option[CTerm]) {
-    case (Some(f), p) =>
-      p.toElimination match
-        case Some(ETerm(t))    => Some(Application(f, t))
-        case Some(EProj(name)) => Some(Projection(f, name))
-        case None              => None
-    case (None, _) => None
-  }
-  lhs match
-    case None => Right(clause) // skip checking absurd clauses
-    case Some(lhs) =>
-      given Context = clause.bindings
-      for
-        (_, lhsUsages) <- checkType(lhs, clause.ty)
-        _ <- checkUsagesSubsumption(lhsUsages, true)
-        (rhs, rhsUsages) <- checkType(clause.rhs, clause.ty)
-        _ <- checkUsagesSubsumption(rhsUsages)
-      yield clause.copy(rhs = rhs)
-}
 
 def checkEffect
   (effect: Effect)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Effect] =
   ctx.trace(s"checking effect signature ${effect.qn}") {
     given Context = IndexedSeq()
 
     for
-      _ <- checkParameterTypeDeclarations(effect.tParamTys.toList)
-      _ <- checkTParamsAreUnrestricted(effect.tParamTys.toList)
-      _ <- checkAreEqDecidableTypes(effect.tParamTys.toList)
-    yield ()
+      telescope <- checkParameterTypeDeclarations(effect.tParamTys.toTelescope)
+      _ <- checkTParamsAreUnrestricted(telescope)
+      _ <- checkAreEqDecidableTypes(telescope)
+    yield Effect(effect.qn)(telescope.reverse.toIndexedSeq, effect.continuationUsage)
   }
 
 def checkOperation
   (qn: QualifiedName, operation: Operation)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Operation] =
   ctx.trace(s"checking effect operation $qn.${operation.name}") {
     Σ.getEffectOption(qn) match
       case None => Left(MissingDeclaration(qn))
       case Some(effect) =>
         val Γ = effect.tParamTys.toIndexedSeq
 
-        checkParameterTypeDeclarations(operation.paramTys)(using Γ) >>
-          checkIsType(operation.resultTy)(using Γ ++ operation.paramTys) >> Right(())
+        for
+          paramTys <- checkParameterTypeDeclarations(operation.paramTys)(using Γ)
+          (resultTy, _) <- checkIsType(operation.resultTy)(using Γ ++ operation.paramTys)
+          (resultUsage, _) <- checkType(operation.resultUsage, UsageType(None))
+        yield operation.copy(paramTys = paramTys, resultTy = resultTy, resultUsage = resultUsage)
   }
 
 private def checkTParamsAreUnrestricted
@@ -359,7 +345,10 @@ private def checkTParamsAreUnrestricted
   case Nil => Right(())
   case binding :: rest =>
     for
-      _ <- checkUsageSubsumption(binding.usage, UsageLiteral(UUnres))
+      constarints <- checkUsageSubsumption(binding.usage, UsageLiteral(UUnres))
+      _ <- constarints.isEmpty match
+        case true  => Right(())
+        case false => Left(ExpectUnrestrictedTypeParameterBinding(binding))
       _ <- checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
     yield ()
 
@@ -368,17 +357,15 @@ private def checkParameterTypeDeclarations
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] = tParamTys match
-  case Nil => Right(())
+  : Either[IrError, Telescope] = tParamTys match
+  case Nil => Right(Nil)
   case binding :: rest =>
-    checkIsType(binding.ty, levelBound) >>
-      checkIsEqDecidableTypes(binding.ty) >>
-      checkSubsumption(
-        binding.usage,
-        UsageLiteral(UUnres),
-        Some(UsageType(None)),
-      ) >>
-      checkParameterTypeDeclarations(rest)(using Γ :+ binding)
+    for
+      (ty, _) <- checkIsType(binding.ty, levelBound)
+      _ <- checkIsEqDecidableTypes(ty)
+      (usage, _) <- checkType(binding.usage, UsageType(None))
+      rest <- checkParameterTypeDeclarations(rest)(using Γ :+ binding)
+    yield Binding(ty, usage)(binding.name) :: rest
 
 private def checkULevel
   (ul: ULevel)
@@ -1296,7 +1283,12 @@ private def checkInherentEqDecidable
       case binding :: rest =>
         for
           eqD <- deriveTypeInherentEqDecidability(binding.ty)
-          _ <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using SUBSUMPTION)
+          constraints <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using
+            SUBSUMPTION,
+          )
+          _ <- constraints.isEmpty match
+            case true  => Right(())
+            case false => Left(NotEqDecidableType(binding.ty))
           _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
         yield ()
 
@@ -1366,11 +1358,13 @@ private def checkInherentEqDecidable
     case Right(_) => Right(())
     // Call 1, 2, 3
     case _ =>
-      checkComponentTypes(
-        constructor.paramTys,
-        data.inherentEqDecidability,
-      ) >>
-        checkComponentUsage(constructor)
+      for
+        _ <- checkComponentTypes(
+          constructor.paramTys,
+          data.inherentEqDecidability,
+        )
+        _ <- checkComponentUsage(constructor)
+      yield ()
 
 private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor:
   override def visitCollapse
@@ -1412,25 +1406,28 @@ private def checkIsEqDecidableTypes
   : Either[IrError, Unit] =
   for
     eqD <- deriveTypeInherentEqDecidability(ty)
-    _ <- checkSubsumption(
+    constraints <- checkSubsumption(
       eqD,
       EqDecidabilityLiteral(EqDecidable),
       Some(EqDecidabilityType()),
     )(using CONVERSION)
-  yield ()
+    r <- constraints.isEmpty match
+      case true  => Right(())
+      case false => Left(NotEqDecidableType(ty))
+  yield r
 
 private def checkAreEqDecidableTypes
   (telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] = telescope match
-  case Nil => Right(())
+  : Either[IrError, Telescope] = telescope match
+  case Nil => Right(Nil)
   case binding :: telescope =>
     for
-      _ <- checkIsEqDecidableTypes(binding.ty)
-      _ <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
-    yield ()
+      ty <- checkIsEqDecidableTypes(binding.ty)
+      rest <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
+    yield telescope
 
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)
@@ -1706,7 +1703,9 @@ private def checkLet
             case Some(bodyTy) =>
               for
                 (bodyTy, _) <- checkIsCType(bodyTy)
-                (body, usages) <- checkType(body, bodyTy.weakened)(using Γ :+ Binding(ty, usage)(gn"v"))
+                (body, usages) <- checkType(body, bodyTy.weakened)(using
+                  Γ :+ Binding(ty, usage)(gn"v"),
+                )
               yield (body, bodyTy, usages)
           // Report an error if the type of `body` needs to reference the effectful
           // computation. User should use a dependent sum type to wrap such

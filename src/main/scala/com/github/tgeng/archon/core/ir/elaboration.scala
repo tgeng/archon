@@ -315,7 +315,8 @@ private def elaborateHead
           FunctionType(binding, bodyTy)
         },
       )
-      _ <- checkDef(d)
+      d <- checkDef(d)
+      // TODO: use rewritten term here
     yield Σ.addDeclaration(d)
   }
 

@@ -93,3 +93,4 @@ enum IrError extends HasException:
   case InsufficientResourceForSplit(x: VTerm.Var, binding: Binding[VTerm])
   case CyclicDeclarations(cycle: Seq[(DeclarationPart, PreDeclaration)])
   case EffectTermToComplex(term: VTerm)
+  case ExpectUnrestrictedTypeParameterBinding(binding: Binding[VTerm])
