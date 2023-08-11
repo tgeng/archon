@@ -196,7 +196,9 @@ def checkDataConstructor
         given Γ: Context = data.tParamTys.map(_._1)
         for
           paramTys <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
-          (tArgs, _) <- checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
+          (tArgs, _) <- checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using
+            Γ ++ paramTys,
+          )
           _ <- checkInherentEqDecidable(Σ.getData(qn), con)
           _ <- {
             // binding of positiveVars must be either covariant or invariant
@@ -254,29 +256,30 @@ def checkRecordField
             record,
           )
 
-        for (ty, _) <- checkIsCType(field.ty, Some(record.ul.weakened))
-        _ <-
-          // binding of positiveVars must be either covariant or invariant
-          // binding of negativeVars must be either contravariant or invariant
-          val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
-          val tParamTysSize = record.tParamTys.size
-          val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
-            case ((_, variance), reverseIndex) =>
-              val index =
-                tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
-              variance match
-                case Variance.INVARIANT     => false
-                case Variance.COVARIANT     => negativeVars(index)
-                case Variance.CONTRAVARIANT => positiveVars(index)
-          }
-          if bindingWithIncorrectUsage.isEmpty then Right(())
-          else
-            Left(
-              IllegalVarianceInRecord(
-                record.qn,
-                bindingWithIncorrectUsage.map(_._2),
-              ),
-            )
+        for
+          (ty, _) <- checkIsCType(field.ty, Some(record.ul.weakened))
+          _ <-
+            // binding of positiveVars must be either covariant or invariant
+            // binding of negativeVars must be either contravariant or invariant
+            val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
+            val tParamTysSize = record.tParamTys.size
+            val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter {
+              case ((_, variance), reverseIndex) =>
+                val index =
+                  tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
+                variance match
+                  case Variance.INVARIANT     => false
+                  case Variance.COVARIANT     => negativeVars(index)
+                  case Variance.CONTRAVARIANT => positiveVars(index)
+            }
+            if bindingWithIncorrectUsage.isEmpty then Right(())
+            else
+              Left(
+                IllegalVarianceInRecord(
+                  record.qn,
+                  bindingWithIncorrectUsage.map(_._2),
+                ),
+              )
         yield Field(field.name, ty)
   }
 
@@ -1461,16 +1464,22 @@ private def verifyUsages
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Usages] =
-  transpose(usages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
-    checkUsageSubsumption(v, Γ.resolve(i).usage)(using SUBSUMPTION)
-  }) >> Right(usages.drop(count).map { v =>
+  for _ <- transpose(usages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
+      for
+        constraint <- checkUsageSubsumption(v, Γ.resolve(i).usage)(using SUBSUMPTION)
+        r <-
+          if constraint.isEmpty then Right(())
+          else Left(NotUsageSubsumption(v, Γ.resolve(i).usage, SUBSUMPTION))
+      yield ()
+    })
+  yield usages.drop(count).map { v =>
     try v.strengthen(count, 0)
     catch
       // It's possible for a term's usage to reference a usage term after it. For example consider
       // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
       // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UUnres.
       case _: StrengthenException => UsageLiteral(Usage.UUnres)
-  })
+  }
 
 /** @param invert
   *   useful when checking patterns where the consumed usages are actually provided usages because
@@ -2176,12 +2185,6 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   } match
     case Some(l) => Left(l)
     case _       => Right(())
-
-extension [L, R1]
-  (e1: Either[L, R1])
-  // TODO[P1]: remove this since it hides typing issues
-  private inline infix def >>[R2](e2: => Either[L, R2]): Either[L, R2] =
-    e1.flatMap(_ => e2)
 
 private def debugCheck[L, R]
   (tm: CTerm | VTerm, ty: CTerm | VTerm, result: => Either[L, R])
