@@ -1485,21 +1485,21 @@ private def verifyUsages
   *   useful when checking patterns where the consumed usages are actually provided usages because
   *   lhs patterns are multiplied by declared usages in function
   */
-private def checkUsagesSubsumption
+def checkUsagesSubsumption
   (usages: Usages, invert: Boolean = false)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Unit] =
+  : Either[IrError, Set[Constraint]] =
   assert(usages.size == Γ.size)
-  allRight((0 until Γ.size).map { i =>
+  transpose((0 until Γ.size).map { i =>
     given Γ2: Context = Γ.take(i)
     val binding = Γ(i)
     val providedUsage = binding.usage
     val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
     if invert then checkUsageSubsumption(consumedUsage, providedUsage)(using SUBSUMPTION)
     else checkUsageSubsumption(providedUsage, consumedUsage)(using SUBSUMPTION)
-  })
+  }).map(_.flatten.toSet)
 
 private def checkContinuationUsageSubsumption
   (usage1: Option[Usage], usage2: Option[Usage])
@@ -2185,6 +2185,30 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   } match
     case Some(l) => Left(l)
     case _       => Right(())
+
+/** Extracts the meta variable and the arguments from a term if it's applying some arguments to a
+  * meta variable. Returns `None` otherwise.
+  *
+  * @return
+  *   option of tuple consisting the meta variable, the arguments applied to this meta variable, the
+  *   additional arguments applied to the result after meta variable application.
+  */
+private def extractMetaAndApplications
+  (t: CTerm)
+  (using ctx: TypingContext)
+  : Option[(Meta, IndexedSeq[VTerm], IndexedSeq[VTerm])] = t match
+  case m: Meta => Some((m, IndexedSeq(), IndexedSeq()))
+  case Application(m @ Meta(i), arg) =>
+    val metaVar = ctx.metaVars(i)
+    metaVar.context.size match
+      case 0 => Some((m, IndexedSeq(), IndexedSeq(arg)))
+      case _ => Some((m, IndexedSeq(arg), IndexedSeq()))
+  case Application(fun, arg) =>
+    for (meta, args, extra) <- extractMetaAndApplications(fun)
+    yield
+      if ctx.metaVars(meta.index).context.size > args.size then (meta, args :+ arg, extra)
+      else (meta, args, extra :+ arg)
+  case _ => None
 
 private def debugCheck[L, R]
   (tm: CTerm | VTerm, ty: CTerm | VTerm, result: => Either[L, R])

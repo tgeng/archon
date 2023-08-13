@@ -353,17 +353,18 @@ private def elaborateBody
     val σ = mutable.Map[Nat, VTerm]()
     matchPattern(constraints.map { case (w, p, _) => (p, w) }, σ) match
       case MatchingStatus.Matched =>
-        for _ <- allRight(constraints.map { case (w, p, _A) =>
-            p.toTerm match
+        for _ <- allRight(constraints.map { case (w, pattern, _A) =>
+            pattern.toTerm match
               case Some(p) =>
                 for
-                  _ <- checkType(p, _A)
-                  _ <- checkType(w, _A)
-                  _ <- checkSubsumption(p.subst(σ.get), w, Some(_A))(using
+                  (p, _) <- checkType(p, _A)
+                  (w, _) <- checkType(w, _A)
+                  constraint <- checkSubsumption(p.subst(σ.get), w, Some(_A))(using
                     CheckSubsumptionMode.CONVERSION,
                   )
+                  _ <- if constraint.isEmpty then Right(()) else Left(UnmatchedPattern(pattern, w, constraint))
                 yield ()
-              case None => Left(UnexpectedAbsurdPattern(p))
+              case None => Left(UnexpectedAbsurdPattern(pattern))
           })
         yield Some(σ.get)
       case MatchingStatus.Mismatch | MatchingStatus.Stuck => Right(None)
@@ -539,12 +540,12 @@ private def elaborateBody
             : Either[IrError, (Signature, CaseTree)] =
             val ElabClause(_E1, _, rhs1, source1) = problem(0)
 
-            def providedUsageLessThanU1(x: Var): Boolean =
-              checkUsageSubsumption(Γ.resolve(x).usage, UsageLiteral(Usage.U1))(using
+            def providedAtLeastU1Usage(x: Var): Boolean =
+              checkUsageSubsumption(UsageLiteral(Usage.U1), Γ.resolve(x).usage)(using
                 CheckSubsumptionMode.SUBSUMPTION,
               ) match
-                case Right(_) => false
-                case _        => true
+                case Right(constraint) if constraint.isEmpty => true
+                case _        => false
 
             // Find something to split.
             _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
@@ -557,7 +558,7 @@ private def elaborateBody
 
               // split data type
               case (_, (x: Var, PDataType(qn, args), _A)) =>
-                if providedUsageLessThanU1(x) then
+                if !providedAtLeastU1Usage(x) then
                   Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
                 else
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -643,7 +644,7 @@ private def elaborateBody
 
               // split constructor
               case (_, (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))) =>
-                if providedUsageLessThanU1(x) then
+                if providedAtLeastU1Usage(x) then
                   Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
                 else
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -757,7 +758,8 @@ private def elaborateBody
                   (rhs1, usages) <- σOption match
                     case Some(σ) => checkType(rhs1.subst(σ), _C)
                     case None    => Left(e)
-                  _ <- checkUsagesSubsumption(usages)
+                  constraint <- checkUsagesSubsumption(usages)
+                  _ <- if constraint.isEmpty then Right(()) else Left(UnsatifisfiedUsageRequirements(constraint))
                 yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
           split(q̅, _C, problem)
         case (Nil, _) => Left(IncompleteClauses(preDefinition.qn))
