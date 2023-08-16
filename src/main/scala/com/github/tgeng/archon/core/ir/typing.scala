@@ -924,10 +924,9 @@ def checkSubsumption
       case Some(Right(v)) => Some(v)
       case Some(Left(e))  => return Left(e)
     (rawSub.normalized, rawSup.normalized) match
-      case (Left(e), _)             => Left(e)
-      case (_, Left(e))             => Left(e)
+      case (Left(e), _) => Left(e)
+      case (_, Left(e)) => Left(e)
       case (Right(sub), Right(sup)) =>
-        // TODO: handle meta variables
         (sub, sup, ty) match
           case (Type(upperBound1), Type(upperBound2), _) =>
             checkSubsumption(upperBound1, upperBound2, None)
@@ -1053,203 +1052,218 @@ def checkSubsumption
       sub <- simplifyLet(sub)
       sup <- if isTotal then reduce(sup) else Right(sup)
       sup <- simplifyLet(sup)
-      r <- (sub, sup, ty) match
-        case (_, _, _) if sub == sup => Right(Set.empty)
-        case (_, _, Some(FunctionType(binding, bodyTy, _))) =>
-          checkSubsumption(
-            Application(sub.weakened, Var(0)),
-            Application(sup.weakened, Var(0)),
-            Some(bodyTy),
-          )(using CONVERSION)(using Γ :+ binding)
-        case (_, _, Some(RecordType(qn, _, _))) =>
-          Σ.getFieldsOption(qn) match
-            case None => Left(MissingDefinition(qn))
-            case Some(fields) =>
-              transpose(
-                fields.map { field =>
-                  checkSubsumption(
-                    Projection(sub, field.name),
-                    Projection(sup, field.name),
-                    Some(field.ty),
-                  )(using CONVERSION)
-                },
-              ).map(_.flatten.toSet)
-        case (CType(upperBound1, eff1), CType(upperBound2, eff2), _) =>
-          for
-            effConstraint <- checkEffSubsumption(eff1, eff2)
-            upperBoundConstraint <- checkSubsumption(upperBound1, upperBound2, Some(sup))
-          yield effConstraint ++ upperBoundConstraint
-        case (ty: IType, CTop(ul2, eff2), _) =>
-          for
-            ul1 <- inferLevel(ty)
-            levelConstraint <- checkULevelSubsumption(ul1, ul2)
-            effConstraint <- checkEffSubsumption(ty.effects, eff2)
-          yield levelConstraint ++ effConstraint
-        case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
-          for
-            effConstraint <- checkEffSubsumption(eff1, eff2)
-            usageConstraint <- checkUsageSubsumption(u1, u2)
-            tyConstraint <- checkSubsumption(vTy1, vTy2, None)
-          yield effConstraint ++ usageConstraint ++ tyConstraint
-        case (Return(v1), Return(v2), Some(F(ty, _, _))) =>
-          checkSubsumption(v1, v2, Some(ty))(using CONVERSION)
-        case (Let(t1, ty1, eff1, usage1, ctx1), Let(t2, ty2, eff2, usage2, ctx2), ty) =>
-          for
-            tyConstraint <- checkSubsumption(ty1, ty2, None)(using CONVERSION)
-            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))(using CONVERSION)
-            usageConstraint <- checkSubsumption(usage1, usage2, Some(UsageType()))(using CONVERSION)
-            combinedEffects <-
-              if effConstraint.isEmpty then Right(eff1) else EffectsUnion(eff1, eff2).normalized
-            tConstraint <- checkSubsumption(
-              t1,
-              t2,
-              // Note on type used heres
-              // * The concrete type passed here does not affect correctness of type checking.
-              // * A combined effect is used to be safe (e.g. we don't want to normalize potentially diverging terms)
-              // * Usage is not important during subsumption checking, hence we just pass UUnres.
-              Some(F(ty1, combinedEffects, UsageLiteral(UUnres))),
-            )(using CONVERSION)
-            ctxConstraint <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(
-              // Using ty1 or ty2 doesn't really matter here. We don't need to do any lambda substitution because ty1 or
-              // ty2 are not referenced by anything in ctx1 or ctx2 or ty.
-              using Γ :+ Binding(ty1, UsageLiteral(UUnres))(gn"v"),
-            )
-          yield tyConstraint ++ effConstraint ++ usageConstraint ++ tConstraint ++ ctxConstraint
-        case (
-            FunctionType(binding1, bodyTy1, eff1),
-            FunctionType(binding2, bodyTy2, eff2),
-            _,
-          ) =>
-          for
-            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
-            tyConstraint <- checkSubsumption(binding2.ty, binding1.ty, None)
-            bodyConstraint <-
-              if tyConstraint.isEmpty
-              then checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
-              else
-                val meta = ctx.addMetaVar(
-                  Guarded(
-                    Γ :+ binding2,
-                    F(binding1.ty.weakened, Total, binding1.usage.weakened),
-                    Return(Var(0)),
-                    tyConstraint,
-                  ),
-                )
-                checkSubsumption(
-                  bodyTy1,
-                  bodyTy2.subst {
-                    case 0 => Some(Collapse(vars(Γ.size).foldLeft[CTerm](meta)(Application(_, _))))
-                    case _ => None
+      r <-
+        def impl() = (sub, sup, ty) match
+          case (_, _, _) if sub == sup => Right(Set.empty)
+          case (_, _, Some(FunctionType(binding, bodyTy, _))) =>
+            checkSubsumption(
+              Application(sub.weakened, Var(0)),
+              Application(sup.weakened, Var(0)),
+              Some(bodyTy),
+            )(using CONVERSION)(using Γ :+ binding)
+          case (_, _, Some(RecordType(qn, _, _))) =>
+            Σ.getFieldsOption(qn) match
+              case None => Left(MissingDefinition(qn))
+              case Some(fields) =>
+                transpose(
+                  fields.map { field =>
+                    checkSubsumption(
+                      Projection(sub, field.name),
+                      Projection(sup, field.name),
+                      Some(field.ty),
+                    )(using CONVERSION)
                   },
-                  None,
-                )(using mode)(using Γ :+ binding2)
-          yield effConstraint ++ tyConstraint ++ bodyConstraint
-        case (Application(fun1, arg1), Application(fun2, arg2), _) =>
-          for
-            case (fun1, fun1Ty, _) <- inferType(fun1)
-            case (fun2, fun2Ty, _) <- inferType(fun2)
-            funTyConstraint <- checkSubsumption(fun1Ty, fun2Ty, None)(using CONVERSION)
-            funConstraint <- checkSubsumption(fun1, fun2, Some(fun1Ty))(using CONVERSION)
-            argConstraint <- fun1Ty match
-              case FunctionType(binding, _, _) =>
-                checkSubsumption(
-                  arg1,
-                  arg2,
-                  Some(binding.ty),
-                )(using CONVERSION)
-              case _ => Left(NotCSubsumption(sub, sup, ty, mode))
-          yield funTyConstraint ++ funConstraint ++ argConstraint
-        case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
-          Σ.getRecordOption(qn1) match
-            case None => Left(MissingDeclaration(qn1))
-            case Some(record) =>
-              var args = IndexedSeq[VTerm]()
-              for
-                effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
-                argConstraint <- transpose(
-                  args1
-                    .zip(args2)
-                    .zip(record.tParamTys)
-                    .map { case ((arg1, arg2), (binding, variance)) =>
-                      variance match
-                        case Variance.INVARIANT =>
-                          val r = checkSubsumption(
-                            arg1,
-                            arg2,
-                            Some(binding.ty.substLowers(args: _*)),
-                          )(using CONVERSION)
-                          args = args :+ arg1
-                          r
-                        case Variance.COVARIANT =>
-                          val r = checkSubsumption(
-                            arg1,
-                            arg2,
-                            Some(binding.ty.substLowers(args: _*)),
-                          )
-                          args = args :+ arg1
-                          r
-                        case Variance.CONTRAVARIANT =>
-                          val r = checkSubsumption(
-                            arg2,
-                            arg1,
-                            Some(binding.ty.substLowers(args: _*)),
-                          )
-                          args = args :+ arg2
-                          r
-                    },
                 ).map(_.flatten.toSet)
-              yield effConstraint ++ argConstraint
-        case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
-          for
-            case (rec1, rec1Ty, _) <- inferType(rec1)
-            case (rec2, rec2Ty, _) <- inferType(rec2)
-            r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
-          yield r
-        case (
-            OperationCall((qn1, tArgs1), name1, args1),
-            OperationCall((qn2, tArgs2), name2, args2),
-            _,
-          ) if qn1 == qn2 && name1 == name2 =>
-          Σ.getOperationOption(qn1, name1) match
-            case None => Left(MissingOperation(name1, qn1))
-            case Some(operation) =>
-              var args = IndexedSeq[VTerm]()
-              Σ.getEffectOption(qn1) match
-                case None => Left(MissingDeclaration(qn1))
-                case Some(effect) =>
-                  for
-                    tArgConstraint <- transpose(
-                      tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
-                        case ((tArg1, tArg2), binding) =>
-                          val r =
-                            checkSubsumption(tArg1, tArg2, Some(binding.ty))(using CONVERSION)
-                          args = args :+ tArg1
-                          r
+          case (CType(upperBound1, eff1), CType(upperBound2, eff2), _) =>
+            for
+              effConstraint <- checkEffSubsumption(eff1, eff2)
+              upperBoundConstraint <- checkSubsumption(upperBound1, upperBound2, Some(sup))
+            yield effConstraint ++ upperBoundConstraint
+          case (ty: IType, CTop(ul2, eff2), _) =>
+            for
+              ul1 <- inferLevel(ty)
+              levelConstraint <- checkULevelSubsumption(ul1, ul2)
+              effConstraint <- checkEffSubsumption(ty.effects, eff2)
+            yield levelConstraint ++ effConstraint
+          case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
+            for
+              effConstraint <- checkEffSubsumption(eff1, eff2)
+              usageConstraint <- checkUsageSubsumption(u1, u2)
+              tyConstraint <- checkSubsumption(vTy1, vTy2, None)
+            yield effConstraint ++ usageConstraint ++ tyConstraint
+          case (Return(v1), Return(v2), Some(F(ty, _, _))) =>
+            checkSubsumption(v1, v2, Some(ty))(using CONVERSION)
+          case (Let(t1, ty1, eff1, usage1, ctx1), Let(t2, ty2, eff2, usage2, ctx2), ty) =>
+            for
+              tyConstraint <- checkSubsumption(ty1, ty2, None)(using CONVERSION)
+              effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))(using CONVERSION)
+              usageConstraint <- checkSubsumption(usage1, usage2, Some(UsageType()))(using
+                CONVERSION,
+              )
+              combinedEffects <-
+                if effConstraint.isEmpty then Right(eff1) else EffectsUnion(eff1, eff2).normalized
+              tConstraint <- checkSubsumption(
+                t1,
+                t2,
+                // Note on type used heres
+                // * The concrete type passed here does not affect correctness of type checking.
+                // * A combined effect is used to be safe (e.g. we don't want to normalize potentially diverging terms)
+                // * Usage is not important during subsumption checking, hence we just pass UUnres.
+                Some(F(ty1, combinedEffects, UsageLiteral(UUnres))),
+              )(using CONVERSION)
+              ctxConstraint <- checkSubsumption(ctx1, ctx2, ty.map(_.weakened))(using mode)(
+                // Using ty1 or ty2 doesn't really matter here. We don't need to do any lambda substitution because ty1 or
+                // ty2 are not referenced by anything in ctx1 or ctx2 or ty.
+                using Γ :+ Binding(ty1, UsageLiteral(UUnres))(gn"v"),
+              )
+            yield tyConstraint ++ effConstraint ++ usageConstraint ++ tConstraint ++ ctxConstraint
+          case (
+              FunctionType(binding1, bodyTy1, eff1),
+              FunctionType(binding2, bodyTy2, eff2),
+              _,
+            ) =>
+            for
+              effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
+              tyConstraint <- checkSubsumption(binding2.ty, binding1.ty, None)
+              bodyConstraint <-
+                if tyConstraint.isEmpty
+                then checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
+                else
+                  val meta = ctx.addMetaVar(
+                    Guarded(
+                      Γ :+ binding2,
+                      F(binding1.ty.weakened, Total, binding1.usage.weakened),
+                      Return(Var(0)),
+                      tyConstraint,
+                    ),
+                  )
+                  checkSubsumption(
+                    bodyTy1,
+                    bodyTy2.subst {
+                      case 0 =>
+                        Some(Collapse(vars(Γ.size).foldLeft[CTerm](meta)(Application(_, _))))
+                      case _ => None
+                    },
+                    None,
+                  )(using mode)(using Γ :+ binding2)
+            yield effConstraint ++ tyConstraint ++ bodyConstraint
+          case (Application(fun1, arg1), Application(fun2, arg2), _) =>
+            for
+              // TODO[P1]: this is O(n^2) for applications of n arguments. Consider improve it to O(n)
+              case (fun1, fun1Ty, _) <- inferType(fun1)
+              case (fun2, fun2Ty, _) <- inferType(fun2)
+              // TODO[P0]: if a previous dependent constraint check failed, add the whole term as a constraint instead,
+              // consider doing the same for the others
+              funTyConstraint <- checkSubsumption(fun1Ty, fun2Ty, None)(using CONVERSION)
+              funConstraint <- checkSubsumption(fun1, fun2, Some(fun1Ty))(using CONVERSION)
+              argConstraint <- fun1Ty match
+                case FunctionType(binding, _, _) =>
+                  checkSubsumption(
+                    arg1,
+                    arg2,
+                    Some(binding.ty),
+                  )(using CONVERSION)
+                case _ => Left(NotCSubsumption(sub, sup, ty, mode))
+            yield funTyConstraint ++ funConstraint ++ argConstraint
+          case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
+            Σ.getRecordOption(qn1) match
+              case None => Left(MissingDeclaration(qn1))
+              case Some(record) =>
+                var args = IndexedSeq[VTerm]()
+                for
+                  effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
+                  argConstraint <- transpose(
+                    args1
+                      .zip(args2)
+                      .zip(record.tParamTys)
+                      .map { case ((arg1, arg2), (binding, variance)) =>
+                        variance match
+                          case Variance.INVARIANT =>
+                            val r = checkSubsumption(
+                              arg1,
+                              arg2,
+                              Some(binding.ty.substLowers(args: _*)),
+                            )(using CONVERSION)
+                            args = args :+ arg1
+                            r
+                          case Variance.COVARIANT =>
+                            val r = checkSubsumption(
+                              arg1,
+                              arg2,
+                              Some(binding.ty.substLowers(args: _*)),
+                            )
+                            args = args :+ arg1
+                            r
+                          case Variance.CONTRAVARIANT =>
+                            val r = checkSubsumption(
+                              arg2,
+                              arg1,
+                              Some(binding.ty.substLowers(args: _*)),
+                            )
+                            args = args :+ arg2
+                            r
                       },
-                    ).map(_.flatten.toSet)
-                    argConstraint <- transpose(
-                      args1.zip(args2).zip(operation.paramTys).map { case ((arg1, arg2), binding) =>
-                        val r = checkSubsumption(arg1, arg2, Some(binding.ty))(
-                          using CONVERSION,
-                        )
-                        args = args :+ arg1
-                        r
-                      },
-                    ).map(_.flatten.toSet)
-                  yield tArgConstraint ++ argConstraint
-        // For now, we skip the complex logic checking subsumption of handler and continuations. It
-        // seems not all that useful to keep those. But we can always add them later if it's deemed
-        // necessary.
-        case _ => Left(NotCSubsumption(sub, sup, ty, mode))
+                  ).map(_.flatten.toSet)
+                yield effConstraint ++ argConstraint
+          case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
+            for
+              case (rec1, rec1Ty, _) <- inferType(rec1)
+              case (rec2, rec2Ty, _) <- inferType(rec2)
+              r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
+            yield r
+          case (
+              OperationCall((qn1, tArgs1), name1, args1),
+              OperationCall((qn2, tArgs2), name2, args2),
+              _,
+            ) if qn1 == qn2 && name1 == name2 =>
+            Σ.getOperationOption(qn1, name1) match
+              case None => Left(MissingOperation(name1, qn1))
+              case Some(operation) =>
+                var args = IndexedSeq[VTerm]()
+                Σ.getEffectOption(qn1) match
+                  case None => Left(MissingDeclaration(qn1))
+                  case Some(effect) =>
+                    for
+                      tArgConstraint <- transpose(
+                        tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
+                          case ((tArg1, tArg2), binding) =>
+                            val r =
+                              checkSubsumption(tArg1, tArg2, Some(binding.ty))(using CONVERSION)
+                            args = args :+ tArg1
+                            r
+                        },
+                      ).map(_.flatten.toSet)
+                      argConstraint <- transpose(
+                        args1.zip(args2).zip(operation.paramTys).map {
+                          case ((arg1, arg2), binding) =>
+                            val r = checkSubsumption(arg1, arg2, Some(binding.ty))(
+                              using CONVERSION,
+                            )
+                            args = args :+ arg1
+                            r
+                        },
+                      ).map(_.flatten.toSet)
+                    yield tArgConstraint ++ argConstraint
+          // For now, we skip the complex logic checking subsumption of handler and continuations. It
+          // seems not all that useful to keep those. But we can always add them later if it's deemed
+          // necessary.
+          case _ => Left(NotCSubsumption(sub, sup, ty, mode))
+        def assignMeta
+          (metaIndex: Nat, args: Seq[VTerm], extra: Seq[VTerm], term: CTerm)
+          : Either[IrError, Set[Constraint]] = ???
+
+        (extractMetaAndApplications(sub), extractMetaAndApplications(sup)) match
+          // TODO: assign values to meta variables here
+          case (Some((Meta(subIdx), subArgs, subExtra)), Some((Meta(supIdx), supArgs, supExtra))) =>
+            if subIdx < supIdx then assignMeta(supIdx, supArgs, supExtra, sub)
+            else if subIdx > supIdx then assignMeta(subIdx, subArgs, subExtra, sup)
+            else impl()
+          case (Some((Meta(idx), args, extra)), None) => assignMeta(idx, args, extra, sup)
+          case (None, Some((Meta(idx), args, extra))) => assignMeta(idx, args, extra, sub)
+          case _ => impl()
     yield r
   },
 )
-
-private def assignMeta
-  (meta: Meta, term: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext) = ???
 
 private def simplifyLet
   (t: CTerm)
@@ -2185,6 +2199,11 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   } match
     case Some(l) => Left(l)
     case _       => Right(())
+
+private def extractDistinctArgVars(args: Seq[VTerm]): Option[List[Nat]] =
+  val argVars = args.collect { case v: Var => v.idx }
+  if argVars.distinct.length == argVars.length then Some(argVars.toList)
+  else None
 
 /** Extracts the meta variable and the arguments from a term if it's applying some arguments to a
   * meta variable. Returns `None` otherwise.
