@@ -85,16 +85,6 @@ object CoPattern:
   def qVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] =
     pVars(firstIndex, lastIndex).map(CPattern(_))
 
-enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
-  case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
-  case EProj(n: Name)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
-
-  override def withSourceInfo(sourceInfo: SourceInfo): Elimination[T] =
-    given SourceInfo = sourceInfo
-    this match
-      case ETerm(v) => ETerm(v)
-      case EProj(n) => EProj(n)
-
 import CoPattern.*
 import Elimination.*
 

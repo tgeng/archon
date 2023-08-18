@@ -16,6 +16,7 @@ import DelimitPolicy.*
 import Usage.*
 import IrError.*
 import MetaVariable.*
+import Elimination.*
 
 trait Reducible[T]:
   def reduce
@@ -30,7 +31,7 @@ extension [T](a: mutable.ArrayBuffer[T])
   def push(t: T) = a.addOne(t)
   def pushAll(ts: Iterable[T]) = a.addAll(ts)
 
-private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
+private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm]]):
 
   // Note: for now this does not seem to be useful because this stack machine is only used for type
   // checking, in which case there are no builtin handlers at all because during type checking all
@@ -57,7 +58,10 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
   private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
     stack.view.zipWithIndex.drop(startIndex).foreach {
       case (HeapHandler(Some(heapKey), _, _), index) =>
-        updateHandlerIndex(Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set.empty), index)
+        updateHandlerIndex(
+          Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set.empty),
+          index,
+        )
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
       case _                         =>
     }
@@ -89,18 +93,28 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.isEmpty then Right(pc)
-        else run(substHole(stack.pop(), pc), true)
+        else
+          stack.pop() match
+            case c: CTerm => run(substHole(c, pc), true)
+            case _ =>
+              throw IllegalStateException(
+                "type error: none of the terms above can take an argument or projection",
+              )
       case Meta(index) =>
-        ctx.metaVars(index) match
-          case Solved(context, ty, value) =>
-            val args = stack.takeRight(context.size).map {
-              case Application(_, arg) => arg
-              case _ => throw IllegalStateException("bad meta variable application")
-            }
-            stack.dropRightInPlace(context.size)
-            run(value.substLowers(args.toSeq: _*), true)
-          // stuck for unresolved meta variables
-          case _ => Right(pc)
+        val t = ctx.metaVars(index) match
+            case Solved(context, ty, value) =>
+              for
+                args <- transpose(stack.takeRight(context.size).map {
+                  case ETerm(arg) => arg.normalized
+                  case _          => throw IllegalStateException("bad meta variable application")
+                })
+                _ = stack.dropRightInPlace(context.size)
+              yield Some(value.substLowers(args.toSeq: _*))          // stuck for unresolved meta variables
+            case _ => Right(None)
+        t match
+          case Right(Some(t)) => run(t)
+          case Right(None) => Right(reconstructTermFromStack(pc))
+          case Left(e) => Left(e)
       case Def(qn) =>
         Σ.getClausesOption(qn) match
           // This is allowed because it could be that the body is not defined yet.
@@ -111,8 +125,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               matchCoPattern(
                 lhs.zip(
                   stack.reverseIterator.map {
-                    case Application(_, arg) => Elimination.ETerm(arg)
-                    case Projection(_, name) => Elimination.EProj(name)
+                    case e: Elimination[_] => e
                     case t =>
                       throw IllegalArgumentException(
                         s"type error: expect application or projection, but got $t",
@@ -147,21 +160,20 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
           case _ =>
             stack.push(pc)
             run(t)
-      case Application(fun, arg) =>
-        fun match
+      case Redux(t, elims) =>
+        elims match
           case _ if reduceDown => throw IllegalArgumentException("type error")
+          case Nil             => run(t)
           case _ =>
-            arg.normalized match
+            val normalizedElims = transpose(elims.reverse.map[Either[IrError, Elimination[VTerm]]] {
+                case ETerm(t) => t.normalized.map(ETerm.apply)
+                case EProj(n) => Right(EProj(n))
+              })
+            normalizedElims match
+              case Right(elims) =>
+                stack.pushAll(elims)
+                run(t)
               case Left(e) => Left(e)
-              case Right(v) =>
-                stack.push(Application(Hole, v))
-                run(fun)
-      case Projection(rec, name) =>
-        rec match
-          case _ if reduceDown => throw IllegalArgumentException("type error")
-          case _ =>
-            stack.push(pc)
-            run(rec)
       case OperationCall((effQn, effArgs), name, args) =>
         def areEffArgsConvertible(ts1: List[VTerm], ts2: List[VTerm], tys: Telescope): Boolean =
           (ts1, ts2, tys) match
@@ -203,9 +215,9 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               case Left(e)   => Left(e)
       case Continuation(handler, capturedStack) =>
         stack.pop() match
-          case Projection(_, name) if name == n"resume" =>
-            val Application(_, param) = stack.pop(): @unchecked
-            val Application(_, arg) = stack.pop(): @unchecked
+          case EProj(name) if name == n"resume" =>
+            val ETerm(param) = stack.pop(): @unchecked
+            val ETerm(arg) = stack.pop(): @unchecked
             val currentStackHeight = stack.length
             stack.push(
               handler.copy(parameter = param)(
@@ -216,8 +228,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
             stack.pushAll(capturedStack)
             regenerateHandlerIndex(currentStackHeight)
             run(Return(arg))
-          case Projection(_, name) if name == n"dispose" =>
-            val Application(_, param) = stack.pop(): @unchecked
+          case EProj(name) if name == n"dispose" =>
+            val ETerm(param) = stack.pop(): @unchecked
             stack.push(
               handler.copy(
                 parameter = param,
@@ -242,8 +254,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
               case _ => // ignore non-handler cases since they do not contain any disposing logic.
             }
             run(Return(Con(n"MkUnit", Nil)))
-          case Projection(_, name) if name == n"replicate" =>
-            val Application(_, param) = stack.pop(): @unchecked
+          case EProj(name) if name == n"replicate" =>
+            val ETerm(param) = stack.pop(): @unchecked
             val currentStackSize = stack.size
             stack.push(
               handler.copy(parameter = param)(
@@ -441,9 +453,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
     given SourceInfo = ctx.sourceInfo
 
     ctx match
-      case l @ Let(t, ty, effects, usage, ctx)   => Let(c, ty, effects, usage, ctx)(l.boundName)
-      case Application(fun, arg) => Application(c, arg)
-      case Projection(rec, name) => Projection(c, name)
+      case l @ Let(t, ty, effects, usage, ctx) => Let(c, ty, effects, usage, ctx)(l.boundName)
       case h @ Handler(
           eff,
           parameterBinding,
@@ -478,10 +488,25 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm]):
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
+    val elims = mutable.ArrayBuffer[Elimination[VTerm]]()
     while (stack.nonEmpty) {
-      current = substHole(stack.pop(), current)
+      stack.pop() match
+        case e: Elimination[_] => elims.append(e)
+        case c: CTerm =>
+          current = substHole(c, current)
+          if elims.nonEmpty then
+            current = Redux(current, elims.toList)(using c.sourceInfo)
+            elims.clear()
     }
     current
+
+extension(c: CTerm)
+  def normalized
+    (using Γ: Context)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Either[IrError, CTerm] = ???
+
 
 extension(v: VTerm)
   def normalized

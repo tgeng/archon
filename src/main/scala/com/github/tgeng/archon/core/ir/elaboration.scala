@@ -474,11 +474,7 @@ private def elaborateBody
             case None => subst(problem, σ)
         yield r
 
-  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm =
-    q̅.foldLeft[CTerm](Def(qn)) {
-      case (f, CPattern(p))    => Application(f, p.toTerm.getOrElse(throw IllegalStateException()))
-      case (f, CProjection(n)) => Projection(f, n)
-    }
+  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm = Redux(Def(qn), q̅.map(_.toElimination.get))
 
   def elaborate
     (q̅ : List[CoPattern], _C: CTerm, problem: Problem)

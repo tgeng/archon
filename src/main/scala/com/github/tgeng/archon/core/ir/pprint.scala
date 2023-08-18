@@ -485,23 +485,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
   }
 
-  override def visitApplication
-    (
-      application: Application,
-    )
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
+  override def visitRedux(redux: Redux)(using ctx: PPrintContext)(using Σ: Signature): Block =
     ctx.withPrecedence(PPApp) {
-      val (args, f) = unroll[Elimination[VTerm], CTerm](application) {
-        case Application(fun, arg) => Left((Elimination.ETerm(arg), fun, Nil))
-        case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
-        case t                     => Right(visitCTerm(t))
-      }
-      juxtapose(f, args.reverse.map(visitElim))
+      juxtapose(redux.t, redux.elims.map(visitElim))
     }
 
-  private def visitElim
+  override def visitElim
     (elim: Elimination[VTerm])
     (using ctx: PPrintContext)
     (using
@@ -521,21 +510,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     recordType.effects,
     bracketAndSpace(recordType.qn, recordType.args.map(visitVTerm)),
   )
-
-  override def visitProjection
-    (
-      projection: Projection,
-    )
-    (using ctx: PPrintContext)
-    (using Σ: Signature)
-    : Block =
-
-    val (args, f) = unroll[Elimination[VTerm], CTerm](projection) {
-      case Application(fun, arg) => Left((Elimination.ETerm(arg), fun, Nil))
-      case Projection(fun, name) => Left((Elimination.EProj(name), fun, Nil))
-      case c                     => Right(visitCTerm(c))
-    }
-    juxtapose(f, args.reverse.map(visitElim))
 
   override def visitOperationCall
     (

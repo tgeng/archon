@@ -348,6 +348,14 @@ trait Visitor[C, R]:
     },
   )
 
+  def visitRedux(redux: Redux)(using ctx: C)(using Σ: Signature): R = combine(
+    visitCTerm(redux.t) +: redux.elims.map(visitElim): _*,
+  )
+
+  def visitElim(elim: Elimination[VTerm])(using ctx: C)(using Σ: Signature): R = elim match
+    case Elimination.EProj(n) => visitName(n)
+    case Elimination.ETerm(v) => visitVTerm(v)
+
   def visitFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(functionType.binding.ty),
@@ -357,23 +365,11 @@ trait Visitor[C, R]:
       visitVTerm(functionType.effects),
     )
 
-  def visitApplication(application: Application)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitCTerm(application.fun),
-      visitVTerm(application.arg),
-    )
-
   def visitRecordType(recordType: RecordType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(recordType.qn) +:
         recordType.args.map(visitVTerm) :+
         visitVTerm(recordType.effects): _*,
-    )
-
-  def visitProjection(projection: Projection)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitCTerm(projection.rec),
-      visitName(projection.name),
     )
 
   def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
@@ -384,14 +380,23 @@ trait Visitor[C, R]:
     )
 
   def visitContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): R =
-    combine(continuation.capturedStack.map(visitCTerm): _*)
+    combine(continuation.capturedStack.map {
+      case c: CTerm             => visitCTerm(c)
+      case elim: Elimination[_] => visitElim(elim)
+    }: _*)
 
   def visitContinuationReplicationState
     (c: ContinuationReplicationState)
     (using ctx: C)
     (using Σ: Signature)
     : R =
-    combine(c.stack1.map(visitCTerm) ++ c.stack2.map(visitCTerm): _*)
+    combine(c.stack1.map {
+      case c: CTerm             => visitCTerm(c)
+      case elim: Elimination[_] => visitElim(elim)
+    } ++ c.stack2.map {
+      case c: CTerm             => visitCTerm(c)
+      case elim: Elimination[_] => visitElim(elim)
+    }: _*)
 
   def visitContinuationReplicationStateAppender
     (c: ContinuationReplicationStateAppender)
@@ -479,10 +484,9 @@ trait Visitor[C, R]:
     case f: F                                    => visitF(f)
     case r: Return                               => visitReturn(r)
     case let: Let                                => visitLet(let)
+    case redux: Redux                            => visitRedux(redux)
     case functionType: FunctionType              => visitFunctionType(functionType)
-    case application: Application                => visitApplication(application)
     case recordType: RecordType                  => visitRecordType(recordType)
-    case projection: Projection                  => visitProjection(projection)
     case operationCall: OperationCall            => visitOperationCall(operationCall)
     case continuation: Continuation              => visitContinuation(continuation)
     case c: ContinuationReplicationState         => visitContinuationReplicationState(c)
@@ -759,6 +763,20 @@ trait Transformer[C]:
       },
     )(let.boundName)(using let.sourceInfo)
 
+  def transformRedux(redux: Redux)(using ctx: C)(using Σ: Signature): CTerm =
+    Redux(
+      transformCTerm(redux.t),
+      redux.elims.map(transformElim),
+    )(using redux.sourceInfo)
+
+  def transformElim
+    (elim: Elimination[VTerm])
+    (using ctx: C)
+    (using Σ: Signature)
+    : Elimination[VTerm] = elim match
+    case Elimination.EProj(n) => Elimination.EProj(transformName(n))(using elim.sourceInfo)
+    case Elimination.ETerm(v) => Elimination.ETerm(transformVTerm(v))(using elim.sourceInfo)
+
   def transformFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): CTerm =
     FunctionType(
       Binding(
@@ -771,24 +789,12 @@ trait Transformer[C]:
       transformVTerm(functionType.effects),
     )(using functionType.sourceInfo)
 
-  def transformApplication(application: Application)(using ctx: C)(using Σ: Signature): CTerm =
-    Application(
-      transformCTerm(application.fun),
-      transformVTerm(application.arg),
-    )(using application.sourceInfo)
-
   def transformRecordType(recordType: RecordType)(using ctx: C)(using Σ: Signature): CTerm =
     RecordType(
       transformQualifiedName(recordType.qn),
       recordType.args.map(transformVTerm),
       transformVTerm(recordType.effects),
     )(using recordType.sourceInfo)
-
-  def transformProjection(projection: Projection)(using ctx: C)(using Σ: Signature): CTerm =
-    Projection(
-      transformCTerm(projection.rec),
-      transformName(projection.name),
-    )(using projection.sourceInfo)
 
   def transformOperationCall
     (operationCall: OperationCall)
@@ -804,7 +810,10 @@ trait Transformer[C]:
   def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
     Continuation(
       transformHandler(continuation.handler),
-      continuation.capturedStack.map(transformCTerm),
+      continuation.capturedStack.map {
+        case c: CTerm             => transformCTerm(c)
+        case elim: Elimination[_] => transformElim(elim)
+      },
     )
   def transformContinuationReplicationState
     (c: ContinuationReplicationState)
@@ -813,8 +822,14 @@ trait Transformer[C]:
     : ContinuationReplicationState =
     ContinuationReplicationState(
       c.handlerIndex,
-      c.stack1.map(transformCTerm),
-      c.stack2.map(transformCTerm),
+      c.stack1.map {
+        case c: CTerm             => transformCTerm(c)
+        case elim: Elimination[_] => transformElim(elim)
+      },
+      c.stack2.map {
+        case c: CTerm             => transformCTerm(c)
+        case elim: Elimination[_] => transformElim(elim)
+      },
     )
 
   def transformContinuationReplicationStateAppender
@@ -914,10 +929,9 @@ trait Transformer[C]:
       case f: F                            => transformF(f)
       case r: Return                       => transformReturn(r)
       case let: Let                        => transformLet(let)
+      case redux: Redux                    => transformRedux(redux)
       case functionType: FunctionType      => transformFunctionType(functionType)
-      case application: Application        => transformApplication(application)
       case recordType: RecordType          => transformRecordType(recordType)
-      case projection: Projection          => transformProjection(projection)
       case operationCall: OperationCall    => transformOperationCall(operationCall)
       case continuation: Continuation      => transformContinuation(continuation)
       case c: ContinuationReplicationState => transformContinuationReplicationState(c)

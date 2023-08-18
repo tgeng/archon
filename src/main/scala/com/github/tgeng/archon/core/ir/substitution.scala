@@ -272,6 +272,30 @@ extension(v: VTerm)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
+extension(e: Elimination[VTerm])
+  def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
+    e.map(v => SubstitutableVTerm.substitute(v, substitution))
+  def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
+    e.map(v => RaisableVTerm.raise(v, amount, at))
+  def weakened(using Σ: Signature) = e.weaken(1, 0)
+  def strengthened(using Σ: Signature) = e.strengthen(1, 0)
+  def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
+    e.map(v => RaisableVTerm.raise(v, -amount, at))
+
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
+    * highest index with the last substitutes 0. Then the result is raised so that the substituted
+    * indices are taken by other (deeper) indices.
+    */
+  def substLowers(vTerms: VTerm*)(using Σ: Signature) =
+    val count = vTerms.length
+    e
+      // for example, consider substitution happened when applying (4, 5) to the body of function \a,
+      // b => a + b. In DeBruijn index the lambda body is `$1 + $0` and `vTerms` is `[4, 5]`. The
+      // first argument `4` at index `0` should replace `$1`.
+      .subst(i => vTerms.lift(count - 1 - i).map(_.weaken(count, 0)))
+      // strengthen the resulted term so that even higher indices are correct.
+      .strengthen(count, 0)
+
 extension(v: Pattern)
   def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
     SubstitutablePattern.substitute(v, substitution)

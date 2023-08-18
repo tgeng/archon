@@ -7,6 +7,7 @@ import QualifiedName.*
 import SourceInfo.*
 import EqDecidability.*
 import Usage.*
+import scala.annotation.targetName
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -25,6 +26,20 @@ object Binding:
 /** Head is on the left, e.g. Z :: S Z :: []
   */
 type Arguments = List[VTerm]
+
+enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
+  case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
+  case EProj(n: Name)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
+
+  override def withSourceInfo(sourceInfo: SourceInfo): Elimination[T] =
+    given SourceInfo = sourceInfo
+    this match
+      case ETerm(v) => ETerm(v)
+      case EProj(n) => EProj(n)
+
+  def map[R](f: T => R): Elimination[R] = this match
+    case ETerm(v) => ETerm(f(v))
+    case EProj(n) => EProj(n)
 
 class HeapKey:
   private val id = HeapKey.nextId
@@ -360,6 +375,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   //     return. Since computations are always linear, this means clet has little flexibility in
   //     terms of resource counting. For example, `plus_1` can only be linear.
 
+  case Redux(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo)
+    extends CTerm(sourceInfo)
+
   /** archon.builtin.Function */
   case FunctionType
     (
@@ -372,8 +390,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case Application(fun: CTerm, arg: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-
   case RecordType
     (
       qn: QualifiedName,
@@ -381,8 +397,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       effects: VTerm = VTerm.Total(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType, QualifiedNameOwner(qn)
-
-  case Projection(rec: CTerm, name: Name)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   case OperationCall(eff: Eff, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
@@ -396,7 +410,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   computation right above corresponding handler. Note that the first term is at the bottom of
     *   the stack and the last term is the tip of the stack.
     */
-  case Continuation(handler: Handler, capturedStack: Seq[CTerm]) extends CTerm(SiEmpty)
+  case Continuation(handler: Handler, capturedStack: Seq[CTerm | Elimination[VTerm]])
+    extends CTerm(SiEmpty)
 
   /** Internaly only. This is only created by reduction.
     *
@@ -413,8 +428,12 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param stack1:
     *   the other replicated stack
     */
-  case ContinuationReplicationState(handlerIndex: Nat, stack1: Seq[CTerm], stack2: Seq[CTerm])
-    extends CTerm(SiEmpty)
+  case ContinuationReplicationState
+    (
+      handlerIndex: Nat,
+      stack1: Seq[CTerm | Elimination[VTerm]],
+      stack2: Seq[CTerm | Elimination[VTerm]],
+    ) extends CTerm(SiEmpty)
 
   /** Internaly only. This is only created by reduction.
     *
@@ -518,11 +537,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case F(vTy, effects, u)              => F(vTy, effects, u)
       case Return(v)                       => Return(v)
       case l @ Let(t, ty, eff, usage, ctx) => Let(t, ty, eff, usage, ctx)(l.boundName)
+      case Redux(t, elims)                 => Redux(t, elims)
       case FunctionType(binding, bodyTy, effects) =>
         FunctionType(binding, bodyTy, effects)
-      case Application(fun, args)         => Application(fun, args)
       case RecordType(qn, args, effects)  => RecordType(qn, args, effects)
-      case Projection(rec, name)          => Projection(rec, name)
       case OperationCall(eff, name, args) => OperationCall(eff, name, args)
       case c: (Continuation | ContinuationReplicationState |
           ContinuationReplicationStateAppender) =>
@@ -579,6 +597,30 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 object CTerm:
   def CTop(t: VTerm, effects: VTerm = VTerm.Total(using SiEmpty))(using sourceInfo: SourceInfo) =
     new CTop(ULevel.USimpleLevel(t), effects)
+
+  @targetName("reduxFromElims")
+  def redux(c: CTerm, elims: Seq[Elimination[VTerm]])(using SourceInfo): Redux =
+    Redux(c, elims.toList)
+
+  @targetName("reduxFromElimsStar")
+  def redux(c: CTerm, elims: Elimination[VTerm]*)(using SourceInfo): Redux = redux(c, elims)
+
+  @targetName("reduxFromTerms")
+  def redux(c: CTerm, args: Seq[VTerm])(using SourceInfo): Redux =
+    Redux(c, args.map(Elimination.ETerm(_)).toList)
+
+  @targetName("reduxFromTermsStar")
+  def redux(c: CTerm, args: VTerm*)(using SourceInfo): Redux = redux(c, args)
+
+  def Application(fun: CTerm, arg: VTerm)(using SourceInfo): Redux =
+    fun match
+      case Redux(c, elims) => Redux(c, elims :+ Elimination.ETerm(arg))
+      case t               => Redux(t, List(Elimination.ETerm(arg)))
+
+  def Projection(rec: CTerm, name: Name)(using SourceInfo): Redux =
+    rec match
+      case Redux(c, elims) => Redux(c, elims :+ Elimination.EProj(name))
+      case t               => Redux(t, List(Elimination.EProj(name)))
 
   extension(binding: Binding[VTerm])
     infix def ->:(body: CTerm): FunctionType =

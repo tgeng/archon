@@ -5,6 +5,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.ULevel.USimpleLevel
 
 import SourceInfo.*
+import Elimination.*
 
 trait DerivedSignature extends Signature:
   override type S <: DerivedSignature
@@ -256,7 +257,7 @@ trait DerivedSignature extends Signature:
               UsageLiteral(U1),
             )(record.selfName),
             qVars(record.tParamTys.size),
-            Projection(Force(Var(0)), fieldName),
+            Redux(Force(Var(0)), EProj(fieldName) :: Nil),
             field.ty,
           ),
         )
@@ -372,7 +373,7 @@ trait DerivedSignature extends Signature:
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
         yield record.tParamTys.foldRight(
-          CtLambda(CtTerm(Projection(Force(Var(0)), fieldName)))(record.selfName),
+          CtLambda(CtTerm(Redux(Force(Var(0)), EProj(fieldName):: Nil)))(record.selfName),
         ) { case ((binding, _), _Q) =>
           CtLambda(_Q)(binding.name)
         }

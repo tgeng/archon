@@ -588,7 +588,7 @@ def checkType
       val meta = ctx.addMetaVar(MetaVariable.Unsolved(Γ, F(ty)))
       Right(
         (
-          Collapse(vars(Γ.size - 1).foldLeft[CTerm](meta)(Application(_, _))),
+          Collapse(redux(meta, vars(Γ.size - 1))),
           Usages.zero,
         ),
       )
@@ -731,22 +731,37 @@ def inferType
               yield r
             case _ => Left(NotTypeError(binding.ty))
         yield (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
-      // TODO: inline solved meta variables here.
-      case Application(fun, arg) =>
+      case Redux(c, elims) =>
+        // TODO: inline solved meta variables here.
+        def checkElims
+          (checkedElims: List[Elimination[VTerm]], cty: CTerm, elims: List[Elimination[VTerm]])
+          : Either[IrError, (List[Elimination[VTerm]], CTerm, Usages)] =
+          elims match
+            case Nil => Right(Nil, cty, Usages.zero)
+            case (e @ ETerm(arg)) :: rest =>
+              cty match
+                case FunctionType(binding, bodyTy, effects) =>
+                  for
+                    (arg, argUsages) <- checkType(arg, binding.ty)
+                    cty <- reduceCType(bodyTy.substLowers(arg))
+                    (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
+                  yield (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages))
+                case _ => Left(ExpectFunction(Redux(c, checkedElims.reverse)))
+            case (e @ EProj(name)) :: rest =>
+              cty match
+                case RecordType(qn, args, effects) =>
+                  Σ.getFieldOption(qn, name) match
+                    case None => Left(MissingField(name, qn))
+                    case Some(f) =>
+                      for
+                        cty <- reduceCType(f.ty.substLowers(args :+ Thunk(c): _*))
+                        (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
+                      yield (EProj(name) :: rest, augmentEffect(effects, cty), restUsages)
+                case _ => Left(ExpectRecord(Redux(c, checkedElims.reverse)))
         for
-          case (fun, funTy, funUsages) <- inferType(fun)
-          r <- funTy match
-            case FunctionType(binding, bodyTy, effects) =>
-              for
-                (arg, argUsages) <- checkType(arg, binding.ty)
-                bodyTy <- reduceCType(bodyTy.substLowers(arg))
-              yield (
-                Application(fun, arg),
-                augmentEffect(effects, bodyTy),
-                funUsages + argUsages * binding.usage,
-              )
-            case _ => Left(ExpectFunction(fun))
-        yield r
+          (c, cty, usages) <- inferType(c)
+          (elims, cty, argUsages) <- checkElims(Nil, cty, elims)
+        yield (Redux(c, elims), cty, (usages + argUsages))
       case RecordType(qn, args, effects) =>
         Σ.getRecordOption(qn) match
           case None => Left(MissingDeclaration(qn))
@@ -755,19 +770,6 @@ def inferType
               (effects, effUsages) <- checkType(effects, EffectsType())
               (args, argsUsages) <- checkTypes(args, record.tParamTys.map(_._1).toList)
             yield (RecordType(qn, args, effects), CType(tm, Total), (effUsages + argsUsages))
-      case Projection(rec, name) =>
-        for
-          (rec, recTy, recUsages) <- inferType(rec)
-          newTm = Projection(rec, name)(using tm.sourceInfo)
-          ty <- recTy match
-            case RecordType(qn, args, effects) =>
-              Σ.getFieldOption(qn, name) match
-                case None => Left(MissingField(name, qn))
-                case Some(f) =>
-                  for ty <- reduceCType(f.ty.substLowers(args :+ Thunk(rec): _*))
-                  yield augmentEffect(effects, ty)
-            case _ => Left(ExpectRecord(rec))
-        yield (newTm, ty, recUsages)
       case OperationCall((qn, tArgs), name, args) =>
         Σ.getEffectOption(qn) match
           case None => Left(MissingDeclaration(qn))
@@ -878,6 +880,14 @@ enum CheckSubsumptionMode:
 import CheckSubsumptionMode.*
 
 given CheckSubsumptionMode = SUBSUMPTION
+
+def checkSubsumptions
+  (subs: List[Elimination[VTerm]], sups: List[Elimination[VTerm]], headTy: CTerm)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Set[Constraint]] = ???
 
 def checkSubsumptions
   (subs: List[VTerm], sups: List[VTerm], tys: Telescope)
@@ -1048,12 +1058,11 @@ def checkSubsumption
   ty, {
     val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
     for
-      sub <- if isTotal then reduce(sub) else Right(sub)
+      sub <- if isTotal then reduce(sub) else sub.normalized
       sub <- simplifyLet(sub)
-      sup <- if isTotal then reduce(sup) else Right(sup)
+      sup <- if isTotal then reduce(sup) else sup.normalized
       sup <- simplifyLet(sup)
-      r <-
-        def impl() = (sub, sup, ty) match
+      r <- (sub, sup, ty) match
           case (_, _, _) if sub == sup => Right(Set.empty)
           case (_, _, Some(FunctionType(binding, bodyTy, _))) =>
             checkSubsumption(
@@ -1147,24 +1156,57 @@ def checkSubsumption
                     None,
                   )(using mode)(using Γ :+ binding2)
             yield effConstraint ++ tyConstraint ++ bodyConstraint
-          case (Application(fun1, arg1), Application(fun2, arg2), _) =>
+          case (Redux(subC, subElims), Redux(supC, supElims), _) =>
             for
-              // TODO[P1]: this is O(n^2) for applications of n arguments. Consider improve it to O(n)
-              case (fun1, fun1Ty, _) <- inferType(fun1)
-              case (fun2, fun2Ty, _) <- inferType(fun2)
-              // TODO[P0]: if a previous dependent constraint check failed, add the whole term as a constraint instead,
-              // consider doing the same for the others
-              funTyConstraint <- checkSubsumption(fun1Ty, fun2Ty, None)(using CONVERSION)
-              funConstraint <- checkSubsumption(fun1, fun2, Some(fun1Ty))(using CONVERSION)
-              argConstraint <- fun1Ty match
-                case FunctionType(binding, _, _) =>
-                  checkSubsumption(
-                    arg1,
-                    arg2,
-                    Some(binding.ty),
-                  )(using CONVERSION)
-                case _ => Left(NotCSubsumption(sub, sup, ty, mode))
-            yield funTyConstraint ++ funConstraint ++ argConstraint
+              (subC, subCty, _) <- inferType(subC)
+              (supC, supCty, _) <- inferType(supC)
+              ctyConstraints <- checkSubsumption(subCty, supCty, None)(using CONVERSION)
+              r <- ctyConstraints.isEmpty match
+                // Return the whole thing as a constraint if type subsumption check failed
+                case false =>
+                  ty match
+                    case Some(ty) =>
+                      Right(
+                        Set(
+                          Constraint(
+                            Γ,
+                            List(Thunk(sub)),
+                            List(Thunk(sup)),
+                            List(Binding(U(ty), Usage.UUnres)(gn"ty")),
+                          ),
+                        ),
+                      )
+                    case None =>
+                      for ul <- inferLevel(sup)
+                      yield Set(
+                        Constraint(
+                          Γ,
+                          List(Thunk(sub)),
+                          List(Thunk(sup)),
+                          List(Binding(U(CType(CTop(ul))), Usage.UUnres)(gn"ty")),
+                        ),
+                      )
+                case true =>
+                  for
+                    cConstraints <- checkSubsumption(subC, supC, Some(supCty))(using CONVERSION)
+                    r <- cConstraints.isEmpty match
+                      case true => checkSubsumptions(subElims, supElims, supCty)
+                      case false =>
+                        def assignMeta
+                          (metaIndex: Nat, args: Seq[VTerm], extra: Seq[VTerm], term: CTerm)
+                          : Either[IrError, Set[Constraint]] = ???
+                        // (extractMetaAndApplications(sub), extractMetaAndApplications(sup)) match
+                        //   // TODO: assign values to meta variables here
+                        //   case (Some((Meta(subIdx), subArgs, subExtra)), Some((Meta(supIdx), supArgs, supExtra))) =>
+                        //     if subIdx < supIdx then assignMeta(supIdx, supArgs, supExtra, sub)
+                        //     else if subIdx > supIdx then assignMeta(subIdx, subArgs, subExtra, sup)
+                        //     else impl()
+                        //   case (Some((Meta(idx), args, extra)), None) => assignMeta(idx, args, extra, sup)
+                        //   case (None, Some((Meta(idx), args, extra))) => assignMeta(idx, args, extra, sub)
+                        //   case _                                      => impl()
+                        ???
+                  yield r
+            yield r
           case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
             Σ.getRecordOption(qn1) match
               case None => Left(MissingDeclaration(qn1))
@@ -1205,12 +1247,6 @@ def checkSubsumption
                       },
                   ).map(_.flatten.toSet)
                 yield effConstraint ++ argConstraint
-          case (Projection(rec1, name1), Projection(rec2, name2), _) if name1 == name2 =>
-            for
-              case (rec1, rec1Ty, _) <- inferType(rec1)
-              case (rec2, rec2Ty, _) <- inferType(rec2)
-              r <- checkSubsumption(rec1Ty, rec2Ty, None)(using CONVERSION)
-            yield r
           case (
               OperationCall((qn1, tArgs1), name1, args1),
               OperationCall((qn2, tArgs2), name2, args2),
@@ -1248,19 +1284,6 @@ def checkSubsumption
           // seems not all that useful to keep those. But we can always add them later if it's deemed
           // necessary.
           case _ => Left(NotCSubsumption(sub, sup, ty, mode))
-        def assignMeta
-          (metaIndex: Nat, args: Seq[VTerm], extra: Seq[VTerm], term: CTerm)
-          : Either[IrError, Set[Constraint]] = ???
-
-        (extractMetaAndApplications(sub), extractMetaAndApplications(sup)) match
-          // TODO: assign values to meta variables here
-          case (Some((Meta(subIdx), subArgs, subExtra)), Some((Meta(supIdx), supArgs, supExtra))) =>
-            if subIdx < supIdx then assignMeta(supIdx, supArgs, supExtra, sub)
-            else if subIdx > supIdx then assignMeta(subIdx, subArgs, subExtra, sup)
-            else impl()
-          case (Some((Meta(idx), args, extra)), None) => assignMeta(idx, args, extra, sup)
-          case (None, Some((Meta(idx), args, extra))) => assignMeta(idx, args, extra, sub)
-          case _ => impl()
     yield r
   },
 )
@@ -2204,30 +2227,6 @@ private def extractDistinctArgVars(args: Seq[VTerm]): Option[List[Nat]] =
   val argVars = args.collect { case v: Var => v.idx }
   if argVars.distinct.length == argVars.length then Some(argVars.toList)
   else None
-
-/** Extracts the meta variable and the arguments from a term if it's applying some arguments to a
-  * meta variable. Returns `None` otherwise.
-  *
-  * @return
-  *   option of tuple consisting the meta variable, the arguments applied to this meta variable, the
-  *   additional arguments applied to the result after meta variable application.
-  */
-private def extractMetaAndApplications
-  (t: CTerm)
-  (using ctx: TypingContext)
-  : Option[(Meta, IndexedSeq[VTerm], IndexedSeq[VTerm])] = t match
-  case m: Meta => Some((m, IndexedSeq(), IndexedSeq()))
-  case Application(m @ Meta(i), arg) =>
-    val metaVar = ctx.metaVars(i)
-    metaVar.context.size match
-      case 0 => Some((m, IndexedSeq(), IndexedSeq(arg)))
-      case _ => Some((m, IndexedSeq(arg), IndexedSeq()))
-  case Application(fun, arg) =>
-    for (meta, args, extra) <- extractMetaAndApplications(fun)
-    yield
-      if ctx.metaVars(meta.index).context.size > args.size then (meta, args :+ arg, extra)
-      else (meta, args, extra :+ arg)
-  case _ => None
 
 private def debugCheck[L, R]
   (tm: CTerm | VTerm, ty: CTerm | VTerm, result: => Either[L, R])
