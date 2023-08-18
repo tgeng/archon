@@ -96,3 +96,5 @@ enum IrError extends HasException:
   case ExpectUnrestrictedTypeParameterBinding(binding: Binding[VTerm])
   case UnsatifisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])
+  case MetaVariableAlreadySolved(meta: CTerm.Meta, t: CTerm, s: MetaVariable.Solved)
+  case MetaVariableCycle(meta: CTerm.Meta, t: CTerm)
