@@ -505,7 +505,9 @@ extension(c: CTerm)
     (using Γ: Context)
     (using Σ: Signature)
     (using TypingContext)
-    : Either[IrError, CTerm] = ???
+    : Either[IrError, CTerm] = 
+      // inline meta variable, consolidate immediately nested redux
+      ???
 
 
 extension(v: VTerm)
