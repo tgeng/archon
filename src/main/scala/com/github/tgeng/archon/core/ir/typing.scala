@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
+import scala.util.boundary, boundary.break;
 import scala.collection.immutable.{Map, Set}
 import scala.collection.mutable
 import com.github.tgeng.archon.common.*
@@ -1256,53 +1257,76 @@ private def checkReduxSubsumption
         for ul <- inferLevel(sup)
         yield U(CType(CTop(ul)))
     tyBinding = Binding(ty, Usage.UUnres)(gn"ty")
-    r <- ctyConstraints.isEmpty match
-      // Return the whole thing as a constraint if type subsumption check failed
-      case false =>
-        Right(Set(Constraint(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil)))
-      case true =>
-        for
-          cConstraints <- checkSubsumption(subC, supC, Some(supCty))(using CONVERSION)
-          r <- cConstraints.isEmpty match
-            case true => checkSubsumptions(sub.elims, sup.elims, supCty)
-            case false =>
-              def assignMeta
-                (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm)
-                : Either[IrError, Set[Constraint]] =
-                ctx.metaVars(meta.index) match
-                  case Unsolved(context, ty) =>
-                    // Make sure meta variable assignment won't cause cyclic meta variable references.
-                    val highestMetaVarInTerm = getHighestMetaVar(term)
-                    if highestMetaVarInTerm >= meta.index then Left(MetaVariableCycle(meta, term))
-                    else 
-                      // make sure all freevars in term are available as args in elims and instantiate substituted terms
-                      // for the meta variable
-                      ???
-                  // Previous subsumption check should have alraedy checked that the solved term is not equivalent, so
-                  // we just fail here directly.
-                  case s: Solved => Left(MetaVariableAlreadySolved(meta, term, s))
-                  case _: Guarded =>
-                    Right(
-                      Set(
-                        Constraint(
-                          Γ,
-                          Thunk(Redux(meta, elims)) :: Nil,
-                          Thunk(term) :: Nil,
-                          tyBinding :: Nil,
-                        ),
-                      ),
-                    )
-              (subC, supC) match
-                case (subC @ Meta(subIdx), supC @ Meta(supIdx)) =>
-                  if subIdx < supIdx then assignMeta(subC, sub.elims, supC)
-                  else if subIdx > supIdx then assignMeta(supC, sup.elims, subC)
-                  else checkSubsumptions(sub.elims, sup.elims, supCty)
-                case (meta: Meta, supC) => assignMeta(meta, sub.elims, supC)
-                case (subC, meta: Meta) => assignMeta(meta, sup.elims, subC)
-                case _ =>
-                  for elimConstraints <- checkSubsumptions(sub.elims, sup.elims, supCty)
-                  yield cConstraints ++ elimConstraints
-        yield r
+    r <-
+      val resultConstraint = Set(
+        Constraint(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil),
+      )
+      ctyConstraints.isEmpty match
+        // Return the whole thing as a constraint if type subsumption check failed
+        case false => Right(resultConstraint)
+        case true =>
+          for
+            cConstraints <- checkSubsumption(subC, supC, Some(supCty))(using CONVERSION)
+            r <- cConstraints.isEmpty match
+              case true => checkSubsumptions(sub.elims, sup.elims, supCty)
+              case false =>
+                def assignMeta
+                  (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, metaOnTheLeft: Boolean)
+                  : Either[IrError, Set[Constraint]] =
+                  ctx.metaVars(meta.index) match
+                    case Unsolved(context, ty) => boundary:
+                      // Make sure meta variable assignment won't cause cyclic meta variable references.
+                      val highestMetaVarInTerm = getHighestMetaVar(term)
+                      if highestMetaVarInTerm >= meta.index then break(Left(MetaVariableCycle(meta, term)))
+                      // Handle extra elims beyond those mentioned by the meta variable context
+                      // If the target term does not mirror the same elim structure for the extras, we can't solve
+                      // the meta variable. In this case we just return the whole thing as a constraint.
+                      val extraElims = elims.drop(context.size)
+                      val (otherTerm, otherExtraElims) = if extraElims.nonEmpty then
+                         term match
+                          case Redux(t, otherElims) => 
+                            if otherElims.size >= extraElims.size then 
+                                val otherElimArgSize = otherElims.size - extraElims.size
+                                (Redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
+                            else
+                                break(Right(resultConstraint))
+                          case _ => break(Right(resultConstraint))
+                         else
+                          (term, Nil)
+                      // Take the arguments corresponding to the meta variable context
+                      val argVars = elims.take(context.size).collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
+                      if argVars.size < context.size then break(Right(resultConstraint))
+                      val argVarToMetaContextIndexMap = argVars.zipWithIndex.map{ case (Var(v), i) => (v, Var(context.size - 1 - i))}.toMap
+
+                      // Make sure the target term only references variables available from the meta variable context
+                      val (a, b) = getFreeVars(otherTerm)(using 0)
+                      val otherTermFreeVars = a ++ b
+                      if otherTermFreeVars.exists(i => !argVarToMetaContextIndexMap.contains(i)) then break(Right(resultConstraint))
+
+                      // substitute free variables in term so that it's compatible with the meta variable context
+                      ctx.metaVars(meta.index) = Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift))
+
+                      // Make sure the extra elims match
+                      if metaOnTheLeft then
+                        checkSubsumptions(extraElims, otherExtraElims, ty.substLowers(argVars: _*))
+                      else
+                        checkSubsumptions(otherExtraElims, extraElims, ty.substLowers(argVars: _*))
+
+                    // Previous subsumption check should have alraedy checked that the solved term is not equivalent, so
+                    // we just fail here directly.
+                    case s: Solved => Left(MetaVariableAlreadySolved(meta, term, s))
+                    case _: Guarded => Right(resultConstraint)
+                (subC, supC) match
+                  case (subC @ Meta(subIdx), supC @ Meta(supIdx)) =>
+                    if subIdx < supIdx then assignMeta(subC, sub.elims, supC, true)
+                    else if subIdx > supIdx then assignMeta(supC, sup.elims, subC, false)
+                    else checkSubsumptions(sub.elims, sup.elims, supCty)
+                  case (meta: Meta, supC) => assignMeta(meta, sub.elims, supC, true)
+                  case (subC, meta: Meta) => assignMeta(meta, sup.elims, subC, false)
+                  case _ =>
+                    for elimConstraints <- checkSubsumptions(sub.elims, sup.elims, supCty)
+                    yield cConstraints ++ elimConstraints
+          yield r
   yield r
 
 private def getHighestMetaVar(term: CTerm)(using Signature): Int =
