@@ -981,10 +981,18 @@ def checkSubsumption
             else Left(NotUsageSubsumption(sub, sup, mode))
           case (v:Var, UsageLiteral(u2), _) =>
             Γ.resolve(v).ty match
+              // TODO[P1]: figure out a smarter way to handle meta variables of usage.
               // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
               case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
               case UsageType(Some(u1Bound)) if mode == SUBSUMPTION => checkSubsumption(u1Bound, UsageLiteral(u2), Some(UsageType()))
               case _ => Left(NotUsageSubsumption(sub, sup, mode))
+          case (Effects(literals1, unionOperands1), Effects(literals2, unionOperands2), _) =>
+            // TODO[P1]: figure out a smarter way to handle meta variables of effects. For example, we may want to have
+            // more specific upper and lower bounds for unsolved meta variables for effects. This way the type checker
+            // can handle meta variables inside an union of effects.
+            if mode == CheckSubsumptionMode.SUBSUMPTION &&
+              literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) then Right(Set.empty)
+              else Left(NotEffectSubsumption(sub, sup, mode))
           case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
           case (Thunk(c1), Thunk(c2), Some(U(ty))) =>
             checkSubsumption(c1, c2, Some(ty))
@@ -1123,18 +1131,18 @@ def checkSubsumption
               ).map(_.flatten.toSet)
         case (CType(upperBound1, eff1), CType(upperBound2, eff2), _) =>
           for
-            effConstraint <- checkEffSubsumption(eff1, eff2)
+            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
             upperBoundConstraint <- checkSubsumption(upperBound1, upperBound2, Some(sup))
           yield effConstraint ++ upperBoundConstraint
         case (ty: IType, CTop(ul2, eff2), _) =>
           for
             ul1 <- inferLevel(ty)
             levelConstraint <- checkULevelSubsumption(ul1, ul2)
-            effConstraint <- checkEffSubsumption(ty.effects, eff2)
+            effConstraint <- checkSubsumption(ty.effects, eff2, Some(EffectsType()))
           yield levelConstraint ++ effConstraint
         case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
           for
-            effConstraint <- checkEffSubsumption(eff1, eff2)
+            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
             usageConstraint <- checkSubsumption(u1, u2, Some(UsageType()))
             tyConstraint <- checkSubsumption(vTy1, vTy2, None)
           yield effConstraint ++ usageConstraint ++ tyConstraint
@@ -1627,30 +1635,6 @@ private def checkContinuationUsageSubsumption
       case l @ Left(_) => l
   case _ => Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
 
-private def checkEffSubsumption
-  (eff1: VTerm, eff2: VTerm)
-  (using mode: CheckSubsumptionMode)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using
-    ctx: TypingContext,
-  )
-  : Either[IrError, Set[Constraint]] =
-  // TODO: handle meta variables (consider handling meta variables in the set by instantiating it to a union of missing
-  // effects)
-  (eff1.normalized, eff2.normalized) match
-    case (Left(e), _)                               => Left(e)
-    case (_, Left(e))                               => Left(e)
-    case (Right(eff1), Right(eff2)) if eff1 == eff2 => Right(Set.empty)
-    case (
-        Right(Effects(literals1, unionOperands1)),
-        Right(Effects(literals2, unionOperands2)),
-      )
-      if mode == CheckSubsumptionMode.SUBSUMPTION &&
-        literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
-      Right(Set.empty)
-    case _ => Left(NotEffectSubsumption(eff1, eff2, mode))
-
 /** Check that `ul1` is lower or equal to `ul2`.
   */
 private def checkULevelSubsumption
@@ -1662,8 +1646,7 @@ private def checkULevelSubsumption
     TypingContext,
   )
   : Either[IrError, Set[Constraint]] =
-  // TODO: handle meta variables (consider handle meta variables inside offset Map by instantiating a meta variable to a
-  // level max)
+  // TODO[P1]: figure out a smarter way to handle levels.
   val ul1Normalized = ul1 match
     case USimpleLevel(v) =>
       v.normalized match
@@ -1681,8 +1664,6 @@ private def checkULevelSubsumption
 
   (ul1Normalized, ul2Normalized) match
     case _ if ul1Normalized == ul2Normalized => Right(Set.empty)
-    case _ if mode == CONVERSION =>
-      Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
     case (
         USimpleLevel(Level(l1, maxOperands1)),
         USimpleLevel(Level(l2, maxOperands2)),
@@ -1692,8 +1673,14 @@ private def checkULevelSubsumption
           maxOperands2.getOrElse(k, -1) >= v
         } =>
       Right(Set.empty)
+    case (
+        USimpleLevel(u1),
+        USimpleLevel(u2),
+      ) => checkSubsumption(u1, u2, Some(LevelType()))
     case (USimpleLevel(_), UωLevel(_))          => Right(Set.empty)
     case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(Set.empty)
+    case _ if mode == CONVERSION =>
+      Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
     case _ => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
 
 def checkTypes
