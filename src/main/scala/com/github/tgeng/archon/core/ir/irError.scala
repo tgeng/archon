@@ -98,3 +98,4 @@ enum IrError extends HasException:
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])
   case MetaVariableAlreadySolved(meta: CTerm.Meta, t: CTerm, s: MetaVariable.Solved)
   case MetaVariableCycle(meta: CTerm.Meta, t: CTerm)
+  case UnmatchedDataIndex(con: VTerm.Con, dataType: VTerm.DataType)
