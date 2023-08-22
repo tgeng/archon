@@ -349,7 +349,7 @@ private def checkTParamsAreUnrestricted
   case Nil => Right(())
   case binding :: rest =>
     for
-      constarints <- checkUsageSubsumption(binding.usage, UsageLiteral(UUnres))
+      constarints <- checkSubsumption(binding.usage, UsageLiteral(UUnres), Some(UsageType()))
       _ <- constarints.isEmpty match
         case true  => Right(())
         case false => Left(ExpectUnrestrictedTypeParameterBinding(binding))
@@ -679,7 +679,7 @@ def inferType
           (effects, effUsages) <- checkType(effects, EffectsType())
           (usage, uUsages) <- checkType(usage, UsageType(None))
           // Prevent returning value of U0 usage, which does not make sense.
-          _ <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
+          _ <- checkSubsumption(usage, UsageLiteral(Usage.U1), Some(UsageType()))
           case (vTy, vTyTy, vTyUsages) <- inferType(vTy)
           vTy <- vTy.normalized
           usage <- usage.normalized
@@ -732,7 +732,6 @@ def inferType
             case _ => Left(NotTypeError(binding.ty))
         yield (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
       case Redux(c, elims) =>
-        // TODO: inline solved meta variables here.
         def checkElims
           (checkedElims: List[Elimination[VTerm]], cty: CTerm, elims: List[Elimination[VTerm]])
           : Either[IrError, (List[Elimination[VTerm]], CTerm, Usages)] =
@@ -969,8 +968,23 @@ def checkSubsumption
               ul1 <- inferLevel(ty)
               levelConstraints <- checkULevelSubsumption(ul1, ul2)
               eqD1 <- deriveTypeInherentEqDecidability(ty)
-              eqDecidabilityConstraints <- checkEqDecidabilitySubsumption(eqD1, eqD2)
+              eqDecidabilityConstraints <- checkSubsumption(eqD1, eqD2, Some(EqDecidabilityType()))
             yield levelConstraints ++ eqDecidabilityConstraints
+          case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _, _) |
+           (_, EqDecidabilityLiteral(EqDecidability.EqUnknown), _) if mode == SUBSUMPTION =>
+            Right(Set.empty)
+          case (UsageLiteral(u1), UsageLiteral(u2), _) =>
+            if u1 >= u2 && mode == SUBSUMPTION then Right(Set.empty)
+            else Left(NotUsageSubsumption(sub, sup, mode))
+          case (UsageLiteral(UUnres), _, _) =>
+            if mode == SUBSUMPTION then Right(Set.empty)
+            else Left(NotUsageSubsumption(sub, sup, mode))
+          case (v:Var, UsageLiteral(u2), _) =>
+            Γ.resolve(v).ty match
+              // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
+              case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
+              case UsageType(Some(u1Bound)) if mode == SUBSUMPTION => checkSubsumption(u1Bound, UsageLiteral(u2), Some(UsageType()))
+              case _ => Left(NotUsageSubsumption(sub, sup, mode))
           case (U(cty1), U(cty2), _) => checkSubsumption(cty1, cty2, None)
           case (Thunk(c1), Thunk(c2), Some(U(ty))) =>
             checkSubsumption(c1, c2, Some(ty))
@@ -1039,7 +1053,7 @@ def checkSubsumption
             // continuation (as a resource) is provided.
             checkContinuationUsageSubsumption(continuationUsage2, continuationUsage1)
           case (UsageType(Some(u1)), UsageType(Some(u2)), _) if mode == SUBSUMPTION =>
-            checkUsageSubsumption(u1, u2)
+            checkSubsumption(u1, u2, Some(UsageType()))
           case (UsageType(Some(_)), UsageType(None), _) if mode == SUBSUMPTION =>
             Right(Set.empty)
           case (
@@ -1121,7 +1135,7 @@ def checkSubsumption
         case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
           for
             effConstraint <- checkEffSubsumption(eff1, eff2)
-            usageConstraint <- checkUsageSubsumption(u1, u2)
+            usageConstraint <- checkSubsumption(u1, u2, Some(UsageType()))
             tyConstraint <- checkSubsumption(vTy1, vTy2, None)
           yield effConstraint ++ usageConstraint ++ tyConstraint
         case (Return(v1), Return(v2), Some(F(ty, _, _))) =>
@@ -1540,24 +1554,6 @@ private def checkAreEqDecidableTypes
       rest <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
     yield telescope
 
-private def checkEqDecidabilitySubsumption
-  (eqD1: VTerm, eqD2: VTerm)
-  (using mode: CheckSubsumptionMode)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using
-    ctx: TypingContext,
-  )
-  : Either[IrError, Set[Constraint]] = (eqD1.normalized, eqD2.normalized) match
-  // TODO: handle meta variables
-  case (Left(e), _)                               => Left(e)
-  case (_, Left(e))                               => Left(e)
-  case (Right(eqD1), Right(eqD2)) if eqD1 == eqD2 => Right(Set.empty)
-  case (Right(EqDecidabilityLiteral(EqDecidability.EqDecidable)), _) |
-    (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnknown))) if mode == SUBSUMPTION =>
-    Right(Set.empty)
-  case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
-
 /** @param usages
   *   usage terms should live in Γ
   * @param count
@@ -1574,7 +1570,7 @@ private def verifyUsages
   : Either[IrError, Usages] =
   for _ <- transpose(usages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
       for
-        constraint <- checkUsageSubsumption(v, Γ.resolve(i).usage)(using SUBSUMPTION)
+        constraint <- checkSubsumption(v, Γ.resolve(i).usage, Some(UsageType()))(using SUBSUMPTION)
         r <-
           if constraint.isEmpty then Right(())
           else Left(NotUsageSubsumption(v, Γ.resolve(i).usage, SUBSUMPTION))
@@ -1605,8 +1601,8 @@ def checkUsagesSubsumption
     val binding = Γ(i)
     val providedUsage = binding.usage
     val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
-    if invert then checkUsageSubsumption(consumedUsage, providedUsage)(using SUBSUMPTION)
-    else checkUsageSubsumption(providedUsage, consumedUsage)(using SUBSUMPTION)
+    if invert then checkSubsumption(consumedUsage, providedUsage, Some(UsageType()))(using SUBSUMPTION)
+    else checkSubsumption(providedUsage, consumedUsage, Some(UsageType()))(using SUBSUMPTION)
   }).map(_.flatten.toSet)
 
 private def checkContinuationUsageSubsumption
@@ -1618,43 +1614,18 @@ private def checkContinuationUsageSubsumption
   : Either[IrError, Set[Constraint]] = (usage1, usage2) match
   case (None, None) => Right(Set.empty)
   case (None, Some(u)) =>
-    checkUsageSubsumption(UsageLiteral(U1), UsageLiteral(u)) match
+    checkSubsumption(UsageLiteral(U1), UsageLiteral(u), Some(UsageType())) match
       case r @ Right(_) => r
       case Left(_: NotUsageSubsumption) =>
         Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
       case l @ Left(_) => l
   case (Some(u1), Some(u2)) =>
-    checkUsageSubsumption(UsageLiteral(u1), UsageLiteral(u2)) match
+    checkSubsumption(UsageLiteral(u1), UsageLiteral(u2), Some(UsageType())) match
       case r @ Right(_) => r
       case Left(_: NotUsageSubsumption) =>
         Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
       case l @ Left(_) => l
   case _ => Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
-
-private def checkUsageSubsumption
-  (usage1: VTerm, usage2: VTerm)
-  (using mode: CheckSubsumptionMode)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = (usage1.normalized, usage2.normalized) match
-  // TODO: handle meta variables (consider handling meta variable in compound usage like how level and effects are
-  // handled)
-  case (Left(e), _)                                       => Left(e)
-  case (_, Left(e))                                       => Left(e)
-  case (Right(usage1), Right(usage2)) if usage1 == usage2 => Right(Set.empty)
-  // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
-  case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2))) if u1 >= u2 && mode == SUBSUMPTION =>
-    Right(Set.empty)
-  case (Right(UsageLiteral(UUnres)), _) if mode == SUBSUMPTION => Right(Set.empty)
-  case (Right(v @ Var(_)), Right(UsageLiteral(u2))) =>
-    Γ.resolve(v).ty match
-      // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
-      case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
-      case UsageType(Some(u1Bound)) if mode == SUBSUMPTION =>
-        checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-      case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
-  case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
 
 private def checkEffSubsumption
   (eff1: VTerm, eff2: VTerm)
@@ -1785,12 +1756,12 @@ private def checkLet
       def areTUsagesZeroOrUnrestricted: Boolean =
         tUsages.forall { usage =>
           toBoolean(
-            checkUsageSubsumption(usage, UsageLiteral(Usage.UUnres))(using
+            checkSubsumption(usage, UsageLiteral(Usage.UUnres), Some(UsageType()))(using
               CheckSubsumptionMode.CONVERSION,
             ),
           ) ||
           toBoolean(
-            checkUsageSubsumption(usage, UsageLiteral(Usage.U0))(using
+            checkSubsumption(usage, UsageLiteral(Usage.U0), Some(UsageType()))(using
               CheckSubsumptionMode.CONVERSION,
             ),
           )
@@ -1833,7 +1804,7 @@ private def checkLet
             bodyTy,
             LeakedReferenceToEffectfulComputationResult(t),
           )
-          _ <- checkUsageSubsumption(usagesInBody.last.strengthened, usage)(using SUBSUMPTION)
+          _ <- checkSubsumption(usagesInBody.last.strengthened, usage, Some(UsageType()))(using SUBSUMPTION)
           usagesInContinuation <- effects match
             // Join with U1 for normal execution without any call to effect handlers
             case v: Var                           => Right(getEffVarContinuationUsage(v))

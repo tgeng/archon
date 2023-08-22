@@ -537,7 +537,7 @@ private def elaborateBody
             val ElabClause(_E1, _, rhs1, source1) = problem(0)
 
             def providedAtLeastU1Usage(x: Var): Boolean =
-              checkUsageSubsumption(UsageLiteral(Usage.U1), Γ.resolve(x).usage)(using
+              checkSubsumption(UsageLiteral(Usage.U1), Γ.resolve(x).usage, Some(UsageType()))(using
                 CheckSubsumptionMode.SUBSUMPTION,
               ) match
                 case Right(constraint) if constraint.isEmpty => true
