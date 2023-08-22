@@ -102,19 +102,19 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
               )
       case Meta(index) =>
         val t = ctx.metaVars(index) match
-            case Solved(context, ty, value) =>
-              for
-                args <- transpose(stack.takeRight(context.size).map {
-                  case ETerm(arg) => arg.normalized
-                  case _          => throw IllegalStateException("bad meta variable application")
-                })
-                _ = stack.dropRightInPlace(context.size)
-              yield Some(value.substLowers(args.toSeq: _*))          // stuck for unresolved meta variables
-            case _ => Right(None)
+          case Solved(context, ty, value) =>
+            for
+              args <- transpose(stack.takeRight(context.size).map {
+                case ETerm(arg) => arg.normalized
+                case _          => throw IllegalStateException("bad meta variable application")
+              })
+              _ = stack.dropRightInPlace(context.size)
+            yield Some(value.substLowers(args.toSeq: _*)) // stuck for unresolved meta variables
+          case _ => Right(None)
         t match
           case Right(Some(t)) => run(t)
-          case Right(None) => Right(reconstructTermFromStack(pc))
-          case Left(e) => Left(e)
+          case Right(None)    => Right(reconstructTermFromStack(pc))
+          case Left(e)        => Left(e)
       case Def(qn) =>
         Σ.getClausesOption(qn) match
           // This is allowed because it could be that the body is not defined yet.
@@ -166,9 +166,9 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           case Nil             => run(t)
           case _ =>
             val normalizedElims = transpose(elims.reverse.map[Either[IrError, Elimination[VTerm]]] {
-                case ETerm(t) => t.normalized.map(ETerm.apply)
-                case EProj(n) => Right(EProj(n))
-              })
+              case ETerm(t) => t.normalized.map(ETerm.apply)
+              case EProj(n) => Right(EProj(n))
+            })
             normalizedElims match
               case Right(elims) =>
                 stack.pushAll(elims)
@@ -505,10 +505,28 @@ extension(c: CTerm)
     (using Γ: Context)
     (using Σ: Signature)
     (using TypingContext)
-    : Either[IrError, CTerm] = 
-      // inline meta variable, consolidate immediately nested redux
-      ???
+    : Either[IrError, CTerm] =
+    // inline meta variable, consolidate immediately nested redux
+    val transformer = new Transformer[TypingContext]():
+      override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
+        ctx.metaVars(m.index) match
+          case Solved(_, _, t) => transformCTerm(t)
+          case _               => m
+      override def transformRedux(r: Redux)(using ctx: TypingContext)(using Σ: Signature): CTerm =
+        redux(
+          transformCTerm(r.t),
+          r.elims.map(transformElim),
+        )(using r.sourceInfo)
 
+      override def transformCollapse
+        (c: Collapse)
+        (using ctx: TypingContext)
+        (using Σ: Signature)
+        : VTerm = transformCTerm(c.cTm) match
+        case Return(v) => transformVTerm(v)
+        case _         => c
+
+    Right(transformer.transformCTerm(c))
 
 extension(v: VTerm)
   def normalized
