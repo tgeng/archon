@@ -633,7 +633,7 @@ def inferType
   : Either[IrError, (CTerm, CTerm, Usages)] =
   debugInfer(
     tm,
-    tm match
+    tm.normalized match
       case Hole =>
         throw IllegalArgumentException(
           "hole should only be present during reduction",
@@ -657,7 +657,6 @@ def inferType
           effects <- effects.normalized
           newTm = CTop(ul, effects)(using tm.sourceInfo)
         yield (newTm, CType(newTm, Total), (uUsages + ulUsages))
-      // TODO: inline solved meta variables here.
       case m @ Meta(index) => Right(m, ctx.metaVars(index).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
@@ -1083,9 +1082,9 @@ def checkSubsumption
   ty, {
     val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
     for
-      sub <- if isTotal then reduce(sub) else sub.normalized
+      sub <- if isTotal then reduce(sub) else Right(sub.normalized)
       sub <- simplifyLet(sub)
-      sup <- if isTotal then reduce(sup) else sup.normalized
+      sup <- if isTotal then reduce(sup) else Right(sup.normalized)
       sup <- simplifyLet(sup)
       r <- (sub, sup, ty) match
         case (_, _, _) if sub == sup => Right(Set.empty)

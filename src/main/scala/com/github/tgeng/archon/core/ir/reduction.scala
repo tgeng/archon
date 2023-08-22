@@ -505,7 +505,7 @@ extension(c: CTerm)
     (using Γ: Context)
     (using Σ: Signature)
     (using TypingContext)
-    : Either[IrError, CTerm] =
+    : CTerm =
     // inline meta variable, consolidate immediately nested redux
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
@@ -526,7 +526,7 @@ extension(c: CTerm)
         case Return(v) => transformVTerm(v)
         case _         => c
 
-    Right(transformer.transformCTerm(c))
+    transformer.transformCTerm(c)
 
 extension(v: VTerm)
   def normalized
