@@ -747,7 +747,7 @@ def inferType
                     cty <- reduceCType(bodyTy.substLowers(arg))
                     (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
                   yield (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages))
-                case _ => Left(ExpectFunction(Redux(c, checkedElims.reverse)))
+                case _ => Left(ExpectFunction(redux(c, checkedElims.reverse)))
             case (e @ EProj(name)) :: rest =>
               cty match
                 case RecordType(qn, args, effects) =>
@@ -755,14 +755,14 @@ def inferType
                     case None => Left(MissingField(name, qn))
                     case Some(f) =>
                       for
-                        cty <- reduceCType(f.ty.substLowers(args :+ Thunk(c): _*))
+                        cty <- reduceCType(f.ty.substLowers(args :+ Thunk(redux(c, checkedElims)): _*))
                         (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
                       yield (EProj(name) :: rest, augmentEffect(effects, cty), restUsages)
-                case _ => Left(ExpectRecord(Redux(c, checkedElims.reverse)))
+                case _ => Left(ExpectRecord(redux(c, checkedElims.reverse)))
         for
           (c, cty, usages) <- inferType(c)
           (elims, cty, argUsages) <- checkElims(Nil, cty, elims)
-        yield (Redux(c, elims), cty, (usages + argUsages))
+        yield (redux(c, elims), cty, (usages + argUsages))
       case RecordType(qn, args, effects) =>
         Σ.getRecordOption(qn) match
           case None => Left(MissingDeclaration(qn))
@@ -882,13 +882,37 @@ import CheckSubsumptionMode.*
 
 given CheckSubsumptionMode = SUBSUMPTION
 
-def checkSubsumptions
-  (subs: List[Elimination[VTerm]], sups: List[Elimination[VTerm]], headTy: CTerm)
+def checkElimSubsumptions
+  (t: CTerm, subs: List[Elimination[VTerm]], sups: List[Elimination[VTerm]], headTy: CTerm)
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = ???
+  : Either[IrError, Set[Constraint]] =
+    val resultConstraint = Set(
+      Constraint(Γ, List(Thunk(redux(t, subs))), List(Thunk(redux(t, sups))),
+     List(Binding(U(headTy), UsageLiteral(Usage.UUnres))(gn"ty"))))
+    (subs, sups, headTy) match
+    case (Nil, Nil, _) => Right(Set.empty)
+    case (ETerm(sub):: subs, ETerm(sup):: sups, t) => t match
+      case FunctionType(binding, bodyTy, _) =>
+        for
+          headConstraints <- checkSubsumption(sub, sup, Some(binding.ty))
+          r <- if headConstraints.isEmpty then
+            checkElimSubsumptions(Application(t, sub), subs, sups, bodyTy)
+          else
+            val (a, b) = getFreeVars(bodyTy)(using 0)
+            if a(0) || b(0) then Right(resultConstraint)
+            else checkElimSubsumptions(Application(t, sub), subs, sups, bodyTy.strengthened).map(headConstraints ++ _)
+        yield r
+      case _ => throw IllegalStateException("should have been checked to be a function type")
+    case (EProj(subName):: subs, EProj(supName):: sups, rt) => rt match
+      case RecordType(qn, args, _) =>
+        if subName == supName then checkElimSubsumptions(Projection(t, subName), subs, sups, Σ.getField(qn, subName).ty.substLowers(args :+ Thunk(t) : _*))
+        else Right(resultConstraint)
+      case _ => throw IllegalStateException("should have been checked to be a record type")
+    case (_ :: _, Nil, _) | (Nil, _ :: _, _) => throw IllegalArgumentException("length mismatch")
+    case (ETerm(_) :: _, EProj(_) :: _, _) | (EProj(_) :: _, ETerm(_) :: _, _) => throw IllegalArgumentException("type mismatch")
 
 def checkSubsumptions
   (subs: List[VTerm], sups: List[VTerm], tys: Telescope)
@@ -1268,7 +1292,7 @@ private def checkReduxSubsumption
           for
             cConstraints <- checkSubsumption(subC, supC, Some(supCty))(using CONVERSION)
             r <- cConstraints.isEmpty match
-              case true => checkSubsumptions(sub.elims, sup.elims, supCty)
+              case true => checkElimSubsumptions(sub.t, sub.elims, sup.elims, supCty)
               case false =>
                 def assignMeta
                   (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, metaOnTheLeft: Boolean)
@@ -1287,14 +1311,15 @@ private def checkReduxSubsumption
                           case Redux(t, otherElims) => 
                             if otherElims.size >= extraElims.size then 
                                 val otherElimArgSize = otherElims.size - extraElims.size
-                                (Redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
+                                (redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
                             else
                                 break(Right(resultConstraint))
                           case _ => break(Right(resultConstraint))
                          else
                           (term, Nil)
                       // Take the arguments corresponding to the meta variable context
-                      val argVars = elims.take(context.size).collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
+                      val metaElims = elims.take(context.size)
+                      val argVars = metaElims.collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
                       if argVars.size < context.size then break(Right(resultConstraint))
                       val argVarToMetaContextIndexMap = argVars.zipWithIndex.map{ case (Var(v), i) => (v, Var(context.size - 1 - i))}.toMap
 
@@ -1307,10 +1332,11 @@ private def checkReduxSubsumption
                       ctx.metaVars(meta.index) = Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift))
 
                       // Make sure the extra elims match
+                      val head = Redux(meta, metaElims)
                       if metaOnTheLeft then
-                        checkSubsumptions(extraElims, otherExtraElims, ty.substLowers(argVars: _*))
+                        checkElimSubsumptions(head, extraElims, otherExtraElims, ty.substLowers(argVars: _*))
                       else
-                        checkSubsumptions(otherExtraElims, extraElims, ty.substLowers(argVars: _*))
+                        checkElimSubsumptions(head, otherExtraElims, extraElims, ty.substLowers(argVars: _*))
 
                     // Previous subsumption check should have alraedy checked that the solved term is not equivalent, so
                     // we just fail here directly.
@@ -1320,12 +1346,10 @@ private def checkReduxSubsumption
                   case (subC @ Meta(subIdx), supC @ Meta(supIdx)) =>
                     if subIdx < supIdx then assignMeta(subC, sub.elims, supC, true)
                     else if subIdx > supIdx then assignMeta(supC, sup.elims, subC, false)
-                    else checkSubsumptions(sub.elims, sup.elims, supCty)
+                    else checkElimSubsumptions(sub.t, sub.elims, sup.elims, supCty)
                   case (meta: Meta, supC) => assignMeta(meta, sub.elims, supC, true)
                   case (subC, meta: Meta) => assignMeta(meta, sup.elims, subC, false)
-                  case _ =>
-                    for elimConstraints <- checkSubsumptions(sub.elims, sup.elims, supCty)
-                    yield cConstraints ++ elimConstraints
+                  case _ => Right(resultConstraint)
           yield r
   yield r
 
