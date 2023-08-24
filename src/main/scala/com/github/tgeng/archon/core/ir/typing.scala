@@ -23,6 +23,7 @@ import PrettyPrinter.pprint
 import WrapPolicy.*
 import IndentPolicy.*
 import DelimitPolicy.*
+import scala.collection.immutable.LazyList.cons
 
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
@@ -40,7 +41,14 @@ private val ANSI_WHITE = "\u001b[37m"
 def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
-case class Constraint(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope)
+enum CheckSubsumptionMode:
+  case SUBSUMPTION, CONVERSION
+
+import CheckSubsumptionMode.*
+
+given CheckSubsumptionMode = SUBSUMPTION
+
+case class Constraint(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope, mode: CheckSubsumptionMode)
 
 /** @param context:
   *   context of this meta-variable
@@ -78,19 +86,80 @@ extension(mv: MetaVariable)
     FunctionType(elem, acc)
   }
 
-trait TypingContext
+class TypingContext
   (
     var traceLevel: Int,
     var enableDebugging: Boolean,
-    val metaVars: mutable.ArrayBuffer[MetaVariable],
   ):
+
+  private val metaVars: mutable.ArrayBuffer[MetaVariable] = mutable.ArrayBuffer()
+  private var version: Int = 0
+  private var solvedVersion: Int = 0
+
+  def resolve(m: Meta): MetaVariable = metaVars(m.index)
 
   def addMetaVar(mv: MetaVariable): Meta =
     val index = metaVars.size
     metaVars += mv
     Meta(index)
 
-  def solve(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] = ???
+  def assignSolved(m: Meta, solved: Solved): Unit =
+    assignSolved(m.index, solved)
+
+  private def assignSolved(index: Nat, solved: Solved): Unit =
+    version += 1
+    metaVars(index) = solved
+
+  private def updateGuarded(index: Nat, guarded: Guarded): Unit =
+    metaVars(index) = guarded
+
+  def solve(constraints: Set[Constraint])(using Σ: Signature): Either[IrError, Set[Constraint]] =
+    var currentConstraints = constraints
+    while(solvedVersion != version) {
+      solvedVersion = version
+      solveOnce(currentConstraints) match
+        case Right(newConstraints) => currentConstraints = newConstraints
+        case Left(e) => return Left(e)
+    }
+    Right(currentConstraints)
+
+  private def solveOnce(constraints: Set[Constraint])(using Σ: Signature): Either[IrError, Set[Constraint]] = boundary:
+    val metaVarIndexes = MetaVarCollector.visitConstraints(constraints)(using this)
+    for index <- metaVarIndexes.toSeq.sorted do
+      metaVars(index) match
+        case Guarded(context, ty, value, constraints) =>
+          solveConstraints(constraints) match
+            case Right(newConstraints)=>
+              if newConstraints.isEmpty then
+                assignSolved(index, new Solved(context, ty, value))
+              else 
+                updateGuarded(index, new Guarded(context, ty, value, newConstraints))
+            case Left(e) => break(Left(e)) 
+        case _ => // do nothing
+    solveConstraints(constraints)
+  
+  private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
+    override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] = Set(m.index) ++ {
+      ctx.resolve(m) match
+      // Include all meta varialbles in the constraints of guarded meta variables so that solving these can potentially
+      // turn guarded meta variables to solved ones.
+      case Guarded(_, _, _, constraints) => visitConstraints(constraints)
+      case _ => Set[Nat]()
+    }
+
+    override def combine(freeVars: Set[Nat]*)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] = freeVars.flatten.toSet
+
+    def visitConstraints(constraints: Set[Constraint])(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
+      constraints.flatMap(c => c.lhs.flatMap(visitVTerm) ++ c.rhs.flatMap(visitVTerm))
+
+
+  private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Either[IrError, Set[Constraint]] = boundary:
+    val result = mutable.Set[Constraint]()
+    for constraint <- constraints do
+      checkSubsumptions(constraint.lhs, constraint.rhs, constraint.tys)(using constraint.mode)(using constraint.context)(using Σ)(using this) match
+        case Right(constraints) => result ++= constraints
+        case Left(e)   => break(Left(e)) 
+    Right(result.toSet)
 
   inline def trace[L, R]
     (
@@ -351,8 +420,8 @@ private def checkTParamsAreUnrestricted
   case Nil => Right(())
   case binding :: rest =>
     for
-      constarints <- checkSubsumption(binding.usage, UsageLiteral(UUnres), Some(UsageType()))
-      _ <- ctx.solve(constarints).isEmpty match
+      constarints <- checkSubsumption(binding.usage, UsageLiteral(UUnres), Some(UsageType())).flatMap(ctx.solve)
+      _ <- constarints.isEmpty match
         case true  => Right(())
         case false => Left(ExpectUnrestrictedTypeParameterBinding(binding))
       _ <- checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
@@ -579,8 +648,8 @@ def checkType
                   con.tArgs.map(_.substLowers(tParamArgs ++ args: _*)),
                   tIndexArgs,
                   data.tIndexTys.substLowers(tParamArgs: _*),
-                )(using CONVERSION)
-                _ <- if ctx.solve(constraints).isEmpty then Right(())
+                )(using CONVERSION).flatMap(ctx.solve)
+                _ <- if constraints.isEmpty then Right(())
                 else Left(UnmatchedDataIndex(c, dataType))
               yield (DataType(qn, args), usages)
         case _ => Left(ExpectDataType(ty))
@@ -601,7 +670,7 @@ def checkType
       for
         case (newTm, inferred, usages) <- inferType(tm)
         constraints <- checkSubsumption(inferred, ty, None)
-        _ <- if ctx.solve(constraints).isEmpty then Right(())
+        _ <- if constraints.isEmpty then Right(())
         else Left(NotVSubsumption(inferred, ty, None, SUBSUMPTION))
       yield (newTm, usages),
 )
@@ -663,7 +732,7 @@ def inferType
           effects <- effects.normalized
           newTm = CTop(ul, effects)(using tm.sourceInfo)
         yield (newTm, CType(newTm, Total), (uUsages + ulUsages))
-      case m @ Meta(index) => Right(m, ctx.metaVars(index).contextFreeType, Usages.zero)
+      case m: Meta => Right(m, ctx.resolve(m).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
           case None             => Left(MissingDeclaration(qn))
@@ -685,8 +754,8 @@ def inferType
           (effects, effUsages) <- checkType(effects, EffectsType())
           (usage, uUsages) <- checkType(usage, UsageType(None))
           // Prevent returning value of U0 usage, which does not make sense.
-          usageConstraints <- checkSubsumption(usage, UsageLiteral(Usage.U1), Some(UsageType()))
-          _ <- if ctx.solve(usageConstraints).isEmpty then Right(())
+          usageConstraints <- checkSubsumption(usage, UsageLiteral(Usage.U1), Some(UsageType())).flatMap(ctx.solve)
+          _ <- if usageConstraints.isEmpty then Right(())
             else Left(NotVSubsumption(usage, UsageLiteral(Usage.U1), Some(UsageType()), SUBSUMPTION))
           case (vTy, vTyTy, vTyUsages) <- inferType(vTy)
           vTy <- vTy.normalized
@@ -877,18 +946,11 @@ def checkType
       for
         case (tm, tmTy, usages) <- inferType(tm)
         ty <- reduceCType(ty)
-        constraints <- checkSubsumption(tmTy, ty, None)
-        _ <- if ctx.solve(constraints).isEmpty then Right(())
+        constraints <- checkSubsumption(tmTy, ty, None).flatMap(ctx.solve)
+        _ <- if constraints.isEmpty then Right(())
         else Left(NotCSubsumption(tmTy, ty, None, SUBSUMPTION))
       yield (tm, usages),
 )
-
-enum CheckSubsumptionMode:
-  case SUBSUMPTION, CONVERSION
-
-import CheckSubsumptionMode.*
-
-given CheckSubsumptionMode = SUBSUMPTION
 
 def checkElimSubsumptions
   (t: CTerm, subs: List[Elimination[VTerm]], sups: List[Elimination[VTerm]], headTy: CTerm)
@@ -899,14 +961,14 @@ def checkElimSubsumptions
   : Either[IrError, Set[Constraint]] =
     val resultConstraint = Set(
       Constraint(Γ, List(Thunk(redux(t, subs))), List(Thunk(redux(t, sups))),
-     List(Binding(U(headTy), UsageLiteral(Usage.UUnres))(gn"ty"))))
+     List(Binding(U(headTy), UsageLiteral(Usage.UUnres))(gn"ty")), mode))
     (subs, sups, headTy) match
     case (Nil, Nil, _) => Right(Set.empty)
     case (ETerm(sub):: subs, ETerm(sup):: sups, t) => t match
       case FunctionType(binding, bodyTy, _) =>
         for
-          headConstraints <- checkSubsumption(sub, sup, Some(binding.ty))
-          r <- if ctx.solve(headConstraints).isEmpty then
+          headConstraints <- checkSubsumption(sub, sup, Some(binding.ty)).flatMap(ctx.solve)
+          r <- if headConstraints.isEmpty then
             checkElimSubsumptions(Application(t, sub), subs, sups, bodyTy)
           else
             val (a, b) = getFreeVars(bodyTy)(using 0)
@@ -934,15 +996,15 @@ def checkSubsumptions
     case (Nil, Nil, Nil) => Right(Set.empty)
     case (sub :: tailSubs, sup :: tailSups, ty :: tys) =>
       for
-        headConstraints <- checkSubsumption(sub, sup, Some(ty.ty))
+        headConstraints <- checkSubsumption(sub, sup, Some(ty.ty)).flatMap(ctx.solve)
         r <-
-          if ctx.solve(headConstraints).isEmpty
+          if headConstraints.isEmpty
           then checkSubsumptions(tailSubs, tailSups, tys.substLowers(sub))
           else
             val (a, b) = getFreeVars(tys)(using 0)
             if a(0) || b(0)
               // if the head term is referenced in the tail, add the whole thing as a constraint
-            then Right(Set(Constraint(Γ, subs, sups, tys)))
+            then Right(Set(Constraint(Γ, subs, sups, tys, mode)))
             // the head term is not referenced in the tail, add the tail constraint in addition to the head
             // constraints
             else checkSubsumptions(tailSubs, tailSups, tys.strengthened).map(headConstraints ++ _)
@@ -1161,10 +1223,10 @@ def checkSubsumption
         case (Let(t1, ty1, eff1, usage1, ctx1), Let(t2, ty2, eff2, usage2, ctx2), ty) =>
           for
             tyConstraint <- checkSubsumption(ty1, ty2, None)(using CONVERSION)
-            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))(using CONVERSION)
+            effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))(using CONVERSION).flatMap(ctx.solve)
             usageConstraint <- checkSubsumption(usage1, usage2, Some(UsageType()))(using CONVERSION)
             combinedEffects <-
-              if ctx.solve(effConstraint).isEmpty then Right(eff1) else EffectsUnion(eff1, eff2).normalized
+              if effConstraint.isEmpty then Right(eff1) else EffectsUnion(eff1, eff2).normalized
             tConstraint <- checkSubsumption(
               t1,
               t2,
@@ -1187,9 +1249,9 @@ def checkSubsumption
           ) =>
           for
             effConstraint <- checkSubsumption(eff1, eff2, Some(EffectsType()))
-            tyConstraint <- checkSubsumption(binding2.ty, binding1.ty, None)
+            tyConstraint <- checkSubsumption(binding2.ty, binding1.ty, None).flatMap(ctx.solve)
             bodyConstraint <-
-              if ctx.solve(tyConstraint).isEmpty
+              if tyConstraint.isEmpty
               then checkSubsumption(bodyTy1, bodyTy2, None)(using mode)(using Γ :+ binding2)
               else
                 val meta = ctx.addMetaVar(
@@ -1298,6 +1360,7 @@ def checkSubsumption
 
 private def checkReduxSubsumption
   (sub: Redux, sup: Redux, ty: Option[CTerm])
+  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -1305,7 +1368,7 @@ private def checkReduxSubsumption
   for
     (subC, subCty, _) <- inferType(sub.t)
     (supC, supCty, _) <- inferType(sup.t)
-    ctyConstraints <- checkSubsumption(subCty, supCty, None)(using CONVERSION)
+    ctyConstraints <- checkSubsumption(subCty, supCty, None)(using CONVERSION).flatMap(ctx.solve)
     ty <- ty match
       case Some(ty) => Right(U(ty))
       case None =>
@@ -1314,21 +1377,21 @@ private def checkReduxSubsumption
     tyBinding = Binding(ty, Usage.UUnres)(gn"ty")
     r <-
       val resultConstraint = Set(
-        Constraint(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil),
+        Constraint(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil, mode),
       )
-      ctx.solve(ctyConstraints).isEmpty match
+      ctyConstraints.isEmpty match
         // Return the whole thing as a constraint if type subsumption check failed
         case false => Right(resultConstraint)
         case true =>
           for
-            cConstraints <- checkSubsumption(subC, supC, Some(supCty))(using CONVERSION)
-            r <- ctx.solve(cConstraints).isEmpty match
+            cConstraints <- checkSubsumption(subC, supC, Some(supCty))(using CONVERSION).flatMap(ctx.solve)
+            r <- cConstraints.isEmpty match
               case true => checkElimSubsumptions(sub.t, sub.elims, sup.elims, supCty)
               case false =>
                 def assignMeta
                   (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, metaOnTheLeft: Boolean)
                   : Either[IrError, Set[Constraint]] =
-                  ctx.metaVars(meta.index) match
+                  ctx.resolve(meta) match
                     case Unsolved(context, ty) => boundary:
                       // Make sure meta variable assignment won't cause cyclic meta variable references.
                       val highestMetaVarInTerm = getHighestMetaVar(term)
@@ -1360,7 +1423,7 @@ private def checkReduxSubsumption
                       if otherTermFreeVars.exists(i => !argVarToMetaContextIndexMap.contains(i)) then break(Right(resultConstraint))
 
                       // substitute free variables in term so that it's compatible with the meta variable context
-                      ctx.metaVars(meta.index) = Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift))
+                      ctx.assignSolved(meta, Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift)))
 
                       // Make sure the extra elims match
                       val head = Redux(meta, metaElims)
@@ -1429,7 +1492,7 @@ private def checkInherentEqDecidable
           constraints <- checkSubsumption(eqD, dataEqD, Some(EqDecidabilityType()))(using
             SUBSUMPTION,
           )
-          _ <- ctx.solve(constraints).isEmpty match
+          _ <- constraints.isEmpty match
             case true  => Right(())
             case false => Left(NotEqDecidableType(binding.ty))
           _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
@@ -1554,7 +1617,7 @@ private def checkIsEqDecidableTypes
       EqDecidabilityLiteral(EqDecidable),
       Some(EqDecidabilityType()),
     )(using CONVERSION)
-    r <- ctx.solve(constraints).isEmpty match
+    r <- constraints.isEmpty match
       case true  => Right(())
       case false => Left(NotEqDecidableType(ty))
   yield r
@@ -1590,7 +1653,7 @@ private def verifyUsages
       for
         constraint <- checkSubsumption(v, Γ.resolve(i).usage, Some(UsageType()))(using SUBSUMPTION)
         r <-
-          if ctx.solve(constraint).isEmpty then Right(())
+          if constraint.isEmpty then Right(())
           else Left(NotUsageSubsumption(v, Γ.resolve(i).usage, SUBSUMPTION))
       yield ()
     })
@@ -1796,7 +1859,7 @@ private def checkLet
             LeakedReferenceToEffectfulComputationResult(t),
           )
           constraints <- checkSubsumption(usagesInBody.last.strengthened, usage, Some(UsageType()))(using SUBSUMPTION)
-          _ <- if ctx.solve(constraints).isEmpty then Right(())
+          _ <- if constraints.isEmpty then Right(())
             else Left(NotVSubsumption(usagesInBody.last.strengthened, usage, Some(UsageType()), SUBSUMPTION))
           usagesInContinuation <- effects match
             // Join with U1 for normal execution without any call to effect handlers
@@ -1927,7 +1990,7 @@ def checkHandler
       EffectsUnion(outputEffects, eff),
       Some(EffectsType()),
     )
-    _ <- if ctx.solve(effConstraints).isEmpty then Right(())
+    _ <- if effConstraints.isEmpty then Right(())
       else Left(NotVSubsumption(inputEff, EffectsUnion(outputEffects, eff), Some(EffectsType()), SUBSUMPTION))
     // Check handler implementations
     (handlerEntries, handlerUsages) <-
