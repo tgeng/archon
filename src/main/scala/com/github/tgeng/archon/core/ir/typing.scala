@@ -25,6 +25,8 @@ import IndentPolicy.*
 import DelimitPolicy.*
 import scala.collection.immutable.LazyList.cons
 
+import z3.scala.*
+
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
 private val ANSI_RED = "\u001b[31m"

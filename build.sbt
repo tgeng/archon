@@ -18,6 +18,9 @@ lazy val root = (project in file("."))
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.13" % "test"
     ),
+    Compile / unmanagedJars += {
+      baseDirectory.value / "unmanaged" / "scalaz3_3-4.8.14-macos-aarch64.jar"
+    },
     Test / envVars := Map(
       "TEST_RESOURCES_ROOT" -> file("src/test/resources").getAbsolutePath
     ),
