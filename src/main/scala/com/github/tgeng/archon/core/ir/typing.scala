@@ -25,8 +25,6 @@ import IndentPolicy.*
 import DelimitPolicy.*
 import scala.collection.immutable.LazyList.cons
 
-import z3.scala.*
-
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
 private val ANSI_RED = "\u001b[31m"
@@ -50,7 +48,12 @@ import CheckSubsumptionMode.*
 
 given CheckSubsumptionMode = SUBSUMPTION
 
-case class Constraint(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope, mode: CheckSubsumptionMode)
+enum Constraint:
+  case Conversion(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope)
+  case SubType(sub: VTerm, sup: VTerm)
+  case EffSubsumption(sub: VTerm, sup: VTerm)
+  case LevelSubsumption(sub: ULevel, sup: ULevel)
+  case UsageSubsumption(sub: VTerm, sup: VTerm)
 
 /** @param context:
   *   context of this meta-variable
@@ -60,6 +63,18 @@ case class Constraint(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys:
 enum MetaVariable(val context: Context, val ty: CTerm):
   case Unsolved(override val context: Context, override val ty: CTerm)
     extends MetaVariable(context, ty)
+  
+  case UnsolvedCType(override val context: Context, override val ty: CTerm, lowerBounds: Set[CTerm])
+    extends MetaVariable(context, ty)
+
+  case UnsolvedEff(override val context: Context, lowerBounds: Set[VTerm])
+    extends MetaVariable(context, F(EffectsType(), Total(), UsageLiteral(UUnres)))
+
+  case UnsolvedLevel(override val context: Context, lowerBounds: Set[VTerm])
+    extends MetaVariable(context, F(LevelType(), Total(), UsageLiteral(UUnres)))
+
+  case UnsolvedUsage(override val context: Context, lowerBounds: Set[VTerm])
+    extends MetaVariable(context, F(UsageType(), Total(), UsageLiteral(UUnres)))
 
   /** @param value:
     *   the solved value of this meta variable
@@ -152,15 +167,22 @@ class TypingContext
     override def combine(freeVars: Set[Nat]*)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] = freeVars.flatten.toSet
 
     def visitConstraints(constraints: Set[Constraint])(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
-      constraints.flatMap(c => c.lhs.flatMap(visitVTerm) ++ c.rhs.flatMap(visitVTerm))
-
+      constraints.flatMap{
+        case Constraint.Conversion(_, lhs, rhs, _) => lhs.flatMap(visitVTerm) ++ rhs.flatMap(visitVTerm)
+        // TODO[P0]: handle other constraints
+        case _ => ???
+      }
 
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Either[IrError, Set[Constraint]] = boundary:
     val result = mutable.Set[Constraint]()
     for constraint <- constraints do
-      checkSubsumptions(constraint.lhs, constraint.rhs, constraint.tys)(using constraint.mode)(using constraint.context)(using Σ)(using this) match
-        case Right(constraints) => result ++= constraints
-        case Left(e)   => break(Left(e)) 
+      constraint match
+        case Constraint.Conversion(context, lhs, rhs, tys) => 
+          checkAreConvertible(lhs, rhs, tys)(using context)(using Σ)(using this) match
+            case Right(constraints) => result ++= constraints
+            case Left(e)   => break(Left(e)) 
+        // TODO[P0]: handle other constraints
+        case _ => ???
     Right(result.toSet)
 
   inline def trace[L, R]
@@ -958,8 +980,8 @@ def checkElimSubsumptions
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] =
     val resultConstraint = Set(
-      Constraint(Γ, List(Thunk(redux(t, subs))), List(Thunk(redux(t, sups))),
-     List(Binding(U(headTy), UsageLiteral(Usage.UUnres))(gn"ty")), mode))
+      Constraint.Conversion(Γ, List(Thunk(redux(t, subs))), List(Thunk(redux(t, sups))),
+     List(Binding(U(headTy), UsageLiteral(Usage.UUnres))(gn"ty"))))
     (subs, sups, headTy) match
     case (Nil, Nil, _) => Right(Set.empty)
     case (ETerm(sub):: subs, ETerm(sup):: sups, t) => t match
@@ -1002,7 +1024,7 @@ def checkSubsumptions
             val (a, b) = getFreeVars(tys)(using 0)
             if a(0) || b(0)
               // if the head term is referenced in the tail, add the whole thing as a constraint
-            then Right(Set(Constraint(Γ, subs, sups, tys, mode)))
+            then Right(Set(Constraint.Conversion(Γ, subs, sups, tys)))
             // the head term is not referenced in the tail, add the tail constraint in addition to the head
             // constraints
             else checkSubsumptions(tailSubs, tailSups, tys.strengthened).map(headConstraints ++ _)
@@ -1372,7 +1394,7 @@ private def checkReduxSubsumption
     tyBinding = Binding(ty, Usage.UUnres)(gn"ty")
     r <-
       val resultConstraint = Set(
-        Constraint(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil, mode),
+        Constraint.Conversion(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil),
       )
       ctyConstraints.isEmpty match
         // Return the whole thing as a constraint if type subsumption check failed
@@ -1431,6 +1453,7 @@ private def checkReduxSubsumption
                     // we just fail here directly.
                     case s: Solved => Left(MetaVariableAlreadySolved(meta, term, s))
                     case _: Guarded => Right(resultConstraint)
+                    case _ => ??? // TODO[P0]: handle other cases
                 (subC, supC) match
                   case (subC @ Meta(subIdx), supC @ Meta(supIdx)) =>
                     if subIdx < supIdx then assignMeta(subC, sub.elims, supC, true)

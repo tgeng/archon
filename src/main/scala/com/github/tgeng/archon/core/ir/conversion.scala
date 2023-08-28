@@ -1,5 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
+import scala.util.boundary, boundary.break;
+import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Reducible.reduce
@@ -40,7 +42,7 @@ def checkIsConvertible(sub: VTerm, sup: VTerm, ty: Option[VTerm])
           case (ty, Top(ul2, eqD2), _) =>
             for
               ul1 <- inferLevel(ty)
-              levelConstraints <- checkULevelSubsumption(ul1, ul2)
+              levelConstraints <- checkULevelIsConvertible(ul1, ul2)
               eqD1 <- deriveTypeInherentEqDecidability(ty)
               eqDecidabilityConstraints <- checkIsConvertible(eqD1, eqD2, Some(EqDecidabilityType()))
             yield levelConstraints ++ eqDecidabilityConstraints
@@ -261,8 +263,96 @@ def checkIsConvertible(sub: CTerm, sup: CTerm, ty: Option[CTerm])
           case _ => Left(NotCConvertible(sub, sup, ty))
       yield r
 
+private def checkReduxIsConvertible
+  (sub: Redux, sup: Redux, ty: Option[CTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Set[Constraint]] =
+  for
+    (subC, subCty, _) <- inferType(sub.t)
+    (supC, supCty, _) <- inferType(sup.t)
+    ctyConstraints <- checkIsConvertible(subCty, supCty, None).flatMap(ctx.solve)
+    ty <- ty match
+      case Some(ty) => Right(U(ty))
+      case None =>
+        for ul <- inferLevel(sup)
+        yield U(CType(CTop(ul)))
+    tyBinding = Binding(ty, Usage.UUnres)(gn"ty")
+    r <-
+      val resultConstraint = Set(
+        Constraint.Conversion(Γ, List(Thunk(sub)), List(Thunk(sup)), tyBinding :: Nil),
+      )
+      ctyConstraints.isEmpty match
+        // Return the whole thing as a constraint if type subsumption check failed
+        case false => Right(resultConstraint)
+        case true =>
+          for
+            cConstraints <- checkIsConvertible(subC, supC, Some(subCty)).flatMap(ctx.solve)
+            r <- cConstraints.isEmpty match
+              case true => checkElimSubsumptions(sub.t, sub.elims, sup.elims, supCty)
+              case false =>
+                def assignMeta
+                  (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, metaOnTheLeft: Boolean)
+                  : Either[IrError, Set[Constraint]] =
+                  ctx.resolve(meta) match
+                    case Unsolved(context, ty) => boundary:
+                      // Make sure meta variable assignment won't cause cyclic meta variable references.
+                      val highestMetaVarInTerm = getHighestMetaVar(term)
+                      if highestMetaVarInTerm >= meta.index then break(Left(MetaVariableCycle(meta, term)))
+                      // Handle extra elims beyond those mentioned by the meta variable context
+                      // If the target term does not mirror the same elim structure for the extras, we can't solve
+                      // the meta variable. In this case we just return the whole thing as a constraint.
+                      val extraElims = elims.drop(context.size)
+                      val (otherTerm, otherExtraElims) = if extraElims.nonEmpty then
+                         term match
+                          case Redux(t, otherElims) => 
+                            if otherElims.size >= extraElims.size then 
+                                val otherElimArgSize = otherElims.size - extraElims.size
+                                (redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
+                            else
+                                break(Right(resultConstraint))
+                          case _ => break(Right(resultConstraint))
+                         else
+                          (term, Nil)
+                      // Take the arguments corresponding to the meta variable context
+                      val metaElims = elims.take(context.size)
+                      val argVars = metaElims.collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
+                      if argVars.size < context.size then break(Right(resultConstraint))
+                      val argVarToMetaContextIndexMap = argVars.zipWithIndex.map{ case (Var(v), i) => (v, Var(context.size - 1 - i))}.toMap
+
+                      // Make sure the target term only references variables available from the meta variable context
+                      val (a, b) = getFreeVars(otherTerm)(using 0)
+                      val otherTermFreeVars = a ++ b
+                      if otherTermFreeVars.exists(i => !argVarToMetaContextIndexMap.contains(i)) then break(Right(resultConstraint))
+
+                      // substitute free variables in term so that it's compatible with the meta variable context
+                      ctx.assignSolved(meta, Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift)))
+
+                      // Make sure the extra elims match
+                      val head = Redux(meta, metaElims)
+                      if metaOnTheLeft then
+                        checkElimSubsumptions(head, extraElims, otherExtraElims, ty.substLowers(argVars: _*))
+                      else
+                        checkElimSubsumptions(head, otherExtraElims, extraElims, ty.substLowers(argVars: _*))
+
+                    // Previous subsumption check should have alraedy checked that the solved term is not equivalent, so
+                    // we just fail here directly.
+                    case s: Solved => Left(MetaVariableAlreadySolved(meta, term, s))
+                    case _: Guarded => Right(resultConstraint)
+                    case _ => ??? // TODO[P0]: handle other cases
+                (subC, supC) match
+                  case (subC @ Meta(subIdx), supC @ Meta(supIdx)) =>
+                    if subIdx < supIdx then assignMeta(subC, sub.elims, supC, true)
+                    else if subIdx > supIdx then assignMeta(supC, sup.elims, subC, false)
+                    else checkElimSubsumptions(sub.t, sub.elims, sup.elims, supCty)
+                  case (meta: Meta, supC) => assignMeta(meta, sub.elims, supC, true)
+                  case (subC, meta: Meta) => assignMeta(meta, sup.elims, subC, false)
+                  case _ => Right(resultConstraint)
+          yield r
+  yield r
+
 def checkAreConvertible(subs: List[VTerm], sups: List[VTerm], tys: Telescope)
-  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -280,7 +370,7 @@ def checkAreConvertible(subs: List[VTerm], sups: List[VTerm], tys: Telescope)
             val (a, b) = getFreeVars(tys)(using 0)
             if a(0) || b(0)
               // if the head term is referenced in the tail, add the whole thing as a constraint
-            then Right(Set(Constraint(Γ, subs, sups, tys, mode)))
+            then Right(Set(Constraint.Conversion(Γ, subs, sups, tys)))
             // the head term is not referenced in the tail, add the tail constraint in addition to the head
             // constraints
             else checkAreConvertible(tailSubs, tailSups, tys.strengthened).map(headConstraints ++ _)
@@ -312,6 +402,34 @@ private inline def debugConversion[L, R]
       rawTy.map(pprint),
     ),
   )(result)
+
+private def checkULevelIsConvertible
+  (ul1: ULevel, ul2: ULevel)
+  (using mode: CheckSubsumptionMode)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext) : Either[IrError, Set[Constraint]] =
+  // TODO[P1]: figure out a smarter way to handle levels.
+  val ul1Normalized = ul1 match
+    case USimpleLevel(v) =>
+      v.normalized match
+        case Left(e)       => return Left(e)
+        case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
+        case Right(v)      => USimpleLevel(v)
+    case _ => ul1
+  val ul2Normalized = ul2 match
+    case USimpleLevel(v) =>
+      v.normalized match
+        case Left(e)       => return Left(e)
+        case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
+        case Right(v)      => USimpleLevel(v)
+    case _ => ul2
+
+  (ul1Normalized, ul2Normalized) match
+    case _ if ul1Normalized == ul2Normalized => Right(Set.empty)
+    // TODO[P0]: assign meta variable if a single meta variable is involved and can be solved
+    // TODO[P0]: return constraint if there are meta variable in the level components
+    case _ => Left(NotLevelConvertible(ul1Normalized, ul2Normalized))
 
 /* References
  [0]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).
