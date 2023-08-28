@@ -117,7 +117,96 @@ def checkIsSubtype
         sup <- sup.normalized(None)
         r <- (sub, sup) match
           case (_, _) if sub == sup => Right(Set.empty[Constraint])
-          case _ => ???
+          case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
+            for
+              effConstraint <- checkEffSubsumption(eff1, eff2)
+              upperBoundConstraint <- checkIsSubtype(upperBound1, upperBound2)
+            yield effConstraint ++ upperBoundConstraint
+          case (ty: IType, CTop(ul2, eff2)) =>
+            for
+              ul1 <- inferLevel(sub)
+              levelConstraint <- checkULevelSubsumption(ul1, ul2)
+              effConstraint <- checkEffSubsumption(ty.effects, eff2)
+            yield levelConstraint ++ effConstraint
+          case (F(vTy1, eff1, u1), F(vTy2, eff2, u2)) =>
+            for
+              effConstraint <- checkEffSubsumption(eff1, eff2)
+              usageConstraint <- checkUsageSubsumption(u1, u2)
+              tyConstraint <- checkIsSubtype(vTy1, vTy2)
+            yield effConstraint ++ usageConstraint ++ tyConstraint
+          case (
+              FunctionType(binding1, bodyTy1, eff1),
+              FunctionType(binding2, bodyTy2, eff2),
+            ) =>
+            for
+              effConstraint <- checkEffSubsumption(eff1, eff2)
+              tyConstraint <- checkIsSubtype(binding2.ty, binding1.ty).flatMap(ctx.solve)
+              bodyConstraint <-
+                if tyConstraint.isEmpty
+                then checkIsSubtype(bodyTy1, bodyTy2)(using Γ :+ binding2)
+                else
+                  val meta = ctx.addMetaVar(
+                    Guarded(
+                      Γ :+ binding2,
+                      F(binding1.ty.weakened, Total(), binding1.usage.weakened),
+                      Return(Var(0)),
+                      tyConstraint,
+                    ),
+                  )
+                  checkIsSubtype(
+                    bodyTy1,
+                    bodyTy2.subst {
+                      case 0 =>
+                        Some(Collapse(vars(Γ.size).foldLeft[CTerm](meta)(Application(_, _))))
+                      case _ => None
+                    },
+                  )(using Γ :+ binding2)
+            yield effConstraint ++ tyConstraint ++ bodyConstraint
+          // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
+          // just wrap them inside redux
+          case (subM: Meta, supM: Meta) =>
+            checkReduxSubsumption(Redux(subM, Nil), Redux(supM, Nil), None)
+          case (subR: Redux, supR: Redux) =>
+            checkReduxSubsumption(Redux(subR, Nil), Redux(supR, Nil), None)
+          case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
+            Σ.getRecordOption(qn1) match
+              case None => Left(MissingDeclaration(qn1))
+              case Some(record) =>
+                val args = ArrayBuffer[VTerm]()
+                for
+                  effConstraint <- checkEffSubsumption(eff1, eff2)
+                  argConstraint <- transpose(
+                    args1
+                      .zip(args2)
+                      .zip(record.tParamTys)
+                      .map { case ((arg1, arg2), (binding, variance)) =>
+                        variance match
+                          case Variance.INVARIANT =>
+                            val r = checkIsConvertible(
+                              arg1,
+                              arg2,
+                              Some(binding.ty.substLowers(args.toSeq: _*)),
+                            )
+                            args += arg1
+                            r
+                          case Variance.COVARIANT =>
+                            for (arg1, _) <- checkIsType(arg1)
+                                (arg2, _) <- checkIsType(arg2)
+                                r <- checkIsSubtype(arg1, arg2)
+                            yield 
+                              args += arg1
+                              r
+                          case Variance.CONTRAVARIANT =>
+                            for (arg1, _) <- checkIsType(arg1)
+                                (arg2, _) <- checkIsType(arg2)
+                                r <- checkIsSubtype(arg2, arg1)
+                            yield 
+                              args += arg2
+                              r
+                      },
+                  ).map(_.flatten.toSet)
+                yield effConstraint ++ argConstraint
+          case _ => Left(NotCSubtype(sub, sup))
       yield r
 
 
@@ -211,9 +300,7 @@ private def checkEffSubsumption
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
-  (using
-    ctx: TypingContext,
-  )
+  (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] =
   // TODO: handle meta variables (consider handling meta variables in the set by instantiating it to a union of missing
   // effects)
@@ -237,9 +324,7 @@ private def checkULevelSubsumption
   (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
-  (using
-    TypingContext,
-  )
+  (using TypingContext)
   : Either[IrError, Set[Constraint]] =
   // TODO: handle meta variables (consider handle meta variables inside offset Map by instantiating a meta variable to a
   // level max)
