@@ -239,7 +239,6 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either
   ctx.trace(s"checking data signature ${data.qn}") {
     given Context = IndexedSeq()
 
-    val tParams = data.tParamTys.map(_._1) ++ data.tIndexTys
     for
       tParamsTysTelescope <- checkParameterTypeDeclarations(data.tParamTys.map(_._1).toTelescope)
       tParamTys = Context.fromTelescope(tParamsTysTelescope)
@@ -362,7 +361,7 @@ def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
     RecordType(
       record.qn,
       (record.tParamTys.size - 1).to(0, -1).map(Var(_)).toList,
-      Total,
+      Total(),
     ),
   ),
   U1,
@@ -485,9 +484,7 @@ def inferType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (VTerm, VTerm, Usages)] =
-  debugInfer(
-    tm,
+  : Either[IrError, (VTerm, VTerm, Usages)] = debugInfer(tm):
     tm match
       case Type(upperBound) =>
         for
@@ -507,7 +504,7 @@ def inferType
         for
           case (cTm, cTy, usage) <- inferType(cTm)
           case (vTy, u) <- cTy match
-            case F(vTy, eff, u) if eff == Total => Right((vTy, u))
+            case F(vTy, eff, u) if isTotal(cTm, Some(cTy)) => Right((vTy, u))
             case F(_, _, _)                     => Left(CollapsingEffectfulTerm(cTm))
             case _                              => Left(NotCollapsable(cTm))
         yield (Collapse(cTm), vTy, usage)
@@ -516,9 +513,9 @@ def inferType
           case (cty, ctyTy, usage) <- inferType(cty)
           newTm <- Collapse(cty)(using tm.sourceInfo).normalized
           r <- ctyTy match
-            case CType(_, eff) if eff == Total => Right(Type(newTm))
+            case CType(_, eff) if isTotal(cty, Some(ctyTy)) => Right(Type(newTm))
             // Automatically promote SomeVType to F(SomeVType)
-            case F(Type(_), eff, _) if eff == Total => Right(Type(newTm))
+            case F(Type(_), eff, _) if isTotal(cty, Some(ctyTy)) => Right(Type(newTm))
             case CType(_, _) | F(Type(_), _, _) =>
               Left(EffectfulCTermAsType(cty))
             case _ => Left(NotTypeError(tm))
@@ -598,8 +595,7 @@ def inferType
             case _       => Left(NotTypeError(ty))
         yield (newTm, r, (heapUsages + tyUsages))
       case Cell(_, _) => throw IllegalArgumentException("cannot infer type")
-      case Auto()     => throw IllegalArgumentException("cannot infer type"),
-  )
+      case Auto()     => throw IllegalArgumentException("cannot infer type")
 
 def getEffectsContinuationUsage
   (effects: Effects)
@@ -707,10 +703,10 @@ def inferType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (CTerm, CTerm, Usages)] =
-  debugInfer(
-    tm,
-    tm.normalized match
+  : Either[IrError, (CTerm, CTerm, Usages)] = debugInfer( tm):
+    for
+      tm <- tm.normalized
+      r <- tm match
       case Hole =>
         throw IllegalArgumentException(
           "hole should only be present during reduction",
@@ -724,7 +720,7 @@ def inferType
           newTm = CType(upperBound, effects)
         yield (
           newTm,
-          CType(newTm, Total),
+          CType(newTm, Total()),
           (effUsages + upperBoundUsages),
         )
       case CTop(ul, effects) =>
@@ -733,7 +729,7 @@ def inferType
           (ul, ulUsages) <- checkULevel(ul)
           effects <- effects.normalized
           newTm = CTop(ul, effects)(using tm.sourceInfo)
-        yield (newTm, CType(newTm, Total), (uUsages + ulUsages))
+        yield (newTm, CType(newTm, Total()), (uUsages + ulUsages))
       case m: Meta => Right(m, ctx.resolve(m).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
@@ -748,7 +744,7 @@ def inferType
             // loaded from handlers and hence there is no way to statically detect cyclic references
             // between computations (functions, etc) unless I make the type system even more
             // complicated to somehow tracking possible call-hierarchy.
-            case U(cty) => Right(augmentEffect(MaybeDiv, cty))
+            case U(cty) => Right(augmentEffect(MaybeDiv(), cty))
             case _      => Left(ExpectUType(vTy))
         yield (Force(v), cTy, vUsages)
       case F(vTy, effects, usage) =>
@@ -764,12 +760,12 @@ def inferType
           usage <- usage.normalized
           newTm = F(vTy, effects, usage)(using tm.sourceInfo)
           cTyTy <- vTyTy match
-            case Type(_) => Right(CType(newTm, Total))
+            case Type(_) => Right(CType(newTm, Total()))
             case _       => Left(NotTypeError(vTy))
         yield (newTm, cTyTy, (effUsages + uUsages + vTyUsages))
       case Return(v) =>
         for case (v, vTy, vUsages) <- inferType(v)
-        yield (Return(v), F(vTy, Total), vUsages)
+        yield (Return(v), F(vTy, Total()), vUsages)
       case tm: Let => checkLet(tm, None)
       case FunctionType(binding, bodyTy, effects) =>
         for
@@ -785,23 +781,23 @@ def inferType
                   tm.sourceInfo,
                 )
                 r <- bodyTyTy match
-                  case CType(_, eff) if eff == Total =>
+                  case CType(_, eff) if isTotal(bodyTy, Some(bodyTyTy)) =>
                     // Strengthen is safe here because if it references the binding, then the
                     // binding must be at level ω and hence ULevelMax would return big type.
                     // Also, there is no need to check the dropped usage because usages in types
                     // is always multiplied by U0.
                     Right(
                       newTm,
-                      CType(newTm, Total),
+                      CType(newTm, Total()),
                       bodyTyUsages.dropRight(1).map(_.strengthened),
                     )
                   // TODO[P3]: think about whether the following is actually desirable
                   // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
                   // inference.
-                  case F(Type(_), eff, _) if eff == Total =>
+                  case F(Type(_), eff, _) if isTotal(bodyTy, Some(bodyTyTy)) =>
                     Right(
                       newTm,
-                      CType(newTm, Total),
+                      CType(newTm, Total()),
                       bodyTyUsages.dropRight(1).map(_.strengthened),
                     )
                   case CType(_, _) | F(Type(_), _, _) =>
@@ -847,7 +843,7 @@ def inferType
             for
               (effects, effUsages) <- checkType(effects, EffectsType())
               (args, argsUsages) <- checkTypes(args, record.tParamTys.map(_._1).toList)
-            yield (RecordType(qn, args, effects), CType(tm, Total), (effUsages + argsUsages))
+            yield (RecordType(qn, args, effects), CType(tm, Total()), (effUsages + argsUsages))
       case OperationCall((qn, tArgs), name, args) =>
         Σ.getEffectOption(qn) match
           case None => Left(MissingDeclaration(qn))
@@ -918,8 +914,8 @@ def inferType
               Right(F(vTy, EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil)))))
             case _ => Left(ExpectCell(cell))
         yield (GetOp(cell), r, cellUsages)
-      case h: HeapHandler => checkHeapHandler(h, None),
-  )
+      case h: HeapHandler => checkHeapHandler(h, None)
+    yield r 
 
 private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): Option[Usage] =
   Γ.resolve(v) match
@@ -1176,12 +1172,9 @@ def checkSubsumption
   sub,
   sup,
   ty, {
-    val isTotal = ty.forall(_.asInstanceOf[IType].effects == Total)
     for
-      sub <- if isTotal then reduce(sub) else Right(sub.normalized)
-      sub <- simplifyLet(sub)
-      sup <- if isTotal then reduce(sup) else Right(sup.normalized)
-      sup <- simplifyLet(sup)
+      sub <- sub.normalized(ty)
+      sup <- sup.normalized(ty)
       r <- (sub, sup, ty) match
         case (_, _, _) if sub == sup => Right(Set.empty)
         case (_, _, Some(FunctionType(binding, bodyTy, _))) =>
@@ -1259,7 +1252,7 @@ def checkSubsumption
                 val meta = ctx.addMetaVar(
                   Guarded(
                     Γ :+ binding2,
-                    F(binding1.ty.weakened, Total, binding1.usage.weakened),
+                    F(binding1.ty.weakened, Total(), binding1.usage.weakened),
                     Return(Var(0)),
                     tyConstraint,
                   ),
@@ -1456,27 +1449,6 @@ private def getHighestMetaVar(term: CTerm)(using Signature): Int =
     override def visitMeta(m: Meta)(using ctx: Unit)(using Σ: Signature): Int = return m.index
   }.visitCTerm(term)(using ())
 
-private def simplifyLet
-  (t: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, CTerm] = ctx.trace[IrError, CTerm](
-  s"simplify",
-  s"${yellow(t.sourceInfo)} ${pprint(t)}",
-  successMsg = tm => s"${yellow(tm.sourceInfo)} ${green(pprint(tm))}",
-) {
-  t match
-    case Let(t, ty, eff, usage, ctx) =>
-      for
-        eff <- eff.normalized
-        r <-
-          if eff == Total then simplifyLet(ctx.substLowers(Collapse(t))).flatMap(reduce)
-          else Right(t)
-      yield r
-    case _ => Right(t)
-}
-
 private def checkInherentEqDecidable
   (data: Data, constructor: Constructor)
   (using Σ: Signature)
@@ -1668,26 +1640,6 @@ private def verifyUsages
       case _: StrengthenException => UsageLiteral(Usage.UUnres)
   }
 
-/** @param invert
-  *   useful when checking patterns where the consumed usages are actually provided usages because
-  *   lhs patterns are multiplied by declared usages in function
-  */
-def checkUsagesSubsumption
-  (usages: Usages, invert: Boolean = false)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] =
-  assert(usages.size == Γ.size)
-  transpose((0 until Γ.size).map { i =>
-    given Γ2: Context = Γ.take(i)
-    val binding = Γ(i)
-    val providedUsage = binding.usage
-    val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
-    if invert then checkSubsumption(consumedUsage, providedUsage, Some(UsageType()))(using SUBSUMPTION)
-    else checkSubsumption(providedUsage, consumedUsage, Some(UsageType()))(using SUBSUMPTION)
-  }).map(_.flatten.toSet)
-
 private def checkContinuationUsageSubsumption
   (usage1: Option[Usage], usage2: Option[Usage])
   (using mode: CheckSubsumptionMode)
@@ -1822,7 +1774,7 @@ private def checkLet
             ),
           )
         }
-      if effects == Total && areTUsagesZeroOrUnrestricted then
+      if isTotal(t, Some(F(ty, effects, usage))) && areTUsagesZeroOrUnrestricted then
         // Do the reduction onsite so that type checking in sub terms can leverage the
         // more specific type. More importantly, this way we do not need to reference
         // the result of a computation in the inferred type.
@@ -2202,7 +2154,7 @@ def checkIsCType
     for
       case (cty, cTyTy, usages) <- inferType(cTy)
       _ <- cTyTy match
-        case CType(_, eff) if eff == Total =>
+        case CType(_, eff) if isTotal(cty, Some(cTyTy)) =>
           levelBound match
             case Some(bound) =>
               for
@@ -2245,7 +2197,7 @@ def reduceVType
     for
       case (vTy, tyTy, _) <- inferType(vTy)
       r <- tyTy match
-        case F(Type(_), effect, _) if effect == Total =>
+        case F(Type(_), effect, _) if isTotal(vTy, Some(tyTy)) =>
           for
             reducedTy <- reduce(vTy)
             r <- reducedTy match
@@ -2274,8 +2226,8 @@ def reduceCType
         for
           case (cTy, cTyTy, _) <- inferType(cTy)
           r <- cTyTy match
-            case CType(_, eff) if eff == Total => reduce(cTy)
-            case F(_, eff, _) if eff == Total =>
+            case CType(_, eff) if isTotal(cTy, Some(cTyTy)) => reduce(cTy)
+            case F(_, eff, _) if isTotal(cTy, Some(cTyTy)) =>
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
                 case Return(vty) => Right(F(vty)(using cTy.sourceInfo))
@@ -2352,7 +2304,7 @@ private def debugCheck[L, R]
   )
 
 private inline def debugInfer[L, R <: (CTerm | VTerm)]
-  (tm: R, result: => Either[L, (R, R, Usages)])
+  (tm: R)(result: => Either[L, (R, R, Usages)])
   (using Context)
   (using Signature)
   (using ctx: TypingContext)

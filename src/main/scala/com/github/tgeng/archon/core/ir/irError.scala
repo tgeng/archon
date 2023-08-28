@@ -99,3 +99,7 @@ enum IrError extends HasException:
   case MetaVariableAlreadySolved(meta: CTerm.Meta, t: CTerm, s: MetaVariable.Solved)
   case MetaVariableCycle(meta: CTerm.Meta, t: CTerm)
   case UnmatchedDataIndex(con: VTerm.Con, dataType: VTerm.DataType)
+  case NotVConvertible(sub: VTerm, sup: VTerm, ty: Option[VTerm])
+  case NotCConvertible(sub: CTerm, sup: CTerm, ty: Option[CTerm])
+  case NotVSubtype(sub: VTerm, sup: VTerm)
+  case NotCSubtype(sub: CTerm, sup: CTerm)

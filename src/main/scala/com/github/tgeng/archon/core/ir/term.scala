@@ -128,7 +128,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** Execute a effect free computation and get the returned value. That is, `cTm` must be of type
-    * `F(V, Total)` for some value type `V`. This VTerm construct is used to embed effect free
+    * `F(V, Total()` for some value type `V`. This VTerm construct is used to embed effect free
     * computations into values so that the type theory is as expressive as typical dependent type
     * theory.
     */
@@ -275,23 +275,21 @@ object VTerm:
 
   def LevelMax(ts: VTerm*): Level = Level(0, Map(ts.map(_ -> 0): _*))
 
-  def Total(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
+  def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
     * executed by the type checker.
     */
-  def Div(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
+  def Div()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.DivQn, Nil), (Builtins.MaybeDivQn, Nil)),
   )
 
   /** Marker of a computation that may or may not diverge. Computation with this effect will be
     * executed by the type checker with timeout.
     */
-  def MaybeDiv(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
+  def MaybeDiv()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.MaybeDivQn, Nil)),
   )
-
-  def canReduce(eff: VTerm) = eff == Total || eff == MaybeDiv
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
     Effects(effects, Set.empty)
@@ -325,11 +323,11 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case CType
     (
       upperBound: CTerm,
-      effects: VTerm = VTerm.Total(using SiEmpty),
+      effects: VTerm = VTerm.Total()(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case CTop(ul: ULevel, effects: VTerm = VTerm.Total(using SiEmpty))(using sourceInfo: SourceInfo)
+  case CTop(ul: ULevel, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo),
     IType
 
@@ -346,7 +344,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case F
     (
       vTy: VTerm,
-      effects: VTerm = VTerm.Total(using SiEmpty),
+      effects: VTerm = VTerm.Total()(using SiEmpty),
       usage: VTerm = VTerm.UsageLiteral(Usage.U1),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
@@ -386,7 +384,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       /** effects that needed for getting the function of this type. The effects caused by function
         * application is tracked by the `bodyTy`.
         */
-      effects: VTerm = VTerm.Total(using SiEmpty),
+      effects: VTerm = VTerm.Total()(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
@@ -394,7 +392,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (
       qn: QualifiedName,
       args: Arguments = Nil,
-      effects: VTerm = VTerm.Total(using SiEmpty),
+      effects: VTerm = VTerm.Total()(using SiEmpty),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType, QualifiedNameOwner(qn)
 
@@ -595,7 +593,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     transformer.transformCTerm(this)
 
 object CTerm:
-  def CTop(t: VTerm, effects: VTerm = VTerm.Total(using SiEmpty))(using sourceInfo: SourceInfo) =
+  def CTop(t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo) =
     new CTop(ULevel.USimpleLevel(t), effects)
 
   @targetName("reduxFromElims")

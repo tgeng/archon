@@ -15,7 +15,7 @@ object TermBuilders:
 
   given Conversion[VTerm, ULevel] = USimpleLevel(_)
 
-  case class Type[+T](ul: ULevel, upperBound: Option[T] = None, effects: Effects = Total)
+  case class Type[+T](ul: ULevel, upperBound: Option[T] = None, effects: Effects = Total()
 
   given Conversion[Type[VTerm], VTerm] = _ match
     case Type(ul, Some(upperBound), _) => Type(ul, upperBound)
@@ -25,7 +25,7 @@ object TermBuilders:
 
   given Conversion[Type[CTerm], CTerm] = _ match
     case Type(ul, Some(upperBound), effects) => CType(ul, upperBound, effects)
-    case Type(ul, None, effects) => CType(ul, CTop(ul, Total), effects)
+    case Type(ul, None, effects) => CType(ul, CTop(ul, Total(), effects)
 
   given Conversion[CTerm, VTerm] = Thunk(_)
 
@@ -83,7 +83,7 @@ object TermBuilders:
     infix def >>=:(ctx: CTerm) = Let(tm, ctx)
 
   extension (argTy: VTerm)
-    infix def ->:(bodyTy: CTerm) = FunctionType(Binding(argTy)(gn"Arg"), bodyTy, Total)
+    infix def ->:(bodyTy: CTerm) = FunctionType(Binding(argTy)(gn"Arg"), bodyTy, Total()
 
     infix def ->:(effAndBody: (VTerm, CTerm)) =
       FunctionType(
@@ -100,7 +100,7 @@ object TermBuilders:
     case SomeCall(qn, elims) =>
       Σ.getRecordOption(qn).flatMap { record =>
         if record.tParamTys.size == elims.size then
-          Some(RecordType(qn, elims.map(_.asInstanceOf[Arg].v), Total))
+          Some(RecordType(qn, elims.map(_.asInstanceOf[Arg].v), Total())
         else
           None
       }.orElse(

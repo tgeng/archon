@@ -40,7 +40,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
   // stack.prependAll(builtinHandlers)
   // private val builtinHandlers = Seq(
   //   CTerm.HeapHandler(
-  //     VTerm.Total, // placeholder value, not important
+  //     VTerm.Total(), // placeholder value, not important
   //     Some(GlobalHeapKey),
   //     IndexedSeq(),
   //     CTerm.Hole
@@ -505,7 +505,7 @@ extension(c: CTerm)
     (using Γ: Context)
     (using Σ: Signature)
     (using TypingContext)
-    : CTerm =
+    : Either[IrError, CTerm] =
     // inline meta variable, consolidate immediately nested redux
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
@@ -526,7 +526,17 @@ extension(c: CTerm)
         case Return(v) => transformVTerm(v)
         case _         => c
 
-    transformer.transformCTerm(c)
+    Right(transformer.transformCTerm(c))
+
+  def normalized(ty: Option[CTerm])
+    (using Γ: Context)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Either[IrError, CTerm] =
+    if isTotal(c, ty) then
+      Reducible.reduce(c)
+    else
+      c.normalized
 
 extension(v: VTerm)
   def normalized

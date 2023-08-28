@@ -394,9 +394,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     : Block = cType match
     case CType(CTop(USimpleLevel(Level(l, operands)), _), eff) if operands.isEmpty =>
       Block("CType" + l.sub)
-    case CType(CTop(USimpleLevel(l), tEff), eff) if tEff == Total =>
+    case CType(CTop(USimpleLevel(l), tEff), eff) if tEff == Total() =>
       ctype(eff, "CType", l)
-    case CType(CTop(UωLevel(layer), tEff), eff) if tEff == Total =>
+    case CType(CTop(UωLevel(layer), tEff), eff) if tEff == Total() =>
       ctype(eff, "CTYPE" + layer.sub)
     case CType(upperBound, eff) =>
       ctype(eff, "CSubtypeOf", upperBound)

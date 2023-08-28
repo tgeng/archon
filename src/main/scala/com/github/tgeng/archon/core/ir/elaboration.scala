@@ -282,7 +282,7 @@ private def elaborateBody
     given SourceInfo = SiEmpty
 
     given Context = record.tParamTys.map(_._1).toIndexedSeq :+
-      Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))), Total)(
+      Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))), Total())(
         record.selfName,
       )
 

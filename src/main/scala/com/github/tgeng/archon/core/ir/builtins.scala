@@ -497,7 +497,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(Total)),
+          rhs = Some(Return(Total())),
         ),
       ),
     ),
