@@ -6,6 +6,7 @@ import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence
 import com.github.tgeng.archon.core.ir.UnificationResult
 
+// TODO[P0]: clean up unused cases
 enum IrError extends HasException:
   case Unknown
   case EffectfulCTermAsType
@@ -56,6 +57,7 @@ enum IrError extends HasException:
   case NotContinuationUsageSubsumption
     (sub: Option[Usage], sup: Option[Usage], mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case NotEffectConvertible(sub: VTerm, sup: VTerm)
   case IllegalVarianceInData
     (
       qn: QualifiedName,
