@@ -37,6 +37,7 @@ def checkIsConvertible(left: VTerm, right: VTerm, ty: Option[VTerm])
         right <- right.normalized
         r <- (left, right, ty) match
           case (_, _, _) if left == right => Right(Set.empty)
+          // TODO[P0]: handle level, eff, usage specially
           case (Type(upperBound1), Type(upperBound2), _) =>
             checkIsConvertible(upperBound1, upperBound2, None)
           case (ty, Top(ul2, eqD2), _) =>
@@ -124,7 +125,7 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
                 ).map(_.flatten.toSet)
           case (CType(upperBound1, eff1), CType(upperBound2, eff2), _) =>
             for
-              effConstraint <- checkEffIsConvertible(eff1, eff2)
+              effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
               upperBoundConstraint <- checkIsConvertible(upperBound1, upperBound2, Some(right))
             yield effConstraint ++ upperBoundConstraint
           case (ty: IType, CTop(ul2, eff2), _) =>
@@ -134,11 +135,11 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
                 case (_, _) if ul1 == ul2 => Right(Set.empty)
                 case (USimpleLevel(l1), USimpleLevel(l2)) => checkIsConvertible(l1, l2, Some(LevelType()))
                 case _ => Left(NotLevelConvertible(ul1, ul2))
-              effConstraint <- checkEffIsConvertible(ty.effects, eff2)
+              effConstraint <- checkIsConvertible(ty.effects, eff2, Some(EffectsType()))
             yield levelConstraint ++ effConstraint
           case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
             for
-              effConstraint <- checkEffIsConvertible(eff1, eff2)
+              effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
               usageConstraint <- checkIsConvertible(u1, u2, Some(UsageType()))
               tyConstraint <- checkIsConvertible(vTy1, vTy2, None)
             yield effConstraint ++ usageConstraint ++ tyConstraint
@@ -147,7 +148,7 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
           case (Let(t1, ty1, eff1, usage1, ctx1), Let(t2, ty2, eff2, usage2, ctx2), ty) =>
             for
               tyConstraint <- checkIsConvertible(ty1, ty2, None)
-              effConstraint <- checkEffIsConvertible(eff1, eff2).flatMap(ctx.solve)
+              effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType())).flatMap(ctx.solve)
               usageConstraint <- checkIsConvertible(usage1, usage2, Some(UsageType()))
               combinedEffects <- if effConstraint.isEmpty then Right(eff1) else EffectsUnion(eff1, eff2).normalized
               tConstraint <- checkIsConvertible(
@@ -167,7 +168,7 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
             yield tyConstraint ++ effConstraint ++ usageConstraint ++ tConstraint ++ ctxConstraint
           case (FunctionType(binding1, bodyTy1, eff1), FunctionType(binding2, bodyTy2, eff2), _) =>
             for
-              effConstraint <- checkEffIsConvertible(eff1, eff2)
+              effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
               tyConstraint <- checkIsConvertible(binding2.ty, binding1.ty, None).flatMap(ctx.solve)
               bodyConstraint <-
                 if tyConstraint.isEmpty
@@ -192,15 +193,17 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
             yield effConstraint ++ tyConstraint ++ bodyConstraint
           // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
           // just wrap them inside redux
-          case (leftM: Meta, rightM: Meta, ty) => checkReduxIsConvertible(Redux(leftM, Nil), Redux(rightM, Nil), ty)
-          case (leftR: Redux, rightR: Redux, ty) => checkReduxIsConvertible(leftR, rightR, ty)
+          case (m: Meta, tm, ty) => checkReduxIsConvertible(Redux(m, Nil), tm, ty)
+          case (tm, m: Meta, ty) => checkReduxIsConvertible(Redux(m, Nil), tm, ty)
+          case (r: Redux, tm, ty) => checkReduxIsConvertible(r, tm, ty)
+          case (tm, r: Redux, ty) => checkReduxIsConvertible(r, tm, ty)
           case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
             Σ.getRecordOption(qn1) match
               case None => Left(MissingDeclaration(qn1))
               case Some(record) =>
                 var args = IndexedSeq[VTerm]()
                 for
-                  effConstraint <- checkEffIsConvertible(eff1, eff2)
+                  effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
                   argConstraint <- transpose(
                     args1
                       .zip(args2)
@@ -257,83 +260,6 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
           case _ => Left(NotCConvertible(left, right, ty))
       yield r
 
-private def checkReduxIsConvertible
-  (left: Redux, right: Redux, ty: Option[CTerm])
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] =
-  for
-    ty <- ty match
-      case Some(ty) => Right(U(ty))
-      case None =>
-        for ul <- inferLevel(right)
-        yield U(CType(CTop(ul)))
-    tyBinding = Binding(ty, Usage.UUnres)(gn"ty")
-    r <-
-      val resultConstraint = Set(
-        Constraint.Conversion(Γ, List(Thunk(left)), List(Thunk(right)), tyBinding :: Nil),
-      )
-      def assignMeta
-        (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, metaOnTheLeft: Boolean)
-        : Either[IrError, Set[Constraint]] =
-        ctx.resolve(meta) match
-          case Unsolved(context, ty) => boundary:
-            // Make sure meta variable assignment won't cause cyclic meta variable references.
-            val highestMetaVarInTerm = getHighestMetaVar(term)
-            if highestMetaVarInTerm >= meta.index then break(Left(MetaVariableCycle(meta, term)))
-            // Handle extra elims beyond those mentioned by the meta variable context
-            // If the target term does not mirror the same elim structure for the extras, we can't solve
-            // the meta variable. In this case we just return the whole thing as a constraint.
-            val extraElims = elims.drop(context.size)
-            val (otherTerm, otherExtraElims) = if extraElims.nonEmpty then
-               term match
-                case Redux(t, otherElims) => 
-                  if otherElims.size >= extraElims.size then 
-                      val otherElimArgSize = otherElims.size - extraElims.size
-                      (redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
-                  else
-                      break(Right(resultConstraint))
-                case _ => break(Right(resultConstraint))
-               else
-                (term, Nil)
-            // Take the arguments corresponding to the meta variable context
-            val metaElims = elims.take(context.size)
-            val argVars = metaElims.collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
-            if argVars.size < context.size then break(Right(resultConstraint))
-            val argVarToMetaContextIndexMap = argVars.zipWithIndex.map{ case (Var(v), i) => (v, Var(context.size - 1 - i))}.toMap
-
-            // Make sure the target term only references variables available from the meta variable context
-            val (a, b) = getFreeVars(otherTerm)(using 0)
-            val otherTermFreeVars = a ++ b
-            if otherTermFreeVars.exists(i => !argVarToMetaContextIndexMap.contains(i)) then break(Right(resultConstraint))
-
-            // substitute free variables in term so that it's compatible with the meta variable context
-            ctx.assignSolved(meta, Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift)))
-
-            // Make sure the extra elims match
-            val head = Redux(meta, metaElims)
-            if metaOnTheLeft then
-              checkElimIsConvertible(head, extraElims, otherExtraElims, ty.substLowers(argVars: _*))
-            else
-              checkElimIsConvertible(head, otherExtraElims, extraElims, ty.substLowers(argVars: _*))
-
-          // Previous conversion check should have alraedy checked that the solved term is not equivalent, so
-          // we just fail here directly.
-          case s: Solved => Left(MetaVariableAlreadySolved(meta, term, s))
-          case _: Guarded => Right(resultConstraint)
-          case _ => ??? // TODO[P0]: handle other cases
-      (left.t, right.t) match
-        case (leftC @ Meta(leftIdx), rightC @ Meta(rightIdx)) =>
-          if leftIdx < rightIdx then assignMeta(leftC, left.elims, rightC, true)
-          else if leftIdx > rightIdx then assignMeta(rightC, right.elims, leftC, false)
-          else 
-            checkElimIsConvertible(left.t, left.elims, right.elims, ctx.resolve(leftC).ty)
-        case (meta: Meta, rightC) => assignMeta(meta, left.elims, rightC, true)
-        case (leftC, meta: Meta) => assignMeta(meta, right.elims, leftC, false)
-        case _ => Right(resultConstraint)
-  yield r
-
 def checkAreConvertible(lefts: List[VTerm], rights: List[VTerm], tys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
@@ -358,6 +284,33 @@ def checkAreConvertible(lefts: List[VTerm], rights: List[VTerm], tys: Telescope)
             else checkAreConvertible(tailLefts, tailRights, tys.strengthened).map(headConstraints ++ _)
       yield r
     case _ => throw IllegalArgumentException("length mismatch")
+
+private def checkReduxIsConvertible
+  (r: Redux, rawTm: CTerm, ty: Option[CTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Set[Constraint]] =
+  val tm = rawTm match
+    case m: Meta => Redux(m, Nil)
+    case _ => rawTm
+  val resultConstraints = Set( Constraint.CConversion(Γ, r, tm, ty))
+  for
+    ty <- ty match
+      case Some(ty) => Right(ty)
+      case None =>
+        for ul <- inferLevel(tm)
+        yield CType(CTop(ul))
+    r <- (r.t, tm) match
+      case (rt @ Meta(leftIdx), tm @ Redux(m@Meta(rightIdx), elims)) =>
+        if leftIdx < rightIdx then assignMeta(rt, r.elims, tm, ty)
+        else if leftIdx > rightIdx then assignMeta(m, elims, r, ty)
+        // Note: we can't check elims because it's possible that the term instantated for the meta can tolerate
+        // differences in elims.
+        else Right(resultConstraints)
+      case (meta: Meta, tm) => assignMeta(meta, r.elims, tm, ty)
+      case _ => Right(resultConstraints)
+  yield r
 
 private def checkElimIsConvertible
   (t: CTerm, lefts: List[Elimination[VTerm]], rights: List[Elimination[VTerm]], headTy: CTerm)
@@ -421,69 +374,60 @@ private def checkULevelIsConvertible
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext) : Either[IrError, Set[Constraint]] =
-  // TODO[P1]: figure out a smarter way to handle levels.
-  val ul1Normalized = ul1 match
-    case USimpleLevel(v) =>
-      v.normalized match
-        case Left(e)       => return Left(e)
-        case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
-        case Right(v)      => USimpleLevel(v)
-    case _ => ul1
-  val ul2Normalized = ul2 match
-    case USimpleLevel(v) =>
-      v.normalized match
-        case Left(e)       => return Left(e)
-        case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
-        case Right(v)      => USimpleLevel(v)
-    case _ => ul2
-
-  (ul1Normalized, ul2Normalized) match
-    case _ if ul1Normalized == ul2Normalized => Right(Set.empty)
-    // TODO[P0]: assign meta variable if a single meta variable is involved and can be solved
-    // TODO[P0]: return constraint if there are meta variable in the level components
-    case _ => Left(NotLevelConvertible(ul1Normalized, ul2Normalized))
-
-private def checkEffIsConvertible
-  (eff1: VTerm, eff2: VTerm)
+  (ul1, ul2) match
+    case (_, _) if ul1 == ul2 => Right(Set.empty)
+    case (USimpleLevel(l1), USimpleLevel(l2)) => checkIsConvertible(l1, l2, Some(LevelType()))
+    case _ => Left(NotLevelConvertible(ul1, ul2))
+  
+def assignMeta
+  (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] =
-  // TODO: handle meta variables (consider handling meta variables in the set by instantiating it to a union of missing
-  // effects)
-  (eff1.normalized, eff2.normalized) match
-    case (Left(e), _)                               => Left(e)
-    case (_, Left(e))                               => Left(e)
-    case (Right(eff1), Right(eff2)) if eff1 == eff2 => Right(Set.empty)
-    // TODO[P0]: assign lower bounds to meta variables if appropriate
-    case _ => Left(NotEffectConvertible(eff1, eff2))
+  val resultConstraint = Set(
+        Constraint.Conversion(Γ, List(Thunk(Redux(meta, elims))), List(Thunk(term)), Binding(U(ty), Usage.UUnres)(gn"ty") :: Nil),
+      )
+  ctx.resolve(meta) match
+    case Unsolved(context, ty) => boundary:
+      // Make sure meta variable assignment won't cause cyclic meta variable references.
+      val highestMetaVarInTerm = getHighestMetaVar(term)
+      if highestMetaVarInTerm >= meta.index then break(Left(MetaVariableCycle(meta, term)))
+      // Handle extra elims beyond those mentioned by the meta variable context
+      // If the target term does not mirror the same elim structure for the extras, we can't solve
+      // the meta variable. In this case we just return the whole thing as a constraint.
+      val extraElims = elims.drop(context.size)
+      val (otherTerm, otherExtraElims) = if extraElims.nonEmpty then
+         term match
+          case Redux(t, otherElims) => 
+            if extraElims == otherElims.takeRight(extraElims.size) then 
+                val otherElimArgSize = otherElims.size - extraElims.size
+                (redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
+            else
+                break(Right(resultConstraint))
+          case _ => break(Right(resultConstraint))
+         else
+          (term, Nil)
+      // Take the arguments corresponding to the meta variable context
+      val metaElims = elims.take(context.size)
+      val argVars = metaElims.collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
+      if argVars.size < context.size then break(Right(resultConstraint))
+      val argVarToMetaContextIndexMap = argVars.zipWithIndex.map{ case (Var(v), i) => (v, Var(context.size - 1 - i))}.toMap
 
-// TODO[P0]: call this and redo the implementation
-private def checkUsageIsConvertible
-  (usage1: VTerm, usage2: VTerm)
-  (using mode: CheckSubsumptionMode)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = (usage1.normalized, usage2.normalized) match
-  // TODO: handle meta variables (consider handling meta variable in compound usage like how level and effects are
-  // handled)
-  case (Left(e), _)                                       => Left(e)
-  case (_, Left(e))                                       => Left(e)
-  case (Right(usage1), Right(usage2)) if usage1 == usage2 => Right(Set.empty)
-  // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
-  case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2))) if u1 >= u2 =>
-    Right(Set.empty)
-  case (Right(UsageLiteral(UUnres)), _) => Right(Set.empty)
-  case (Right(v @ Var(_)), Right(UsageLiteral(u2))) =>
-    Γ.resolve(v).ty match
-      // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
-      case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
-      case UsageType(Some(u1Bound)) =>
-        checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-      case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
-  case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
+      // Make sure the target term only references variables available from the meta variable context
+      val (a, b) = getFreeVars(otherTerm)(using 0)
+      val otherTermFreeVars = a ++ b
+      if otherTermFreeVars.exists(i => !argVarToMetaContextIndexMap.contains(i)) then break(Right(resultConstraint))
 
+      // substitute free variables in term so that it's compatible with the meta variable context
+      ctx.assignSolved(meta, Solved(context, ty, otherTerm.subst(argVarToMetaContextIndexMap.lift)))
+      Right(Set.empty)
+
+    // Previous conversion check should have alraedy checked that the solved term is not equivalent, so
+    // we just fail here directly.
+    case s: Solved => Left(MetaVariableAlreadySolved(meta, term, s))
+    case _: Guarded => Right(resultConstraint)
+    case _ => ??? // TODO[P0]: handle other cases
 
 /* References
  [0]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).

@@ -54,6 +54,7 @@ enum IrError extends HasException:
       mode: CheckSubsumptionMode,
     )
   case NotUsageSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case NotUsageConvertible(sub: VTerm, sup: VTerm)
   case NotContinuationUsageSubsumption
     (sub: Option[Usage], sup: Option[Usage], mode: CheckSubsumptionMode)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)

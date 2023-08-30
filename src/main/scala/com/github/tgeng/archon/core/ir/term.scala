@@ -41,6 +41,10 @@ enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Eliminat
     case ETerm(v) => ETerm(f(v))
     case EProj(n) => EProj(n)
 
+  def mapEither[L, R](f: T => Either[L, R]): Either[L, Elimination[R]] = this match
+    case ETerm(v) => f(v).map(ETerm(_))
+    case EProj(n) => Right(EProj(n))
+
 class HeapKey:
   private val id = HeapKey.nextId
 

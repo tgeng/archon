@@ -526,7 +526,13 @@ extension(c: CTerm)
         case Return(v) => transformVTerm(v)
         case _         => c
 
-    Right(transformer.transformCTerm(c))
+    transformer.transformCTerm(c) match
+      case Redux(t, elims) =>
+        for
+          elims <- transpose(elims.map(_.mapEither(_.normalized)))
+        yield redux(t, elims)
+      case t => Right(t)
+    
 
   def normalized(ty: Option[CTerm])
     (using Γ: Context)

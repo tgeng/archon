@@ -50,9 +50,11 @@ given CheckSubsumptionMode = SUBSUMPTION
 
 enum Constraint:
   case Conversion(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope)
+  case VConversion(context: Context, lhs: VTerm, rhs: VTerm, ty: Option[VTerm])
+  case CConversion(context: Context, lhs: CTerm, rhs: CTerm, ty: Option[CTerm])
   case SubType(sub: VTerm, sup: VTerm)
   case EffSubsumption(sub: VTerm, sup: VTerm)
-  case LevelSubsumption(sub: ULevel, sup: ULevel)
+  case LevelSubsumption(sub: VTerm, sup: VTerm)
   case UsageSubsumption(sub: VTerm, sup: VTerm)
 
 /** @param context:
