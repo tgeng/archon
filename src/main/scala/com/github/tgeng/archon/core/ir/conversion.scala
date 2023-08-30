@@ -309,39 +309,48 @@ private def checkReduxIsConvertible
         // differences in elims.
         else Right(resultConstraints)
       case (meta: Meta, tm) => assignMeta(meta, r.elims, tm, ty)
+      // Head is some unknown varialbe so the redux won't ever be reduced. Hence we try checking all elims.
+      case (Force(v1: Var), Redux(Force(v2: Var), elims)) if v1 == v2 => 
+        val headTy = Γ.resolve(v1).ty match
+          case U(ty) => ty
+          case _ => throw IllegalStateException("should have been checked to be a U type")
+        checkElimIsConvertible(Force(v1), r.elims, elims, headTy, ty)
+      // If not enough arguments are given, def can't reduce so we check all elims
+      case (Def(qn1), Redux(Def(qn2), elims)) if qn1 == qn2 => 
+        val headTy = Σ.getDefinition(qn1).ty
+        checkElimIsConvertible(r.t, r.elims, elims, headTy, ty)
       case _ => Right(resultConstraints)
   yield r
 
 private def checkElimIsConvertible
-  (t: CTerm, lefts: List[Elimination[VTerm]], rights: List[Elimination[VTerm]], headTy: CTerm)
+  (head: CTerm, lefts: List[Elimination[VTerm]], rights: List[Elimination[VTerm]], headTy: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] =
-    val resultConstraint = Set(
-      Constraint.Conversion(Γ, List(Thunk(redux(t, lefts))), List(Thunk(redux(t, rights))),
-     List(Binding(U(headTy), UsageLiteral(Usage.UUnres))(gn"ty"))))
+    val resultConstraint = Set(Constraint.CConversion(Γ, redux(head, lefts), redux(head, rights), Some(ty)))
     (lefts, rights, headTy) match
     case (Nil, Nil, _) => Right(Set.empty)
-    case (ETerm(left):: lefts, ETerm(right):: rights, t) => t match
+    case (ETerm(left):: lefts, ETerm(right):: rights, headTy) => headTy match
       case FunctionType(binding, bodyTy, _) =>
         for
           headConstraints <- checkIsConvertible(left, right, Some(binding.ty)).flatMap(ctx.solve)
           r <- if headConstraints.isEmpty then
-            checkElimIsConvertible(Application(t, left), lefts, rights, bodyTy)
+            checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)
           else
             val (a, b) = getFreeVars(bodyTy)(using 0)
             if a(0) || b(0) then Right(resultConstraint)
-            else checkElimIsConvertible(Application(t, left), lefts, rights, bodyTy.strengthened).map(headConstraints ++ _)
+            else checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy.strengthened, ty).map(headConstraints ++ _)
         yield r
       case _ => throw IllegalStateException("should have been checked to be a function type")
     case (EProj(leftName):: lefts, EProj(rightName):: rights, rt) => rt match
       case RecordType(qn, args, _) =>
-        if leftName == rightName then checkElimIsConvertible(Projection(t, leftName), lefts, rights, Σ.getField(qn, leftName).ty.substLowers(args :+ Thunk(t) : _*))
+        if leftName == rightName then checkElimIsConvertible(Projection(head, leftName), lefts, rights, Σ.getField(qn, leftName).ty.substLowers(args :+ Thunk(head) : _*), ty)
         else Right(resultConstraint)
       case _ => throw IllegalStateException("should have been checked to be a record type")
-    case (_ :: _, Nil, _) | (Nil, _ :: _, _) => throw IllegalArgumentException("length mismatch")
     case (ETerm(_) :: _, EProj(_) :: _, _) | (EProj(_) :: _, ETerm(_) :: _, _) => throw IllegalArgumentException("type mismatch")
+    // Different length may not be a problem since it's possible that one side may be calling more projection of some record
+    case (_ :: _, Nil, _) | (Nil, _ :: _, _) => Right(resultConstraint)
 
 private inline def debugConversion[L, R]
   (
