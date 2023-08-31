@@ -23,7 +23,7 @@ import DelimitPolicy.*
 
 /**
   * Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.
-  * @param rawTy optional if left and right are types
+  * @param ty optional if left and right are types
   */
 def checkIsConvertible(left: VTerm, right: VTerm, ty: Option[VTerm])
   (using Γ: Context)
@@ -37,7 +37,27 @@ def checkIsConvertible(left: VTerm, right: VTerm, ty: Option[VTerm])
         right <- right.normalized
         r <- (left, right, ty) match
           case (_, _, _) if left == right => Right(Set.empty)
-          // TODO[P0]: handle level, eff, usage specially
+          case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType())) =>
+            // If meta some component is not reduced yet, we can't check subsumption
+            if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(((v, _) => hasCollapse(v))) 
+            then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
+            else Left(NotVConvertible(left, right, ty))
+          case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_))) =>
+            // If meta some component is not reduced yet, we can't check subsumption
+            if operands1.exists(hasCollapse) || operands2.exists(hasCollapse)
+            then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
+            else Left(NotVConvertible(left, right, ty))
+          case (UsageCompound(op, operands), _: UsageLiteral | _: UsageCompound, Some(UsageType(_))) =>
+            // If meta some component is not reduced yet, we can't check subsumption
+            if operands.map(_._1).exists(hasCollapse)
+            then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
+            else Left(NotVConvertible(left, right, ty))
+          case (_: UsageLiteral | _: UsageCompound, UsageCompound(op, operands), Some(UsageType(_))) =>
+            // If meta some component is not reduced yet, we can't check subsumption
+            if operands.map(_._1).exists(hasCollapse)
+            then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
+            else Left(NotVConvertible(left, right, ty))
+          // TODO[P0]: handle eff, usage specially
           case (Type(upperBound1), Type(upperBound2), _) =>
             checkIsConvertible(upperBound1, upperBound2, None)
           case (ty, Top(ul2, eqD2), _) =>
@@ -87,6 +107,13 @@ def checkIsConvertible(left: VTerm, right: VTerm, ty: Option[VTerm])
           case (v, Collapse(c), ty) => checkIsConvertible(Return(v), c, ty.map(F(_)))
           case _ => Left(NotVConvertible(left, right, ty))
       yield r
+
+private object CollapseFinder extends Visitor[Unit, Boolean]:
+  override def combine(rs: Boolean*)(using ctx: Unit)(using Σ: Signature): Boolean = rs.exists(b => b)
+  override def visitCollapse(collapse: Collapse)(using ctx: Unit)(using Σ: Signature): Boolean = true
+  
+private def hasCollapse(t: VTerm)(using Σ: Signature): Boolean = CollapseFinder.visitVTerm(t)(using ())
+
 
 /**
   * Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.

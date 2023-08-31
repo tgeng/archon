@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
+import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
@@ -597,32 +598,31 @@ extension(v: VTerm)
 
       dfs(u).map(lubToTerm)
     case e: Effects =>
-      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[Var])] = tm match
+      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[VTerm])] = tm match
         case Effects(literal, operands) =>
-          for literalsAndOperands: Set[(Set[Eff], Set[Var])] <- transpose(
-              operands.map(dfs),
+          for literalsAndOperands: Set[(Set[Eff], Set[VTerm])] <- transpose(
+              operands.map(_.normalized.flatMap(dfs)),
             )
           yield (
             literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
             literalsAndOperands.flatMap { case (_, o) => o },
           )
-        case c: Collapse => c.normalized.flatMap(dfs)
-        case v: Var      => Right((Set.empty, Set(v)))
+        case _: Var | _: Collapse      => Right((Set.empty, Set(tm)))
         case _ =>
           throw IllegalStateException(s"expect to be of Effects type: $tm")
 
       dfs(e).map { case (eff, operands) =>
-        // Unfortunately Set in scala is not covariant, though it could be.
-        Effects(eff, operands.asInstanceOf[Set[VTerm]])
+        if eff.isEmpty && operands.size == 1 then operands.head
+        else Effects(eff, operands)
       }
     case l: Level =>
       def dfs(tm: VTerm): Either[IrError, (Nat, Map[VTerm, Nat])] = tm match
         case Level(literal, operands) =>
           for literalsAndOperands: Seq[(Nat, Map[VTerm, Nat])] <- transpose(
               operands.map { (tm, offset) =>
-                dfs(tm).map { case (l, m) =>
-                  (l + offset, m.map((tm, l) => (tm, l + offset)))
-                }
+                for tm <- tm.normalized
+                    (l, m) <- dfs(tm)
+                yield (l + offset, m.map((tm, l) => (tm, l + offset)))
               }.toList,
             )
           yield (
@@ -632,12 +632,14 @@ extension(v: VTerm)
               .groupMap(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) },
           )
-        case c: Collapse => c.normalized.flatMap(dfs)
-        case v: Var      => Right(0, Map((v, 0)))
-        case _ =>
-          throw IllegalStateException(s"expect to be of Level type: $tm")
+        case _: Var | _: Collapse     => Right(0, Map((tm, 0)))
+        case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
-      dfs(l).map { case (l, m) => Level(l, m) }
+      dfs(l).map { case (l, m) => 
+        if l == 0 && m.size == 1 && m.head._2 == 0 
+        then m.head._1
+        else Level(l, m) 
+      }
     case _ => Right(v)
 
 extension(vs: List[VTerm])
