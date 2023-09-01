@@ -164,10 +164,10 @@ def checkIsSubtype
             yield effConstraint ++ tyConstraint ++ bodyConstraint
           // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
           // just wrap them inside redux
-          case (subM: Meta, supM: Meta) =>
-            checkReduxSubsumption(Redux(subM, Nil), Redux(supM, Nil), None)
-          case (subR: Redux, supR: Redux) =>
-            checkReduxSubsumption(Redux(subR, Nil), Redux(supR, Nil), None)
+          case (m: Meta, tm) => ???
+          case (tm, m: Meta) => ???
+          case (r: Redux, tm) => ???
+          case (tm, r: Redux) => ???
           case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
             Σ.getRecordOption(qn1) match
               case None => Left(MissingDeclaration(qn1))
@@ -212,7 +212,6 @@ def checkIsSubtype
 
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)
-  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using
@@ -226,7 +225,7 @@ private def checkEqDecidabilitySubsumption
   case (Right(EqDecidabilityLiteral(EqDecidability.EqDecidable)), _) |
     (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
     Right(Set.empty)
-  case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2, mode))
+  case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2))
 
 /** @param invert
   *   useful when checking patterns where the consumed usages are actually provided usages because
@@ -250,7 +249,6 @@ private def checkUsagesSubsumption
 
 private def checkContinuationUsageSubsumption
   (usage1: Option[Usage], usage2: Option[Usage])
-  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -260,19 +258,18 @@ private def checkContinuationUsageSubsumption
     checkUsageSubsumption(UsageLiteral(U1), UsageLiteral(u)) match
       case r @ Right(_) => r
       case Left(_: NotUsageSubsumption) =>
-        Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
+        Left(NotContinuationUsageSubsumption(usage1, usage2))
       case l @ Left(_) => l
   case (Some(u1), Some(u2)) =>
     checkUsageSubsumption(UsageLiteral(u1), UsageLiteral(u2)) match
       case r @ Right(_) => r
       case Left(_: NotUsageSubsumption) =>
-        Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
+        Left(NotContinuationUsageSubsumption(usage1, usage2))
       case l @ Left(_) => l
-  case _ => Left(NotContinuationUsageSubsumption(usage1, usage2, mode))
+  case _ => Left(NotContinuationUsageSubsumption(usage1, usage2))
 
 private def checkUsageSubsumption
   (usage1: VTerm, usage2: VTerm)
-  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -292,12 +289,11 @@ private def checkUsageSubsumption
       case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
       case UsageType(Some(u1Bound)) =>
         checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-      case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
-  case _ => Left(NotUsageSubsumption(usage1, usage2, mode))
+      case _ => Left(NotUsageSubsumption(usage1, usage2))
+  case _ => Left(NotUsageSubsumption(usage1, usage2))
 
 private def checkEffSubsumption
   (eff1: VTerm, eff2: VTerm)
-  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -312,16 +308,14 @@ private def checkEffSubsumption
         Right(Effects(literals1, unionOperands1)),
         Right(Effects(literals2, unionOperands2)),
       )
-      if mode == CheckSubsumptionMode.SUBSUMPTION &&
-        literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
+      if literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
       Right(Set.empty)
-    case _ => Left(NotEffectSubsumption(eff1, eff2, mode))
+    case _ => Left(NotEffectSubsumption(eff1, eff2))
 
 /** Check that `ul1` is lower or equal to `ul2`.
   */
 private def checkULevelSubsumption
   (ul1: ULevel, ul2: ULevel)
-  (using mode: CheckSubsumptionMode)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
@@ -356,7 +350,15 @@ private def checkULevelSubsumption
       Right(Set.empty)
     case (USimpleLevel(_), UωLevel(_))          => Right(Set.empty)
     case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(Set.empty)
-    case _ => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized, mode))
+    case _ => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized))
+
+  
+private def checkLevelSubsumption
+  (l1: VTerm, l2: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : Either[IrError, Set[Constraint]] = ???
 
 private inline def debugIsSubtyping[L, R]
   (rawSub: CTerm | VTerm, rawSup: CTerm | VTerm)

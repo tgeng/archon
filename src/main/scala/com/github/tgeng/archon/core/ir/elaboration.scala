@@ -359,9 +359,7 @@ private def elaborateBody
                 for
                   (p, _) <- checkType(p, _A)
                   (w, _) <- checkType(w, _A)
-                  constraint <- checkSubsumption(p.subst(σ.get), w, Some(_A))(using
-                    CheckSubsumptionMode.CONVERSION,
-                  )
+                  constraint <- checkIsConvertible(p.subst(σ.get), w, Some(_A))
                   _ <- if constraint.isEmpty then Right(()) else Left(UnmatchedPattern(pattern, w, constraint))
                 yield ()
               case None => Left(UnexpectedAbsurdPattern(pattern))
@@ -537,9 +535,7 @@ private def elaborateBody
             val ElabClause(_E1, _, rhs1, source1) = problem(0)
 
             def providedAtLeastU1Usage(x: Var): Boolean =
-              checkSubsumption(UsageLiteral(Usage.U1), Γ.resolve(x).usage, Some(UsageType()))(using
-                CheckSubsumptionMode.SUBSUMPTION,
-              ) match
+              checkUsageSubsumption(UsageLiteral(Usage.U1), Γ.resolve(x).usage) match
                 case Right(constraint) if constraint.isEmpty => true
                 case _        => false
 

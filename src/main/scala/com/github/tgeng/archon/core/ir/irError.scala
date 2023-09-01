@@ -35,29 +35,25 @@ enum IrError extends HasException:
       sub: VTerm,
       sup: VTerm,
       ty: Option[VTerm],
-      mode: CheckSubsumptionMode,
     )
   case NotCSubsumption
     (
       sub: CTerm,
       sup: CTerm,
       ty: Option[CTerm],
-      mode: CheckSubsumptionMode,
     )
-  case NotLevelSubsumption(sub: ULevel, sup: ULevel, mode: CheckSubsumptionMode)
+  case NotLevelSubsumption(sub: ULevel, sup: ULevel)
   case NotLevelConvertible(sub: ULevel, sup: ULevel)
   case LevelTooBig(level: ULevel)
   case NotEqDecidabilitySubsumption
     (
       sub: VTerm,
       sup: VTerm,
-      mode: CheckSubsumptionMode,
     )
-  case NotUsageSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case NotUsageSubsumption(sub: VTerm, sup: VTerm)
   case NotUsageConvertible(sub: VTerm, sup: VTerm)
-  case NotContinuationUsageSubsumption
-    (sub: Option[Usage], sup: Option[Usage], mode: CheckSubsumptionMode)
-  case NotEffectSubsumption(sub: VTerm, sup: VTerm, mode: CheckSubsumptionMode)
+  case NotContinuationUsageSubsumption(sub: Option[Usage], sup: Option[Usage])
+  case NotEffectSubsumption(sub: VTerm, sup: VTerm)
   case NotEffectConvertible(sub: VTerm, sup: VTerm)
   case IllegalVarianceInData
     (
