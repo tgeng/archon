@@ -263,14 +263,39 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     transformer.transformVTerm(this)
 
 object VTerm:
+
   def Top(t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))(using SourceInfo) =
     new Top(ULevel.USimpleLevel(t), eqDecidability)
-  def UsageSum(operands: VTerm*)(using SourceInfo) =
-    UsageCompound(UsageOperation.USum, operands.toMultiset)
+
+  def UsageSum(operands: VTerm*)(using SourceInfo): VTerm =
+    val (usages, terms) = collectUsage(operands)
+    (usages.foldLeft(U0)(_ + _), terms) match
+      case (u, Nil) => UsageLiteral(u)
+      case (U0, terms) => UsageCompound(UsageOperation.USum, terms.toMultiset)
+      case (URel, _) => UsageLiteral(URel)
+      case (u, terms) => UsageCompound(UsageOperation.USum, (UsageLiteral(u) :: terms).toMultiset)
+
   def UsageProd(operands: VTerm*)(using SourceInfo) =
-    UsageCompound(UsageOperation.UProd, operands.toMultiset)
+    val (usages, terms) = collectUsage(operands)
+    (usages.foldLeft(U1)(_ * _), terms) match
+      case (u, Nil) => UsageLiteral(u)
+      case (U1, terms) => UsageCompound(UsageOperation.UProd, terms.toMultiset)
+      case (U0, _) => UsageLiteral(U0)
+      case (u, terms) => UsageCompound(UsageOperation.UProd, (UsageLiteral(u) :: terms).toMultiset)
+
   def UsageJoin(operands: VTerm*)(using SourceInfo) =
-    UsageCompound(UsageOperation.UJoin, operands.toMultiset)
+    if operands.isEmpty then throw IllegalStateException("UsageJoin cannot be empty")
+    val (usages, terms) = collectUsage(operands)
+    (usages.reduce(_ | _), terms) match
+      case (u, Nil) => UsageLiteral(u)
+      case (UUnres, _) => UsageLiteral(UUnres)
+      case (u, terms) => UsageCompound(UsageOperation.UJoin, (UsageLiteral(u) :: terms).toMultiset)
+
+  private def collectUsage(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
+    operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)){
+      case ((usages, terms), UsageLiteral(u)) => (u :: usages, terms)
+      case ((usages, terms), term) => (usages, terms)
+    }
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(n, Map())
