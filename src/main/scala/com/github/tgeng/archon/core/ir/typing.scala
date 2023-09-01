@@ -41,13 +41,6 @@ private val ANSI_WHITE = "\u001b[37m"
 def yellow(s: Any): String = ANSI_YELLOW + s.toString + ANSI_RESET
 def green(s: Any): String = ANSI_GREEN + s.toString + ANSI_RESET
 
-enum CheckSubsumptionMode:
-  case SUBSUMPTION, CONVERSION
-
-import CheckSubsumptionMode.*
-
-given CheckSubsumptionMode = SUBSUMPTION
-
 enum Constraint:
   case Conversion(context: Context, lhs: List[VTerm], rhs: List[VTerm], tys: Telescope)
   case VConversion(context: Context, lhs: VTerm, rhs: VTerm, ty: Option[VTerm])
@@ -1248,28 +1241,6 @@ private def verifyUsages
       case _: StrengthenException => UsageLiteral(Usage.UUnres)
   }
 
-private def checkContinuationUsageSubsumption
-  (usage1: Option[Usage], usage2: Option[Usage])
-  (using mode: CheckSubsumptionMode)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = (usage1, usage2) match
-  case (None, None) => Right(Set.empty)
-  case (None, Some(u)) =>
-    checkUsageSubsumption(UsageLiteral(U1), UsageLiteral(u)) match
-      case r @ Right(_) => r
-      case Left(_: NotUsageSubsumption) =>
-        Left(NotContinuationUsageSubsumption(usage1, usage2))
-      case l @ Left(_) => l
-  case (Some(u1), Some(u2)) =>
-    checkUsageSubsumption(UsageLiteral(u1), UsageLiteral(u2)) match
-      case r @ Right(_) => r
-      case Left(_: NotUsageSubsumption) =>
-        Left(NotContinuationUsageSubsumption(usage1, usage2))
-      case l @ Left(_) => l
-  case _ => Left(NotContinuationUsageSubsumption(usage1, usage2))
-
 def checkTypes
   (tms: Seq[VTerm], tys: Telescope)
   (using Γ: Context)
@@ -1875,38 +1846,3 @@ private inline def debugInfer[L, R <: (CTerm | VTerm)]
   )(result.map { case (v, r, u) =>
     (v, r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
   })
-
-private inline def debugSubsumption[L, R]
-  (
-    rawSub: CTerm | VTerm,
-    rawSup: CTerm | VTerm,
-    rawTy: Option[CTerm | VTerm],
-    result: => Either[L, R],
-  )
-  (using mode: CheckSubsumptionMode)
-  (using Context)
-  (using Signature)
-  (using ctx: TypingContext)
-  : Either[L, R] =
-  val modeString = mode match
-    case CheckSubsumptionMode.SUBSUMPTION => "⪯"
-    case CheckSubsumptionMode.CONVERSION  => "≡"
-  ctx.trace(
-    s"deciding",
-    Block(
-      ChopDown,
-      Aligned,
-      yellow(rawSub.sourceInfo),
-      pprint(rawSub),
-      modeString,
-      yellow(rawSup.sourceInfo),
-      pprint(rawSup),
-      ":",
-      yellow(rawTy.map(_.sourceInfo).getOrElse(SiEmpty)),
-      rawTy.map(pprint),
-    ),
-  )(result)
-
-/* References
- [0]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).
- */
