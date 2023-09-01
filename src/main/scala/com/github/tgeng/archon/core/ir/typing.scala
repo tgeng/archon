@@ -66,10 +66,10 @@ enum MetaVariable(val context: Context, val ty: CTerm):
   case Unsolved(override val context: Context, override val ty: CTerm)
     extends MetaVariable(context, ty)
   
-  case UnsolvedCType(override val context: Context, override val ty: CTerm, lowerBounds: Set[CTerm])
+  case UnsolvedCType(override val context: Context, override val ty: CTerm, lowerBound: CTerm)
     extends MetaVariable(context, ty)
 
-  case UnsolvedVType(override val context: Context, val vty: VTerm, lowerBounds: Set[VTerm])
+  case UnsolvedVType(override val context: Context, val vty: VTerm, lowerBound: VTerm)
     extends MetaVariable(context, F(vty, Total(), UsageLiteral(UUnres)))
 
   case UnsolvedEff(override val context: Context, lowerBound: VTerm)
@@ -177,13 +177,9 @@ class TypingContext
     resolve(meta) match
       case m: Unsolved => assign(m)()
       case m: UnsolvedCType => assign(m):
-        case term => transpose(m.lowerBounds.map { lowerBound =>
-          checkIsSubtype(lowerBound, term)
-        }).map(_.flatten.toSet)
+        case term => checkIsSubtype(m.lowerBound, term)
       case m: UnsolvedVType => assign(m):
-        case Return(term) => transpose(m.lowerBounds.map { lowerBound =>
-          checkIsSubtype(lowerBound, term)
-        }).map(_.flatten.toSet)
+        case Return(term) => checkIsSubtype(m.lowerBound, term)
         case _ => Right(resultConstraint)
       case m: UnsolvedEff => assign(m):
         case Return(term) => checkEffSubsumption(m.lowerBound, term)
