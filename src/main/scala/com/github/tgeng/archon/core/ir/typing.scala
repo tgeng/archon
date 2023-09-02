@@ -1799,6 +1799,7 @@ private def checkVar0Leak
   if positiveFreeVars(0) || negativeFreeVars(0) then Left(error)
   else Right(())
 
+// TODO: delete this.
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   es.first {
     case Left(l) => Some(l)
@@ -1806,6 +1807,12 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
   } match
     case Some(l) => Left(l)
     case _       => Right(())
+
+private object CollapseFinder extends Visitor[Unit, Boolean]:
+  override def combine(rs: Boolean*)(using ctx: Unit)(using Σ: Signature): Boolean = rs.exists(b => b)
+  override def visitCollapse(collapse: Collapse)(using ctx: Unit)(using Σ: Signature): Boolean = true
+  
+def hasCollapse(t: VTerm)(using Σ: Signature): Boolean = CollapseFinder.visitVTerm(t)(using ())
 
 private def extractDistinctArgVars(args: Seq[VTerm]): Option[List[Nat]] =
   val argVars = args.collect { case v: Var => v.idx }

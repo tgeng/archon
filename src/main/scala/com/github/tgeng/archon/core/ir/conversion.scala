@@ -107,12 +107,6 @@ def checkIsConvertible(left: VTerm, right: VTerm, ty: Option[VTerm])
           case _ => Left(NotVConvertible(left, right, ty))
       yield r
 
-private object CollapseFinder extends Visitor[Unit, Boolean]:
-  override def combine(rs: Boolean*)(using ctx: Unit)(using Σ: Signature): Boolean = rs.exists(b => b)
-  override def visitCollapse(collapse: Collapse)(using ctx: Unit)(using Σ: Signature): Boolean = true
-  
-private def hasCollapse(t: VTerm)(using Σ: Signature): Boolean = CollapseFinder.visitVTerm(t)(using ())
-
 
 /**
   * Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.
