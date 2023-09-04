@@ -298,7 +298,7 @@ def checkAreConvertible(lefts: List[VTerm], rights: List[VTerm], tys: Telescope)
             val (a, b) = getFreeVars(tys)(using 0)
             if a(0) || b(0)
               // if the head term is referenced in the tail, add the whole thing as a constraint
-            then Right(Set(Constraint.Conversion(Γ, lefts, rights, tys)))
+            then Right(Set(Constraint.Conversions(Γ, lefts, rights, tys)))
             // the head term is not referenced in the tail, add the tail constraint in addition to the head
             // constraints
             else checkAreConvertible(tailLefts, tailRights, tys.strengthened).map(headConstraints ++ _)
