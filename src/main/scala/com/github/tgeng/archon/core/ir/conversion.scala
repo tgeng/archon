@@ -323,11 +323,15 @@ private def checkReduxIsConvertible
         yield CType(CTop(ul))
     r <- (r.t, tm) match
       case (rt @ Meta(leftIdx), tm @ Redux(m@Meta(rightIdx), elims)) =>
-        if leftIdx < rightIdx then ctx.assignMeta(rt, r.elims, tm, ty)
-        else if leftIdx > rightIdx then ctx.assignMeta(m, elims, r, ty)
-        // Note: we can't check elims because it's possible that the term instantated for the meta can tolerate
-        // differences in elims.
-        else Right(resultConstraints)
+        if leftIdx == rightIdx then 
+          // Note: we can't check elims because it's possible that the term instantated for the meta can tolerate
+          // differences in elims.
+          Right(resultConstraints)
+        else ctx.assignMeta(rt, r.elims, tm, ty) match
+          case Right(r) => Right(r)
+          // Try the other way around if meta variable cycles are found.
+          case Left(_ : MetaVariableCycle) => ctx.assignMeta(m, elims, r, ty)
+          case Left(l) => Left(l)
       case (meta: Meta, tm) => ctx.assignMeta(meta, r.elims, tm, ty)
       // Head is some unknown varialbe so the redux won't ever be reduced. Hence we try checking all elims.
       case (Force(v1: Var), Redux(Force(v2: Var), elims)) if v1 == v2 => 

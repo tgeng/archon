@@ -138,8 +138,7 @@ class TypingContext
       val context = metaVariable.context
       val ty = metaVariable.ty
       // Make sure meta variable assignment won't cause cyclic meta variable references.
-      val highestMetaVarInTerm = getHighestMetaVar(term)
-      if highestMetaVarInTerm >= meta.index then return Left(MetaVariableCycle(meta, term))
+      if getAllReferencedMetaVars(term)(meta.index) then return Left(MetaVariableCycle(meta, term))
       // Handle extra elims beyond those mentioned by the meta variable context
       // If the target term does not mirror the same elim structure for the extras, we can't solve
       // the meta variable. In this case we just return the whole thing as a constraint.
@@ -176,17 +175,19 @@ class TypingContext
         r
 
     resolve(meta) match
-      case m@Unsolved(_, _, constraint) => assign(m):
-        case term =>
-          constraint match
-            case UmcNothing => Right(Set.empty)
-            case UmcCSubtype(lowerBound) => checkIsSubtype(lowerBound, term)
-            case UmcVSubtype(lowerBound) => checkIsSubtype(lowerBound, Collapse(term))
-            case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(term))
-            case UmcLevelSubsumption(lowerBound) => checkLevelSubsumption(lowerBound, Collapse(term))
-            case UmcUsageSubsumption(upperBound) => checkUsageSubsumption(Collapse(term), upperBound)
+      case m @ Unsolved(_, _, constraint) =>
+        assign(m):
+          case term =>
+            constraint match
+              case UmcNothing                    => Right(Set.empty)
+              case UmcCSubtype(lowerBound)       => checkIsSubtype(lowerBound, term)
+              case UmcVSubtype(lowerBound)       => checkIsSubtype(lowerBound, Collapse(term))
+              case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(term))
+              case UmcLevelSubsumption(lowerBound) =>
+                checkLevelSubsumption(lowerBound, Collapse(term))
+              case UmcUsageSubsumption(upperBound) =>
+                checkUsageSubsumption(Collapse(term), upperBound)
       case _ => Right(resultConstraint)
-
 
   private def assignSolved(index: Nat, solved: Solved): Unit =
     version += 1
@@ -1077,13 +1078,18 @@ def checkType
           else Left(NotCSubsumption(tmTy, ty, None))
       yield (tm, usages),
 )
+private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
+  override def combine(rs: Set[Int]*)(using ctx: TypingContext)(using Σ: Signature): Set[Int] = rs.flatten.to(Set)
+  override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
+    Set(m.index) ++ (ctx.resolve(m) match
+      // bounds in unsolved doesn't need to be checked now. They will be checked when they become solved.
+      case _: Unsolved => Set.empty
+      case Guarded(_, _, value, _) => visitCTerm(value)
+      case Solved(_, _, value) => visitCTerm(value))
+}
 
-private def getHighestMetaVar(term: CTerm)(using Signature): Int =
-  new Visitor[Unit, Int]() {
-    override def combine(rs: Int*)(using ctx: Unit)(using Σ: Signature): Int =
-      rs.maxOption.getOrElse(-1)
-    override def visitMeta(m: Meta)(using ctx: Unit)(using Σ: Signature): Int = return m.index
-  }.visitCTerm(term)(using ())
+private def getAllReferencedMetaVars(term: CTerm)(using Signature)(using TypingContext): Set[Int] =
+  MetaVarVisitor.visitCTerm(term)
 
 private def checkInherentEqDecidable
   (data: Data, constructor: Constructor)
