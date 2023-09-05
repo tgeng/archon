@@ -232,7 +232,7 @@ object AstParser:
 
   private def sTerm: StrParser[STerm] = P(rhs.map(STerm(_)))
 
-  private def app: StrParser[AstTerm] = P(builtins || redux)
+  private def app: StrParser[AstTerm] = P(builtins || redex)
 
   private def rhs: StrParser[AstTerm] = P {
     val argBinding
@@ -276,7 +276,7 @@ object AstParser:
           case Nil => throw IllegalStateException()
           case t :: rest =>
             rest.foldLeft(t) { (a, b) =>
-              AstRedux(
+              AstRedex(
                 AstDef(Builtins.EffectsUnionQn)(using SiEmpty),
                 Elimination.ETerm(a)(using a.sourceInfo) :: Elimination.ETerm(
                   b
@@ -290,7 +290,7 @@ object AstParser:
     ) << P.whitespaces
   }
 
-  private def redux: StrParser[AstTerm] = P {
+  private def redex: StrParser[AstTerm] = P {
     val elim: StrParser[Elimination[AstTerm]] = P(
       si(P.from("#") >> name)(Elimination.EProj(_)) || si(atom)(
         Elimination.ETerm(_)
@@ -305,7 +305,7 @@ object AstParser:
       yield (head, elims)
     ) {
       case (head, Nil)   => head
-      case (head, elims) => AstRedux(head, elims)
+      case (head, elims) => AstRedex(head, elims)
     }
   }
 

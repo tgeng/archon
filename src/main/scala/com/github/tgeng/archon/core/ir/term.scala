@@ -402,7 +402,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   //     return. Since computations are always linear, this means clet has little flexibility in
   //     terms of resource counting. For example, `plus_1` can only be linear.
 
-  case Redux(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo)
+  case Redex(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
 
   /** archon.builtin.Function */
@@ -564,7 +564,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case F(vTy, effects, u)              => F(vTy, effects, u)
       case Return(v)                       => Return(v)
       case l @ Let(t, ty, eff, usage, ctx) => Let(t, ty, eff, usage, ctx)(l.boundName)
-      case Redux(t, elims)                 => Redux(t, elims)
+      case Redex(t, elims)                 => Redex(t, elims)
       case FunctionType(binding, bodyTy, effects) =>
         FunctionType(binding, bodyTy, effects)
       case RecordType(qn, args, effects)  => RecordType(qn, args, effects)
@@ -625,29 +625,29 @@ object CTerm:
   def CTop(t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo) =
     new CTop(ULevel.USimpleLevel(t), effects)
 
-  @targetName("reduxFromElims")
-  def redux(c: CTerm, elims: Seq[Elimination[VTerm]])(using SourceInfo): Redux =
-    Redux(c, elims.toList)
+  @targetName("redexFromElims")
+  def redex(c: CTerm, elims: Seq[Elimination[VTerm]])(using SourceInfo): Redex =
+    Redex(c, elims.toList)
 
-  @targetName("reduxFromElimsStar")
-  def redux(c: CTerm, elims: Elimination[VTerm]*)(using SourceInfo): Redux = redux(c, elims)
+  @targetName("redexFromElimsStar")
+  def redex(c: CTerm, elims: Elimination[VTerm]*)(using SourceInfo): Redex = redex(c, elims)
 
-  @targetName("reduxFromTerms")
-  def redux(c: CTerm, args: Seq[VTerm])(using SourceInfo): Redux =
-    Redux(c, args.map(Elimination.ETerm(_)).toList)
+  @targetName("redexFromTerms")
+  def redex(c: CTerm, args: Seq[VTerm])(using SourceInfo): Redex =
+    Redex(c, args.map(Elimination.ETerm(_)).toList)
 
-  @targetName("reduxFromTermsStar")
-  def redux(c: CTerm, args: VTerm*)(using SourceInfo): Redux = redux(c, args)
+  @targetName("redexFromTermsStar")
+  def redex(c: CTerm, args: VTerm*)(using SourceInfo): Redex = redex(c, args)
 
-  def Application(fun: CTerm, arg: VTerm)(using SourceInfo): Redux =
+  def Application(fun: CTerm, arg: VTerm)(using SourceInfo): Redex =
     fun match
-      case Redux(c, elims) => Redux(c, elims :+ Elimination.ETerm(arg))
-      case t               => Redux(t, List(Elimination.ETerm(arg)))
+      case Redex(c, elims) => Redex(c, elims :+ Elimination.ETerm(arg))
+      case t               => Redex(t, List(Elimination.ETerm(arg)))
 
-  def Projection(rec: CTerm, name: Name)(using SourceInfo): Redux =
+  def Projection(rec: CTerm, name: Name)(using SourceInfo): Redex =
     rec match
-      case Redux(c, elims) => Redux(c, elims :+ Elimination.EProj(name))
-      case t               => Redux(t, List(Elimination.EProj(name)))
+      case Redex(c, elims) => Redex(c, elims :+ Elimination.EProj(name))
+      case t               => Redex(t, List(Elimination.EProj(name)))
 
   extension(binding: Binding[VTerm])
     infix def ->:(body: CTerm): FunctionType =

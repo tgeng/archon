@@ -273,7 +273,7 @@ def astToIr
           case _ => throw IllegalStateException()
         }
       yield r
-    case AstRedux(head, elims) =>
+    case AstRedex(head, elims) =>
       for
         head <- astToIr(head)
         r <- chainAstWithDefaultName[[X] =>> List[Elimination[X]]](

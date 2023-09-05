@@ -19,7 +19,7 @@ enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
   case AstFunctionType
     (argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
     (using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
-  case AstRedux(head: AstTerm, elims: List[Elimination[AstTerm]])(using sourceInfo: SourceInfo)
+  case AstRedex(head: AstTerm, elims: List[Elimination[AstTerm]])(using sourceInfo: SourceInfo)
     extends AstTerm(sourceInfo)
   case AstBlock(statements: List[Statement])(using sourceInfo: SourceInfo)
     extends AstTerm(
@@ -40,7 +40,7 @@ enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
       case AstF(vTy, effects)     => AstF(vTy, effects)
       case AstFunctionType(argName, argTy, bodyTy, effects) =>
         AstFunctionType(argName, argTy, bodyTy, effects)
-      case AstRedux(head, elims) => AstRedux(head, elims)
+      case AstRedex(head, elims) => AstRedex(head, elims)
       case AstBlock(statements)  => AstBlock(statements)
 
 enum Statement:

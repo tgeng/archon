@@ -163,11 +163,11 @@ def checkIsSubtype
                 )(using Γ :+ binding2)
           yield effConstraint ++ tyConstraint ++ bodyConstraint
         // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
-        // just wrap them inside redux
+        // just wrap them inside redex
         case (m: Meta, tm)  => ???
         case (tm, m: Meta)  => ???
-        case (r: Redux, tm) => ???
-        case (tm, r: Redux) => ???
+        case (r: Redex, tm) => ???
+        case (tm, r: Redex) => ???
         case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
           Σ.getRecordOption(qn1) match
             case None => Left(MissingDeclaration(qn1))

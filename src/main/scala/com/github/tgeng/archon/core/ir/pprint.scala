@@ -485,9 +485,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
   }
 
-  override def visitRedux(redux: Redux)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitRedex(redex: Redex)(using ctx: PPrintContext)(using Σ: Signature): Block =
     ctx.withPrecedence(PPApp) {
-      juxtapose(redux.t, redux.elims.map(visitElim))
+      juxtapose(redex.t, redex.elims.map(visitElim))
     }
 
   override def visitElim

@@ -472,7 +472,7 @@ private def elaborateBody
             case None => subst(problem, σ)
         yield r
 
-  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm = Redux(Def(qn), q̅.map(_.toElimination.get))
+  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm = Redex(Def(qn), q̅.map(_.toElimination.get))
 
   def elaborate
     (q̅ : List[CoPattern], _C: CTerm, problem: Problem)

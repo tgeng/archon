@@ -212,11 +212,11 @@ def checkIsConvertible(left: CTerm, right: CTerm, ty: Option[CTerm])
                   )(using Γ :+ binding2)
             yield effConstraint ++ tyConstraint ++ bodyConstraint
           // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
-          // just wrap them inside redux
-          case (m: Meta, tm, ty) => checkReduxIsConvertible(Redux(m, Nil), tm, ty)
-          case (tm, m: Meta, ty) => checkReduxIsConvertible(Redux(m, Nil), tm, ty)
-          case (r: Redux, tm, ty) => checkReduxIsConvertible(r, tm, ty)
-          case (tm, r: Redux, ty) => checkReduxIsConvertible(r, tm, ty)
+          // just wrap them inside redex
+          case (m: Meta, tm, ty) => checkRedexIsConvertible(Redex(m, Nil), tm, ty)
+          case (tm, m: Meta, ty) => checkRedexIsConvertible(Redex(m, Nil), tm, ty)
+          case (r: Redex, tm, ty) => checkRedexIsConvertible(r, tm, ty)
+          case (tm, r: Redex, ty) => checkRedexIsConvertible(r, tm, ty)
           case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2), _) if qn1 == qn2 =>
             Σ.getRecordOption(qn1) match
               case None => Left(MissingDeclaration(qn1))
@@ -305,14 +305,14 @@ def checkAreConvertible(lefts: List[VTerm], rights: List[VTerm], tys: Telescope)
       yield r
     case _ => throw IllegalArgumentException("length mismatch")
 
-private def checkReduxIsConvertible
-  (r: Redux, rawTm: CTerm, ty: Option[CTerm])
+private def checkRedexIsConvertible
+  (r: Redex, rawTm: CTerm, ty: Option[CTerm])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] =
   val tm = rawTm match
-    case m: Meta => Redux(m, Nil)
+    case m: Meta => Redex(m, Nil)
     case _ => rawTm
   val resultConstraints = Set( Constraint.CConversion(Γ, r, tm, ty))
   for
@@ -322,7 +322,7 @@ private def checkReduxIsConvertible
         for ul <- inferLevel(tm)
         yield CType(CTop(ul))
     r <- (r.t, tm) match
-      case (rt @ Meta(leftIdx), tm @ Redux(m@Meta(rightIdx), elims)) =>
+      case (rt @ Meta(leftIdx), tm @ Redex(m@Meta(rightIdx), elims)) =>
         if leftIdx == rightIdx then 
           // Note: we can't check elims because it's possible that the term instantated for the meta can tolerate
           // differences in elims.
@@ -333,14 +333,14 @@ private def checkReduxIsConvertible
           case Left(_ : MetaVariableCycle) => ctx.assignMeta(m, elims, r, ty)
           case Left(l) => Left(l)
       case (meta: Meta, tm) => ctx.assignMeta(meta, r.elims, tm, ty)
-      // Head is some unknown varialbe so the redux won't ever be reduced. Hence we try checking all elims.
-      case (Force(v1: Var), Redux(Force(v2: Var), elims)) if v1 == v2 => 
+      // Head is some unknown varialbe so the redex won't ever be reduced. Hence we try checking all elims.
+      case (Force(v1: Var), Redex(Force(v2: Var), elims)) if v1 == v2 => 
         val headTy = Γ.resolve(v1).ty match
           case U(ty) => ty
           case _ => throw IllegalStateException("should have been checked to be a U type")
         checkElimIsConvertible(Force(v1), r.elims, elims, headTy, ty)
       // If not enough arguments are given, def can't reduce so we check all elims
-      case (Def(qn1), Redux(Def(qn2), elims)) if qn1 == qn2 => 
+      case (Def(qn1), Redex(Def(qn2), elims)) if qn1 == qn2 => 
         val headTy = Σ.getDefinition(qn1).ty
         checkElimIsConvertible(r.t, r.elims, elims, headTy, ty)
       case _ => Right(resultConstraints)
@@ -352,7 +352,7 @@ private def checkElimIsConvertible
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] =
-    val resultConstraint = Set(Constraint.CConversion(Γ, redux(head, lefts), redux(head, rights), Some(ty)))
+    val resultConstraint = Set(Constraint.CConversion(Γ, redex(head, lefts), redex(head, rights), Some(ty)))
     (lefts, rights, headTy) match
     case (Nil, Nil, _) => Right(Set.empty)
     case (ETerm(left):: lefts, ETerm(right):: rights, headTy) => headTy match

@@ -257,7 +257,7 @@ trait DerivedSignature extends Signature:
               UsageLiteral(U1),
             )(record.selfName),
             qVars(record.tParamTys.size),
-            Redux(Force(Var(0)), EProj(fieldName) :: Nil),
+            Redex(Force(Var(0)), EProj(fieldName) :: Nil),
             field.ty,
           ),
         )
@@ -373,7 +373,7 @@ trait DerivedSignature extends Signature:
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
         yield record.tParamTys.foldRight(
-          CtLambda(CtTerm(Redux(Force(Var(0)), EProj(fieldName):: Nil)))(record.selfName),
+          CtLambda(CtTerm(Redex(Force(Var(0)), EProj(fieldName):: Nil)))(record.selfName),
         ) { case ((binding, _), _Q) =>
           CtLambda(_Q)(binding.name)
         }

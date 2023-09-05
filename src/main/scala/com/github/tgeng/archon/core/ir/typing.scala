@@ -126,7 +126,7 @@ class TypingContext
     val resultConstraint = Set(
       Constraint.Conversions(
         Γ,
-        List(Thunk(Redux(meta, elims))),
+        List(Thunk(Redex(meta, elims))),
         List(Thunk(term)),
         Binding(U(ty), Usage.UUnres)(gn"ty") :: Nil,
       ),
@@ -146,10 +146,10 @@ class TypingContext
       val (otherTerm, otherExtraElims) =
         if extraElims.nonEmpty then
           term match
-            case Redux(t, otherElims) =>
+            case Redex(t, otherElims) =>
               if extraElims == otherElims.takeRight(extraElims.size) then
                 val otherElimArgSize = otherElims.size - extraElims.size
-                (redux(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
+                (redex(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
               else return Right(resultConstraint)
             case _ => return Right(resultConstraint)
         else (term, Nil)
@@ -783,7 +783,7 @@ def checkType
       val meta = ctx.addMetaVar(MetaVariable.Unsolved(Γ, F(ty), UmcNothing))
       Right(
         (
-          Collapse(redux(meta, vars(Γ.size - 1))),
+          Collapse(redex(meta, vars(Γ.size - 1))),
           Usages.zero,
         ),
       )
@@ -932,7 +932,7 @@ def inferType
               yield r
             case _ => Left(NotTypeError(binding.ty))
         yield (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
-      case Redux(c, elims) =>
+      case Redex(c, elims) =>
         def checkElims
           (checkedElims: List[Elimination[VTerm]], cty: CTerm, elims: List[Elimination[VTerm]])
           : Either[IrError, (List[Elimination[VTerm]], CTerm, Usages)] =
@@ -946,7 +946,7 @@ def inferType
                     cty <- reduceCType(bodyTy.substLowers(arg))
                     (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
                   yield (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages))
-                case _ => Left(ExpectFunction(redux(c, checkedElims.reverse)))
+                case _ => Left(ExpectFunction(redex(c, checkedElims.reverse)))
             case (e @ EProj(name)) :: rest =>
               cty match
                 case RecordType(qn, args, effects) =>
@@ -955,15 +955,15 @@ def inferType
                     case Some(f) =>
                       for
                         cty <- reduceCType(
-                          f.ty.substLowers(args :+ Thunk(redux(c, checkedElims)): _*),
+                          f.ty.substLowers(args :+ Thunk(redex(c, checkedElims)): _*),
                         )
                         (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
                       yield (EProj(name) :: rest, augmentEffect(effects, cty), restUsages)
-                case _ => Left(ExpectRecord(redux(c, checkedElims.reverse)))
+                case _ => Left(ExpectRecord(redex(c, checkedElims.reverse)))
         for
           (c, cty, usages) <- inferType(c)
           (elims, cty, argUsages) <- checkElims(Nil, cty, elims)
-        yield (redux(c, elims), cty, (usages + argUsages))
+        yield (redex(c, elims), cty, (usages + argUsages))
       case RecordType(qn, args, effects) =>
         Σ.getRecordOption(qn) match
           case None => Left(MissingDeclaration(qn))

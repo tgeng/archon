@@ -161,7 +161,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           case _ =>
             stack.push(pc)
             run(t)
-      case Redux(t, elims) =>
+      case Redex(t, elims) =>
         elims match
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case Nil             => run(t)
@@ -496,7 +496,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
         case c: CTerm =>
           current = substHole(c, current)
           if elims.nonEmpty then
-            current = Redux(current, elims.toList)(using c.sourceInfo)
+            current = Redex(current, elims.toList)(using c.sourceInfo)
             elims.clear()
     }
     current
@@ -507,14 +507,14 @@ extension(c: CTerm)
     (using Σ: Signature)
     (using TypingContext)
     : Either[IrError, CTerm] =
-    // inline meta variable, consolidate immediately nested redux
+    // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
         ctx.resolve(m) match
           case Solved(_, _, t) => transformCTerm(t)
           case _               => m
-      override def transformRedux(r: Redux)(using ctx: TypingContext)(using Σ: Signature): CTerm =
-        redux(
+      override def transformRedex(r: Redex)(using ctx: TypingContext)(using Σ: Signature): CTerm =
+        redex(
           transformCTerm(r.t),
           r.elims.map(transformElim),
         )(using r.sourceInfo)
@@ -528,10 +528,10 @@ extension(c: CTerm)
         case _         => c
 
     transformer.transformCTerm(c) match
-      case Redux(t, elims) =>
+      case Redex(t, elims) =>
         for
           elims <- transpose(elims.map(_.mapEither(_.normalized)))
-        yield redux(t, elims)
+        yield redex(t, elims)
       case t => Right(t)
     
 

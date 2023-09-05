@@ -61,7 +61,7 @@ enum FTerm:
   case FDef(qn: QualifiedName)
   case FVar(name: Name)
   case FFunctionType(argName: Name, argTy: FTerm, bodyTy: FTerm, effects: FTerm)
-  case FRedux(head: FTerm, elims: List[Either[Name, FTerm]])
+  case FRedex(head: FTerm, elims: List[Either[Name, FTerm]])
   case FBlock(statements: List[FStatement])
   // TODO: Properly handle lambda requires term synthesis. Otherwise, usage of captured terms must
   //  be provided manually, which is very cumbersome.

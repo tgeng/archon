@@ -348,8 +348,8 @@ trait Visitor[C, R]:
     },
   )
 
-  def visitRedux(redux: Redux)(using ctx: C)(using Σ: Signature): R = combine(
-    visitCTerm(redux.t) +: redux.elims.map(visitElim): _*,
+  def visitRedex(redex: Redex)(using ctx: C)(using Σ: Signature): R = combine(
+    visitCTerm(redex.t) +: redex.elims.map(visitElim): _*,
   )
 
   def visitElim(elim: Elimination[VTerm])(using ctx: C)(using Σ: Signature): R = elim match
@@ -484,7 +484,7 @@ trait Visitor[C, R]:
     case f: F                                    => visitF(f)
     case r: Return                               => visitReturn(r)
     case let: Let                                => visitLet(let)
-    case redux: Redux                            => visitRedux(redux)
+    case redex: Redex                            => visitRedex(redex)
     case functionType: FunctionType              => visitFunctionType(functionType)
     case recordType: RecordType                  => visitRecordType(recordType)
     case operationCall: OperationCall            => visitOperationCall(operationCall)
@@ -763,11 +763,11 @@ trait Transformer[C]:
       },
     )(let.boundName)(using let.sourceInfo)
 
-  def transformRedux(redux: Redux)(using ctx: C)(using Σ: Signature): CTerm =
-    Redux(
-      transformCTerm(redux.t),
-      redux.elims.map(transformElim),
-    )(using redux.sourceInfo)
+  def transformRedex(redex: Redex)(using ctx: C)(using Σ: Signature): CTerm =
+    Redex(
+      transformCTerm(redex.t),
+      redex.elims.map(transformElim),
+    )(using redex.sourceInfo)
 
   def transformElim
     (elim: Elimination[VTerm])
@@ -929,7 +929,7 @@ trait Transformer[C]:
       case f: F                            => transformF(f)
       case r: Return                       => transformReturn(r)
       case let: Let                        => transformLet(let)
-      case redux: Redux                    => transformRedux(redux)
+      case redex: Redex                    => transformRedex(redex)
       case functionType: FunctionType      => transformFunctionType(functionType)
       case recordType: RecordType          => transformRecordType(recordType)
       case operationCall: OperationCall    => transformOperationCall(operationCall)
