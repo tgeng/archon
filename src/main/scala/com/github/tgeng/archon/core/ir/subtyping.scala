@@ -145,22 +145,23 @@ def checkIsSubtype
               if tyConstraint.isEmpty
               then checkIsSubtype(bodyTy1, bodyTy2)(using Γ :+ binding2)
               else
-                val meta = ctx.addMetaVar(
-                  Guarded(
-                    Γ :+ binding2,
-                    F(binding1.ty.weakened, Total(), binding1.usage.weakened),
-                    Return(Var(0)),
-                    tyConstraint,
-                  ),
-                )
+                given Context = Γ :+ binding2
                 checkIsSubtype(
                   bodyTy1,
                   bodyTy2.subst {
                     case 0 =>
-                      Some(Collapse(vars(Γ.size).foldLeft[CTerm](meta)(Application(_, _))))
+                      Some(
+                        Collapse(
+                          ctx.addGuarded(
+                            F(binding1.ty.weakened, Total(), binding1.usage.weakened),
+                            Return(Var(0)),
+                            tyConstraint,
+                          ),
+                        ),
+                      )
                     case _ => None
                   },
-                )(using Γ :+ binding2)
+                )
           yield effConstraint ++ tyConstraint ++ bodyConstraint
         // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
         // just wrap them inside redex
@@ -366,8 +367,8 @@ private def checkLevelSubsumption
       case Level(l, operands) => Some((l, operands))
       case v: Var             => Some((0, Map(v -> 0)))
       // TODO: handle meta variable updates
-      case c: Collapse        => None
-      case _                  => throw IllegalStateException("type error")
+      case c: Collapse => None
+      case _           => throw IllegalStateException("type error")
   for
     l1Components <- extractLiteralAndOperands(l1)
     l2Components <- extractLiteralAndOperands(l2)
@@ -388,7 +389,8 @@ private def checkLevelSubsumption
         // At this point l2 does not contain any meta variables. Hence, l2 is fixed and the only way for subsumption to
         // possibly work is that l1 only contains some extra stuck computations under operands. Otherwise, subsumption
         // eheck must fail.
-        case (Some(literal1, _), Some(literal2, _)) if literal1 > literal2 => Left(NotVSubsumption(l1, l2, Some(LevelType())))
+        case (Some(literal1, _), Some(literal2, _)) if literal1 > literal2 =>
+          Left(NotVSubsumption(l1, l2, Some(LevelType())))
         case (Some(_, operands1), Some(_, operands2)) =>
           // Offending operands are those that has an offset in l1 that is larger than the offset in l2 and is not a
           // stuck computation.

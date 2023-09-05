@@ -102,7 +102,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                 "type error: none of the terms above can take an argument or projection",
               )
       case m: Meta =>
-        val t = ctx.resolve(m) match
+        val t = ctx.resolveMeta(m) match
           case Solved(context, ty, value) =>
             for
               args <- transpose(stack.takeRight(context.size).map {
@@ -510,7 +510,7 @@ extension(c: CTerm)
     // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
-        ctx.resolve(m) match
+        ctx.resolveMeta(m) match
           case Solved(_, _, t) => transformCTerm(t)
           case _               => m
       override def transformRedex(r: Redex)(using ctx: TypingContext)(using Σ: Signature): CTerm =

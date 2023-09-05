@@ -111,9 +111,33 @@ class TypingContext
   private var solvedVersion: Int = 0
   given TypingContext = this
 
-  def resolve(m: Meta): MetaVariable = metaVars(m.index)
+  // TODO[P0]: check usage of this method. Normally the following `resolve` should be used instead.
+  def resolveMeta(m: Meta) = metaVars(m.index)
 
-  def addMetaVar(mv: MetaVariable): Meta =
+  def resolve(c: CTerm)(using Signature): Option[(MetaVariable, CTerm, List[Elimination[VTerm]])] = c match
+    case Meta(index) =>
+      val resolved = metaVars(index)
+      if resolved.context.isEmpty then Some(resolved, resolved.ty, Nil)
+      else None
+    case Redex(Meta(index), elims) => 
+      val resolved = metaVars(index)
+      if resolved.context.size <= elims.size 
+      then Some(resolved, resolved.ty.substLowers(elims.take(resolved.context.size).map{
+        case Elimination.ETerm(t) => t
+        case _ => throw IllegalStateException("type error")
+      }: _*), elims.drop(resolved.context.size))
+      else None
+    case _           => None
+
+  def addUnsolved(ty: CTerm)(using Γ: Context): CTerm =
+    val meta = addMetaVar(Unsolved(Γ, ty, UmcNothing))
+    redex(meta, vars(Γ.size - 1))
+
+  def addGuarded(ty: CTerm, value: CTerm, constraints: Set[Constraint])(using Γ: Context): CTerm =
+    val meta = addMetaVar(Guarded(Γ, ty, value, constraints))
+    redex(meta, vars(Γ.size - 1))
+
+  private def addMetaVar(mv: MetaVariable): Meta =
     val index = metaVars.size
     metaVars += mv
     Meta(index)
@@ -174,7 +198,7 @@ class TypingContext
         assignSolved(meta.index, Solved(context, ty, value))
         r
 
-    resolve(meta) match
+    resolveMeta(meta) match
       case m @ Unsolved(_, _, constraint) =>
         assign(m):
           case term =>
@@ -225,7 +249,7 @@ class TypingContext
   private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
     override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
       Set(m.index) ++ {
-        ctx.resolve(m) match
+        ctx.resolveMeta(m) match
           // Include all meta varialbles in the constraints of guarded meta variables so that solving these can potentially
           // turn guarded meta variables to solved ones.
           case Guarded(_, _, _, constraints) => visitConstraints(constraints)
@@ -578,7 +602,7 @@ private def checkULevel
     yield (ULevel.USimpleLevel(l), usages)
   case ULevel.UωLevel(_) => Right(ul, Usages.zero)
 
-// Precondition: tm is already type-checked
+// Precondition: tm is already type-checked and is normalized
 private def inferLevel
   (tm: VTerm)
   (using Γ: Context)
@@ -592,6 +616,7 @@ private def inferLevel
       Γ.resolve(r).ty match
         case Type(upperBound) => inferLevel(upperBound)
         case _                => Left(NotTypeError(tm))
+    // TODO[P0]: this is not right, we need to handle collapse of redux here.
     case Collapse(cTm)      => inferLevel(cTm)
     case U(cty)             => inferLevel(cty)
     case DataType(qn, args) => Right(Σ.getData(qn).ul.substLowers(args: _*))
@@ -780,10 +805,9 @@ def checkType
         case _: CellType                                => Left(ExpectCellTypeWithHeap(heapKey))
         case _                                          => Left(ExpectCellType(ty))
     case Auto() =>
-      val meta = ctx.addMetaVar(MetaVariable.Unsolved(Γ, F(ty), UmcNothing))
       Right(
         (
-          Collapse(redex(meta, vars(Γ.size - 1))),
+          Collapse(ctx.addUnsolved(F(ty))),
           Usages.zero,
         ),
       )
@@ -818,6 +842,20 @@ private def inferLevel
         // arg is of type Level. But in that case the overall level would be ω.
         yield ULevelMax(argLevel.weakened, bodyLevel).strengthened
       case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).ul.substLowers(args: _*))
+      // TODO[P0]: check redex instead, also hoist such a check to some helper function
+      case m: Meta =>
+        ctx.resolveMeta(m).ty match
+          case CType(upperBound, _) => inferLevel(upperBound)
+          case cty =>
+            val level = ctx.addUnsolved(F(LevelType()))
+            val usage = ctx.addUnsolved(F(UsageType()))
+            for 
+              constraints <- checkIsConvertible(cty, CType(CTop(USimpleLevel(Collapse(level)), Collapse(usage))), None)
+              constraints <- ctx.solve(constraints)
+              l <- 
+                if constraints.isEmpty then Collapse(level).normalized
+                else Left(ExpectCType(m))
+            yield USimpleLevel(l)
       case _ =>
         throw IllegalArgumentException(s"should have been checked to be a computation type: $tm ")
   yield ul
@@ -854,7 +892,7 @@ def inferType
           effects <- effects.normalized
           newTm = CTop(ul, effects)(using tm.sourceInfo)
         yield (newTm, CType(newTm, Total()), (uUsages + ulUsages))
-      case m: Meta => Right(m, ctx.resolve(m).contextFreeType, Usages.zero)
+      case m: Meta => Right(m, ctx.resolveMeta(m).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
           case None             => Left(MissingDeclaration(qn))
@@ -876,8 +914,7 @@ def inferType
           (effects, effUsages) <- checkType(effects, EffectsType())
           (usage, uUsages) <- checkType(usage, UsageType(None))
           // Prevent returning value of U0 usage, which does not make sense.
-          usageConstraints <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1))
-            .flatMap(ctx.solve)
+          usageConstraints <- checkUsageSubsumption(usage, UsageLiteral(Usage.U1)).flatMap(ctx.solve)
           _ <-
             if usageConstraints.isEmpty then Right(())
             else Left(NotVSubsumption(usage, UsageLiteral(Usage.U1), Some(UsageType())))
@@ -1079,13 +1116,15 @@ def checkType
       yield (tm, usages),
 )
 private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
-  override def combine(rs: Set[Int]*)(using ctx: TypingContext)(using Σ: Signature): Set[Int] = rs.flatten.to(Set)
+  override def combine(rs: Set[Int]*)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
+    rs.flatten.to(Set)
   override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
-    Set(m.index) ++ (ctx.resolve(m) match
+    Set(m.index) ++ (ctx.resolveMeta(m) match
       // bounds in unsolved doesn't need to be checked now. They will be checked when they become solved.
-      case _: Unsolved => Set.empty
+      case _: Unsolved             => Set.empty
       case Guarded(_, _, value, _) => visitCTerm(value)
-      case Solved(_, _, value) => visitCTerm(value))
+      case Solved(_, _, value)     => visitCTerm(value)
+    )
 }
 
 private def getAllReferencedMetaVars(term: CTerm)(using Signature)(using TypingContext): Set[Int] =
