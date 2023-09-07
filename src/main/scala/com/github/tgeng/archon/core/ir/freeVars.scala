@@ -122,16 +122,6 @@ def getFreeVars
   FreeVarsVisitorObject.visitCTerm(tm)
 
 def getFreeVars
-  (ul: ULevel)
-  (using bar: Nat)
-  (using Σ: Signature)
-  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
-  import ULevel.*
-  ul match
-    case USimpleLevel(l) => getFreeVars(l)
-    case UωLevel(_)      => (Set.empty, Set.empty)
-
-def getFreeVars
   (eff: Eff)
   (using bar: Nat)
   (using Σ: Signature)

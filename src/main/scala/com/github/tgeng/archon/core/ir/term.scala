@@ -70,43 +70,29 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 
 extension(eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
-enum ULevel(val sourceInfo: SourceInfo) extends SourceInfoOwner[ULevel]:
-  case USimpleLevel(level: VTerm) extends ULevel(level.sourceInfo)
-  case UωLevel(layer: Nat)(using sourceInfo: SourceInfo) extends ULevel(sourceInfo)
-
-  override def withSourceInfo(sourceInfo: SourceInfo): ULevel =
-    given SourceInfo = sourceInfo
-
-    this match
-      case USimpleLevel(level) => USimpleLevel(level)
-      case UωLevel(layer)      => UωLevel(layer)
-
-object ULevel:
-  extension(u: ULevel)
-    def map(f: VTerm => VTerm): ULevel = u match
-      case USimpleLevel(level) => USimpleLevel(f(level))
-      case _: ULevel.UωLevel   => u
-
-  def ULevelSuc(u: ULevel): ULevel =
-    given SourceInfo = SiLevelSuc(u.sourceInfo)
-
-    u match
-      case USimpleLevel(l) => USimpleLevel(VTerm.LevelSuc(l))
-      case UωLevel(layer)  => UωLevel(layer + 1)
-
-  def ULevelMax(u1: ULevel, u2: ULevel): ULevel =
-    given SourceInfo = SiLevelMax(u1.sourceInfo, u2.sourceInfo)
-
-    (u1, u2) match
-      case (USimpleLevel(l1), USimpleLevel(l2)) =>
-        USimpleLevel(VTerm.LevelMax(l1, l2))
-      case (UωLevel(layer1), UωLevel(layer2)) =>
-        UωLevel(math.max(layer1, layer2))
-      case (_, u: UωLevel) => u
-      case (u, _)          => u
-
 enum UsageOperation:
   case USum, UProd, UJoin
+
+/**
+  * Represents an order number `m * ω + n`.
+  */
+case class LevelOrder(m: Nat, n: Nat) extends Comparable[LevelOrder]:
+  override def compareTo(that: LevelOrder): Int =
+    if this.m < that.m then -1
+    else if this.m > that.m then 1
+    else this.n.compareTo(that.n)
+
+object LevelOrder:
+  def orderMax(a: LevelOrder, b: LevelOrder): LevelOrder =
+    if a.m > b.m then a else if a.m < b.m then b else LevelOrder(a.m, a.n max b.n)
+
+  val ω = LevelOrder(1, 0)
+  val zero = LevelOrder(0, 0)
+  // 256 is arbitrary but it should be enough for any practical purpose
+  val upperBound = LevelOrder(256, 0)
+
+extension (o: LevelOrder)
+  infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
@@ -124,7 +110,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // on unrestricted types that are used linearly.
   case Top
     (
-      ul: ULevel,
+      level: VTerm,
       eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable),
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
@@ -191,13 +177,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
-  case LevelType()(using sourceInfo: SourceInfo)
+  case LevelType(upperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
-    QualifiedNameOwner(
-      LevelQn,
-    )
+    QualifiedNameOwner(LevelQn)
+
   case Level
-    (literal: Nat, maxOperands: Map[VTerm, /* level offset */ Nat])
+    (literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** archon.builtin.Heap */
@@ -234,7 +219,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
     this match
       case Type(upperBound)                => Type(upperBound)
-      case Top(ul, eqD)                    => Top(ul, eqD)
+      case Top(l, eqD)                    => Top(l, eqD)
       case Var(index)                      => Var(index)
       case Collapse(cTm)                   => Collapse(cTm)
       case U(cTy)                          => U(cTy)
@@ -248,8 +233,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
       case EffectsType(continuationUsage)  => EffectsType(continuationUsage)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
-      case LevelType()                     => LevelType()
-      case Level(literal, maxOperands)     => Level(literal, maxOperands)
+      case LevelType(upperBound)                    => LevelType(upperBound)
+      case Level(literal, maxOperands)  => Level(literal, maxOperands)
       case HeapType()                      => HeapType()
       case Heap(key)                       => Heap(key)
       case CellType(heap, ty)              => CellType(heap, ty)
@@ -265,44 +250,49 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 object VTerm:
 
   def Top(t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))(using SourceInfo) =
-    new Top(ULevel.USimpleLevel(t), eqDecidability)
+    new Top(t, eqDecidability)
 
   def UsageSum(operands: VTerm*)(using SourceInfo): VTerm =
     val (usages, terms) = collectUsage(operands)
     (usages.foldLeft(U0)(_ + _), terms) match
-      case (u, Nil) => UsageLiteral(u)
+      case (u, Nil)    => UsageLiteral(u)
       case (U0, terms) => UsageCompound(UsageOperation.USum, terms.toMultiset)
-      case (URel, _) => UsageLiteral(URel)
-      case (u, terms) => UsageCompound(UsageOperation.USum, (UsageLiteral(u) :: terms).toMultiset)
+      case (URel, _)   => UsageLiteral(URel)
+      case (u, terms)  => UsageCompound(UsageOperation.USum, (UsageLiteral(u) :: terms).toMultiset)
 
   def UsageProd(operands: VTerm*)(using SourceInfo) =
     val (usages, terms) = collectUsage(operands)
     (usages.foldLeft(U1)(_ * _), terms) match
-      case (u, Nil) => UsageLiteral(u)
+      case (u, Nil)    => UsageLiteral(u)
       case (U1, terms) => UsageCompound(UsageOperation.UProd, terms.toMultiset)
-      case (U0, _) => UsageLiteral(U0)
-      case (u, terms) => UsageCompound(UsageOperation.UProd, (UsageLiteral(u) :: terms).toMultiset)
+      case (U0, _)     => UsageLiteral(U0)
+      case (u, terms)  => UsageCompound(UsageOperation.UProd, (UsageLiteral(u) :: terms).toMultiset)
 
   def UsageJoin(operands: VTerm*)(using SourceInfo) =
     if operands.isEmpty then throw IllegalStateException("UsageJoin cannot be empty")
     val (usages, terms) = collectUsage(operands)
     (usages.reduce(_ | _), terms) match
-      case (u, Nil) => UsageLiteral(u)
+      case (u, Nil)    => UsageLiteral(u)
       case (UUnres, _) => UsageLiteral(UUnres)
-      case (u, terms) => UsageCompound(UsageOperation.UJoin, (UsageLiteral(u) :: terms).toMultiset)
+      case (u, terms)  => UsageCompound(UsageOperation.UJoin, (UsageLiteral(u) :: terms).toMultiset)
 
   private def collectUsage(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
-    operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)){
+    operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)) {
       case ((usages, terms), UsageLiteral(u)) => (u :: usages, terms)
-      case ((usages, terms), term) => (usages, terms)
+      case ((usages, terms), term)            => (usages, terms)
     }
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
-    Level(n, Map())
+    Level(LevelOrder(0, n), Map())
 
-  def LevelSuc(t: VTerm): Level = Level(0, Map(t -> 1))
+  def LevelLiteral(m: Nat, n: Nat)(using sourceInfo: SourceInfo): Level =
+    Level(LevelOrder(m, n), Map())
+  
+  def LevelUpperBound(): Level = Level(LevelOrder.upperBound, Map())
 
-  def LevelMax(ts: VTerm*): Level = Level(0, Map(ts.map(_ -> 0): _*))
+  def LevelSuc(t: VTerm): Level = Level(LevelOrder.zero, Map(t -> 1))
+
+  def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, Map(ts.map(_ -> 0): _*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
@@ -356,7 +346,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case CTop(ul: ULevel, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo)
+  case CTop(level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo),
     IType
 
@@ -557,7 +547,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     this match
       case Hole                            => Hole
       case CType(upperBound, effects)      => CType(upperBound, effects)
-      case CTop(ul, effects)               => CTop(ul, effects)
+      case CTop(l, effects)               => CTop(l, effects)
       case Meta(index)                     => Meta(index)
       case Def(qn)                         => Def(qn)
       case Force(v)                        => Force(v)
@@ -623,7 +613,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
 object CTerm:
   def CTop(t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo) =
-    new CTop(ULevel.USimpleLevel(t), effects)
+    new CTop(t, effects)
 
   @targetName("redexFromElims")
   def redex(c: CTerm, elims: Seq[Elimination[VTerm]])(using SourceInfo): Redex =
@@ -649,7 +639,7 @@ object CTerm:
       case Redex(c, elims) => Redex(c, elims :+ Elimination.EProj(name))
       case t               => Redex(t, List(Elimination.EProj(name)))
 
-  extension(binding: Binding[VTerm])
+  extension (binding: Binding[VTerm])
     infix def ->:(body: CTerm): FunctionType =
       new FunctionType(binding, body)
 

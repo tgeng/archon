@@ -42,9 +42,9 @@ enum IrError extends HasException:
       sup: CTerm,
       ty: Option[CTerm],
     )
-  case NotLevelSubsumption(sub: ULevel, sup: ULevel)
-  case NotLevelConvertible(sub: ULevel, sup: ULevel)
-  case LevelTooBig(level: ULevel)
+  case NotLevelSubsumption(sub: VTerm, sup: VTerm)
+  case NotLevelConvertible(sub: VTerm, sup: VTerm)
+  case LevelTooBig(level: VTerm)
   case NotEqDecidabilitySubsumption
     (
       sub: VTerm,

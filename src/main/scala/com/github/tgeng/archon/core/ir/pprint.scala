@@ -14,7 +14,6 @@ import CoPattern.*
 import Pattern.*
 import VTerm.*
 import CTerm.*
-import ULevel.*
 
 private class RenamerContext:
   val nameStack = mutable.ArrayBuffer[Ref[Name]]()
@@ -160,9 +159,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   given (using PPrintContext)(using Signature): Conversion[Name, Block] = n => Block(n.toString)
 
-  given (using PPrintContext)(using Signature): Conversion[ULevel, Block] =
-    visitULevel(_)
-
   given (using PPrintContext)(using Signature): Conversion[QualifiedName, Block] =
     visitQualifiedName(_)
 
@@ -284,26 +280,20 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     : Block = Block(Concat, "#", p.name)
 
   override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
-    case Type(Top(USimpleLevel(Level(l, operands)), _)) if operands.isEmpty =>
+    case Type(Top(Level(l, operands), _)) if operands.isEmpty =>
       Block("Type" + l.sub)
-    case Type(Top(USimpleLevel(l), EqDecidabilityLiteral(EqDecidability.EqDecidable))) =>
+    case Type(Top(l, EqDecidabilityLiteral(EqDecidability.EqDecidable))) =>
       app("Type", l)
-    case Type(Top(UωLevel(layer), EqDecidabilityLiteral(EqDecidability.EqDecidable))) =>
-      Block("TYPE" + layer.sub)
-    case Type(Top(USimpleLevel(l), EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
+    case Type(Top(l, EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
       app("Type?", l)
-    case Type(Top(UωLevel(layer), EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
-      app("TYPE?" + layer.sub)
-    case Type(Top(USimpleLevel(l), eqD)) => app("Type", l, "withEqDecidability", eqD)
-    case Type(Top(UωLevel(layer), eqD))  => app("TYPE" + layer.sub, "withEqDecidability", eqD)
+    case Type(Top(l, eqD)) => app("Type", l, "withEqDecidability", eqD)
     case Type(upperBound)                => app("SubtypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    top.ul match
-      case USimpleLevel(Level(l, operands)) if operands.isEmpty =>
+    top.level match
+      case Level(l, operands) if operands.isEmpty =>
         Block("Top" + l.sub)
-      case USimpleLevel(l) => app("Top", l)
-      case UωLevel(layer)  => Block("TOP" + layer.sub)
+      case l => app("Top", l)
 
   override def visitVar(v: Var)(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block(ctx.resolve(v.idx).value.toString)
@@ -344,9 +334,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         )
 
     val operands = mutable.ArrayBuffer[Block]()
-    if level.maxOperands.values.forall(_ < level.literal) then
-      operands.append(Block("L" + level.literal.sub))
-
+    operands.append(Block("L" + level.literal.sub))
     if operands.isEmpty && level.maxOperands.size == 1 then toBlock(level.maxOperands.head)
     else if operands.nonEmpty && level.maxOperands.isEmpty then operands.head
     else
@@ -392,12 +380,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature,
     )
     : Block = cType match
-    case CType(CTop(USimpleLevel(Level(l, operands)), _), eff) if operands.isEmpty =>
+    case CType(CTop(Level(l, operands), _), eff) if operands.isEmpty =>
       Block("CType" + l.sub)
-    case CType(CTop(USimpleLevel(l), tEff), eff) if tEff == Total() =>
+    case CType(CTop(l, tEff), eff) if tEff == Total() =>
       ctype(eff, "CType", l)
-    case CType(CTop(UωLevel(layer), tEff), eff) if tEff == Total() =>
-      ctype(eff, "CTYPE" + layer.sub)
     case CType(upperBound, eff) =>
       ctype(eff, "CSubtypeOf", upperBound)
 
@@ -408,11 +394,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature,
     )
     : Block =
-    cTop.ul match
-      case USimpleLevel(Level(l, operands)) if operands.isEmpty =>
+    cTop.level match
+      case Level(l, operands) if operands.isEmpty =>
         ctype(cTop.effects, "CTop" + l.sub)
-      case USimpleLevel(l) => ctype(cTop.effects, "CTop", l)
-      case UωLevel(layer)  => ctype(cTop.effects, "CTOP" + layer.sub)
+      case l => ctype(cTop.effects, "CTop", l)
 
   override def visitDef
     (d: Def)
@@ -886,3 +871,14 @@ private def unroll[E, T]
         case (es, t) => (e :: es, t)
     }
   case Right(b) => (Nil, b)
+
+extension(o: LevelOrder) {
+  def sub: String = 
+    val mString = o.m match
+      case 0 => ""
+      case m => subNat(m) + "ω₊" // Unfortunately there doesn't seem to be a subscript character for ω
+    val nString = subNat(o.n)
+    mString + nString
+}
+
+private def subNat(i: Nat): String = i.toString.map(i => (i - '0' + '₀').toChar)

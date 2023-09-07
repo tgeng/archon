@@ -2,7 +2,6 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.ULevel.USimpleLevel
 
 import SourceInfo.*
 import Elimination.*
@@ -17,7 +16,6 @@ trait DerivedSignature extends Signature:
       .orElse(getEffectDerivedDefinitionOption(qn))
       .orElse(getEffectOpDerivedDefinitionOption(qn))
       .orElse(getDeclaredDefinitionOption(qn))
-      .orElse(getBigType(qn).map(_._1))
 
   def getDeclaredDefinitionOption(qn: QualifiedName): Option[Declaration.Definition]
 
@@ -29,7 +27,6 @@ trait DerivedSignature extends Signature:
       .orElse(getRecordFieldDerivedClausesOption(qn))
       .orElse(getEffectDerivedClausesOption(qn))
       .orElse(getEffectOpDerivedClausesOption(qn))
-      .orElse(getBigType(qn).map(_._2))
 
   def getDeclaredClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
@@ -41,13 +38,11 @@ trait DerivedSignature extends Signature:
       .orElse(getRecordFieldDerivedCaseTreeOption(qn))
       .orElse(getEffectDerivedCaseTreeOption(qn))
       .orElse(getEffectOpDerivedCaseTreeOption(qn))
-      .orElse(getBigType(qn).map(_._3))
 
   def getDeclaredCaseTreeOption(qn: QualifiedName): Option[CaseTree]
 
   import VTerm.*
   import CTerm.*
-  import ULevel.*
   import Usage.*
   import CoPattern.*
   import CaseTree.*
@@ -58,41 +53,6 @@ trait DerivedSignature extends Signature:
 
   /** Usage paramter itself is only used in typing and hence has U0 */
   private def usageBinding = Binding(UsageType(), UsageLiteral(U0))(n"u")
-
-  private def getBigType
-    (qn: QualifiedName)
-    : Option[(Definition, IndexedSeq[Clause], CaseTree)] =
-    // TODO[P3]: it seems big SubtypeOf is not that useful so I will skip it for now.
-    import Name.*
-    import QualifiedName.*
-    import Builtins.*
-    for
-      (isComputation, layer) <-
-        qn match
-          case Node(BuiltinType, Normal(name)) if name.startsWith("TYPE") =>
-            name.drop(4).toIntOption.map((false, _))
-          case Node(BuiltinType, Normal(name)) if name.startsWith("CTYPE") =>
-            name.drop(5).toIntOption.map((true, _))
-          case _ => None
-      if layer >= 0
-    yield (
-      new Definition(qn)(
-        if isComputation then CType(CType(CTop(UωLevel(layer))))
-        else F(Type(Type(Top(UωLevel(layer))))),
-      ),
-      IndexedSeq(
-        Clause(
-          IndexedSeq(),
-          Nil,
-          if isComputation then CType(CTop(UωLevel(layer)))
-          else Return(Type(Top(UωLevel(layer)))),
-          if isComputation then CType(CType(CTop(UωLevel(layer))))
-          else F(Type(Type(Top(UωLevel(layer))))),
-        ),
-      ),
-      if isComputation then CtTerm(CType(CTop(UωLevel(layer))))
-      else CtTerm(Return(Type(Top(UωLevel(layer))))),
-    )
 
   def getDataDerivedDefinitionOption
     (qn: QualifiedName)

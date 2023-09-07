@@ -119,18 +119,16 @@ object Builtins:
   import PreDeclaration.*
   import CTerm.*
   import VTerm.*
-  import ULevel.*
   import CoPattern.*
   import Pattern.*
   import Usage.*
   import EqDecidability.*
   import CaseTree.*
-  import ULevel.*
 
   private def binding(name: Name, t: VTerm, usage: VTerm = UsageLiteral(U1)): Binding[CTerm] =
     Binding(Return(t), Return(usage))(name)
 
-  private val L0 = ULevel.USimpleLevel(LevelLiteral(0))
+  private val L0 = LevelLiteral(0)
 
   private val builtins: Seq[PreDeclaration] = Seq(
     PreData(UnitQn)(
@@ -278,7 +276,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(Type(Top(USimpleLevel(Var(0)))))),
+          rhs = Some(Return(Type(Top(Var(0))))),
         ),
       ),
     ),

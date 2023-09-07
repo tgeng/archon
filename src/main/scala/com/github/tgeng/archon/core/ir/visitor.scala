@@ -4,7 +4,6 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import CTerm.*
 import VTerm.*
-import ULevel.*
 import Pattern.*
 import CoPattern.*
 import CaseTree.*
@@ -220,7 +219,7 @@ trait Visitor[C, R]:
     visitVTerm(ty.upperBound)
 
   def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
-    visitULevel(top.ul),
+    visitVTerm(top.level),
     visitVTerm(top.eqDecidability),
   )
 
@@ -316,7 +315,7 @@ trait Visitor[C, R]:
 
   def visitCTop(cTop: CTop)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitULevel(cTop.ul),
+      visitVTerm(cTop.level),
       visitVTerm(cTop.effects),
     )
 
@@ -463,10 +462,6 @@ trait Visitor[C, R]:
       visitQualifiedName(eff._1) +:
         eff._2.map(visitVTerm): _*,
     )
-
-  def visitULevel(ul: ULevel)(using ctx: C)(using Σ: Signature): R = ul match
-    case USimpleLevel(level) => visitVTerm(level)
-    case UωLevel(layer)      => visitBigLevel(layer)
 
   def visitBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -637,7 +632,7 @@ trait Transformer[C]:
     Type(transformVTerm(ty.upperBound))(using ty.sourceInfo)
 
   def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(
-    transformULevel(top.ul),
+    transformVTerm(top.level),
     transformVTerm(top.eqDecidability),
   )(using top.sourceInfo)
 
@@ -728,7 +723,7 @@ trait Transformer[C]:
 
   def transformCTop(cTop: CTop)(using ctx: C)(using Σ: Signature): CTerm =
     CTop(
-      transformULevel(cTop.ul),
+      transformVTerm(cTop.level),
       transformVTerm(cTop.effects),
     )(using cTop.sourceInfo)
 
@@ -903,12 +898,6 @@ trait Transformer[C]:
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))
-
-  def transformULevel(ul: ULevel)(using ctx: C)(using Σ: Signature): ULevel =
-    ul match
-      case USimpleLevel(level) => USimpleLevel(transformVTerm(level))
-      case UωLevel(layer) =>
-        UωLevel(transformBigLevel(layer))(using ul.sourceInfo)
 
   def transformBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature): Nat =
     layer

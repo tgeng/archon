@@ -603,13 +603,13 @@ extension(v: VTerm)
         else Effects(eff, operands)
       }
     case l: Level =>
-      def dfs(tm: VTerm): Either[IrError, (Nat, Map[VTerm, Nat])] = tm match
+      def dfs(tm: VTerm): Either[IrError, (LevelOrder, Map[VTerm, Nat])] = tm match
         case Level(literal, operands) =>
-          for literalsAndOperands: Seq[(Nat, Map[VTerm, Nat])] <- transpose(
+          for literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] <- transpose(
               operands.map { (tm, offset) =>
                 for tm <- tm.normalized
                     (l, m) <- dfs(tm)
-                yield (l + offset, m.map((tm, l) => (tm, l + offset)))
+                yield (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
               }.toList,
             )
           yield (
@@ -619,11 +619,11 @@ extension(v: VTerm)
               .groupMap(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) },
           )
-        case _: Var | _: Collapse     => Right(0, Map((tm, 0)))
+        case _: Var | _: Collapse     => Right(LevelOrder.zero, Map((tm, 0)))
         case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
       dfs(l).map { case (l, m) => 
-        if l == 0 && m.size == 1 && m.head._2 == 0 
+        if l == LevelOrder.zero && m.size == 1 && m.head._2 == 0 
         then m.head._1
         else Level(l, m) 
       }

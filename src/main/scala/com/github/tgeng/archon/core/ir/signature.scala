@@ -2,7 +2,6 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.ULevel.USimpleLevel
 
 import SourceInfo.*
 
@@ -24,7 +23,7 @@ enum Declaration:
       /* binding + tParamTys */
       val tIndexTys: Telescope,
       /* binding + tParamTys + tIndexTys */
-      val ul: ULevel,
+      val level: VTerm,
       /* binding + tParamTys + tIndexTys */
       val inherentEqDecidability: VTerm,
     )
@@ -32,7 +31,7 @@ enum Declaration:
     (val qn: QualifiedName)
     (
       val tParamTys: TContext = IndexedSeq(), /* binding + tParamTys */
-      val ul: ULevel = ULevel.USimpleLevel(VTerm.LevelLiteral(0)),
+      val level: VTerm,
       val selfName: Ref[Name] = n"self",
     )
   case Definition(val qn: QualifiedName)(val ty: CTerm)

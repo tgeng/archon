@@ -10,7 +10,6 @@ import collection.mutable
 import AstTerm.*
 import VTerm.*
 import CTerm.*
-import ULevel.*
 import AstError.*
 import Elimination.*
 import AstPattern.*

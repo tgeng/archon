@@ -8,7 +8,6 @@ import com.github.tgeng.archon.core.ir.Reducible.reduce
 
 import VTerm.*
 import CTerm.*
-import ULevel.*
 import IrError.*
 import Declaration.*
 import Elimination.*
@@ -38,7 +37,7 @@ def checkIsConvertible
       right <- right.normalized
       r <- (left, right, ty) match
         case (_, _, _) if left == right => Right(Set.empty)
-        case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType())) =>
+        case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType(_))) =>
           // If meta some component is not reduced yet, we can't check subsumption
           if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(
               ((v, _) => hasCollapse(v)),
@@ -70,10 +69,10 @@ def checkIsConvertible
           else Left(NotVConvertible(left, right, ty))
         case (Type(upperBound1), Type(upperBound2), _) =>
           checkIsConvertible(upperBound1, upperBound2, None)
-        case (ty, Top(ul2, eqD2), _) =>
+        case (ty, Top(level2, eqD2), _) =>
           for
-            ul1 <- inferLevel(ty)
-            levelConstraints <- checkULevelIsConvertible(ul1, ul2)
+            level1 <- inferLevel(ty)
+            levelConstraints <- checkIsConvertible(level1, level2, Some(LevelType(LevelUpperBound())))
             eqD1 <- deriveTypeInherentEqDecidability(ty)
             eqDecidabilityConstraints <- checkIsConvertible(eqD1, eqD2, Some(EqDecidabilityType()))
           yield levelConstraints ++ eqDecidabilityConstraints
@@ -160,14 +159,10 @@ def checkIsConvertible
             effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
             upperBoundConstraint <- checkIsConvertible(upperBound1, upperBound2, Some(right))
           yield effConstraint ++ upperBoundConstraint
-        case (ty: IType, CTop(ul2, eff2), _) =>
+        case (ty: IType, CTop(level2, eff2), _) =>
           for
-            ul1 <- inferLevel(ty)
-            levelConstraint <- (ul1, ul2) match
-              case (_, _) if ul1 == ul2 => Right(Set.empty)
-              case (USimpleLevel(l1), USimpleLevel(l2)) =>
-                checkIsConvertible(l1, l2, Some(LevelType()))
-              case _ => Left(NotLevelConvertible(ul1, ul2))
+            level1 <- inferLevel(ty)
+            levelConstraint <- checkIsConvertible(level1, level2, Some(LevelType(LevelUpperBound())))
             effConstraint <- checkIsConvertible(ty.effects, eff2, Some(EffectsType()))
           yield levelConstraint ++ effConstraint
         case (F(vTy1, eff1, u1), F(vTy2, eff2, u2), _) =>
@@ -340,8 +335,8 @@ private def checkRedexIsConvertible
     ty <- ty match
       case Some(ty) => Right(ty)
       case None =>
-        for ul <- inferLevel(tm)
-        yield CType(CTop(ul))
+        for level <- inferLevel(tm)
+        yield CType(CTop(level))
     r <- (r.t, tm) match
       case (rt @ Meta(leftIdx), tm @ Redex(m @ Meta(rightIdx), elims)) =>
         if leftIdx == rightIdx then
@@ -446,17 +441,6 @@ private inline def debugConversion[L, R]
       rawTy.map(pprint),
     ),
   )(result)
-
-private def checkULevelIsConvertible
-  (ul1: ULevel, ul2: ULevel)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : Either[IrError, Set[Constraint]] =
-  (ul1, ul2) match
-    case (_, _) if ul1 == ul2                 => Right(Set.empty)
-    case (USimpleLevel(l1), USimpleLevel(l2)) => checkIsConvertible(l1, l2, Some(LevelType()))
-    case _                                    => Left(NotLevelConvertible(ul1, ul2))
 
 /* References
  [0]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).

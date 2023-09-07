@@ -170,32 +170,32 @@ private def elaborateHead
       (using Γ: Context)
       (using Signature)
       (using ctx: TypingContext)
-      : Either[IrError, (Telescope, ULevel, VTerm)] =
+      : Either[IrError, (Telescope, VTerm, VTerm)] =
       for
         ty <- reduceCType(ty)
         r <- ty match
           // Here and below we do not care about the declared effect types because data type
           // constructors are always total. Declaring non-total signature is not necessary (nor
           // desirable) but acceptable.
-          case F(Type(Top(ul, eqDecidability)), _, _) =>
-            Right((Nil, ul, eqDecidability))
+          case F(Type(Top(level, eqDecidability)), _, _) =>
+            Right((Nil, level, eqDecidability))
           case F(t, _, _) => Left(ExpectVType(t))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, eqDecidability) =>
-              (binding +: telescope, ul, eqDecidability)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, level, eqDecidability) =>
+              (binding +: telescope, level, eqDecidability)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
 
     for
       tParamTys <- elaborateTContext(preData.tParamTys)
-      case (tIndices, ul, eqDecidability) <- elaborateTy(preData.ty)(using
+      case (tIndices, level, eqDecidability) <- elaborateTy(preData.ty)(using
         Γ0 ++ tParamTys.map(_._1),
       )
       data = new Data(preData.qn)(
         tParamTys,
         tIndices,
-        ul,
+        level,
         eqDecidability,
       )
       _ <- checkData(data)
@@ -231,8 +231,8 @@ private def elaborateBody
             Right((Nil, args.drop(data.tParamTys.size)))
           case F(t, _, _) => Left(ExpectDataType(t, Some(data.qn)))
           case FunctionType(binding, bodyTy, _) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul) =>
-              (binding :: telescope, ul)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, level) =>
+              (binding :: telescope, level)
             }
           case _ => Left(NotDataTypeType(ty))
       yield r
@@ -265,7 +265,7 @@ private def elaborateHead
       tParamTys <- elaborateTContext(record.tParamTys)
       ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
       r <- ty match
-        case CType(CTop(ul, _), _) => Right(new Record(record.qn)(tParamTys, ul))
+        case CType(CTop(level, _), _) => Right(new Record(record.qn)(tParamTys, level))
         case t                     => Left(ExpectCType(t))
       _ <- checkRecord(r)
     yield Σ.addDeclaration(r)
@@ -820,8 +820,8 @@ private def elaborateBody
           case F(ty, effects, usage) =>
             Right((Nil, ty, usage))
           case FunctionType(binding, bodyTy, effects) =>
-            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, ul, usage) =>
-              (binding :: telescope, ul, usage)
+            elaborateTy(bodyTy)(using Γ :+ binding).map { case (telescope, level, usage) =>
+              (binding :: telescope, level, usage)
             }
           case _ => Left(ExpectFType(ty))
       yield r

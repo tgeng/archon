@@ -9,7 +9,6 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.Reducible.reduce
 import VTerm.*
 import CTerm.*
-import ULevel.*
 import IrError.*
 import Declaration.*
 import Elimination.*
@@ -390,7 +389,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either
       tParamTys = Context.fromTelescope(tParamsTysTelescope)
       tIndexTys <- checkParameterTypeDeclarations(data.tIndexTys)(using tParamTys)
       tContext = tParamTys ++ tIndexTys
-      (ul, _) <- checkULevel(data.ul)(using tContext)
+      (level, _) <- checkLevel(data.level)(using tContext)
       (inherentEqDecidability, _) <- checkType(data.inherentEqDecidability, EqDecidabilityType())(
         using tContext,
       )
@@ -398,7 +397,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either
     yield Data(data.qn)(
       tParamTys.zip(data.tParamTys.map(_._2)),
       tIndexTys,
-      ul,
+      level,
       inherentEqDecidability,
     )
   }
@@ -414,7 +413,7 @@ def checkDataConstructor
       case Some(data) =>
         given Γ: Context = data.tParamTys.map(_._1)
         for
-          paramTys <- checkParameterTypeDeclarations(con.paramTys, Some(data.ul))
+          paramTys <- checkParameterTypeDeclarations(con.paramTys, Some(data.level))
           (tArgs, _) <- checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using
             Γ ++ paramTys,
           )
@@ -457,8 +456,8 @@ def checkRecord
       tParamTysTelescope <- checkParameterTypeDeclarations(tParams.toList)
       tParamTys = Context.fromTelescope(tParamTysTelescope)
       _ <- checkTParamsAreUnrestricted(tParams.toList)
-      (ul, _) <- checkULevel(record.ul)(using tParams.toIndexedSeq)
-    yield Record(record.qn)(tParamTys.zip(record.tParamTys.map(_._2)), ul, record.selfName)
+      (level, _) <- checkLevel(record.level)(using tParams.toIndexedSeq)
+    yield Record(record.qn)(tParamTys.zip(record.tParamTys.map(_._2)), level, record.selfName)
   }
 
 def checkRecordField
@@ -476,7 +475,7 @@ def checkRecordField
           )
 
         for
-          (ty, _) <- checkIsCType(field.ty, Some(record.ul.weakened))
+          (ty, _) <- checkIsCType(field.ty, Some(record.level.weakened))
           _ <-
             // binding of positiveVars must be either covariant or invariant
             // binding of negativeVars must be either contravariant or invariant
@@ -575,7 +574,7 @@ private def checkTParamsAreUnrestricted
     yield ()
 
 private def checkParameterTypeDeclarations
-  (tParamTys: Telescope, levelBound: Option[ULevel] = None)
+  (tParamTys: Telescope, levelBound: Option[VTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -589,18 +588,12 @@ private def checkParameterTypeDeclarations
       rest <- checkParameterTypeDeclarations(rest)(using Γ :+ binding)
     yield Binding(ty, usage)(binding.name) :: rest
 
-private def checkULevel
-  (ul: ULevel)
+private def checkLevel
+  (level: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (ULevel, Usages)] = ul match
-  case ULevel.USimpleLevel(l) =>
-    for
-      (l, usages) <- checkType(l, LevelType())
-      l <- l.normalized
-    yield (ULevel.USimpleLevel(l), usages)
-  case ULevel.UωLevel(_) => Right(ul, Usages.zero)
+  : Either[IrError, (VTerm, Usages)] = checkType(level, LevelType(LevelUpperBound()))
 
 // Precondition: tm is already type-checked and is normalized
 private def inferLevel
@@ -608,10 +601,10 @@ private def inferLevel
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, ULevel] =
+  : Either[IrError, VTerm] =
   tm match
-    case Type(upperBound) => inferLevel(upperBound).map(ULevelSuc(_))
-    case Top(ul, eqD)     => Right(ul)
+    case Type(upperBound) => inferLevel(upperBound).map(LevelSuc(_))
+    case Top(level, eqD)     => Right(level)
     case r: Var =>
       Γ.resolve(r).ty match
         case Type(upperBound) => inferLevel(upperBound)
@@ -619,10 +612,12 @@ private def inferLevel
     // TODO[P0]: this is not right, we need to handle collapse of redux here.
     case Collapse(cTm)      => inferLevel(cTm)
     case U(cty)             => inferLevel(cty)
-    case DataType(qn, args) => Right(Σ.getData(qn).ul.substLowers(args: _*))
+    case DataType(qn, args) => Right(Σ.getData(qn).level.substLowers(args: _*))
     case _: UsageType | _: EqDecidabilityType | _: EffectsType | _: HeapType =>
-      Right(ULevel.USimpleLevel(LevelLiteral(0)))
-    case _: LevelType    => Right(ULevel.UωLevel(0))
+      Right(LevelLiteral(0))
+    case LevelType(upperBound)    => 
+      for (upperBound, _) <- checkLevel(upperBound)
+      yield LevelSuc(upperBound)
     case CellType(_, ty) => inferLevel(ty)
     case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
@@ -639,12 +634,12 @@ def inferType
         upperBound <- upperBound.normalized
         newTm = Type(upperBound)(using tm.sourceInfo)
       yield (newTm, Type(newTm), upperBoundUsages)
-    case Top(ul, eqD) =>
+    case Top(level, eqD) =>
       for
-        (ul, ulUsage) <- checkULevel(ul)
+        (level, ulUsage) <- checkLevel(level)
         (eqD, eqDUsage) <- checkType(eqD, EqDecidabilityType())
         eqD <- eqD.normalized
-        newTm = Top(ul, eqD)(using tm.sourceInfo)
+        newTm = Top(level, eqD)(using tm.sourceInfo)
       yield (newTm, Type(newTm), (ulUsage + eqDUsage))
     case r: Var => Right(r, Γ.resolve(r).ty, Usages.single(r))
     case Collapse(cTm) =>
@@ -720,14 +715,14 @@ def inferType
         EffectsType(usage),
         literalUsages + operandsUsages,
       )
-    case LevelType() => Right(LevelType(), (Type(LevelType())), Usages.zero)
+    case LevelType(order) => Right(LevelType(order), (Type(LevelType(order))), Usages.zero)
     case Level(op, maxOperands) =>
       for
         (operands, usages) <- transposeCheckTypeResults(maxOperands.map { (ref, _) =>
-          checkType(ref, LevelType())
+          checkLevel(ref)
         })
         newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
-      yield (newTm, LevelType(), usages)
+      yield (newTm, LevelType(newTm), usages)
     case HeapType() => Right(HeapType(), (Type(HeapType())), Usages.zero)
     case h: Heap    => Right(h, HeapType(), Usages.zero)
     case CellType(heap, ty) =>
@@ -827,12 +822,12 @@ private def inferLevel
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, ULevel] =
+  : Either[IrError, VTerm] =
   for
     tm <- Reducible.reduce(tm)
-    ul <- tm match
-      case CType(upperBound, effects) => inferLevel(upperBound).map(ULevelSuc(_))
-      case CTop(ul, effects)          => Right(ul)
+    level <- tm match
+      case CType(upperBound, effects) => inferLevel(upperBound).map(LevelSuc(_))
+      case CTop(level, effects)          => Right(level)
       case F(vTy, effects, usage)     => inferLevel(vTy)
       case FunctionType(binding, bodyTy, effects) =>
         for
@@ -840,25 +835,25 @@ private def inferLevel
           bodyLevel <- inferLevel(bodyTy)(using Γ :+ binding)
         // strengthen is always safe because the only case that bodyLevel would reference 0 is when
         // arg is of type Level. But in that case the overall level would be ω.
-        yield ULevelMax(argLevel.weakened, bodyLevel).strengthened
-      case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).ul.substLowers(args: _*))
+        yield LevelMax(argLevel.weakened, bodyLevel).strengthened
+      case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).level.substLowers(args: _*))
       // TODO[P0]: check redex instead, also hoist such a check to some helper function
       case m: Meta =>
         ctx.resolveMeta(m).ty match
           case CType(upperBound, _) => inferLevel(upperBound)
           case cty =>
-            val level = ctx.addUnsolved(F(LevelType()))
+            val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
             val usage = ctx.addUnsolved(F(UsageType()))
             for 
-              constraints <- checkIsConvertible(cty, CType(CTop(USimpleLevel(Collapse(level)), Collapse(usage))), None)
+              constraints <- checkIsConvertible(cty, CType(CTop(Collapse(level)), Collapse(usage)), None)
               constraints <- ctx.solve(constraints)
               l <- 
                 if constraints.isEmpty then Collapse(level).normalized
                 else Left(ExpectCType(m))
-            yield USimpleLevel(l)
+            yield l
       case _ =>
         throw IllegalArgumentException(s"should have been checked to be a computation type: $tm ")
-  yield ul
+  yield level
 
 def inferType
   (tm: CTerm)
@@ -885,12 +880,12 @@ def inferType
           CType(newTm, Total()),
           (effUsages + upperBoundUsages),
         )
-      case CTop(ul, effects) =>
+      case CTop(level, effects) =>
         for
           (effects, uUsages) <- checkType(effects, EffectsType())
-          (ul, ulUsages) <- checkULevel(ul)
+          (level, ulUsages) <- checkLevel(level)
           effects <- effects.normalized
-          newTm = CTop(ul, effects)(using tm.sourceInfo)
+          newTm = CTop(level, effects)(using tm.sourceInfo)
         yield (newTm, CType(newTm, Total()), (uUsages + ulUsages))
       case m: Meta => Right(m, ctx.resolveMeta(m).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
@@ -1500,9 +1495,6 @@ def checkHandler
       F(DataType(Builtins.UnitQn), parameterOpsEffects),
     )(using parameterOpsΓ)
     parameterTypeLevel <- inferLevel(newParameterBinding.ty)
-    parameterTypeLevel <- parameterTypeLevel match
-      case ULevel.USimpleLevel(l) => Right(l)
-      case _                      => Left(LevelTooBig(parameterTypeLevel))
     parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
     (parameterReplicator, parameterReplicatorUsages) <- parameterReplicator match
       case Some(parameterReplicator) =>
@@ -1580,19 +1572,12 @@ def checkHandler
                 .weakened
               for
                 opResultTyLevel <- inferLevel(opResultTy)
-                opResultTyLevel <- opResultTyLevel match
-                  case ULevel.USimpleLevel(l) => Right(l)
-                  case _                      => Left(LevelTooBig(opResultTyLevel))
                 case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
                   case Some(continuationUsage) =>
                     resumeNameOption match
                       case Some(resumeName) =>
                         for
                           outputTypeLevel <- inferLevel(outputType)
-                          level <- outputTypeLevel match
-                            case ULevel.USimpleLevel(o) =>
-                              Right(LevelMax(parameterTypeLevel, opResultTyLevel, o))
-                            case l: ULevel.UωLevel => Left(LevelTooBig(l))
                         yield (
                           opParamTys :+
                             Binding(
@@ -1600,7 +1585,7 @@ def checkHandler
                                 RecordType(
                                   Builtins.ContinuationQn,
                                   List(
-                                    level,
+                                    outputTypeLevel,
                                     UsageLiteral(continuationUsage),
                                     newParameterBinding.usage,
                                     newParameterBinding.ty,
@@ -1728,7 +1713,7 @@ def checkHeapHandler
   yield (input, r, inputUsages)
 
 def checkIsType
-  (vTy: VTerm, levelBound: Option[ULevel] = None)
+  (vTy: VTerm, levelBound: Option[VTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -1741,8 +1726,8 @@ def checkIsType
           levelBound match
             case Some(bound) =>
               for
-                ul <- inferLevel(vTy)
-                _ <- checkULevelSubsumption(ul, bound)
+                level <- inferLevel(vTy)
+                _ <- checkLevelSubsumption(level, bound)
               yield ()
             case _ => Right(())
         case _ => Left(NotTypeError(vTy))
@@ -1750,7 +1735,7 @@ def checkIsType
   }
 
 def checkIsCType
-  (cTy: CTerm, levelBound: Option[ULevel] = None)
+  (cTy: CTerm, levelBound: Option[VTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
@@ -1763,8 +1748,8 @@ def checkIsCType
           levelBound match
             case Some(bound) =>
               for
-                ul <- inferLevel(cTy)
-                _ <- checkULevelSubsumption(ul, bound)
+                level <- inferLevel(cTy)
+                _ <- checkLevelSubsumption(level, bound)
               yield ()
             case _ => Right(())
         case _: CType => Left(EffectfulCTermAsType(cTy))
@@ -1852,7 +1837,7 @@ def reduceCType
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   case CType(upperBound, effects) =>
     CType(upperBound, EffectsUnion(eff, effects))
-  case CTop(ul, effects)      => CTop(ul, EffectsUnion(eff, effects))
+  case CTop(level, effects)      => CTop(level, EffectsUnion(eff, effects))
   case F(vTy, effects, usage) => F(vTy, EffectsUnion(eff, effects), usage)
   case FunctionType(binding, bodyTy, effects) =>
     FunctionType(

@@ -15,17 +15,17 @@ object TermBuilders:
 
   given Conversion[VTerm, ULevel] = USimpleLevel(_)
 
-  case class Type[+T](ul: ULevel, upperBound: Option[T] = None, effects: Effects = Total()
+  case class Type[+T](level: ULevel, upperBound: Option[T] = None, effects: Effects = Total()
 
   given Conversion[Type[VTerm], VTerm] = _ match
-    case Type(ul, Some(upperBound), _) => Type(ul, upperBound)
-    case Type(ul, None, _) => Type(ul, Top(ul))
+    case Type(level, Some(upperBound), _) => Type(level, upperBound)
+    case Type(level, None, _) => Type(level, Top(level))
 
   given Conversion[Type[VTerm], Binding[VTerm]] = t => Binding(v(t))(gn"arg")
 
   given Conversion[Type[CTerm], CTerm] = _ match
-    case Type(ul, Some(upperBound), effects) => CType(ul, upperBound, effects)
-    case Type(ul, None, effects) => CType(ul, CTop(ul, Total(), effects)
+    case Type(level, Some(upperBound), effects) => CType(level, upperBound, effects)
+    case Type(level, None, effects) => CType(level, CTop(level, Total(), effects)
 
   given Conversion[CTerm, VTerm] = Thunk(_)
 

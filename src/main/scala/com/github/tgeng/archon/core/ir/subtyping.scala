@@ -7,7 +7,6 @@ import com.github.tgeng.archon.core.ir.Reducible.reduce
 
 import VTerm.*
 import CTerm.*
-import ULevel.*
 import IrError.*
 import Declaration.*
 import Elimination.*
@@ -37,10 +36,10 @@ def checkIsSubtype
       r <- (sub, sup) match
         case (_, _) if sub == sup                   => Right(Set.empty)
         case (Type(upperBound1), Type(upperBound2)) => checkIsSubtype(upperBound1, upperBound2)
-        case (ty, Top(ul2, eqD2)) =>
+        case (ty, Top(level2, eqD2)) =>
           for
-            ul1 <- inferLevel(ty)
-            levelConstraints <- checkULevelSubsumption(ul1, ul2)
+            level1 <- inferLevel(ty)
+            levelConstraints <- checkLevelSubsumption(level1, level2)
             eqD1 <- deriveTypeInherentEqDecidability(ty)
             eqDecidabilityConstraints <- checkEqDecidabilitySubsumption(eqD1, eqD2)
           yield levelConstraints ++ eqDecidabilityConstraints
@@ -122,10 +121,10 @@ def checkIsSubtype
             effConstraint <- checkEffSubsumption(eff1, eff2)
             upperBoundConstraint <- checkIsSubtype(upperBound1, upperBound2)
           yield effConstraint ++ upperBoundConstraint
-        case (ty: IType, CTop(ul2, eff2)) =>
+        case (ty: IType, CTop(level2, eff2)) =>
           for
-            ul1 <- inferLevel(sub)
-            levelConstraint <- checkULevelSubsumption(ul1, ul2)
+            level1 <- inferLevel(sub)
+            levelConstraint <- checkLevelSubsumption(level1, level2)
             effConstraint <- checkEffSubsumption(ty.effects, eff2)
           yield levelConstraint ++ effConstraint
         case (F(vTy1, eff1, u1), F(vTy2, eff2, u2)) =>
@@ -313,46 +312,6 @@ private def checkEffSubsumption
       Right(Set.empty)
     case _ => Left(NotEffectSubsumption(eff1, eff2))
 
-/** Check that `ul1` is lower or equal to `ul2`.
-  */
-private def checkULevelSubsumption
-  (ul1: ULevel, ul2: ULevel)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : Either[IrError, Set[Constraint]] =
-  // TODO: handle meta variables (consider handle meta variables inside offset Map by instantiating a meta variable to a
-  // level max)
-  val ul1Normalized = ul1 match
-    case USimpleLevel(v) =>
-      v.normalized match
-        case Left(e)       => return Left(e)
-        case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
-        case Right(v)      => USimpleLevel(v)
-    case _ => ul1
-  val ul2Normalized = ul2 match
-    case USimpleLevel(v) =>
-      v.normalized match
-        case Left(e)       => return Left(e)
-        case Right(v: Var) => USimpleLevel(Level(0, Map(v -> 0)))
-        case Right(v)      => USimpleLevel(v)
-    case _ => ul2
-
-  (ul1Normalized, ul2Normalized) match
-    case _ if ul1Normalized == ul2Normalized => Right(Set.empty)
-    case (
-        USimpleLevel(Level(l1, maxOperands1)),
-        USimpleLevel(Level(l2, maxOperands2)),
-      )
-      if l1 <= l2 &&
-        maxOperands1.forall { (k, v) =>
-          maxOperands2.getOrElse(k, -1) >= v
-        } =>
-      Right(Set.empty)
-    case (USimpleLevel(_), UωLevel(_))          => Right(Set.empty)
-    case (UωLevel(l1), UωLevel(l2)) if l1 <= l2 => Right(Set.empty)
-    case _ => Left(NotLevelSubsumption(ul1Normalized, ul2Normalized))
-
 /** Checks if l1 is smaller than l2.
   */
 private def checkLevelSubsumption
@@ -361,11 +320,11 @@ private def checkLevelSubsumption
   (using Σ: Signature)
   (using TypingContext)
   : Either[IrError, Set[Constraint]] =
-  def extractLiteralAndOperands(level: VTerm): Either[IrError, Option[(Nat, Map[VTerm, Nat])]] =
+  def extractLiteralAndOperands(level: VTerm): Either[IrError, Option[(LevelOrder, Map[VTerm, Nat])]] =
     for level <- level.normalized
     yield level match
       case Level(l, operands) => Some((l, operands))
-      case v: Var             => Some((0, Map(v -> 0)))
+      case v: Var             => Some((LevelOrder.zero, Map(v -> 0)))
       // TODO: handle meta variable updates
       case c: Collapse => None
       case _           => throw IllegalStateException("type error")
@@ -375,12 +334,12 @@ private def checkLevelSubsumption
     r <-
       (l1Components, l2Components) match
         // Level 0 subsumes any level
-        case (Some((0, operands)), _) if operands.isEmpty => Right(Set.empty)
+        case (Some((LevelOrder.zero, operands)), _) if operands.isEmpty => Right(Set.empty)
         // Any stuck computation makes subsumption unknown so we just delay it.
         case (None, _) | (_, None) => Right(Set(Constraint.LevelSubsumption(Γ, l1, l2)))
         // Normal case where we can compare the literals and operands directly.
         case (Some((l1, operands1)), Some((l2, operands2)))
-          if l1 <= l2 && operands1
+          if l1.compareTo(l2) <= 0 && operands1
             .forall((operand1, offset1) => operands2.get(operand1).getOrElse(-1) >= offset1) =>
           Right(Set.empty)
         // If l2 has some stuck computation, it's possible for l2 to be arbitrarily large so we just delay it.
@@ -389,8 +348,8 @@ private def checkLevelSubsumption
         // At this point l2 does not contain any meta variables. Hence, l2 is fixed and the only way for subsumption to
         // possibly work is that l1 only contains some extra stuck computations under operands. Otherwise, subsumption
         // eheck must fail.
-        case (Some(literal1, _), Some(literal2, _)) if literal1 > literal2 =>
-          Left(NotVSubsumption(l1, l2, Some(LevelType())))
+        case (Some(literal1, _), Some(literal2, _)) if literal1.compareTo(literal2) > 0 =>
+          Left(NotVSubsumption(l1, l2, Some(LevelType(LevelUpperBound()))))
         case (Some(_, operands1), Some(_, operands2)) =>
           // Offending operands are those that has an offset in l1 that is larger than the offset in l2 and is not a
           // stuck computation.
@@ -399,7 +358,7 @@ private def checkLevelSubsumption
           }
           if offendingOperands.isEmpty
           then Right(Set(Constraint.LevelSubsumption(Γ, l1, l2)))
-          else Left(NotVSubsumption(l1, l2, Some(LevelType())))
+          else Left(NotVSubsumption(l1, l2, Some(LevelType(LevelUpperBound()))))
   yield r
 
 private inline def debugIsSubtyping[L, R]

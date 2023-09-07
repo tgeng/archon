@@ -44,7 +44,6 @@ enum UnificationResult:
 import UnificationResult.*
 import VTerm.*
 import CTerm.*
-import ULevel.*
 
 /** A syntax-based normalization is used here and hence the type parameter `ty` is only used to
   * determine term types. Syntax-based normalization is sufficient for our use case because we
@@ -84,24 +83,14 @@ def unify
       // injectivity
       case (ty @ Type(upperBound1), Type(upperBound2), _) => unify(upperBound1, upperBound2, ty)
       case (
-          Top(UωLevel(l1), eqDecidability1),
-          Top(UωLevel(l2), eqDecidability2),
-          _,
-        ) if l1 == l2 =>
-        unify(
-          eqDecidability1,
-          eqDecidability2,
-          EqDecidabilityType(),
-        )
-      case (
-          Top(USimpleLevel(l1), eqDecidability1),
-          Top(USimpleLevel(l2), eqDecidability2),
+          Top(l1, eqDecidability1),
+          Top(l2, eqDecidability2),
           _,
         ) =>
         unifyAll(
           List(l1, eqDecidability1),
           List(l2, eqDecidability2),
-          telescope(LevelType(), EqDecidabilityType()),
+          telescope(LevelType(LevelUpperBound()), EqDecidabilityType()),
         )
       // We do not unify any computation types since it does not seem to be very
       // useful. If someday we would add such support, we will need to extend
