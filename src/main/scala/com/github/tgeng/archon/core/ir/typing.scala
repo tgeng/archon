@@ -858,6 +858,8 @@ private def inferLevel
     tm <- Reducible.reduce(tm)
     level <- ctx.withMetaResolved(tm):
       case (meta, Nil) => meta.ty match
+          // TODO[P1]: consider refactor this to use some helper function for such common patterns where we create a
+          // stub term when expecting the meta variable to match certain structure.
           case CType(upperBound, _) => inferLevel(upperBound)
           case cty =>
             val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
