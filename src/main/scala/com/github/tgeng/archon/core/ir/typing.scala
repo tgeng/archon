@@ -59,6 +59,20 @@ enum UnsolvedMetaVariableConstraint:
   case UmcLevelSubsumption(lowerBound: VTerm)
   case UmcUsageSubsumption(upperBound: VTerm)
 
+  def substLowers(args: VTerm*)(using Signature): UnsolvedMetaVariableConstraint = this match
+    case UmcNothing => UmcNothing
+    case UmcCSubtype(lowerBound) =>
+      UmcCSubtype(lowerBound.substLowers(args: _*))
+    case UmcVSubtype(lowerBound) =>
+      UmcVSubtype(lowerBound.substLowers(args: _*))
+    case UmcEffSubsumption(lowerBound) =>
+      UmcEffSubsumption(lowerBound.substLowers(args: _*))
+    case UmcLevelSubsumption(lowerBound) =>
+      UmcLevelSubsumption(lowerBound.substLowers(args: _*))
+    case UmcUsageSubsumption(upperBound) =>
+      UmcUsageSubsumption(upperBound.substLowers(args: _*))
+  
+
 /** @param context:
   *   context of this meta-variable
   * @param ty:
@@ -94,8 +108,18 @@ enum MetaVariable(val context: Context, val ty: CTerm):
     case _                             => true,
   )
 
-extension (mv: MetaVariable)
-  def contextFreeType: CTerm = mv.context.foldRight[CTerm](mv.ty) { (elem, acc) =>
+  def substLowers(args: VTerm*)(using Signature): MetaVariable =
+    require(context.size >= args.size)
+    this match
+      case Unsolved(context, ty, constraint) =>
+        Unsolved(context.drop(args.size), ty.substLowers(args: _*), constraint)
+      case Solved(context, ty, value) =>
+        Solved(context.drop(args.size), ty.substLowers(args: _*), value.substLowers(args: _*))
+      case Guarded(context, ty, value, constraints) =>
+        Guarded(context.drop(args.size), ty.substLowers(args: _*), value.substLowers(args: _*), constraints)
+  
+
+  def contextFreeType: CTerm = context.foldRight[CTerm](ty) { (elem, acc) =>
     FunctionType(elem, acc)
   }
 
@@ -113,18 +137,25 @@ class TypingContext
   // TODO[P0]: check usage of this method. Normally the following `resolve` should be used instead.
   def resolveMeta(m: Meta) = metaVars(m.index)
 
-  def resolve(c: CTerm)(using Signature): Option[(MetaVariable, CTerm, List[Elimination[VTerm]])] = c match
+  def withMetaResolved[R](input: CTerm)(action: ((MetaVariable, List[Elimination[VTerm]])|CTerm) => R)(using Signature): R =
+    resolve(input) match
+      case Some((meta, elims)) => action((meta, elims))
+      case None                => action(input)
+
+  def resolve(c: CTerm)(using Signature): Option[(/* substituted meta variables where context has length zero */ MetaVariable, /* left over elims */ List[Elimination[VTerm]])] = c match
     case Meta(index) =>
       val resolved = metaVars(index)
-      if resolved.context.isEmpty then Some(resolved, resolved.ty, Nil)
+      if resolved.context.isEmpty then Some(resolved, Nil)
       else None
     case Redex(Meta(index), elims) => 
       val resolved = metaVars(index)
       if resolved.context.size <= elims.size 
-      then Some(resolved, resolved.ty.substLowers(elims.take(resolved.context.size).map{
-        case Elimination.ETerm(t) => t
-        case _ => throw IllegalStateException("type error")
-      }: _*), elims.drop(resolved.context.size))
+      then
+         val args = elims.take(resolved.context.size).map{
+                 case Elimination.ETerm(t) => t
+                 case _ => throw IllegalStateException("type error")
+               }
+         Some(resolved.substLowers(args: _*), elims.drop(resolved.context.size))
       else None
     case _           => None
 
@@ -825,7 +856,19 @@ private def inferLevel
   : Either[IrError, VTerm] =
   for
     tm <- Reducible.reduce(tm)
-    level <- tm match
+    level <- ctx.withMetaResolved(tm):
+      case (meta, Nil) => meta.ty match
+          case CType(upperBound, _) => inferLevel(upperBound)
+          case cty =>
+            val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
+            val usage = ctx.addUnsolved(F(UsageType()))
+            for 
+              constraints <- checkIsConvertible(cty, CType(CTop(Collapse(level)), Collapse(usage)), None)
+              constraints <- ctx.solve(constraints)
+              l <- 
+                if constraints.isEmpty then Collapse(level).normalized
+                else Left(NotCTypeError(tm))
+            yield l
       case CType(upperBound, effects) => inferLevel(upperBound).map(LevelSuc(_))
       case CTop(level, effects)          => Right(level)
       case F(vTy, effects, usage)     => inferLevel(vTy)
@@ -837,22 +880,7 @@ private def inferLevel
         // arg is of type Level. But in that case the overall level would be ω.
         yield LevelMax(argLevel.weakened, bodyLevel).strengthened
       case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).level.substLowers(args: _*))
-      // TODO[P0]: check redex instead, also hoist such a check to some helper function
-      case m: Meta =>
-        ctx.resolveMeta(m).ty match
-          case CType(upperBound, _) => inferLevel(upperBound)
-          case cty =>
-            val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
-            val usage = ctx.addUnsolved(F(UsageType()))
-            for 
-              constraints <- checkIsConvertible(cty, CType(CTop(Collapse(level)), Collapse(usage)), None)
-              constraints <- ctx.solve(constraints)
-              l <- 
-                if constraints.isEmpty then Collapse(level).normalized
-                else Left(ExpectCType(m))
-            yield l
-      case _ =>
-        throw IllegalArgumentException(s"should have been checked to be a computation type: $tm ")
+      case _ => Left(NotCTypeError(tm))
   yield level
 
 def inferType

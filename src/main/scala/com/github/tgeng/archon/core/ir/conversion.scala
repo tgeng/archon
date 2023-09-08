@@ -20,6 +20,9 @@ import WrapPolicy.*
 import IndentPolicy.*
 import DelimitPolicy.*
 
+
+// def expectConvertible(target: CTerm, )
+
 /** Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.
   * @param ty
   *   optional if left and right are types
