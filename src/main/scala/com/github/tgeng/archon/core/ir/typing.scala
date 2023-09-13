@@ -273,6 +273,13 @@ class TypingContext
     val (a, b) = getFreeVars(value)(using 0)
     if (a ++ b -- m.substitution.keySet).nonEmpty then return None
     Some(value.subst(m.substitution.lift))
+
+  def adaptForMetaVariable(m: RUnsolved, value: VTerm)(using Signature): Option[VTerm] =
+    // Make sure meta variable assignment won't cause cyclic meta variable references.
+    if MetaVarVisitor.visitVTerm(value)(m.index) then return None
+    val (a, b) = getFreeVars(value)(using 0)
+    if (a ++ b -- m.substitution.keySet).nonEmpty then return None
+    Some(value.subst(m.substitution.lift))
   
   def updateConstraint(u: RUnsolved, constraint: UnsolvedMetaVariableConstraint): Unit =
     metaVars(u.index) match

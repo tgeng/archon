@@ -37,7 +37,24 @@ def checkIsSubtype
       sup <- sup.normalized
       r <- ctx.withMetaResolved2(sub, sup):
         case (_, _) if sub == sup                   => Right(Set.empty)
-        // TODO: handle meta variable cases
+        case (_, u@RUnsolved(_, _, constraint, tm, ty)) => ctx.adaptForMetaVariable(u, sub) match
+          case None => Right(Set(Constraint.VSubType(Γ, sub, sup)))
+          case Some(value) =>
+            for 
+              newConstraint <- constraint match
+                case UmcNothing => Right(UmcVSubtype(value))
+                case UmcVSubtype(existingLowerBound) =>
+                  for
+                    lowerBound <- typeUnion(existingLowerBound, value)
+                  yield UmcVSubtype(lowerBound)
+                case _ => throw IllegalStateException("type error")
+            yield 
+              ctx.updateConstraint(u, newConstraint)
+              Set.empty
+        case (u@RUnsolved(_, _, UmcVSubtype(existingLowerBound), tm, ty), sup: VTerm) => ctx.adaptForMetaVariable(u, sub) match
+          case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+          case _ => Right(Set(Constraint.VSubType(Γ, sub, sup)))
+        case (_: ResolvedMetaVariable, _) | (_, _: ResolvedMetaVariable) => Right(Set(Constraint.VSubType(Γ, sub, sup)))
         case (Type(upperBound1), Type(upperBound2)) => checkIsSubtype(upperBound1, upperBound2)
         case (ty: VTerm, Top(level2, eqD2)) =>
           for
@@ -131,7 +148,7 @@ def checkIsSubtype
         case ((u@RUnsolved(_, _, UmcCSubtype(existingLowerBound), tm, ty), Nil), sup: CTerm) => ctx.adaptForMetaVariable(u, sub) match
           case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, value)
           case _ => Right(Set(Constraint.CSubType(Γ, sub, sup)))
-        case ((_: ResolvedMetaVariable, _), _) | (_, (_: ResolvedMetaVariable, _)) => Right(Set(Constraint.CSubType(Γ, sub, sup)))
+        case ((_: ResolvedMetaVariable, Nil), _) | (_, (_: ResolvedMetaVariable, Nil)) => Right(Set(Constraint.CSubType(Γ, sub, sup)))
         case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
           for
             effConstraint <- checkEffSubsumption(eff1, eff2)
