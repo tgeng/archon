@@ -92,7 +92,7 @@ enum MetaVariable(val context: Context, val ty: CTerm):
   case Solved(override val context: Context, override val ty: CTerm, value: CTerm)
     extends MetaVariable(context, ty)
 
-  /** @param constraints:
+  /** @param preconditions:
     *   must be non-empty since otherwise the meta variable would be solved.
     */
   case Guarded
@@ -100,11 +100,11 @@ enum MetaVariable(val context: Context, val ty: CTerm):
       override val context: Context,
       override val ty: CTerm,
       value: CTerm,
-      constraints: Set[Constraint],
+      preconditions: Set[Constraint],
     ) extends MetaVariable(context, ty)
 
   require(this match
-    case Guarded(_, _, _, constraints) => constraints.nonEmpty
+    case Guarded(_, _, _, preconditions) => preconditions.nonEmpty
     case _                             => true,
   )
 
@@ -115,13 +115,34 @@ enum MetaVariable(val context: Context, val ty: CTerm):
         Unsolved(context.drop(args.size), ty.substLowers(args: _*), constraint)
       case Solved(context, ty, value) =>
         Solved(context.drop(args.size), ty.substLowers(args: _*), value.substLowers(args: _*))
-      case Guarded(context, ty, value, constraints) =>
-        Guarded(context.drop(args.size), ty.substLowers(args: _*), value.substLowers(args: _*), constraints)
+      case Guarded(context, ty, value, preconditions) =>
+        Guarded(context.drop(args.size), ty.substLowers(args: _*), value.substLowers(args: _*), preconditions)
   
 
   def contextFreeType: CTerm = context.foldRight[CTerm](ty) { (elem, acc) =>
     FunctionType(elem, acc)
   }
+
+enum ResolvedMetaVariable:
+  /**
+   * @param substitution: substitution that converts a term in the context in which this resolution happens to the
+   *   context of this meta variable. That is, a term after this substitution can be assigned to the meta variable.
+   *   Note that, caller must check to make sure all variables are mapped by this substitution, otherwise, the 
+   *   substituted variable can contain (unresolved) free variables. Note that, this value is none if a substitution map 
+   *   cannot be obtained (due to redex containing eliminations that are not distinct variables)
+   * @param resolved: the resolved meta variable where types are already substituted with the current arguments in the
+   *   given redex.
+   */
+  case RUnsolved(
+    index: Nat, 
+    substitution: Map[Int, VTerm],
+    constraint: UnsolvedMetaVariableConstraint,
+    tm: CTerm,
+    ty: CTerm,
+  )
+  case RGuarded()
+  case RSolved()
+import ResolvedMetaVariable.*
 
 class TypingContext
   (
@@ -137,25 +158,55 @@ class TypingContext
   // TODO[P0]: check usage of this method. Normally the following `resolve` should be used instead.
   def resolveMeta(m: Meta) = metaVars(m.index)
 
-  def withMetaResolved[R](input: CTerm)(action: ((MetaVariable, List[Elimination[VTerm]])|CTerm) => R)(using Signature): R =
+  def withMetaResolved[R](input: CTerm)
+    (action: ((ResolvedMetaVariable, List[Elimination[VTerm]])|CTerm) => R)(using Signature): R =
     resolve(input) match
-      case Some((meta, elims)) => action((meta, elims))
-      case None                => action(input)
+      case Some(r) => action(r)
+      case None    => action(input)
 
-  def resolve(c: CTerm)(using Signature): Option[(/* substituted meta variables where context has length zero */ MetaVariable, /* left over elims */ List[Elimination[VTerm]])] = c match
-    case Meta(index) =>
+  def withMetaResolved2[R](input1: CTerm, input2: CTerm)(action: ((ResolvedMetaVariable, List[Elimination[VTerm]])|CTerm, (ResolvedMetaVariable, List[Elimination[VTerm]])|CTerm) => R)(using Signature): R =
+    withMetaResolved(input1):
+      case input1 =>
+        withMetaResolved(input2):
+          case input2 =>
+            action(input1, input2)
+
+  def resolve(c: CTerm)(using Signature): Option[(ResolvedMetaVariable, List[Elimination[VTerm]])] =
+    val (index, elims) = c match
+      case Meta(index) => (index, Nil)
+      case r@Redex(Meta(index), elims) => (index, elims)
+      case _ => return None
+    metaVars(index) match
+      case Unsolved(context, ty, constraints) =>
+        if context.size > elims.size then return None
+        val args = elims.take(context.size).collect{
+          case Elimination.ETerm(t) => t
+        }
+        val substitutionCandidate = args.zipWithIndex.collect { case (Var(v), i) =>
+          (v, Var(context.size - 1 - i))
+        }.toMap
+        val substitution = if substitutionCandidate.size == context.size
+        then substitutionCandidate
+        else return None
+          
+        val extraElims = elims.drop(context.size)
+        Some(ResolvedMetaVariable.RUnsolved(index, substitution, constraints.substLowers(args: _*), c, ty.substLowers(args: _*)), extraElims)
+      case Solved(context, _, _) => Some(RSolved(), elims.drop(context.size))
+      case Guarded(context, _, _, _) => Some(RGuarded(), elims.drop(context.size))
+  
+  def resolveMetaVariableType(c: CTerm)(using Signature): Option[CTerm] = c match
+    case m@Meta(index) =>
       val resolved = metaVars(index)
-      if resolved.context.isEmpty then Some(resolved, Nil)
+      if resolved.context.isEmpty then Some(resolved.ty)
       else None
-    case Redex(Meta(index), elims) => 
+    case Redex(m@Meta(index), elims) => 
       val resolved = metaVars(index)
       if resolved.context.size <= elims.size 
       then
-         val args = elims.take(resolved.context.size).map{
-                 case Elimination.ETerm(t) => t
-                 case _ => throw IllegalStateException("type error")
-               }
-         Some(resolved.substLowers(args: _*), elims.drop(resolved.context.size))
+        val args = elims.take(resolved.context.size).collect{
+          case Elimination.ETerm(t) => t
+        }
+        Some(resolved.ty.substLowers(args: _*))
       else None
     case _           => None
 
@@ -172,80 +223,44 @@ class TypingContext
     metaVars += mv
     Meta(index)
 
-  def assignMeta
-    (meta: Meta, elims: List[Elimination[VTerm]], term: CTerm, ty: CTerm)
+  /**
+   * @param value: value must be in the context of the meta variable. That is, value must be from a call of 
+   *   `adaptForMetaVariable`
+   */
+  def assignUnsolved
+    (m: RUnsolved, value: CTerm)
     (using Γ: Context)
     (using Σ: Signature)
     : Either[IrError, Set[Constraint]] =
-    val resultConstraint = Set(
-      Constraint.Conversions(
-        Γ,
-        List(Thunk(Redex(meta, elims))),
-        List(Thunk(term)),
-        Binding(U(ty), Usage.UUnres)(gn"ty") :: Nil,
-      ),
-    )
-    def assign
-      (metaVariable: MetaVariable)
-      (extraAction: CTerm => Context ?=> Either[IrError, Set[Constraint]])
-      : Either[IrError, Set[Constraint]] =
-      val context = metaVariable.context
-      val ty = metaVariable.ty
-      // Make sure meta variable assignment won't cause cyclic meta variable references.
-      if getAllReferencedMetaVars(term)(meta.index) then return Left(MetaVariableCycle(meta, term))
-      // Handle extra elims beyond those mentioned by the meta variable context
-      // If the target term does not mirror the same elim structure for the extras, we can't solve
-      // the meta variable. In this case we just return the whole thing as a constraint.
-      val extraElims = elims.drop(context.size)
-      val (otherTerm, otherExtraElims) =
-        if extraElims.nonEmpty then
-          term match
-            case Redex(t, otherElims) =>
-              if extraElims == otherElims.takeRight(extraElims.size) then
-                val otherElimArgSize = otherElims.size - extraElims.size
-                (redex(t, otherElims.take(otherElimArgSize)), otherElims.drop(otherElimArgSize))
-              else return Right(resultConstraint)
-            case _ => return Right(resultConstraint)
-        else (term, Nil)
-      // Take the arguments corresponding to the meta variable context
-      val metaElims = elims.take(context.size)
-      val argVars = metaElims.collect { case ETerm(v: Var) => v }.distinct.toIndexedSeq
-      if argVars.size < context.size then return Right(resultConstraint)
-      val argVarToMetaContextIndexMap = argVars.zipWithIndex.map { case (Var(v), i) =>
-        (v, Var(context.size - 1 - i))
-      }.toMap
+    assignValue(m.index, value)
+    m.constraint match
+      case UmcNothing                    => Right(Set.empty)
+      case UmcCSubtype(lowerBound)       => checkIsSubtype(lowerBound, value)
+      case UmcVSubtype(lowerBound)       => checkIsSubtype(lowerBound, Collapse(value))
+      case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(value))
+      case UmcLevelSubsumption(lowerBound) =>
+        checkLevelSubsumption(lowerBound, Collapse(value))
+      case UmcUsageSubsumption(upperBound) =>
+        checkUsageSubsumption(Collapse(value), upperBound)
 
-      // Make sure the target term only references variables available from the meta variable context
-      val (a, b) = getFreeVars(otherTerm)(using 0)
-      val otherTermFreeVars = a ++ b
-      if otherTermFreeVars.exists(i => !argVarToMetaContextIndexMap.contains(i)) then
-        return Right(resultConstraint)
+  def alignElims(t: CTerm, elims: List[Elimination[VTerm]])(using Signature): Option[CTerm] =
+    elims match
+      case Nil => Some(t)
+      case elims => t match
+        case Redex(t, elims2) if elims2.takeRight(elims.size) == elims => Some(redex(t, elims2.dropRight(elims.size)))
+        case _ => None
 
-      // substitute free variables in term so that it's compatible with the meta variable context
-      val value = otherTerm.subst(argVarToMetaContextIndexMap.lift)
-      for r <- extraAction(value)(using context)
-      yield
-        assignSolved(meta.index, Solved(context, ty, value))
-        r
+  def adaptForMetaVariable(m: RUnsolved, value: CTerm)(using Signature): Option[CTerm] =
+    // Make sure meta variable assignment won't cause cyclic meta variable references.
+    if MetaVarVisitor.visitCTerm(value)(m.index) then return None
+    val (a, b) = getFreeVars(value)(using 0)
+    if (a ++ b -- m.substitution.keySet).nonEmpty then return None
+    Some(value.subst(m.substitution.lift))
 
-    resolveMeta(meta) match
-      case m @ Unsolved(_, _, constraint) =>
-        assign(m):
-          case term =>
-            constraint match
-              case UmcNothing                    => Right(Set.empty)
-              case UmcCSubtype(lowerBound)       => checkIsSubtype(lowerBound, term)
-              case UmcVSubtype(lowerBound)       => checkIsSubtype(lowerBound, Collapse(term))
-              case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(term))
-              case UmcLevelSubsumption(lowerBound) =>
-                checkLevelSubsumption(lowerBound, Collapse(term))
-              case UmcUsageSubsumption(upperBound) =>
-                checkUsageSubsumption(Collapse(term), upperBound)
-      case _ => Right(resultConstraint)
-
-  private def assignSolved(index: Nat, solved: Solved): Unit =
+  private def assignValue(index: Nat, value: CTerm): Unit =
     version += 1
-    metaVars(index) = solved
+    val existing = metaVars(index)
+    metaVars(index) = Solved(existing.context, existing.ty, value)
 
   private def updateGuarded(index: Nat, guarded: Guarded): Unit =
     metaVars(index) = guarded
@@ -270,7 +285,7 @@ class TypingContext
         case Guarded(context, ty, value, constraints) =>
           solveConstraints(constraints) match
             case Right(newConstraints) =>
-              if newConstraints.isEmpty then assignSolved(index, new Solved(context, ty, value))
+              if newConstraints.isEmpty then assignValue(index, value)
               else updateGuarded(index, new Guarded(context, ty, value, newConstraints))
             case Left(e) => break(Left(e))
         case _ => // do nothing
@@ -856,8 +871,20 @@ private def inferLevel
   : Either[IrError, VTerm] =
   for
     tm <- Reducible.reduce(tm)
-    level <- ctx.withMetaResolved(tm):
-      case (meta, Nil) => meta.ty match
+    level <- tm match
+      case CType(upperBound, effects) => inferLevel(upperBound).map(LevelSuc(_))
+      case CTop(level, effects)          => Right(level)
+      case F(vTy, effects, usage)     => inferLevel(vTy)
+      case FunctionType(binding, bodyTy, effects) =>
+        for
+          argLevel <- inferLevel(binding.ty)
+          bodyLevel <- inferLevel(bodyTy)(using Γ :+ binding)
+        // strengthen is always safe because the only case that bodyLevel would reference 0 is when
+        // arg is of type Level. But in that case the overall level would be ω.
+        yield LevelMax(argLevel.weakened, bodyLevel).strengthened
+      case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).level.substLowers(args: _*))
+      case tm => ctx.resolveMetaVariableType(tm) match
+        case Some(ty) => ty match
           // TODO[P1]: consider refactor this to use some helper function for such common patterns where we create a
           // stub term when expecting the meta variable to match certain structure.
           case CType(upperBound, _) => inferLevel(upperBound)
@@ -871,18 +898,7 @@ private def inferLevel
                 if constraints.isEmpty then Collapse(level).normalized
                 else Left(NotCTypeError(tm))
             yield l
-      case CType(upperBound, effects) => inferLevel(upperBound).map(LevelSuc(_))
-      case CTop(level, effects)          => Right(level)
-      case F(vTy, effects, usage)     => inferLevel(vTy)
-      case FunctionType(binding, bodyTy, effects) =>
-        for
-          argLevel <- inferLevel(binding.ty)
-          bodyLevel <- inferLevel(bodyTy)(using Γ :+ binding)
-        // strengthen is always safe because the only case that bodyLevel would reference 0 is when
-        // arg is of type Level. But in that case the overall level would be ω.
-        yield LevelMax(argLevel.weakened, bodyLevel).strengthened
-      case RecordType(qn, args, effects) => Right(Σ.getRecord(qn).level.substLowers(args: _*))
-      case _ => Left(NotCTypeError(tm))
+        case _ => Left(NotCTypeError(tm))
   yield level
 
 def inferType
@@ -1151,9 +1167,6 @@ private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
       case Solved(_, _, value)     => visitCTerm(value)
     )
 }
-
-private def getAllReferencedMetaVars(term: CTerm)(using Signature)(using TypingContext): Set[Int] =
-  MetaVarVisitor.visitCTerm(term)
 
 private def checkInherentEqDecidable
   (data: Data, constructor: Constructor)

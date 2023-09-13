@@ -18,9 +18,11 @@ import PrettyPrinter.pprint
 import WrapPolicy.*
 import IndentPolicy.*
 import DelimitPolicy.*
+import UnsolvedMetaVariableConstraint.*
+import ResolvedMetaVariable.*
 import scala.collection.mutable.ArrayBuffer
 
-/** Preconditions: rawSub and rawSup are both types
+/** Preconditions: sub and sup are both checked to be types
   */
 def checkIsSubtype
   (sub: VTerm, sup: VTerm)
@@ -89,16 +91,11 @@ def checkIsSubtype
           checkContinuationUsageSubsumption(continuationUsage2, continuationUsage1)
         case (UsageType(Some(u1)), UsageType(Some(u2))) => checkUsageSubsumption(u1, u2)
         case (UsageType(Some(_)), UsageType(None))      => Right(Set.empty)
-        case (CellType(heap1, ty1), CellType(heap2, ty2)) =>
-          for
-            heapConstraints <- checkIsConvertible(heap1, heap2, Some(HeapType()))
-            tyConstraints <- checkIsSubtype(ty1, ty2)
-          yield heapConstraints ++ tyConstraints
         case (v: Var, ty2) =>
           Γ.resolve(v).ty match
             case Type(upperBound) => checkIsSubtype(upperBound, ty2)
             case _                => Left(NotVSubtype(sub, sup))
-        case _ => Left(NotVSubtype(sub, sup))
+        case _ => checkIsConvertible(sub, sup, None)
     yield r
 
 /** Preconditions: rawSub and rawSup are both types
@@ -114,8 +111,12 @@ def checkIsSubtype
     for
       sub <- sub.normalized(None)
       sup <- sup.normalized(None)
-      r <- (sub, sup) match
+      r <- ctx.withMetaResolved2(sub, sup):
         case (_, _) if sub == sup => Right(Set.empty[Constraint])
+        case (sub, (RUnsolved(_, _, constraint, tm, ty), Nil)) => constraint match
+          case UmcNothing => ???
+          case _ => ???
+        case ((_: ResolvedMetaVariable, _), _) | (_, (_: ResolvedMetaVariable, _)) => Right(Set(Constraint.CSubType(Γ, sub, sup)))
         case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
           for
             effConstraint <- checkEffSubsumption(eff1, eff2)
@@ -162,12 +163,6 @@ def checkIsSubtype
                   },
                 )
           yield effConstraint ++ tyConstraint ++ bodyConstraint
-        // bare meta should be very rare since almost all terms would be under some context. But if they do appear, we
-        // just wrap them inside redex
-        case (m: Meta, tm)  => ???
-        case (tm, m: Meta)  => ???
-        case (r: Redex, tm) => ???
-        case (tm, r: Redex) => ???
         case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
           Σ.getRecordOption(qn1) match
             case None => Left(MissingDeclaration(qn1))
@@ -208,7 +203,7 @@ def checkIsSubtype
                     },
                 ).map(_.flatten.toSet)
               yield effConstraint ++ argConstraint
-        case _ => Left(NotCSubtype(sub, sup))
+        case _ => checkIsConvertible(sub, sup, None)
     yield r
 
 private def checkEqDecidabilitySubsumption
@@ -269,7 +264,7 @@ private def checkContinuationUsageSubsumption
       case l @ Left(_) => l
   case _ => Left(NotContinuationUsageSubsumption(usage1, usage2))
 
-private def checkUsageSubsumption
+def checkUsageSubsumption
   (usage1: VTerm, usage2: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
