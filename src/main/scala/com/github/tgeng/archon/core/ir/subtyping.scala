@@ -35,10 +35,11 @@ def checkIsSubtype
     for
       sub <- sub.normalized
       sup <- sup.normalized
-      r <- (sub, sup) match
+      r <- ctx.withMetaResolved2(sub, sup):
         case (_, _) if sub == sup                   => Right(Set.empty)
+        // TODO: handle meta variable cases
         case (Type(upperBound1), Type(upperBound2)) => checkIsSubtype(upperBound1, upperBound2)
-        case (ty, Top(level2, eqD2)) =>
+        case (ty: VTerm, Top(level2, eqD2)) =>
           for
             level1 <- inferLevel(ty)
             levelConstraints <- checkLevelSubsumption(level1, level2)
@@ -91,14 +92,14 @@ def checkIsSubtype
           checkContinuationUsageSubsumption(continuationUsage2, continuationUsage1)
         case (UsageType(Some(u1)), UsageType(Some(u2))) => checkUsageSubsumption(u1, u2)
         case (UsageType(Some(_)), UsageType(None))      => Right(Set.empty)
-        case (v: Var, ty2) =>
+        case (v: Var, ty2: VTerm) =>
           Γ.resolve(v).ty match
             case Type(upperBound) => checkIsSubtype(upperBound, ty2)
             case _                => Left(NotVSubtype(sub, sup))
         case _ => checkIsConvertible(sub, sup, None)
     yield r
 
-/** Preconditions: rawSub and rawSup are both types
+/** Preconditions: sub and sup are both types
   */
 def checkIsSubtype
   (sub: CTerm, sup: CTerm)
@@ -113,9 +114,23 @@ def checkIsSubtype
       sup <- sup.normalized(None)
       r <- ctx.withMetaResolved2(sub, sup):
         case (_, _) if sub == sup => Right(Set.empty[Constraint])
-        case (sub, (RUnsolved(_, _, constraint, tm, ty), Nil)) => constraint match
-          case UmcNothing => ???
-          case _ => ???
+        case (_, (u@RUnsolved(_, _, constraint, tm, ty), Nil)) => ctx.adaptForMetaVariable(u, sub) match
+          case None => Right(Set(Constraint.CSubType(Γ, sub, sup)))
+          case Some(value) =>
+            for 
+              newConstraint <- constraint match
+                case UmcNothing => Right(UmcCSubtype(value))
+                case UmcCSubtype(existingLowerBound) =>
+                  for
+                    lowerBound <- typeUnion(existingLowerBound, value)
+                  yield UmcCSubtype(lowerBound)
+                case _ => throw IllegalStateException("type error")
+            yield 
+              ctx.updateConstraint(u, newConstraint)
+              Set.empty
+        case ((u@RUnsolved(_, _, UmcCSubtype(existingLowerBound), tm, ty), Nil), sup: CTerm) => ctx.adaptForMetaVariable(u, sub) match
+          case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, value)
+          case _ => Right(Set(Constraint.CSubType(Γ, sub, sup)))
         case ((_: ResolvedMetaVariable, _), _) | (_, (_: ResolvedMetaVariable, _)) => Right(Set(Constraint.CSubType(Γ, sub, sup)))
         case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
           for
@@ -205,6 +220,9 @@ def checkIsSubtype
               yield effConstraint ++ argConstraint
         case _ => checkIsConvertible(sub, sup, None)
     yield r
+
+private def typeUnion(a: CTerm, b: CTerm): Either[IrError, CTerm] = ???
+private def typeUnion(a: VTerm, b: VTerm): Either[IrError, VTerm] = ???
 
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)

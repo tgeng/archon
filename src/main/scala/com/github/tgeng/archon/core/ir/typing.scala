@@ -170,6 +170,23 @@ class TypingContext
         withMetaResolved(input2):
           case input2 =>
             action(input1, input2)
+  
+  def withMetaResolved[R](input: VTerm)
+    (action: (ResolvedMetaVariable|VTerm) => R)(using Signature): R =
+      input match
+        case Collapse(c) => withMetaResolved(c) {
+          case (r, Nil) => action((r))
+          case (_, _) => throw IllegalStateException("type error: extra elims for vterm which should never happen")
+          case _: CTerm => action(input)
+        }
+        case _ => action(input)
+
+  def withMetaResolved2[R](input1: VTerm, input2: VTerm)(action: (ResolvedMetaVariable|VTerm, ResolvedMetaVariable|VTerm) => R)(using Signature): R =
+    withMetaResolved(input1):
+      case input1 =>
+        withMetaResolved(input2):
+          case input2 =>
+            action(input1, input2)
 
   def resolve(c: CTerm)(using Signature): Option[(ResolvedMetaVariable, List[Elimination[VTerm]])] =
     val (index, elims) = c match
@@ -256,6 +273,12 @@ class TypingContext
     val (a, b) = getFreeVars(value)(using 0)
     if (a ++ b -- m.substitution.keySet).nonEmpty then return None
     Some(value.subst(m.substitution.lift))
+  
+  def updateConstraint(u: RUnsolved, constraint: UnsolvedMetaVariableConstraint): Unit =
+    metaVars(u.index) match
+      case Unsolved(context, ty, _) =>
+        metaVars(u.index) = Unsolved(context, ty, constraint)
+      case _ => throw IllegalStateException("updateConstraint called on non-unsolved meta variable")
 
   private def assignValue(index: Nat, value: CTerm): Unit =
     version += 1
