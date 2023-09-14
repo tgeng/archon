@@ -336,23 +336,40 @@ def checkUsageSubsumption
   case _ => Left(NotUsageSubsumption(sub, sup))
 
 private def checkEffSubsumption
-  (eff1: VTerm, eff2: VTerm)
+  (sub: VTerm, sup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] =
-  // TODO: handle meta variables (consider handling meta variables in the set by instantiating it to a union of missing
-  // effects)
-  (eff1.normalized, eff2.normalized) match
-    case (Left(e), _)                               => Left(e)
-    case (_, Left(e))                               => Left(e)
-    case (Right(eff1), Right(eff2)) if eff1 == eff2 => Right(Set.empty)
-    case (
-        Right(Effects(literals1, unionOperands1)),
-        Right(Effects(literals2, unionOperands2)),
-      ) if literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
-      Right(Set.empty)
-    case _ => Left(NotEffectSubsumption(eff1, eff2))
+  : Either[IrError, Set[Constraint]] = check2(sub, sup):
+  case (
+      Effects(literals1, unionOperands1),
+      Effects(literals2, unionOperands2),
+    ) if literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
+    Right(Set.empty)
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+    ctx.adaptForMetaVariable(u, sub) match
+      case None => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
+      case Some(value) =>
+        for newLowerBound <- constraint match
+            case UmcNothing                            => Right(value)
+            case UmcEffSubsumption(existingLowerBound) => EffectsUnion(existingLowerBound, value).normalized
+            case _                                     => throw IllegalStateException("type error")
+        yield
+          ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
+          Set.empty
+  // If upper bound is total, the meta variable can only take total as the value.
+  case (
+      u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), tm, ty),
+      Effects(literals, operands),
+    ) if literals.isEmpty && operands.isEmpty =>
+    ctx.assignUnsolved(u, Return(Total()))
+  case (u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
+    ctx.adaptForMetaVariable(u, sub) match
+      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+      case _                                          => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
+    Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
+  case _ => Left(NotEffectSubsumption(sub, sup))
 
 /** Checks if l1 is smaller than l2.
   */
