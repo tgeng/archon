@@ -31,7 +31,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
   case (_, _) if sub == sup => Right(Set.empty)
-  case (_, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.VSubType(Γ, sub, sup)))
       case Some(value) =>
@@ -119,7 +119,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
   case (_, _) if sub == sup => Right(Set.empty[Constraint])
-  case (_, (u @ RUnsolved(_, _, constraint, tm, ty), Nil)) =>
+  case (sub: CTerm, (u @ RUnsolved(_, _, constraint, tm, ty), Nil)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.CSubType(Γ, sub, sup)))
       case Some(value) =>
@@ -234,14 +234,16 @@ private def checkEqDecidabilitySubsumption
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = (eqD1.normalized, eqD2.normalized) match
-  // TODO: handle meta variables
-  case (Left(e), _)                               => Left(e)
-  case (_, Left(e))                               => Left(e)
-  case (Right(eqD1), Right(eqD2)) if eqD1 == eqD2 => Right(Set.empty)
-  case (Right(EqDecidabilityLiteral(EqDecidability.EqDecidable)), _) |
-    (_, Right(EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
+  : Either[IrError, Set[Constraint]] = check2(eqD1, eqD2):
+  case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) |
+    (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
     Right(Set.empty)
+  case (u: RUnsolved, EqDecidabilityLiteral(EqDecidability.EqDecidable)) =>
+    ctx.assignUnsolved(u, Return(eqD2))
+  case (EqDecidabilityLiteral(EqDecidability.EqUnknown), u: RUnsolved) =>
+    ctx.assignUnsolved(u, Return(eqD1))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
+    Right(Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2)))
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2))
 
 /** @param invert
@@ -286,28 +288,50 @@ private def checkContinuationUsageSubsumption
   case _ => Left(NotContinuationUsageSubsumption(usage1, usage2))
 
 def checkUsageSubsumption
-  (usage1: VTerm, usage2: VTerm)
+  (sub: VTerm, sup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = (usage1.normalized, usage2.normalized) match
-  // TODO: handle meta variables (consider handling meta variable in compound usage like how level and effects are
-  // handled)
-  case (Left(e), _)                                       => Left(e)
-  case (_, Left(e))                                       => Left(e)
-  case (Right(usage1), Right(usage2)) if usage1 == usage2 => Right(Set.empty)
+  : Either[IrError, Set[Constraint]] = check2(sub, sup):
   // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
-  case (Right(UsageLiteral(u1)), Right(UsageLiteral(u2))) if u1 >= u2 =>
+  case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 =>
     Right(Set.empty)
-  case (Right(UsageLiteral(UUnres)), _) => Right(Set.empty)
-  case (Right(v @ Var(_)), Right(UsageLiteral(u2))) =>
+  case (UsageLiteral(UUnres), _) => Right(Set.empty)
+  case (v @ Var(_), UsageLiteral(u2)) =>
     Γ.resolve(v).ty match
       // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
       case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
       case UsageType(Some(u1Bound)) =>
         checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-      case _ => Left(NotUsageSubsumption(usage1, usage2))
-  case _ => Left(NotUsageSubsumption(usage1, usage2))
+      case _ => Left(NotUsageSubsumption(sub, sup))
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+    ctx.adaptForMetaVariable(u, sub) match
+      case None => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+      case Some(value) =>
+        for
+          newLowerBound <- constraint match
+            case UmcNothing => Right(value)
+            case UmcUsageSubsumption(existingLowerBound) =>
+              UsageJoin(existingLowerBound, value).normalized
+            case _ => throw IllegalStateException("type error")
+          r <- newLowerBound match
+            // If lower bound is already U1 or U0, we know they must take one of those values.
+            case UsageLiteral(Usage.U1) | UsageLiteral(Usage.U0) =>
+              ctx.assignUnsolved(u, Return(newLowerBound))
+            case _ =>
+              ctx.updateConstraint(u, UmcUsageSubsumption(newLowerBound))
+              Right(Set.empty)
+        yield r
+  // If upper bound is UUnres, the meta variable can only take UUnres as the value.
+  case (u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty), UsageLiteral(Usage.UUnres)) =>
+    ctx.assignUnsolved(u, Return(UsageLiteral(Usage.UUnres)))
+  case (u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
+    ctx.adaptForMetaVariable(u, sub) match
+      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+      case _ => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
+    Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+  case _ => Left(NotUsageSubsumption(sub, sup))
 
 private def checkEffSubsumption
   (eff1: VTerm, eff2: VTerm)

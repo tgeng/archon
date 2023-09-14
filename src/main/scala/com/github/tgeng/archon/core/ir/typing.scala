@@ -50,6 +50,7 @@ enum Constraint:
   case EffSubsumption(context: Context, sub: VTerm, sup: VTerm)
   case LevelSubsumption(context: Context, sub: VTerm, sup: VTerm)
   case UsageSubsumption(context: Context, sub: VTerm, sup: VTerm)
+  case EqDecidabilitySubsumption(context: Context, sub: VTerm, sup: VTerm)
 
 enum UnsolvedMetaVariableConstraint:
   case UmcNothing
