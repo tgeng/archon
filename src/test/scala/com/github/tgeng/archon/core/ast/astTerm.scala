@@ -23,7 +23,7 @@ enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
     extends AstTerm(sourceInfo)
   case AstBlock(statements: List[Statement])(using sourceInfo: SourceInfo)
     extends AstTerm(
-      sourceInfo
+      sourceInfo,
     )
 
   override def withSourceInfo(sourceInfo: SourceInfo): AstTerm =
@@ -53,6 +53,6 @@ enum Statement:
       outputType: AstTerm,
       transformInputName: Name,
       transform: AstTerm,
-      handlers: Map[Name, ( /* op args */ List[Name], AstTerm)]
+      handlers: Map[Name, ( /* op args */ List[Name], AstTerm)],
     )
   case SHeapHandler(outputEffects: AstTerm, heapVarName: Name)

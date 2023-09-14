@@ -84,7 +84,7 @@ def uLubProd[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
       sum1 <- lub1
       sum2 <- lub2
     yield uSumProd(sum1, sum2)
-  }
+  },
 )
 
 def uLubSum[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
@@ -93,11 +93,11 @@ def uLubSum[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
       sum1 <- lub1
       sum2 <- lub2
     yield uSumSum(sum1, sum2)
-  }
+  },
 )
 
 def uLubJoin[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
-  lubs.flatten.map(uSumNormalize).toSet
+  lubs.flatten.map(uSumNormalize).toSet,
 )
 
 private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
@@ -131,7 +131,7 @@ private def uSumProd[T](sum1: USum[T], sum2: USum[T]): USum[T] =
   uSumNormalize(prods)
 
 private def uSumSum[T](sum1: USum[T], sum2: USum[T]): USum[T] = uSumNormalize(
-  sum1 ++ sum2
+  sum1 ++ sum2,
 )
 
 private def uSumNormalize[T](sum: Iterable[UProd[T]]): USum[T] =

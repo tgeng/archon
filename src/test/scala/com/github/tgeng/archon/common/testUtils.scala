@@ -11,7 +11,7 @@ extension [L, R](e: Either[L, R])
       if l.isInstanceOf[HasException] then
         throw IllegalStateException(
           l.toString,
-          l.asInstanceOf[HasException].exception
+          l.asInstanceOf[HasException].exception,
         )
       else throw IllegalStateException(l.toString)
     case Right(r) => r

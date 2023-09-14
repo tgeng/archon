@@ -15,8 +15,8 @@ class PrecedenceGraphBuilder
     /** Maps from a representative operator to the representative of the tighter node.
       */
     private val precedenceMap: mutable.Map[Operator, mutable.ArrayBuffer[
-      Operator
-    ]] = mutable.Map()
+      Operator,
+    ]] = mutable.Map(),
   ):
 
   def add(operator: Operator, precedences: Seq[Precedence]): Either[PrecedenceGraphError, Unit] =
@@ -26,7 +26,7 @@ class PrecedenceGraphBuilder
     val sameAsOperators = precedences.flatMap(p =>
       p.kind match
         case SameAs => Seq(representatives(p.operator))
-        case _      => Seq()
+        case _      => Seq(),
     )
     val representative = sameAsOperators.size match
       case 0 => operator
@@ -36,19 +36,19 @@ class PrecedenceGraphBuilder
     val tighterThanOperators = precedences.flatMap(p =>
       p.kind match
         case TighterThan => Seq(representatives(p.operator))
-        case _           => Seq()
+        case _           => Seq(),
     )
     val looserThanOperators = precedences.flatMap(p =>
       p.kind match
         case LooserThan => Seq(representatives(p.operator))
-        case _          => Seq()
+        case _          => Seq(),
     )
 
     val loop = precedenceMap.keys.detectLoop(op =>
       val neighbors = precedenceMap.getOrElse(op, Set.empty).to(mutable.Set)
       if op == representative then neighbors.addAll(looserThanOperators)
       if tighterThanOperators.contains(op) then neighbors.add(representative)
-      neighbors
+      neighbors,
     )
     loop match
       case Some(loop) => return error(LoopDetected(loop))
@@ -58,12 +58,12 @@ class PrecedenceGraphBuilder
     tighterThanOperators.foreach(o =>
       precedenceMap
         .getOrElseUpdate(o, mutable.ArrayBuffer())
-        .append(representative)
+        .append(representative),
     )
     looserThanOperators.foreach(o =>
       precedenceMap
         .getOrElseUpdate(representative, mutable.ArrayBuffer())
-        .append(o)
+        .append(o),
     )
     Right(())
 
@@ -72,13 +72,13 @@ class PrecedenceGraphBuilder
     val nodes: Map[Operator, Iterable[Operator]] =
       this.representatives.groupMap(_(1))(_(0))
     val maxIncomingPathLengths = nodes.keys.getMaxIncomingPathLength(
-      this.precedenceMap.withDefaultValue(mutable.ArrayBuffer())
+      this.precedenceMap.withDefaultValue(mutable.ArrayBuffer()),
     )
     // Remove unnecessary edges in the graph
     this.precedenceMap.foreach((op, ops) =>
       ops.subtractAll(
-        ops.filter(o => maxIncomingPathLengths(o) != maxIncomingPathLengths(op) + 1)
-      )
+        ops.filter(o => maxIncomingPathLengths(o) != maxIncomingPathLengths(op) + 1),
+      ),
     )
     val precedenceMap = this.precedenceMap.view.mapValues(_.toSeq).toMap
     val nodePrecedenceMap =
@@ -97,12 +97,12 @@ class PrecedenceGraphBuilder
           override def toString: String =
             representative.toString + "->" + precedenceMap.getOrElse(
               representative,
-              Nil
-            )
-      )
+              Nil,
+            ),
+      ),
     )
     precedenceMap.foreach((k, v) =>
-      nodePrecedenceMap(operatorToNodeMap(k)) = v.map(operatorToNodeMap)
+      nodePrecedenceMap(operatorToNodeMap(k)) = v.map(operatorToNodeMap),
     )
     // TODO[P4]: topologically sort this so that lower nodes are visited first. This makes it faster to
     // yield the correct AST with the mixfix parser.
@@ -128,7 +128,7 @@ case class PrecedenceRule
   (
     fixity: Fixity,
     operatorNames: Seq[String],
-    precedences: List[(PrecedenceKind, String)]
+    precedences: List[(PrecedenceKind, String)],
   )
 
 object PrecedenceRule:
@@ -142,7 +142,7 @@ object PrecedenceRule:
       .map(_.matched)
       .withFilter(s => !s.contains("__"), "<no consecutive _>")
     val operatorNames: StrParser[List[String]] = P.indentedBlockFromHere(
-      (operatorName sepBy1 P.whitespacesWithIndent) <%%< P.eob
+      (operatorName sepBy1 P.whitespacesWithIndent) <%%< P.eob,
     )
     val precedence: StrParser[List[(PrecedenceKind, String)]] =
       P.indentedBlock {
@@ -154,23 +154,23 @@ object PrecedenceRule:
     import Associativity.*
     val fixity: StrParser[Fixity] =
       ("closed " as Closed) || ("infixl " as Infix(
-        Left
+        Left,
       )) || ("infixr " as Infix(Right)) ||
         ("infix " as Infix(
-          Non
+          Non,
         )) || ("prefix " as Prefix) || ("postfix " as Postfix)
     P.indentedBlock {
       P.lift(
         (
           fixity << P.whitespacesWithIndent,
           operatorNames,
-          (P.indent >> P.space.++ >> precedence.++.map(_.flatten)) ??
-        )
+          (P.indent >> P.space.++ >> precedence.++.map(_.flatten)) ??,
+        ),
       )
         // Somehow type inference fails here and thinks the above yields `StrParser[Nothing, ...]`
         // instead of `StrParser[Char, ...]`
         .asInstanceOf[StrParser[
-          (Fixity, List[String], Option[List[(PrecedenceKind, String)]])
+          (Fixity, List[String], Option[List[(PrecedenceKind, String)]]),
         ]]
         .map(t => PrecedenceRule(t(0), t(1), t(2).getOrElse(Nil)))
     }

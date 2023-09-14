@@ -11,7 +11,7 @@ class FunctorDerivationSpec extends AnyFreeSpec:
   "tree" in {
     assert(
       Functor.map(Branch(Leaf(1), Branch(Leaf(2), Leaf(3))), _ + 1) ==
-        Branch(Leaf(2), Branch(Leaf(3), Leaf(4)))
+        Branch(Leaf(2), Branch(Leaf(3), Leaf(4))),
     )
   }
 
@@ -24,7 +24,7 @@ class FunctorDerivationSpec extends AnyFreeSpec:
       optionT: Option[T],
       eitherT: Either[String, T],
       i: Int,
-      listInt: List[Int]
+      listInt: List[Int],
     )
     derives Functor
 
@@ -32,7 +32,7 @@ class FunctorDerivationSpec extends AnyFreeSpec:
     assert(
       Functor.map(
         Blob("1", 2, List(3, 4), Set(5, 6), Some(7), Right(8), 9, List(10, 11)),
-        -_
+        -_,
       ) ==
         Blob(
           "1",
@@ -42,7 +42,7 @@ class FunctorDerivationSpec extends AnyFreeSpec:
           Some(-7),
           Right(-8),
           9,
-          List(10, 11)
-        )
+          List(10, 11),
+        ),
     )
   }

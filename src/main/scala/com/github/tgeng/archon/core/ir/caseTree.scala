@@ -11,13 +11,13 @@ enum CaseTree:
     (
       operand: VTerm,
       cases: Map[QualifiedName, /* binding + arg count */ CaseTree],
-      default: CaseTree
+      default: CaseTree,
     )
   case CtDataCase
     (
       operand: VTerm,
       qn: QualifiedName,
-      cases: Map[Name, /* binding + arg count */ CaseTree]
+      cases: Map[Name, /* binding + arg count */ CaseTree],
     )
 
 // [1] Jesper Cockx and Andreas Abel. 2018. Elaborating dependent (co)pattern matching. Proc. ACM

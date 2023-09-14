@@ -20,11 +20,7 @@ import MetaVariable.*
 import Elimination.*
 
 trait Reducible[T]:
-  def reduce
-    (t: T)
-    (using ctx: Context)
-    (using signature: Signature)
-    (using TypingContext)
+  def reduce(t: T)(using ctx: Context)(using signature: Signature)(using TypingContext)
     : Either[IrError, T]
 
 extension [T](a: mutable.ArrayBuffer[T])
@@ -501,7 +497,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
     }
     current
 
-extension(c: CTerm)
+extension (c: CTerm)
   def normalized
     (using Γ: Context)
     (using Σ: Signature)
@@ -529,23 +525,20 @@ extension(c: CTerm)
 
     transformer.transformCTerm(c) match
       case Redex(t, elims) =>
-        for
-          elims <- transpose(elims.map(_.mapEither(_.normalized)))
+        for elims <- transpose(elims.map(_.mapEither(_.normalized)))
         yield redex(t, elims)
       case t => Right(t)
-    
 
-  def normalized(ty: Option[CTerm])
+  def normalized
+    (ty: Option[CTerm])
     (using Γ: Context)
     (using Σ: Signature)
     (using TypingContext)
     : Either[IrError, CTerm] =
-    if isTotal(c, ty) then
-      Reducible.reduce(c)
-    else
-      c.normalized
+    if isTotal(c, ty) then Reducible.reduce(c)
+    else c.normalized
 
-extension(v: VTerm)
+extension (v: VTerm)
   def normalized
     (using Γ: Context)
     (using Σ: Signature)
@@ -573,11 +566,11 @@ extension(v: VTerm)
         case _ =>
           throw IllegalStateException(s"expect to be of Usage type: $tm")
 
-      def lubToTerm(lub: ULub[Var]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq :_*)
+      def lubToTerm(lub: ULub[Var]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq: _*)
 
-      def sumToTerm(sum: USum[Var]): VTerm = UsageSum(sum.map(prodToTerm).toSeq :_*)
+      def sumToTerm(sum: USum[Var]): VTerm = UsageSum(sum.map(prodToTerm).toSeq: _*)
 
-      def prodToTerm(prod: UProd[Var]): VTerm = UsageProd( prod.map(varOrUsageToTerm).toSeq :_*)
+      def prodToTerm(prod: UProd[Var]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq: _*)
 
       def varOrUsageToTerm(t: Var | Usage): VTerm = t match
         case v: Var   => v
@@ -594,7 +587,7 @@ extension(v: VTerm)
             literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
             literalsAndOperands.flatMap { case (_, o) => o },
           )
-        case _: Var | _: Collapse      => Right((Set.empty, Set(tm)))
+        case _: Var | _: Collapse => Right((Set.empty, Set(tm)))
         case _ =>
           throw IllegalStateException(s"expect to be of Effects type: $tm")
 
@@ -607,8 +600,9 @@ extension(v: VTerm)
         case Level(literal, operands) =>
           for literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] <- transpose(
               operands.map { (tm, offset) =>
-                for tm <- tm.normalized
-                    (l, m) <- dfs(tm)
+                for
+                  tm <- tm.normalized
+                  (l, m) <- dfs(tm)
                 yield (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
               }.toList,
             )
@@ -619,17 +613,17 @@ extension(v: VTerm)
               .groupMap(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) },
           )
-        case _: Var | _: Collapse     => Right(LevelOrder.zero, Map((tm, 0)))
-        case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
+        case _: Var | _: Collapse => Right(LevelOrder.zero, Map((tm, 0)))
+        case _                    => throw IllegalStateException(s"expect to be of Level type: $tm")
 
-      dfs(l).map { case (l, m) => 
-        if l == LevelOrder.zero && m.size == 1 && m.head._2 == 0 
+      dfs(l).map { case (l, m) =>
+        if l == LevelOrder.zero && m.size == 1 && m.head._2 == 0
         then m.head._1
-        else Level(l, m) 
+        else Level(l, m)
       }
     case _ => Right(v)
 
-extension(vs: List[VTerm])
+extension (vs: List[VTerm])
   def normalized
     (using ctx: Context)
     (using Σ: Signature)

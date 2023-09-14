@@ -68,13 +68,12 @@ import Builtins.*
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
 
-extension(eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
+extension (eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
 enum UsageOperation:
   case USum, UProd, UJoin
 
-/**
-  * Represents an order number `m * ω + n`.
+/** Represents an order number `m * ω + n`.
   */
 case class LevelOrder(m: Nat, n: Nat) extends Comparable[LevelOrder]:
   override def compareTo(that: LevelOrder): Int =
@@ -91,8 +90,7 @@ object LevelOrder:
   // 256 is arbitrary but it should be enough for any practical purpose
   val upperBound = LevelOrder(256, 0)
 
-extension (o: LevelOrder)
-  infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
+extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
@@ -219,7 +217,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
     this match
       case Type(upperBound)                => Type(upperBound)
-      case Top(l, eqD)                    => Top(l, eqD)
+      case Top(l, eqD)                     => Top(l, eqD)
       case Var(index)                      => Var(index)
       case Collapse(cTm)                   => Collapse(cTm)
       case U(cTy)                          => U(cTy)
@@ -233,8 +231,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
       case EffectsType(continuationUsage)  => EffectsType(continuationUsage)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
-      case LevelType(upperBound)                    => LevelType(upperBound)
-      case Level(literal, maxOperands)  => Level(literal, maxOperands)
+      case LevelType(upperBound)           => LevelType(upperBound)
+      case Level(literal, maxOperands)     => Level(literal, maxOperands)
       case HeapType()                      => HeapType()
       case Heap(key)                       => Heap(key)
       case CellType(heap, ty)              => CellType(heap, ty)
@@ -287,7 +285,7 @@ object VTerm:
 
   def LevelLiteral(m: Nat, n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(m, n), Map())
-  
+
   def LevelUpperBound(): Level = Level(LevelOrder.upperBound, Map())
 
   def LevelSuc(t: VTerm): Level = Level(LevelOrder.zero, Map(t -> 1))
@@ -346,9 +344,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case CTop(level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo),
-    IType
+  case CTop
+    (level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
   /** Represents either a metavariable or a guarded constant in [2]. This is always created during
     * type checking and user-term won't include this. Rather, user terms should contain `Auto` where
@@ -547,7 +545,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     this match
       case Hole                            => Hole
       case CType(upperBound, effects)      => CType(upperBound, effects)
-      case CTop(l, effects)               => CTop(l, effects)
+      case CTop(l, effects)                => CTop(l, effects)
       case Meta(index)                     => Meta(index)
       case Def(qn)                         => Def(qn)
       case Force(v)                        => Force(v)

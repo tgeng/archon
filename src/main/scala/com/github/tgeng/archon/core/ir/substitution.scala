@@ -14,10 +14,7 @@ trait Raisable[T]:
   def raise(t: T, amount: Int, bar: Int = 0)(using Σ: Signature): T
 
 trait Substitutable[S: Raisable, T]:
-  def substitute
-    (s: S, substitution: PartialSubstitution[T], offset: Int = 0)
-    (using Σ: Signature)
-    : S
+  def substitute(s: S, substitution: PartialSubstitution[T], offset: Int = 0)(using Σ: Signature): S
 
 import VTerm.*
 import CTerm.*
@@ -38,16 +35,14 @@ private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar *
   override def transformVar(v: Var)(using ctx: (Int, Int))(using Σ: Signature) =
     if v.idx >= ctx._2 then
       val newIndex = v.idx + ctx._1
-      if newIndex < 0 then
-        throw StrengthenException(v, ctx._1)
+      if newIndex < 0 then throw StrengthenException(v, ctx._1)
       Var(newIndex)(using v.sourceInfo)
     else v
 
   override def transformPVar(v: PVar)(using ctx: (Int, Int))(using Σ: Signature) =
     if v.idx >= ctx._2 then
       val newIndex = v.idx + ctx._1
-      if newIndex < 0 then
-        throw StrengthenException(v, ctx._1)
+      if newIndex < 0 then throw StrengthenException(v, ctx._1)
       PVar(newIndex)(using v.sourceInfo)
     else v
 
@@ -207,7 +202,7 @@ given SubstitutableTelescope: Substitutable[Telescope, VTerm] with
         offset + 1,
       )
 
-extension(c: CTerm)
+extension (c: CTerm)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableCTerm.substitute(c, substitution)
   def weakened(using Σ: Signature) = c.weaken(1, 0)
@@ -231,7 +226,7 @@ extension(c: CTerm)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension(b: Binding[VTerm])
+extension (b: Binding[VTerm])
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature): Binding[VTerm] =
     b.map(_.subst(substitution))
   def weaken(amount: Nat, at: Nat)(using Σ: Signature): Binding[VTerm] =
@@ -248,7 +243,7 @@ extension(b: Binding[VTerm])
   def substLowers(vTerms: VTerm*)(using Σ: Signature): Binding[VTerm] =
     b.map(_.substLowers(vTerms: _*))
 
-extension(v: VTerm)
+extension (v: VTerm)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableVTerm.substitute(v, substitution)
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
@@ -272,7 +267,7 @@ extension(v: VTerm)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension(e: Elimination[VTerm])
+extension (e: Elimination[VTerm])
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     e.map(v => SubstitutableVTerm.substitute(v, substitution))
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
@@ -296,7 +291,7 @@ extension(e: Elimination[VTerm])
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension(v: Pattern)
+extension (v: Pattern)
   def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
     SubstitutablePattern.substitute(v, substitution)
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
@@ -320,7 +315,7 @@ extension(v: Pattern)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension(v: CoPattern)
+extension (v: CoPattern)
   def subst(substitution: PartialSubstitution[Pattern])(using Σ: Signature) =
     SubstitutableCoPattern.substitute(v, substitution)
   def substTerm(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
@@ -346,7 +341,7 @@ extension(v: CoPattern)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension(telescope: Telescope)
+extension (telescope: Telescope)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     SubstitutableTelescope.substitute(telescope, substitution)
   def weaken(amount: Nat, at: Nat)(using Σ: Signature) =
@@ -374,6 +369,6 @@ extension(telescope: Telescope)
       // strengthen the resulted term so that even higher indices are correct.
       .strengthen(count, 0)
 
-extension(ct: CaseTree)
+extension (ct: CaseTree)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature) =
     VTermSubstituteTransformer.transformCaseTree(ct)(using (substitution, 0))

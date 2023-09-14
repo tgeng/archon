@@ -552,8 +552,7 @@ object Builtins:
         binding(n"A", Type(Top(Var(1)))),
         binding(n"cell", CellType(Var(1), Var(0))),
       ),
-      ty =
-        F(Var(1), EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(2))))), UsageLiteral(UUnres)),
+      ty = F(Var(1), EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(2))))), UsageLiteral(UUnres)),
       clauses = List(
         PreClause(
           boundNames = Nil,

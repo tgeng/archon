@@ -9,7 +9,7 @@ trait Recursive[T]:
       recursiveParent: => Recursive[P],
       isCurrentRecursive: Any => Boolean,
       t: T,
-      f: P => Option[P]
+      f: P => Option[P],
     )
     : P
 
@@ -36,7 +36,7 @@ object Recursive:
   def recursiveSum[T]
     (
       s: Mirror.SumOf[T],
-      recursives: => List[Recursive[T]]
+      recursives: => List[Recursive[T]],
     )
     : Recursive[T] = new Recursive[T]:
     override def transform[P >: T]
@@ -44,7 +44,7 @@ object Recursive:
         recursiveParent: => Recursive[P],
         isCurrentRecursive: Any => Boolean,
         t: T,
-        f: P => Option[P]
+        f: P => Option[P],
       )
       : P =
       // always start by invoking the caller-specified transformer `f`.
@@ -56,13 +56,13 @@ object Recursive:
             recursiveParent,
             isCurrentRecursive,
             t,
-            f
+            f,
           )
 
   def recursiveProduct[T]
     (
       p: Mirror.ProductOf[T],
-      functors: => List[Option[Functor[?]]]
+      functors: => List[Option[Functor[?]]],
     )
     : Recursive[T] = new Recursive[T]:
     override def transform[P >: T]
@@ -70,7 +70,7 @@ object Recursive:
         recursiveParent: => Recursive[P],
         isCurrentRecursive: Any => Boolean,
         t: T,
-        f: P => Option[P]
+        f: P => Option[P],
       )
       : P =
       val transformed =
@@ -81,7 +81,7 @@ object Recursive:
               recursiveParent,
               isCurrentRecursive,
               t.asInstanceOf[T],
-              f
+              f,
             )
           // second, fallback to invoke `Functor.map`
           case (functorInstance, Some(functor)) =>
@@ -93,9 +93,9 @@ object Recursive:
                     recursiveParent,
                     isCurrentRecursive,
                     t.asInstanceOf[T],
-                    f
+                    f,
                   )
-                else t
+                else t,
             )
           // finally, if none works, leave the field as it is
           case (e, _) => e

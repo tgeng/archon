@@ -14,9 +14,9 @@ enum Fixity:
   case Infix(val associativity: Associativity)
   case Postfix
 
-  /** Note that an operator of this fixity should have at least one hole inside, for example
-    * `[_]`. In other words, atoms like `myVariable` should not be represented as an operator but
-    * simply an [[MixfixAst.Identifier]] instead.
+  /** Note that an operator of this fixity should have at least one hole inside, for example `[_]`.
+    * In other words, atoms like `myVariable` should not be represented as an operator but simply an
+    * [[MixfixAst.Identifier]] instead.
     */
   case Closed
 
@@ -38,13 +38,13 @@ object Operator:
     if nameParts.isEmpty then throw IllegalArgumentException("nameParts should not be empty")
     if fixity == Closed && nameParts.size == 1 then
       throw IllegalArgumentException(
-        "for closed operator the nameParts must contain at least 2 elements"
+        "for closed operator the nameParts must contain at least 2 elements",
       )
     nameParts.foreach(namePart => assert(namePart.nonEmpty))
     new Operator(qualifiedName, fixity, nameParts)
 
-/** Operators in neighbor nodes binds tighter than operators in this node. Note that there must
-  * not be cycles. Implementation should be immutable.
+/** Operators in neighbor nodes binds tighter than operators in this node. Note that there must not
+  * be cycles. Implementation should be immutable.
   */
 trait PrecedenceNode:
   def operators: Map[Fixity, Seq[Operator]]
@@ -72,7 +72,7 @@ enum MixfixAst[N, L]:
           (interleave(namePartsString, args) :+ namePartsString.last).mkString(
             "[",
             " ",
-            "]"
+            "]",
           )
         case Prefix => interleave(namePartsString, args).mkString("[", " ", "]")
         case Postfix =>
@@ -81,7 +81,7 @@ enum MixfixAst[N, L]:
           (interleave(args, namePartsString) :+ args.last).mkString(
             "[",
             " ",
-            "]"
+            "]",
           )
     case ApplyCall(args)  => args.mkString("[@ ", " ", "]")
     case Identifier(name) => "`" + name.toString + "`"
@@ -108,9 +108,7 @@ def createMixfixParser[N, M[+_]: Alternative: Monad: Applicative: Functor, L]
     r <- createMixfixParserImpl(trimGraph(g, nameParts), literalParser)
   yield r
 
-def trimGraph
-  (g: PrecedenceGraph, nameParts: Set[String])
-  : PrecedenceGraph =
+def trimGraph(g: PrecedenceGraph, nameParts: Set[String]): PrecedenceGraph =
   // key is old node, value is new node
   val nodeMap = mutable.Map[PrecedenceNode, PrecedenceNode]()
   val newPrecedenceMap = mutable.Map[PrecedenceNode, Seq[PrecedenceNode]]()
@@ -127,9 +125,9 @@ def trimGraph
           (
             fixity,
             operators.filter(
-              isOperatorRelevant
-            )
-          )
+              isOperatorRelevant,
+            ),
+          ),
         )
 
       override def neighbors: Seq[PrecedenceNode] = newPrecedenceMap(this)
@@ -141,7 +139,7 @@ def trimGraph
   g.flatMap(nodeMap.lift).toSeq
 
 def createMixfixParserImpl[N, M[
-  +_
+  +_,
 ]: Alternative: Monad: Applicative: Functor, L]
   (g: PrecedenceGraph, literalParser: ParserT[N, L, M])
   (using Functor[ParserT[N, *, M]])
@@ -153,14 +151,12 @@ def createMixfixParserImpl[N, M[
   (using cache: ParserCache[N, M])
   : ParserT[N, MixfixAst[N, L], M] =
   val illegalIdentifierNames = g
-    .flatMap(node =>
-      node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts.flatten))
-    )
+    .flatMap(node => node.operators.values.flatMap(ops => ops.flatMap(op => op.nameParts.flatten)))
     .toSet
 
   def getNodeTargetName(node: PrecedenceNode) = node.operators.values
     .flatMap(
-      _.map(_.nameParts.map(_.mkString).mkString("_"))
+      _.map(_.nameParts.map(_.mkString).mkString("_")),
     )
     .mkString("{", ", ", "}")
 
@@ -171,10 +167,10 @@ def createMixfixParserImpl[N, M[
     parsers.reduceOption(_ || _).getOrElse(P.fail("<tighter ops>"))
 
   def expr: ParserT[N, MixfixAst[N, L], M] = P(
-    P.cached(g, unionBiased(g.map(pHat)) | closedPlus)
+    P.cached(g, unionBiased(g.map(pHat)) | closedPlus),
   )
 
-  extension(node: PrecedenceNode)
+  extension (node: PrecedenceNode)
     def pHat: ParserT[N, MixfixAst[N, L], M] =
       P(
         P.cached(
@@ -186,25 +182,25 @@ def createMixfixParserImpl[N, M[
               // somehow type inferencing is not working here and requires explicit type arguments
               P.foldRight1[
                 (Operator, List[MixfixAst[N, L]], List[List[N]]),
-                MixfixAst[N, L]
+                MixfixAst[N, L],
               ](
                 pRight,
                 P.pure((t, postArg) => OperatorCall(t(0), t(1) :+ postArg, t(2))),
-                pUp
+                pUp,
               ) |
               P.foldLeft1[MixfixAst[
                 N,
-                L
+                L,
               ], (Operator, List[MixfixAst[N, L]], List[List[N]])](
                 pUp,
                 P.pure((preArg, t) => OperatorCall(t(0), preArg +: t(1), t(2))),
-                pLeft
+                pLeft,
               )
             args <- closed.**
-          yield if args.isEmpty then ops else ApplyCall(ops +: args)
+          yield if args.isEmpty then ops else ApplyCall(ops +: args),
         ),
         getNodeTargetName(node),
-        lazily = true
+        lazily = true,
       )
 
     def pRight: ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
@@ -212,7 +208,7 @@ def createMixfixParserImpl[N, M[
         (node, "right"),
         node.op(Prefix) |
           P.lift((node.pUp, node.op(Infix(Associativity.Right))))
-            .map((preArg, t) => (t(0), preArg +: t(1), t(2)))
+            .map((preArg, t) => (t(0), preArg +: t(1), t(2))),
       )
 
     def pLeft: ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
@@ -220,13 +216,13 @@ def createMixfixParserImpl[N, M[
         (node, "left"),
         node.op(Postfix) |
           P.lift((node.op(Infix(Associativity.Left)), node.pUp))
-            .map((t, postArg) => (t(0), t(1) :+ postArg, t(2)))
+            .map((t, postArg) => (t(0), t(1) :+ postArg, t(2))),
       )
 
     def pUp: ParserT[N, MixfixAst[N, L], M] =
       P.cached(
         (node, "up"),
-        unionBiased(node.neighbors.map(_.pHat)) | closedPlus
+        unionBiased(node.neighbors.map(_.pHat)) | closedPlus,
       )
 
     def op(fix: Fixity): ParserT[N, (Operator, List[MixfixAst[N, L]], List[List[N]]), M] =
@@ -237,16 +233,16 @@ def createMixfixParserImpl[N, M[
             .getOrElse(fix, Seq())
             .map(operator =>
               between(expr, operator.nameParts)
-                .map((args, nameParts) => (operator, args, nameParts))
-            )
-        )
+                .map((args, nameParts) => (operator, args, nameParts)),
+            ),
+        ),
       )
 
   def closedPlus: ParserT[N, MixfixAst[N, L], M] =
     closed.++.map(args =>
       if args.size == 1
       then args.head
-      else ApplyCall(args)
+      else ApplyCall(args),
     )
 
   def closed: ParserT[N, MixfixAst[N, L], M] =
@@ -260,21 +256,21 @@ def createMixfixParserImpl[N, M[
             n =>
               val s = nn.asString(n)
               s
-                .startsWith("`") && s.endsWith("`")
+                .startsWith("`") && s.endsWith("`"),
           ).map(Identifier.apply) ||
             literalParser.map(Literal.apply) ||
             P(
               node
                 .op(Closed)
                 .map((op, args, nameParts) => OperatorCall(op, args, nameParts)),
-              getNodeTargetName(node)
-            )
-        )
+              getNodeTargetName(node),
+            ),
+        ),
       ) ||
         P.satisfySingle(
           s"<none of $illegalIdentifierNames>",
-          n => !illegalIdentifierNames.contains(nn.asString(n))
-        ).map(Identifier.apply)
+          n => !illegalIdentifierNames.contains(nn.asString(n)),
+        ).map(Identifier.apply),
     )
 
   def between[T]
@@ -286,20 +282,20 @@ def createMixfixParserImpl[N, M[
         for
           firstNamePart <- namePart(firstName)
           argsAndRestNameParts <- P.lift(
-            names.map(name => P.lift((p, namePart(name))))
+            names.map(name => P.lift((p, namePart(name)))),
           )
         yield (
           argsAndRestNameParts.map(_(0)),
-          firstNamePart :: argsAndRestNameParts.map(_(1))
+          firstNamePart :: argsAndRestNameParts.map(_(1)),
         )
 
   def namePart(s: Seq[String]) = P.lift(
     s.map(s =>
       P.satisfySingle(
         s"'$s'",
-        n => nn.asString(n) == s
-      )
-    ).toList
+        n => nn.asString(n) == s,
+      ),
+    ).toList,
   )
 
   expr << P.eos

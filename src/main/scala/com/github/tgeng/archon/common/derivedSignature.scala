@@ -54,9 +54,7 @@ trait DerivedSignature extends Signature:
   /** Usage paramter itself is only used in typing and hence has U0 */
   private def usageBinding = Binding(UsageType(), UsageLiteral(U0))(n"u")
 
-  def getDataDerivedDefinitionOption
-    (qn: QualifiedName)
-    : Option[Declaration.Definition] =
+  def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     // First parameter is usage type. Declared paramters and indexes follow after.
     for
       data <- getDataOption(qn)
@@ -137,7 +135,8 @@ trait DerivedSignature extends Signature:
           val numAllParams = typeParams.size + constructor.paramTys.size
           IndexedSeq(
             Clause(
-              usageBinding +: (typeParams.map(b => Binding(b.ty, U0)(b.name),
+              usageBinding +: (typeParams.map(b =>
+                Binding(b.ty, U0)(b.name),
               ) ++ constructor.paramTys),
               qVars(numAllParams),
               Return(Con(conName, vars(constructor.paramTys.size - 1))),
@@ -333,7 +332,7 @@ trait DerivedSignature extends Signature:
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
         yield record.tParamTys.foldRight(
-          CtLambda(CtTerm(Redex(Force(Var(0)), EProj(fieldName):: Nil)))(record.selfName),
+          CtLambda(CtTerm(Redex(Force(Var(0)), EProj(fieldName) :: Nil)))(record.selfName),
         ) { case ((binding, _), _Q) =>
           CtLambda(_Q)(binding.name)
         }

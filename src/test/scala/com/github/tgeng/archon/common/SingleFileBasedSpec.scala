@@ -7,7 +7,7 @@ import org.scalatest.freespec.AnyFreeSpec
 abstract class SingleFileBasedSpec
   (
     relativePath: String,
-    fileFilter: File => Boolean = _ => true
+    fileFilter: File => Boolean = _ => true,
   )
   extends AnyFreeSpec:
   private val testDataDir = TestDataConstants.testResourcesRoot / relativePath

@@ -31,9 +31,9 @@ class Parsers:
 
   def threeWords = P(
     for (first, _, second, _, third) <- P.lift(
-        (P.word, P.spaces, P.word, P.spaces, P.word)
+        (P.word, P.spaces, P.word, P.spaces, P.word),
       )
-    yield (first, second, third)
+    yield (first, second, third),
   )
 
   def integer = P(P.integer)
@@ -79,7 +79,7 @@ class Parsers:
       atom chainedLeftBy
         P.spaces >> P.anyOf("*/").!.map { op => (a: String, b: String) =>
           s"($a $op $b)"
-        } << P.spaces
+        } << P.spaces,
     )
 
     factor chainedLeftBy
@@ -95,7 +95,7 @@ class Parsers:
   def indentedBlock = P(
     P.indentedBlock {
       (P.word sepBy1 P.newlineWithIndent) << P.eob
-    }
+    },
   )
 
   def json = P {
@@ -113,7 +113,7 @@ class Parsers:
     def jString = P(P.quoted() map JString.apply)
 
     def jArray = P(
-      "[".! >%> (jValue sepBy ",".!.% map (a => JArray(a.toIndexedSeq))) <%< "]"
+      "[".! >%> (jValue sepBy ",".!.% map (a => JArray(a.toIndexedSeq))) <%< "]",
     )
 
     def jObject = P {
@@ -143,8 +143,8 @@ class ParserCombinatorsTest extends AnyFreeSpec:
       obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$"))
         .map(
           _.!!.invoke(
-            obj
-          ).asInstanceOf[Parser[Char, Any]]
+            obj,
+          ).asInstanceOf[Parser[Char, Any]],
         )
     for parser <- parsers
     do
@@ -159,7 +159,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
         if expected != actual then
           testDataFile.writeText(actual)
           fail(
-            s"Test comparison failed for $parserName. Test data has been updated."
+            s"Test comparison failed for $parserName. Test data has been updated.",
           )
       }
 
@@ -190,7 +190,7 @@ class ParserCombinatorsTest extends AnyFreeSpec:
               expectedPart.append(outputs.lift(0).getOrElse(""))
             case l: List[(Int, Any)] =>
               actualPart.append(
-                l.map((advance, t) => s"$advance | $t").mkString("\n----\n")
+                l.map((advance, t) => s"$advance | $t").mkString("\n----\n"),
               )
               expectedPart.append(outputs.mkString("\n----\n"))
             case _ => fail("impossible")

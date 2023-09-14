@@ -28,8 +28,8 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
             if i % 2 == 1 then Some(Leaf(i * 2))
             else None
           case _ => None
-        }
-      ) == Node(Leaf(2), Node(Leaf(2), Leaf(6)))
+        },
+      ) == Node(Leaf(2), Node(Leaf(2), Leaf(6))),
     )
   }
 
@@ -42,8 +42,8 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
             if i % 2 == 1 then Some(Leaf2(i * 2))
             else None
           case _ => None
-        }
-      ) == Node2(Leaf2(2), Node(Leaf(2), Leaf(3)))
+        },
+      ) == Node2(Leaf2(2), Node(Leaf(2), Leaf(3))),
     )
   }
 
@@ -54,22 +54,22 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
           List(
             WLeaf(1),
             WNode(List(WLeaf(2), WLeaf(3))),
-            WTupleNode((1, WLeaf(5)))
-          )
+            WTupleNode((1, WLeaf(5))),
+          ),
         ),
         {
           case WLeaf(i) =>
             if i % 2 == 1 then Some(WLeaf(i * 2))
             else None
           case _ => None
-        }
+        },
       ) == WNode(
         List(
           WLeaf(2),
           WNode(List(WLeaf(2), WLeaf(6))),
-          WTupleNode((1, WLeaf(10)))
-        )
-      )
+          WTupleNode((1, WLeaf(10))),
+        ),
+      ),
     )
   }
 

@@ -25,7 +25,7 @@ object Functor:
   private def functorCoproduct[F[_]]
     (
       s: K1Sum[F],
-      functors: => List[Functor[[X] =>> Any]]
+      functors: => List[Functor[[X] =>> Any]],
     )
     : Functor[F] =
     new Functor[F]:
@@ -36,7 +36,7 @@ object Functor:
   private def functorProduct[F[_], T]
     (
       p: K1Product[F],
-      functors: => List[Functor[[X] =>> Any]]
+      functors: => List[Functor[[X] =>> Any]],
     )
     : Functor[F] =
     new Functor[F]:
@@ -66,7 +66,7 @@ object Functor:
 
   given Functor[Tuple1] with
     override def map[A, B](a: Tuple1[A], f: A => B): Tuple1[B] = Tuple1(
-      f(a.head)
+      f(a.head),
     )
 
   given [E]: Functor[(E, *)] with

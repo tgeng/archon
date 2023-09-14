@@ -14,27 +14,27 @@ enum AstDeclaration:
       val tParamTys: AstTContext,
       val ty: AstTerm,
       val isPure: Boolean,
-      val constructors: List[AstConstructor]
+      val constructors: List[AstConstructor],
     )
   case AstRecord
     (
       override val name: Name,
       val tParamTys: AstTContext,
       val ty: AstTerm,
-      val fields: List[AstField]
+      val fields: List[AstField],
     )
   case AstDefinition
     (
       override val name: Name,
       val paramTys: AstTelescope,
       val ty: AstTerm,
-      val clauses: List[AstClause]
+      val clauses: List[AstClause],
     )
   case AstEffect
     (
       override val name: Name,
       val tParamTys: AstTelescope,
-      val operations: List[AstOperation]
+      val operations: List[AstOperation],
     )
 
   def name: Name
@@ -48,7 +48,7 @@ case class AstClause
     bindings: AstTelescope, // TODO[P3]: remove `binding` after elaboration is implemented
     lhs: List[AstCoPattern],
     rhs: Option[AstTerm], // `None` for absurd pattern
-    ty: AstTerm // TODO[P3]: remove `ty` after elaboration is implemented
+    ty: AstTerm, // TODO[P3]: remove `ty` after elaboration is implemented
   )
 
 case class AstOperation(name: Name, ty: AstTerm)

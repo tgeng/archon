@@ -39,7 +39,7 @@ object Block:
   def apply
     (
       objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String |
-        Iterable[String | Block])*
+        Iterable[String | Block])*,
     )
     : Block =
     var wrapPolicy: WrapPolicy = Wrap
@@ -61,21 +61,21 @@ case class Block
     children: Seq[Block | String],
     wrapPolicy: WrapPolicy,
     indentPolicy: IndentPolicy,
-    delimitPolicy: DelimitPolicy
+    delimitPolicy: DelimitPolicy,
   ) {
 
   def ++(more: Iterable[Block | String]) = Block(
     children ++ more,
     wrapPolicy,
     indentPolicy,
-    delimitPolicy
+    delimitPolicy,
   )
 
   def +(oneMore: Block | String) = Block(
     children :+ oneMore,
     wrapPolicy,
     indentPolicy,
-    delimitPolicy
+    delimitPolicy,
   )
 
   override def toString = {
@@ -144,7 +144,7 @@ case class Block
     }
   }
 
-  extension(b: Block | String)
+  extension (b: Block | String)
     private def printBlockOrString(using ctx: PrintContext) = b match {
       case b: Block  => b.print
       case s: String => ctx.append(s)
@@ -152,7 +152,7 @@ case class Block
 
     private def delimitInParagraph(using ctx: PrintContext): Unit = if (
       !Set(
-        ',', '.', '!', '?', ';'
+        ',', '.', '!', '?', ';',
       ).contains(b.peek)
     ) ctx.delimitWithSpace
 
@@ -164,54 +164,54 @@ case class Block
     private def width
       (widthLeft: Int, onlyMeasureFirstLine: Boolean = false)
       (using ctx: PrintContext)
-      : Option[Int] = boundary: 
-        b match {
-          case s: String => if (s.size <= widthLeft) Some(s.size) else None
-          case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
-            if (onlyMeasureFirstLine) {
-              wrapPolicy match {
-                case AlwaysNewline => return Some(0)
-                case ChopDown =>
-                  indentPolicy match {
-                    case FixedIncrement(_) => return Some(0)
-                    case Aligned =>
-                      b.children.headOption match {
-                        case Some(cb) => return cb.width(widthLeft, true)
-                        case None     => return Some(0)
-                      }
-                  }
-                case Wrap =>
-                  b.children.headOption match {
-                    case Some(cb) => return cb.width(widthLeft, true)
-                    case None     => return Some(0)
-                  }
-                case _ => ()
-              }
-            }
+      : Option[Int] = boundary:
+      b match {
+        case s: String => if (s.size <= widthLeft) Some(s.size) else None
+        case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
+          if (onlyMeasureFirstLine) {
             wrapPolicy match {
-              case AlwaysNewline => return None
-              case _             => ()
-            }
-            var width = 0
-            var widthLeft2 = widthLeft
-            for (child <- children) {
-              var childWidth = child.width(widthLeft2) match {
-                case Some(w) => w
-                case None    => break[Option[Int]](None)
-              }
-              delimitPolicy match {
-                case Whitespace | Paragraph => childWidth += 1
-                case Concat                 => ()
-              }
-              width += childWidth
-              widthLeft2 -= childWidth
-            }
-            delimitPolicy match {
-              case Whitespace | Paragraph => Some(width - 1)
-              case Concat                 => Some(width)
+              case AlwaysNewline => return Some(0)
+              case ChopDown =>
+                indentPolicy match {
+                  case FixedIncrement(_) => return Some(0)
+                  case Aligned =>
+                    b.children.headOption match {
+                      case Some(cb) => return cb.width(widthLeft, true)
+                      case None     => return Some(0)
+                    }
+                }
+              case Wrap =>
+                b.children.headOption match {
+                  case Some(cb) => return cb.width(widthLeft, true)
+                  case None     => return Some(0)
+                }
+              case _ => ()
             }
           }
-    }
+          wrapPolicy match {
+            case AlwaysNewline => return None
+            case _             => ()
+          }
+          var width = 0
+          var widthLeft2 = widthLeft
+          for (child <- children) {
+            var childWidth = child.width(widthLeft2) match {
+              case Some(w) => w
+              case None    => break[Option[Int]](None)
+            }
+            delimitPolicy match {
+              case Whitespace | Paragraph => childWidth += 1
+              case Concat                 => ()
+            }
+            width += childWidth
+            widthLeft2 -= childWidth
+          }
+          delimitPolicy match {
+            case Whitespace | Paragraph => Some(width - 1)
+            case Concat                 => Some(width)
+          }
+        }
+      }
 }
 
 class PrintContext
@@ -220,7 +220,7 @@ class PrintContext
     private var width: Int,
     private val widthLimit: Int,
     private var indent: Int,
-    var nextBlockOnNewLine: Boolean = false
+    var nextBlockOnNewLine: Boolean = false,
   ) {
   def widthLeft = widthLimit - width
 

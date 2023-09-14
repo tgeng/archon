@@ -59,7 +59,7 @@ class SingleLoadingExpirableCache[K, V, F](loadingFn: (key: K) => (V, F))
           case Some(v, f) if (f == fingerprint) => v
           case _ =>
             throw IllegalStateException(
-              s"Fail to load value for key $key and fingerprint $fingerprint."
+              s"Fail to load value for key $key and fingerprint $fingerprint.",
             )
         }
       }

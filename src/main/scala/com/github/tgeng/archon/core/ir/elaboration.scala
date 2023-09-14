@@ -266,7 +266,7 @@ private def elaborateHead
       ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
       r <- ty match
         case CType(CTop(level, _), _) => Right(new Record(record.qn)(tParamTys, level))
-        case t                     => Left(ExpectCType(t))
+        case t                        => Left(ExpectCType(t))
       _ <- checkRecord(r)
     yield Σ.addDeclaration(r)
   }
@@ -316,7 +316,7 @@ private def elaborateHead
         },
       )
       d <- checkDef(d)
-      // TODO: use rewritten term here
+    // TODO: use rewritten term here
     yield Σ.addDeclaration(d)
   }
 
@@ -360,7 +360,9 @@ private def elaborateBody
                   (p, _) <- checkType(p, _A)
                   (w, _) <- checkType(w, _A)
                   constraint <- checkIsConvertible(p.subst(σ.get), w, Some(_A))
-                  _ <- if constraint.isEmpty then Right(()) else Left(UnmatchedPattern(pattern, w, constraint))
+                  _ <-
+                    if constraint.isEmpty then Right(())
+                    else Left(UnmatchedPattern(pattern, w, constraint))
                 yield ()
               case None => Left(UnexpectedAbsurdPattern(pattern))
           })
@@ -472,7 +474,8 @@ private def elaborateBody
             case None => subst(problem, σ)
         yield r
 
-  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm = Redex(Def(qn), q̅.map(_.toElimination.get))
+  def apply(qn: QualifiedName, q̅ : List[CoPattern]): CTerm =
+    Redex(Def(qn), q̅.map(_.toElimination.get))
 
   def elaborate
     (q̅ : List[CoPattern], _C: CTerm, problem: Problem)
@@ -537,7 +540,7 @@ private def elaborateBody
             def providedAtLeastU1Usage(x: Var): Boolean =
               checkUsageSubsumption(UsageLiteral(Usage.U1), Γ.resolve(x).usage) match
                 case Right(constraint) if constraint.isEmpty => true
-                case _        => false
+                case _                                       => false
 
             // Find something to split.
             _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
@@ -706,7 +709,6 @@ private def elaborateBody
                     }
                     .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
-
               // split empty
               case (_, (x: Var, PAbsurd(), _A)) =>
                 _A match
@@ -751,7 +753,9 @@ private def elaborateBody
                     case Some(σ) => checkType(rhs1.subst(σ), _C)
                     case None    => Left(e)
                   constraint <- checkUsagesSubsumption(usages)
-                  _ <- if constraint.isEmpty then Right(()) else Left(UnsatifisfiedUsageRequirements(constraint))
+                  _ <-
+                    if constraint.isEmpty then Right(())
+                    else Left(UnsatifisfiedUsageRequirements(constraint))
                 yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
           split(q̅, _C, problem)
         case (Nil, _) => Left(IncompleteClauses(preDefinition.qn))

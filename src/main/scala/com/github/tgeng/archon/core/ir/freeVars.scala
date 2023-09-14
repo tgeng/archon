@@ -144,7 +144,7 @@ private def union
   : (Set[Nat], Set[Nat]) =
   (freeVars1._1 | freeVars2._1, freeVars1._2 | freeVars2._2)
 
-extension(freeVars1: (Set[Nat], Set[Nat]))
+extension (freeVars1: (Set[Nat], Set[Nat]))
   private def -(offset: Nat): (Set[Nat], Set[Nat]) =
     (freeVars1._1.map(_ - offset), freeVars1._2.map(_ - offset))
 

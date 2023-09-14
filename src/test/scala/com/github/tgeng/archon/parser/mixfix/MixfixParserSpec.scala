@@ -31,7 +31,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
             .split2("_")
             .filter(_.nonEmpty)
             .map(_.split2("\\b").toSeq)
-            .toList
+            .toList,
         )
         operatorMap(operatorName) = operator
 
@@ -40,10 +40,10 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
       val precedences = rule.precedences.map((kind, operatorName) =>
         Precedence(
           operatorMap(
-            operatorName
+            operatorName,
           ),
-          kind
-        )
+          kind,
+        ),
       )
       assert(gb.add(headOperator, precedences) == Right(()))
       for operatorName <- rule.operatorNames.tail do
@@ -51,8 +51,8 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
         assert(
           gb.add(
             operator,
-            List(Precedence(headOperator, PrecedenceKind.SameAs))
-          ) == Right(())
+            List(Precedence(headOperator, PrecedenceKind.SameAs)),
+          ) == Right(()),
         )
     val g = gb.build()
 
@@ -82,7 +82,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
                 actualPart.append(r.mkErrorString(input))
               case l: List[(Int, Any)] =>
                 actualPart.append(
-                  l.map((advance, t) => s"$advance | $t").mkString("\n----\n")
+                  l.map((advance, t) => s"$advance | $t").mkString("\n----\n"),
                 )
         actualParts.append(actualPart.toString)
     }
@@ -91,7 +91,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
     if expected != actual then
       file.writeText(actual)
       fail(
-        s"Test comparison failed for ${file.getName}. Test data has been updated."
+        s"Test comparison failed for ${file.getName}. Test data has been updated.",
       )
 
 object MixfixParserSpec:

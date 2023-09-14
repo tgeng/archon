@@ -2,8 +2,8 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.Nat
 
-/** First element is the outermost binding, e.g. [x: Nat, y: Vector String x] is represented as `x: Nat :: y: Vector
-  * String x :: []`
+/** First element is the outermost binding, e.g. [x: Nat, y: Vector String x] is represented as `x:
+  * Nat :: y: Vector String x :: []`
   */
 type Telescope = List[Binding[VTerm]]
 
@@ -11,7 +11,7 @@ type Telescope = List[Binding[VTerm]]
   */
 type Context = collection.IndexedSeq[Binding[VTerm]]
 
-extension(ctx: collection.IndexedSeq[Binding[VTerm]])
+extension (ctx: collection.IndexedSeq[Binding[VTerm]])
   def resolve(ref: VTerm.Var)(using Signature): Binding[VTerm] = resolve(ref.idx)
 
   def resolve(idx: Nat)(using Signature): Binding[VTerm] =

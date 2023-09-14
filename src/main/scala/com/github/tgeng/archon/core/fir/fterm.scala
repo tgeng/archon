@@ -5,9 +5,8 @@ import com.github.tgeng.archon.core.common.*
 
 /** # Syntax
   *
-  * ## Hard keywrods: -> ; , ( ) { } $ =>
-  * ## Soft keywords: < > [ ] 
-  * 
+  * ## Hard keywrods: -> ; , ( ) { } $ => ## Soft keywords: < > [ ]
+  *
   * ```
   * user: def repeat : (x: Nat) -> [*] A -> <eff x> Vector A x
   *           repeat 0 a => Nil
@@ -36,7 +35,7 @@ import com.github.tgeng.archon.core.common.*
   *      foo p (B y) _ c => c.resume p (doSomethingElse1 y)
   *   op bar p arg1 arg2 c => c.dispose p; someResult
   * ```
-  * # Lambda 
+  * # Lambda
   * ```
   * user: filter { e => e % 2 == 0 } [1, 2, 3]
   * full: filter {

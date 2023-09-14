@@ -22,13 +22,12 @@ given DeBruijnPattern: DeBruijn[Pattern] with
   override def subst(p: Pattern, s: Substitutor[Pattern])(using Signature) = p.subst(s)
 
 /** Local references are represented as DeBruijn indices so `var 0` points to the right most entry
-  * in the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)`
-  * to the first var in target context (DeBruijn index targetContextSize - 1).
-  * [[nonTrivialMapping]] contains the mapping of the last variables in the target context. If
-  * target context is longer than source context, then [[nonTrivialMapping]] must account for this
-  * gap. In addition, it may go beyond this gap to account for more mapping. To an extreme,
-  * [[nonTrivialMapping]] can have size [[targetContextSize]], in which case all the mappings are
-  * explicitly specified.
+  * in the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)` to
+  * the first var in target context (DeBruijn index targetContextSize - 1). [[nonTrivialMapping]]
+  * contains the mapping of the last variables in the target context. If target context is longer
+  * than source context, then [[nonTrivialMapping]] must account for this gap. In addition, it may
+  * go beyond this gap to account for more mapping. To an extreme, [[nonTrivialMapping]] can have
+  * size [[targetContextSize]], in which case all the mappings are explicitly specified.
   */
 class Substitutor[T: DeBruijn]
   (
@@ -45,7 +44,7 @@ class Substitutor[T: DeBruijn]
       *
       * where a, b, c are some terms living in source context.
       */
-    private var nonTrivialMapping: IndexedSeq[T]
+    private var nonTrivialMapping: IndexedSeq[T],
   )
   extends PartialSubstitution[T]:
 
@@ -74,7 +73,7 @@ class Substitutor[T: DeBruijn]
   def map[R: DeBruijn](f: T => R): Substitutor[R] = Substitutor(
     sourceContextSize,
     targetContextSize,
-    nonTrivialMapping.map(f)
+    nonTrivialMapping.map(f),
   )
 
   @targetName("uplus")
@@ -84,8 +83,8 @@ class Substitutor[T: DeBruijn]
       sourceContextSize + that.sourceContextSize,
       targetContextSize + that.targetContextSize,
       that.nonTrivialMapping ++ nonTrivialMapping.map(
-        summon[DeBruijn[T]].weaken(_, that.sourceContextSize, 0)
-      )
+        summon[DeBruijn[T]].weaken(_, that.sourceContextSize, 0),
+      ),
     )
 
   infix def remove(index: Nat): Substitutor[T] =
@@ -96,16 +95,16 @@ class Substitutor[T: DeBruijn]
       Substitutor(
         sourceContextSize,
         targetContextSize - 1,
-        nonTrivialMapping.patch(index, IndexedSeq.empty, 1)
+        nonTrivialMapping.patch(index, IndexedSeq.empty, 1),
       )
-  
+
   infix def add(index: Nat, t: T) =
     materialize(index)
-      Substitutor(
-        sourceContextSize,
-        targetContextSize - 1,
-        nonTrivialMapping.patch(index, IndexedSeq(t), 0)
-      )
+    Substitutor(
+      sourceContextSize,
+      targetContextSize - 1,
+      nonTrivialMapping.patch(index, IndexedSeq(t), 0),
+    )
 
   @targetName("compose")
   infix def ∘(that: Substitutor[T])(using Signature): Substitutor[T] =
@@ -114,13 +113,13 @@ class Substitutor[T: DeBruijn]
     Substitutor(
       that.sourceContextSize,
       this.targetContextSize,
-      this.nonTrivialMapping.map(summon[DeBruijn[T]].subst(_, that))
+      this.nonTrivialMapping.map(summon[DeBruijn[T]].subst(_, that)),
     )
 
   def drop(count: Nat): Substitutor[T] = Substitutor(
     sourceContextSize,
     targetContextSize - count,
-    nonTrivialMapping.drop(count)
+    nonTrivialMapping.drop(count),
   )
 
 object Substitutor:
@@ -129,8 +128,8 @@ object Substitutor:
   def of[T: DeBruijn](sourceContextSize: Nat, terms: T*): Substitutor[T] =
     Substitutor(sourceContextSize, terms.size, terms.toIndexedSeq)
 
-extension(s: Substitutor[Pattern])
+extension (s: Substitutor[Pattern])
   def toTermSubstitutor: Substitutor[VTerm] = s.map(
     _.toTerm
-      .getOrElse(throw IllegalStateException("unexpected absurd pattern"))
+      .getOrElse(throw IllegalStateException("unexpected absurd pattern")),
   )

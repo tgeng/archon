@@ -7,10 +7,10 @@ import scala.math.min
 
 case class ParseError(index: Int, description: String, targets: Seq[String] = Nil)
 
-/** [[committed]] means at which level backtracking should be disabled. Levels correspond to
-  * target names (i.e. one additional target creates one level), so lower levels are more severe
-  * than upper levels because a lower level means back tracking is disabled closer to the root of
-  * the parser hierarchy.
+/** [[committed]] means at which level backtracking should be disabled. Levels correspond to target
+  * names (i.e. one additional target creates one level), so lower levels are more severe than upper
+  * levels because a lower level means back tracking is disabled closer to the root of the parser
+  * hierarchy.
   */
 // TODO[P4]: consider generalizing `Seq` to some traversable so that one can provide an implementation
 //  that simply drops any error message for fast parsing. Then failure messages can be recovered
@@ -36,7 +36,7 @@ object ParseResult:
     : ParseResult[M, T] =
     SimpleParseResult(result, trimErrors(errors), committed)
   def unapply[M[+_], T](r: ParseResult[M, T]): Option[(M[T], Seq[ParseError], Boolean)] = Some(
-    (r.result, r.errors, r.committed)
+    (r.result, r.errors, r.committed),
   )
 
   private def trimErrors(errors: Seq[ParseError]): Seq[ParseError] =
@@ -47,7 +47,7 @@ object ParseResult:
     (
       override val result: M[T],
       override val errors: Seq[ParseError],
-      override val committed: Boolean
+      override val committed: Boolean,
     )
     extends ParseResult[M, T]
   private case class WrappedParseResult[M[+_], +T]
@@ -149,8 +149,7 @@ extension [I, T, M[+_]]
         override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, T)] =
           val pResult = p.doParse(index)
           // Only continue if first failed and is not committed says do not abort
-          if pResult.result == am.empty && !pResult.committed then
-            ap.or(pResult, q.doParse(index))
+          if pResult.result == am.empty && !pResult.committed then ap.or(pResult, q.doParse(index))
           else pResult
 
 given Flattener[List] with
@@ -166,7 +165,8 @@ given [I, M[+_]](using Functor[ParseResult[M, *]]): Functor[ParserT[I, *, M]] wi
         override def parseImpl(index: Int)(using input: IndexedSeq[I]): ParseResult[M, (Int, S)] =
           Functor.map(f.doParse(index), (advance, t) => (advance, g(t)))
 
-given [I, M[+_]] (using Functor[ParseResult[M, *]])
+given [I, M[+_]]
+  (using Functor[ParseResult[M, *]])
   (using Applicative[ParseResult[M, *]])
   (using Monad[ParseResult[M, *]])
   : Applicative[ParserT[I, *, M]] with
@@ -179,7 +179,8 @@ given [I, M[+_]] (using Functor[ParseResult[M, *]])
     else if m.isFailureParser then m.asInstanceOf[ParserT[I, S, M]]
     else flatMapImpl(f, f => summon[Functor[ParserT[I, *, M]]].map(m, m => f(m)))
 
-given [I, M[+_]] (using Functor[ParseResult[M, *]])
+given [I, M[+_]]
+  (using Functor[ParseResult[M, *]])
   (using Applicative[ParseResult[M, *]])
   (using Monad[ParseResult[M, *]])
   : Monad[ParserT[I, *, M]] with
@@ -199,10 +200,11 @@ private def flatMapImpl[I, M[+_], T, S]
         mp.flatMap(
           m.doParse(index),
           (advance, t) =>
-            fp.map(f(t).doParse(index + advance), (advance2, s) => (advance + advance2, s))
+            fp.map(f(t).doParse(index + advance), (advance2, s) => (advance + advance2, s)),
         )
 
-given [I, M[+_]] (using Applicative[ParserT[I, *, M]])
+given [I, M[+_]]
+  (using Applicative[ParserT[I, *, M]])
   (using Applicative[ParseResult[M, *]])
   (using ap: Alternative[ParseResult[M, *]])
   (using Applicative[M])
@@ -238,7 +240,8 @@ given [M[+_]](using flattener: Flattener[M])(using Functor[M]): Functor[ParseRes
   override def map[T, S](f: ParseResult[M, T], g: T => S): ParseResult[M, S] =
     ParseResult(Functor.map(f.result, g), f.errors, f.committed)
 
-given [M[+_]] (using Functor[ParseResult[M, *]])
+given [M[+_]]
+  (using Functor[ParseResult[M, *]])
   (using flattener: Flattener[M])
   (using Functor[M])
   (using Applicative[M])
@@ -246,12 +249,11 @@ given [M[+_]] (using Functor[ParseResult[M, *]])
   : Applicative[ParseResult[M, *]] with
   override def pure[T](t: T): ParseResult[M, T] = success(Applicative.pure(t))
 
-  override def starApply[T, S]
-    (f: ParseResult[M, T => S], m: ParseResult[M, T])
-    : ParseResult[M, S] =
+  override def starApply[T, S](f: ParseResult[M, T => S], m: ParseResult[M, T]): ParseResult[M, S] =
     flatMapImpl(f, f => Functor.map(m, m => f(m)))
 
-given [M[+_]] (using Functor[ParseResult[M, *]])
+given [M[+_]]
+  (using Functor[ParseResult[M, *]])
   (using Applicative[ParseResult[M, *]])
   (using flattener: Flattener[M])
   (using Functor[M])
@@ -272,10 +274,11 @@ private def flatMapImpl[M[+_], T, S]
   ParseResult(
     Monad.flatMap(parseResults, r => r.result),
     m.errors ++ flattener.flatten(Monad.flatMap(parseResults, r => Applicative.pure(r.errors))),
-    flattener.or(Functor.map(parseResults, _.committed), m.committed)
+    flattener.or(Functor.map(parseResults, _.committed), m.committed),
   )
 
-given [M[+_]] (using Applicative[ParseResult[M, *]])
+given [M[+_]]
+  (using Applicative[ParseResult[M, *]])
   (using flattener: Flattener[M])
   (using Monad[M])
   (using Alternative[M])
@@ -288,7 +291,7 @@ given [M[+_]] (using Applicative[ParseResult[M, *]])
       a.result, {
         evaluatedB = Some(b)
         evaluatedB.get.result
-      }
+      },
     )
     evaluatedB match
       case Some(b) => ParseResult(result, a.errors ++ b.errors, a.committed || b.committed)

@@ -168,11 +168,7 @@ private object CycleVisitor
     : Boolean =
     action(using (ctx._1 + 1, ctx._2))
 
-  override def visitVar
-    (v: Var)
-    (using ctx: (Nat, Boolean))
-    (using Σ: Signature)
-    : Boolean =
+  override def visitVar(v: Var)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
     // Only report true (cyclic) if a type or value has been encountered from root term.
     ctx._2 && v.idx == ctx._1
 
@@ -278,8 +274,8 @@ def unifyAll
                 u̅.map(_.subst(σt)),
                 v̅.map(_.subst(σt)),
                 telescope.substLowers(u).subst(σt),
-              )(
-                using _Δ,
+              )(using
+                _Δ,
               )
             yield compose(uRes, uRes2)
           case u => Right(u)

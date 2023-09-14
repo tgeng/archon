@@ -287,7 +287,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case Type(Top(l, EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
       app("Type?", l)
     case Type(Top(l, eqD)) => app("Type", l, "withEqDecidability", eqD)
-    case Type(upperBound)                => app("SubtypeOf", upperBound)
+    case Type(upperBound)  => app("SubtypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
     top.level match
@@ -846,7 +846,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
   }
 
-  extension(blocks: Iterable[String | Block])
+  extension (blocks: Iterable[String | Block])
     def sepBy(delimiter: String | Block): Block =
       if blocks.isEmpty then Block()
       else
@@ -872,11 +872,12 @@ private def unroll[E, T]
     }
   case Right(b) => (Nil, b)
 
-extension(o: LevelOrder) {
-  def sub: String = 
+extension (o: LevelOrder) {
+  def sub: String =
     val mString = o.m match
       case 0 => ""
-      case m => subNat(m) + "ω₊" // Unfortunately there doesn't seem to be a subscript character for ω
+      case m =>
+        subNat(m) + "ω₊" // Unfortunately there doesn't seem to be a subscript character for ω
     val nString = subNat(o.n)
     mString + nString
 }
