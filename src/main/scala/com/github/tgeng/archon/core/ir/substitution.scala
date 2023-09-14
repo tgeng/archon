@@ -75,8 +75,7 @@ given RaisableTelescope: Raisable[Telescope] with
           bar + 1,
         )
 
-private object PatternSubstituteTransformer
-  extends Transformer[(PartialSubstitution[Pattern], /* offset */ Int)]:
+private object PatternSubstituteTransformer extends Transformer[(PartialSubstitution[Pattern], /* offset */ Int)]:
   override def withBindings[T]
     (bindingNames: => Seq[Ref[Name]])
     (action: ((PartialSubstitution[Pattern], Int)) ?=> T)
@@ -85,10 +84,7 @@ private object PatternSubstituteTransformer
     : T =
     action(using (ctx._1, ctx._2 + bindingNames.size))
 
-  override def transformVar
-    (v: Var)
-    (using ctx: (PartialSubstitution[Pattern], /* offset */ Int))
-    (using Σ: Signature) =
+  override def transformVar(v: Var)(using ctx: (PartialSubstitution[Pattern], /* offset */ Int))(using Σ: Signature) =
     ctx._1(v.idx - ctx._2) match
       case Some(t) =>
         RaisableVTerm.raise(
@@ -101,10 +97,7 @@ private object PatternSubstituteTransformer
         )
       case _ => v
 
-  override def transformPVar
-    (v: PVar)
-    (using ctx: (PartialSubstitution[Pattern], /* offset */ Int))
-    (using Σ: Signature) =
+  override def transformPVar(v: PVar)(using ctx: (PartialSubstitution[Pattern], /* offset */ Int))(using Σ: Signature) =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisablePattern.raise(t, ctx._2)
       case _       => v
@@ -133,8 +126,7 @@ given SubstitutableCoPattern: Substitutable[CoPattern, Pattern] with
     : CoPattern =
     PatternSubstituteTransformer.transformCoPattern(p)(using (substitution, offset))
 
-private object VTermSubstituteTransformer
-  extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)]:
+private object VTermSubstituteTransformer extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)]:
   override def withBindings[T]
     (bindingNames: => Seq[Ref[Name]])
     (action: ((PartialSubstitution[VTerm], Int)) ?=> T)
@@ -143,18 +135,12 @@ private object VTermSubstituteTransformer
     : T =
     action(using (ctx._1, ctx._2 + bindingNames.size))
 
-  override def transformVar
-    (v: Var)
-    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
-    (using Σ: Signature) =
+  override def transformVar(v: Var)(using ctx: (PartialSubstitution[VTerm], /* offset */ Int))(using Σ: Signature) =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _       => v
 
-  override def transformPVar
-    (v: PVar)
-    (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
-    (using Σ: Signature) =
+  override def transformPVar(v: PVar)(using ctx: (PartialSubstitution[VTerm], /* offset */ Int))(using Σ: Signature) =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => PForced(RaisableVTerm.raise(t, ctx._2))
       case _       => v
@@ -212,9 +198,8 @@ extension (c: CTerm)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableCTerm.raise(c, -amount, at)
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
@@ -236,9 +221,8 @@ extension (b: Binding[VTerm])
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature): Binding[VTerm] =
     b.map(_.strengthen(amount, at))
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature): Binding[VTerm] =
     b.map(_.substLowers(vTerms: _*))
@@ -253,9 +237,8 @@ extension (v: VTerm)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableVTerm.raise(v, -amount, at)
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
@@ -277,9 +260,8 @@ extension (e: Elimination[VTerm])
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     e.map(v => RaisableVTerm.raise(v, -amount, at))
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length
@@ -301,9 +283,8 @@ extension (v: Pattern)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisablePattern.raise(v, -amount, at)
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: Pattern*)(using Σ: Signature) =
     val count = vTerms.length
@@ -327,9 +308,8 @@ extension (v: CoPattern)
   def strengthen(amount: Nat, at: Nat)(using Σ: Signature) =
     RaisableCoPattern.raise(v, -amount, at)
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: Pattern*)(using Σ: Signature) =
     val count = vTerms.length
@@ -355,9 +335,8 @@ extension (telescope: Telescope)
       at,
     )
 
-  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the
-    * highest index with the last substitutes 0. Then the result is raised so that the substituted
-    * indices are taken by other (deeper) indices.
+  /** Substitutes lower DeBruijn indices with the given terms. The first term substitutes the highest index with the
+    * last substitutes 0. Then the result is raised so that the substituted indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature) =
     val count = vTerms.length

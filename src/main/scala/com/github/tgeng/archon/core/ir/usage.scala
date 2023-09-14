@@ -105,8 +105,7 @@ private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
     .map {
       _.partitionMap { prod =>
         if prod.isEmpty then Right(Usage.U1)
-        else if prod.size == 1 && prod.head.isInstanceOf[Usage] then
-          Right(prod.head.asInstanceOf[Usage])
+        else if prod.size == 1 && prod.head.isInstanceOf[Usage] then Right(prod.head.asInstanceOf[Usage])
         else Left(prod)
       }
     }

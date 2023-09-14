@@ -47,7 +47,7 @@ def checkIsSubtype
   case (u @ RUnsolved(_, _, UmcVSubtype(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
-      case _ => Right(Set(Constraint.VSubType(Γ, sub, sup)))
+      case _                                          => Right(Set(Constraint.VSubType(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _) | (_, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.VSubType(Γ, sub, sup)))
   case (Type(upperBound1), Type(upperBound2)) => checkIsSubtype(upperBound1, upperBound2)
@@ -135,7 +135,7 @@ def checkIsSubtype
   case ((u @ RUnsolved(_, _, UmcCSubtype(existingLowerBound), tm, ty), Nil), sup: CTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, value)
-      case _ => Right(Set(Constraint.CSubType(Γ, sub, sup)))
+      case _                                          => Right(Set(Constraint.CSubType(Γ, sub, sup)))
   case ((_: ResolvedMetaVariable, Nil), _) | (_, (_: ResolvedMetaVariable, Nil)) =>
     Right(Set(Constraint.CSubType(Γ, sub, sup)))
   case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
@@ -235,8 +235,7 @@ private def checkEqDecidabilitySubsumption
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(eqD1, eqD2):
-  case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) |
-    (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
+  case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) | (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
     Right(Set.empty)
   case (u: RUnsolved, EqDecidabilityLiteral(EqDecidability.EqDecidable)) =>
     ctx.assignUnsolved(u, Return(eqD2))
@@ -247,8 +246,8 @@ private def checkEqDecidabilitySubsumption
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2))
 
 /** @param invert
-  *   useful when checking patterns where the consumed usages are actually provided usages because
-  *   lhs patterns are multiplied by declared usages in function
+  *   useful when checking patterns where the consumed usages are actually provided usages because lhs patterns are
+  *   multiplied by declared usages in function
   */
 private def checkUsagesSubsumption
   (usages: Usages, invert: Boolean = false)
@@ -323,12 +322,15 @@ def checkUsageSubsumption
               Right(Set.empty)
         yield r
   // If upper bound is UUnres, the meta variable can only take UUnres as the value.
-  case (u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty), UsageLiteral(Usage.UUnres)) =>
+  case (
+      u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty),
+      UsageLiteral(Usage.UUnres),
+    ) =>
     ctx.assignUnsolved(u, Return(UsageLiteral(Usage.UUnres)))
   case (u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
-      case _ => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+      case _                                          => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case _ => Left(NotUsageSubsumption(sub, sup))
@@ -360,9 +362,7 @@ private def checkLevelSubsumption
   (using Σ: Signature)
   (using TypingContext)
   : Either[IrError, Set[Constraint]] =
-  def extractLiteralAndOperands
-    (level: VTerm)
-    : Either[IrError, Option[(LevelOrder, Map[VTerm, Nat])]] =
+  def extractLiteralAndOperands(level: VTerm): Either[IrError, Option[(LevelOrder, Map[VTerm, Nat])]] =
     for level <- level.normalized
     yield level match
       case Level(l, operands) => Some((l, operands))
@@ -405,11 +405,7 @@ private def checkLevelSubsumption
 
 private def check2
   (a: VTerm, b: VTerm)
-  (
-    action: (ResolvedMetaVariable | VTerm, ResolvedMetaVariable | VTerm) => Either[IrError, Set[
-      Constraint,
-    ]],
-  )
+  (action: (ResolvedMetaVariable | VTerm, ResolvedMetaVariable | VTerm) => Either[IrError, Set[Constraint]])
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)

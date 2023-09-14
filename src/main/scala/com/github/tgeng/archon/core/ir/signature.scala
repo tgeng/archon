@@ -36,13 +36,12 @@ enum Declaration:
     )
   case Definition(val qn: QualifiedName)(val ty: CTerm)
 
-  /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest
-    * `U` are not allowed. This is necessary because type-based handler matching needs a "simple"
-    * way to efficiently locate the corresponding handler. Arbitrary logic that can happen during
-    * conversion would make it very difficult to implement dynamic handlers efficiently. Also note
-    * that this means we also need to conservatively reject `tParamTys` like `[A: Type, a: A]`
-    * because there is no way to statically know if `A` could be `U`. In addition, this also rules
-    * out any data type that wraps non-eqDecidable computation inside.
+  /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest `U` are not allowed.
+    * This is necessary because type-based handler matching needs a "simple" way to efficiently locate the corresponding
+    * handler. Arbitrary logic that can happen during conversion would make it very difficult to implement dynamic
+    * handlers efficiently. Also note that this means we also need to conservatively reject `tParamTys` like `[A: Type,
+    * a: A]` because there is no way to statically know if `A` could be `U`. In addition, this also rules out any data
+    * type that wraps non-eqDecidable computation inside.
     */
   case Effect
     (val qn: QualifiedName)
@@ -50,25 +49,21 @@ enum Declaration:
       val tParamTys: Context = IndexedSeq(),
       /** Semantic:
         *
-        *   - None: operations don't manipulate continuations at all (hence won't have access to a
-        *     continuation argument). Instead, implementation of an operation simply returns the
-        *     operation result. Semantically None subsumes `U1` because it's a more restricted case
-        *     of U1.
-        *   - Some(u): operations can manipulate continuations in ways according to `u`.
-        *     Specifically, for each value of `u` as the following
+        *   - None: operations don't manipulate continuations at all (hence won't have access to a continuation
+        *     argument). Instead, implementation of an operation simply returns the operation result. Semantically None
+        *     subsumes `U1` because it's a more restricted case of U1.
+        *   - Some(u): operations can manipulate continuations in ways according to `u`. Specifically, for each value of
+        *     `u` as the following
         *     - U0: continuation can only be disposed
-        *     - U1: continuation can only be resumed. Difference from `None` is that output of
-        *       continuation can be inspected and more computation can be done after the
-        *       continuation is resumed.
+        *     - U1: continuation can only be resumed. Difference from `None` is that output of continuation can be
+        *       inspected and more computation can be done after the continuation is resumed.
         *     - UAff: continuation can be resumed or disposed
         *     - URel: continuation can be resumed or replicated
-        *     - UUnres: continuation an be resumed, disposed, or replicated.
-        *     Note that continuation is always captured linearly in `U`. It's difficult to sugarize
-        *     the record type `U U1 Continuation` as a function type with various usages and
-        *     automatically insert dispose and replicate wherever needed. This is because dispose
-        *     and replicate can be effectful. The effect is captured by the `Continuation` record
-        *     type, though such effects can only have `None` continuation usage so that the
-        *     operation semantic is simple.
+        *     - UUnres: continuation an be resumed, disposed, or replicated. Note that continuation is always captured
+        *       linearly in `U`. It's difficult to sugarize the record type `U U1 Continuation` as a function type with
+        *       various usages and automatically insert dispose and replicate wherever needed. This is because dispose
+        *       and replicate can be effectful. The effect is captured by the `Continuation` record type, though such
+        *       effects can only have `None` continuation usage so that the operation semantic is simple.
         */
       val continuationUsage: Option[Usage],
     )
@@ -81,10 +76,10 @@ case class Constructor
   (
     name: Name,
     paramTys: Telescope = Nil, /* + tParamTys */
-    /** Arguments passed to the data type constructor. The length should be identical with
-      * `tIndexTys`. Hence, for non-indexed type this should just be `Nil`. For indexed families,
-      * the argument here can be any expressions. For example, for `Vec (A: Type) : (n: Nat) ->
-      * Type`, this would be [0] for constructor `Nil` and `[n + 1]` for constructor `Cons`.
+    /** Arguments passed to the data type constructor. The length should be identical with `tIndexTys`. Hence, for
+      * non-indexed type this should just be `Nil`. For indexed families, the argument here can be any expressions. For
+      * example, for `Vec (A: Type) : (n: Nat) -> Type`, this would be [0] for constructor `Nil` and `[n + 1]` for
+      * constructor `Cons`.
       */
     tArgs: Arguments = Nil, /* + tParamTys + paramTys */
   )

@@ -20,8 +20,7 @@ import MetaVariable.*
 import Elimination.*
 
 trait Reducible[T]:
-  def reduce(t: T)(using ctx: Context)(using signature: Signature)(using TypingContext)
-    : Either[IrError, T]
+  def reduce(t: T)(using ctx: Context)(using signature: Signature)(using TypingContext): Either[IrError, T]
 
 extension [T](a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
@@ -70,10 +69,9 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
   /** @param pc
     *   "program counter"
     * @param reduceDown
-    *   if true, logic should not try to decompose the [[pc]] and push it's components on to the
-    *   stack. This is useful so that the run logic does not spin into infinite loop if the given
-    *   term has type errors. (Ideally, input should be type-checked so this should never happen,
-    *   unless there are bugs in type checking code.)
+    *   if true, logic should not try to decompose the [[pc]] and push it's components on to the stack. This is useful
+    *   so that the run logic does not spin into infinite loop if the given term has type errors. (Ideally, input should
+    *   be type-checked so this should never happen, unless there are bugs in type checking code.)
     * @return
     */
   @tailrec
@@ -498,11 +496,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
     current
 
 extension (c: CTerm)
-  def normalized
-    (using Γ: Context)
-    (using Σ: Signature)
-    (using TypingContext)
-    : Either[IrError, CTerm] =
+  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, CTerm] =
     // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
@@ -515,11 +509,9 @@ extension (c: CTerm)
           r.elims.map(transformElim),
         )(using r.sourceInfo)
 
-      override def transformCollapse
-        (c: Collapse)
-        (using ctx: TypingContext)
-        (using Σ: Signature)
-        : VTerm = transformCTerm(c.cTm) match
+      override def transformCollapse(c: Collapse)(using ctx: TypingContext)(using Σ: Signature): VTerm = transformCTerm(
+        c.cTm,
+      ) match
         case Return(v) => transformVTerm(v)
         case _         => c
 
@@ -529,21 +521,12 @@ extension (c: CTerm)
         yield redex(t, elims)
       case t => Right(t)
 
-  def normalized
-    (ty: Option[CTerm])
-    (using Γ: Context)
-    (using Σ: Signature)
-    (using TypingContext)
-    : Either[IrError, CTerm] =
+  def normalized(ty: Option[CTerm])(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, CTerm] =
     if isTotal(c, ty) then Reducible.reduce(c)
     else c.normalized
 
 extension (v: VTerm)
-  def normalized
-    (using Γ: Context)
-    (using Σ: Signature)
-    (using TypingContext)
-    : Either[IrError, VTerm] = v match
+  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, VTerm] = v match
     case Collapse(cTm) =>
       for
         reduced <- Reducible.reduce(cTm)
@@ -624,11 +607,7 @@ extension (v: VTerm)
     case _ => Right(v)
 
 extension (vs: List[VTerm])
-  def normalized
-    (using ctx: Context)
-    (using Σ: Signature)
-    (using TypingContext)
-    : Either[IrError, List[VTerm]] =
+  def normalized(using ctx: Context)(using Σ: Signature)(using TypingContext): Either[IrError, List[VTerm]] =
     transpose(vs.map(_.normalized))
 
 given Reducible[CTerm] with
@@ -645,12 +624,7 @@ given Reducible[CTerm] with
     .map(_.withSourceInfo(t.sourceInfo))
 
 object Reducible:
-  def reduce
-    (t: CTerm)
-    (using Context)
-    (using Signature)
-    (using ctx: TypingContext)
-    : Either[IrError, CTerm] =
+  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): Either[IrError, CTerm] =
     ctx.trace[IrError, CTerm](
       s"reducing",
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
@@ -731,7 +705,7 @@ def matchCoPattern
       var status: MatchingStatus = matchingStatus
       var elims = rest
       elim match
-        case (CPattern(p), ETerm(w)) => matchPattern(List((p, w)), mapping, matchingStatus)
+        case (CPattern(p), ETerm(w))                  => matchPattern(List((p, w)), mapping, matchingStatus)
         case (CProjection(n1), EProj(n2)) if n1 == n2 =>
         case (CProjection(_), ETerm(_)) | (_, EProj(_)) =>
           throw IllegalArgumentException("type error")

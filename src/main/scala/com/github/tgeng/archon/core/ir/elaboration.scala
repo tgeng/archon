@@ -150,20 +150,12 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
     )
     : Set[QualifiedName] = rs.flatten.toSet
 
-  override def visitQualifiedName
-    (qn: QualifiedName)
-    (using ctx: Unit)
-    (using Σ: Signature)
-    : Set[QualifiedName] = Set(qn)
+  override def visitQualifiedName(qn: QualifiedName)(using ctx: Unit)(using Σ: Signature): Set[QualifiedName] = Set(qn)
 
 end QualifiedNameVisitor
 
 private given Γ0: Context = IndexedSeq()
-private def elaborateHead
-  (preData: PreData)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Signature] =
+private def elaborateHead(preData: PreData)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Signature] =
   ctx.trace(s"elaborating data signature ${preData.qn}") {
     def elaborateTy
       (ty: CTerm)
@@ -202,11 +194,7 @@ private def elaborateHead
     yield Σ.addDeclaration(data)
   }
 
-private def elaborateBody
-  (preData: PreData)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Signature] =
+private def elaborateBody(preData: PreData)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Signature] =
   ctx.trace(s"elaborating data body ${preData.qn}") {
     val data = Σ.getData(preData.qn)
 
@@ -224,8 +212,7 @@ private def elaborateBody
           // acceptable.
           // TODO: report better error if `qn`, arg count, or param args (not refs to those bound at
           //  data declaration) are unexpected.
-          case F(DataType(qn, args), _, _)
-            if qn == data.qn && args.size == data.tParamTys.size + data.tIndexTys.size =>
+          case F(DataType(qn, args), _, _) if qn == data.qn && args.size == data.tParamTys.size + data.tIndexTys.size =>
             // Drop parameter args because Constructor.tArgs only track index args
             // TODO: check and report invalid args
             Right((Nil, args.drop(data.tParamTys.size)))
@@ -255,11 +242,7 @@ private def elaborateBody
     }
   }
 
-private def elaborateHead
-  (record: PreRecord)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Signature] =
+private def elaborateHead(record: PreRecord)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Signature] =
   ctx.trace(s"elaborating record signature ${record.qn}") {
     for
       tParamTys <- elaborateTContext(record.tParamTys)
@@ -389,14 +372,8 @@ private def elaborateBody
     case ElabClause(_, q :: _, _, _) :: _       => Left(UnexpectedCPattern(q))
     case c @ ElabClause(_, _, rhs, source) :: _ => Left(MissingUserCoPattern(source))
 
-  def subst
-    (problem: Problem, σ: PartialSubstitution[VTerm])
-    (using Σ: Signature)
-    : Either[IrError, Problem] =
-    def simplify
-      (v: VTerm, p: Pattern, _A: VTerm)
-      (using Σ: Signature)
-      : Either[IrError, Option[List[Constraint]]] =
+  def subst(problem: Problem, σ: PartialSubstitution[VTerm])(using Σ: Signature): Either[IrError, Problem] =
+    def simplify(v: VTerm, p: Pattern, _A: VTerm)(using Σ: Signature): Either[IrError, Option[List[Constraint]]] =
       // It's assumed that v is already normalized. The only place un-normalized term may appear
       // during elaboration is through unification. But unification pre-normalizes terms so in
       // here all terms are already normalized.
@@ -451,10 +428,7 @@ private def elaborateBody
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
         case _ => Right(Some(List((v, p, _A))))
 
-    def simplifyAll
-      (constraints: List[Constraint])
-      (using Σ: Signature)
-      : Either[IrError, Option[List[Constraint]]] =
+    def simplifyAll(constraints: List[Constraint])(using Σ: Signature): Either[IrError, Option[List[Constraint]]] =
       constraints match
         case Nil => Right(Some(Nil))
         case (v, p, _A) :: constraints =>
@@ -553,8 +527,7 @@ private def elaborateBody
 
               // split data type
               case (_, (x: Var, PDataType(qn, args), _A)) =>
-                if !providedAtLeastU1Usage(x) then
-                  Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
+                if !providedAtLeastU1Usage(x) then Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
                 else
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
                   assert(
@@ -639,8 +612,7 @@ private def elaborateBody
 
               // split constructor
               case (_, (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))) =>
-                if providedAtLeastU1Usage(x) then
-                  Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
+                if providedAtLeastU1Usage(x) then Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
                 else
                   val (_Γ1, binding, _Γ2) = Γ.split(x)
                   assert(
@@ -774,11 +746,7 @@ private def elaborateBody
     yield _Σ.addCaseTree(preDefinition.qn, _Q)
   }
 
-private def elaborateHead
-  (effect: PreEffect)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Signature] =
+private def elaborateHead(effect: PreEffect)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Signature] =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     for
       tParamTys <- elaborateContext(effect.tParamTys)

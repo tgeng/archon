@@ -393,8 +393,8 @@ object Builtins:
       ),
     ),
 
-    /** CSubtypeOf (level : LevelType) (effects: EffectsType) (upperBound : U(CType(CTop(level,
-      * effects)))) : CType(CType(.force upperBound, effects))
+    /** CSubtypeOf (level : LevelType) (effects: EffectsType) (upperBound : U(CType(CTop(level, effects)))) :
+      * CType(CType(.force upperBound, effects))
       *
       * {} |- := CType(.force upperBound, effects)
       */

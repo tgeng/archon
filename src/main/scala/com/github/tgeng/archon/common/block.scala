@@ -38,8 +38,7 @@ import DelimitPolicy.*
 object Block:
   def apply
     (
-      objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String |
-        Iterable[String | Block])*,
+      objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[String | Block])*,
     )
     : Block =
     var wrapPolicy: WrapPolicy = Wrap
@@ -161,57 +160,55 @@ case class Block
       case s: String => s.headOption.getOrElse(' ')
     }
 
-    private def width
-      (widthLeft: Int, onlyMeasureFirstLine: Boolean = false)
-      (using ctx: PrintContext)
-      : Option[Int] = boundary:
-      b match {
-        case s: String => if (s.size <= widthLeft) Some(s.size) else None
-        case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
-          if (onlyMeasureFirstLine) {
-            wrapPolicy match {
-              case AlwaysNewline => return Some(0)
-              case ChopDown =>
-                indentPolicy match {
-                  case FixedIncrement(_) => return Some(0)
-                  case Aligned =>
-                    b.children.headOption match {
-                      case Some(cb) => return cb.width(widthLeft, true)
-                      case None     => return Some(0)
-                    }
-                }
-              case Wrap =>
-                b.children.headOption match {
-                  case Some(cb) => return cb.width(widthLeft, true)
-                  case None     => return Some(0)
-                }
-              case _ => ()
+    private def width(widthLeft: Int, onlyMeasureFirstLine: Boolean = false)(using ctx: PrintContext): Option[Int] =
+      boundary:
+        b match {
+          case s: String => if (s.size <= widthLeft) Some(s.size) else None
+          case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
+            if (onlyMeasureFirstLine) {
+              wrapPolicy match {
+                case AlwaysNewline => return Some(0)
+                case ChopDown =>
+                  indentPolicy match {
+                    case FixedIncrement(_) => return Some(0)
+                    case Aligned =>
+                      b.children.headOption match {
+                        case Some(cb) => return cb.width(widthLeft, true)
+                        case None     => return Some(0)
+                      }
+                  }
+                case Wrap =>
+                  b.children.headOption match {
+                    case Some(cb) => return cb.width(widthLeft, true)
+                    case None     => return Some(0)
+                  }
+                case _ => ()
+              }
             }
-          }
-          wrapPolicy match {
-            case AlwaysNewline => return None
-            case _             => ()
-          }
-          var width = 0
-          var widthLeft2 = widthLeft
-          for (child <- children) {
-            var childWidth = child.width(widthLeft2) match {
-              case Some(w) => w
-              case None    => break[Option[Int]](None)
+            wrapPolicy match {
+              case AlwaysNewline => return None
+              case _             => ()
+            }
+            var width = 0
+            var widthLeft2 = widthLeft
+            for (child <- children) {
+              var childWidth = child.width(widthLeft2) match {
+                case Some(w) => w
+                case None    => break[Option[Int]](None)
+              }
+              delimitPolicy match {
+                case Whitespace | Paragraph => childWidth += 1
+                case Concat                 => ()
+              }
+              width += childWidth
+              widthLeft2 -= childWidth
             }
             delimitPolicy match {
-              case Whitespace | Paragraph => childWidth += 1
-              case Concat                 => ()
+              case Whitespace | Paragraph => Some(width - 1)
+              case Concat                 => Some(width)
             }
-            width += childWidth
-            widthLeft2 -= childWidth
-          }
-          delimitPolicy match {
-            case Whitespace | Paragraph => Some(width - 1)
-            case Concat                 => Some(width)
           }
         }
-      }
 }
 
 class PrintContext

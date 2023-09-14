@@ -39,12 +39,10 @@ def checkIsConvertible
       left <- left.normalized
       right <- right.normalized
       r <- (left, right, ty) match
-        case (_, _, _) if left == right => Right(Set.empty)
+        case (_, _, _) if left == right                                                   => Right(Set.empty)
         case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType(_))) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(
-              ((v, _) => hasCollapse(v)),
-            )
+          if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(((v, _) => hasCollapse(v)))
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_))) =>
@@ -175,8 +173,8 @@ def checkIsConvertible
                 case _         => throw IllegalStateException("type error")
             case ((_: RGuarded, _), _) | (_, (_: RGuarded, _)) =>
               Right(Set(Constraint.CConversion(Γ, left, right, ty)))
-            case ((u: RUnsolved, elims), t: CTerm) => checkRedexIsConvertible(u, elims, t, ty)
-            case (t: CTerm, (u: RUnsolved, elims)) => checkRedexIsConvertible(u, elims, t, ty)
+            case ((u: RUnsolved, elims), t: CTerm)                  => checkRedexIsConvertible(u, elims, t, ty)
+            case (t: CTerm, (u: RUnsolved, elims))                  => checkRedexIsConvertible(u, elims, t, ty)
             case ((u1: RUnsolved, elims1), (u2: RUnsolved, elims2)) =>
               // This step is to make meta variable delegation deterministic
               val (uSmall, elimsSmall, uBig, elimsBig) =
@@ -192,7 +190,7 @@ def checkIsConvertible
             case (Return(v1), Return(v2)) =>
               ty match
                 case Some(F(ty, _, _)) => checkIsConvertible(v1, v2, Some(ty))
-                case _ => throw IllegalStateException("should have been checked to be a F type")
+                case _                 => throw IllegalStateException("should have been checked to be a F type")
             case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
               for
                 effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
@@ -322,19 +320,17 @@ def checkIsConvertible
                     case Some(effect) =>
                       for
                         tArgConstraint <- transpose(
-                          tArgs1.zip(tArgs2).zip(effect.tParamTys).map {
-                            case ((tArg1, tArg2), binding) =>
-                              val r = checkIsConvertible(tArg1, tArg2, Some(binding.ty))
-                              args = args :+ tArg1
-                              r
+                          tArgs1.zip(tArgs2).zip(effect.tParamTys).map { case ((tArg1, tArg2), binding) =>
+                            val r = checkIsConvertible(tArg1, tArg2, Some(binding.ty))
+                            args = args :+ tArg1
+                            r
                           },
                         ).map(_.flatten.toSet)
                         argConstraint <- transpose(
-                          args1.zip(args2).zip(operation.paramTys).map {
-                            case ((arg1, arg2), binding) =>
-                              val r = checkIsConvertible(arg1, arg2, Some(binding.ty))
-                              args = args :+ arg1
-                              r
+                          args1.zip(args2).zip(operation.paramTys).map { case ((arg1, arg2), binding) =>
+                            val r = checkIsConvertible(arg1, arg2, Some(binding.ty))
+                            args = args :+ arg1
+                            r
                           },
                         ).map(_.flatten.toSet)
                       yield tArgConstraint ++ argConstraint
@@ -366,8 +362,7 @@ def checkAreConvertible
             then Right(Set(Constraint.Conversions(Γ, lefts, rights, tys)))
             // the head term is not referenced in the tail, add the tail constraint in addition to the head
             // constraints
-            else
-              checkAreConvertible(tailLefts, tailRights, tys.strengthened).map(headConstraints ++ _)
+            else checkAreConvertible(tailLefts, tailRights, tys.strengthened).map(headConstraints ++ _)
       yield r
     case _ => throw IllegalArgumentException("length mismatch")
 
@@ -407,8 +402,7 @@ private def checkElimIsConvertible
           for
             headConstraints <- checkIsConvertible(left, right, Some(binding.ty)).flatMap(ctx.solve)
             r <-
-              if headConstraints.isEmpty then
-                checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)
+              if headConstraints.isEmpty then checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)
               else
                 val (a, b) = getFreeVars(bodyTy)(using 0)
                 if a(0) || b(0) then Right(resultConstraint)

@@ -2,8 +2,8 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.Nat
 
-/** First element is the outermost binding, e.g. [x: Nat, y: Vector String x] is represented as `x:
-  * Nat :: y: Vector String x :: []`
+/** First element is the outermost binding, e.g. [x: Nat, y: Vector String x] is represented as `x: Nat :: y: Vector
+  * String x :: []`
   */
 type Telescope = List[Binding[VTerm]]
 

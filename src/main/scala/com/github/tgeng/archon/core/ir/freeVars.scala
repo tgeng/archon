@@ -66,11 +66,7 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
         .toSeq: _*,
     )
 
-  override def visitCellType
-    (cellType: CellType)
-    (using ctx: Nat)
-    (using Σ: Signature)
-    : (Set[Nat], Set[Nat]) = combine(
+  override def visitCellType(cellType: CellType)(using ctx: Nat)(using Σ: Signature): (Set[Nat], Set[Nat]) = combine(
     visitVTerm(cellType.heap),
     mix(visitVTerm(cellType.ty)),
   )
@@ -105,30 +101,19 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
       visitCTerm(functionType.bodyTy)(using bar + 1),
     )
 
-def getFreeVars
-  (tm: VTerm)
-  (using bar: Nat)
-  (using Σ: Signature)
-  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+def getFreeVars(tm: VTerm)(using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   FreeVarsVisitorObject.visitVTerm(
     tm,
   )
 
-def getFreeVars
-  (tm: CTerm)
-  (using bar: Nat)
-  (using Σ: Signature)
-  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+def getFreeVars(tm: CTerm)(using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
   FreeVarsVisitorObject.visitCTerm(tm)
 
-def getFreeVars
-  (eff: Eff)
-  (using bar: Nat)
-  (using Σ: Signature)
-  : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = eff._2
-  .map(getFreeVars)
-  .reduceOption(union)
-  .getOrElse((Set.empty, Set.empty))
+def getFreeVars(eff: Eff)(using bar: Nat)(using Σ: Signature): ( /* positive */ Set[Nat], /* negative */ Set[Nat]) =
+  eff._2
+    .map(getFreeVars)
+    .reduceOption(union)
+    .getOrElse((Set.empty, Set.empty))
 
 def getFreeVars
   (args: Iterable[VTerm])
@@ -139,9 +124,7 @@ def getFreeVars
   .reduceOption(union)
   .getOrElse((Set.empty, Set.empty))
 
-private def union
-  (freeVars1: (Set[Nat], Set[Nat]), freeVars2: (Set[Nat], Set[Nat]))
-  : (Set[Nat], Set[Nat]) =
+private def union(freeVars1: (Set[Nat], Set[Nat]), freeVars2: (Set[Nat], Set[Nat])): (Set[Nat], Set[Nat]) =
   (freeVars1._1 | freeVars2._1, freeVars1._2 | freeVars2._2)
 
 extension (freeVars1: (Set[Nat], Set[Nat]))

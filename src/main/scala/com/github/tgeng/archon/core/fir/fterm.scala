@@ -19,10 +19,9 @@ import com.github.tgeng.archon.core.common.*
   *           (S m) + n => S (m + n)
   * ```
   *
-  * * Use `_` for automatically inferred value, like in Agda and Idris * Use `$` for placeholder of
-  * unbound variables, like `_` in Scala. Specifically, `$0` binds to the first parameter, `$1` the
-  * second, etc. Also, internal names of operator has holes filled with `$`. So the `+` operator in
-  * `1 + 2` has internal name `$+$`.
+  * * Use `_` for automatically inferred value, like in Agda and Idris * Use `$` for placeholder of unbound variables,
+  * like `_` in Scala. Specifically, `$0` binds to the first parameter, `$1` the second, etc. Also, internal names of
+  * operator has holes filled with `$`. So the `+` operator in `1 + 2` has internal name `$+$`.
   *
   * ## Handler
   *

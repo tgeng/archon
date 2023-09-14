@@ -12,41 +12,30 @@ trait Visitor[C, R]:
 
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def withBindings
-    (bindingNames: => Seq[Ref[Name]])
-    (action: C ?=> R)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
+  def withBindings(bindingNames: => Seq[Ref[Name]])(action: C ?=> R)(using ctx: C)(using Σ: Signature): R =
     action(using ctx)
 
-  def visitPreTContext
-    (tTelescope: List[(Binding[CTerm], Variance)])
-    (using ctx: C)
-    (using Σ: Signature)
-    : R = tTelescope match
-    case Nil => combine()
-    case (binding, _) :: rest =>
-      combine(
-        visitPreBinding(binding),
-        withBindings(Seq(binding.name)) {
-          visitPreTContext(rest)
-        },
-      )
+  def visitPreTContext(tTelescope: List[(Binding[CTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+    tTelescope match
+      case Nil => combine()
+      case (binding, _) :: rest =>
+        combine(
+          visitPreBinding(binding),
+          withBindings(Seq(binding.name)) {
+            visitPreTContext(rest)
+          },
+        )
 
-  def visitTContext
-    (tTelescope: List[(Binding[VTerm], Variance)])
-    (using ctx: C)
-    (using Σ: Signature)
-    : R = tTelescope match
-    case Nil => combine()
-    case (binding, _) :: rest =>
-      combine(
-        visitBinding(binding),
-        withBindings(Seq(binding.name)) {
-          visitTContext(rest)
-        },
-      )
+  def visitTContext(tTelescope: List[(Binding[VTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+    tTelescope match
+      case Nil => combine()
+      case (binding, _) :: rest =>
+        combine(
+          visitBinding(binding),
+          withBindings(Seq(binding.name)) {
+            visitTContext(rest)
+          },
+        )
 
   def visitPreContext(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
     telescope match
@@ -108,11 +97,7 @@ trait Visitor[C, R]:
         pConstructor.args.map(visitPattern): _*,
     )
 
-  def visitPForcedConstructor
-    (pForcedConstructor: PForcedConstructor)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
+  def visitPForcedConstructor(pForcedConstructor: PForcedConstructor)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitName(pForcedConstructor.name) +:
         pForcedConstructor.args.map(visitPattern): _*,
@@ -254,19 +239,13 @@ trait Visitor[C, R]:
   def visitUsageCompound(usageCompound: UsageCompound)(using ctx: C)(using Σ: Signature): R =
     combine(usageCompound.operands.multiMap(visitVTerm).multiToSeq: _*)
 
-  def visitEqDecidabilityType
-    (eqDecidabilityType: EqDecidabilityType)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R = visitQualifiedName(Builtins.EqDecidabilityQn)
+  def visitEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)(using ctx: C)(using Σ: Signature): R =
+    visitQualifiedName(Builtins.EqDecidabilityQn)
 
-  def visitEqDecidabilityLiteral
-    (eqDecidabilityLiteral: EqDecidabilityLiteral)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R = eqDecidabilityLiteral.eqDecidability match
-    case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
-    case EqDecidability.EqUnknown   => visitQualifiedName(Builtins.EqUnknownQn)
+  def visitEqDecidabilityLiteral(eqDecidabilityLiteral: EqDecidabilityLiteral)(using ctx: C)(using Σ: Signature): R =
+    eqDecidabilityLiteral.eqDecidability match
+      case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
+      case EqDecidability.EqUnknown   => visitQualifiedName(Builtins.EqUnknownQn)
 
   def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(Builtins.EffectsQn)
@@ -384,11 +363,7 @@ trait Visitor[C, R]:
       case elim: Elimination[_] => visitElim(elim)
     }: _*)
 
-  def visitContinuationReplicationState
-    (c: ContinuationReplicationState)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
+  def visitContinuationReplicationState(c: ContinuationReplicationState)(using ctx: C)(using Σ: Signature): R =
     combine(c.stack1.map {
       case c: CTerm             => visitCTerm(c)
       case elim: Elimination[_] => visitElim(elim)
@@ -494,12 +469,7 @@ trait Visitor[C, R]:
 
 trait Transformer[C]:
 
-  def withBindings[T]
-    (bindingNames: => Seq[Ref[Name]])
-    (action: C ?=> T)
-    (using ctx: C)
-    (using Σ: Signature)
-    : T =
+  def withBindings[T](bindingNames: => Seq[Ref[Name]])(action: C ?=> T)(using ctx: C)(using Σ: Signature): T =
     action(using ctx)
 
   def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
@@ -587,11 +557,7 @@ trait Transformer[C]:
   def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
     PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
 
-  def transformPForcedConstructor
-    (d: PForcedConstructor)
-    (using ctx: C)
-    (using Σ: Signature)
-    : Pattern =
+  def transformPForcedConstructor(d: PForcedConstructor)(using ctx: C)(using Σ: Signature): Pattern =
     PForcedConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
 
   def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature): Pattern =
@@ -664,20 +630,13 @@ trait Transformer[C]:
   def transformUsageLiteral(usageLiteral: UsageLiteral)(using ctx: C)(using Σ: Signature): VTerm =
     usageLiteral
 
-  def transformUsageCompound
-    (usageCompound: UsageCompound)
-    (using ctx: C)
-    (using Σ: Signature)
-    : VTerm = UsageCompound(
+  def transformUsageCompound(usageCompound: UsageCompound)(using ctx: C)(using Σ: Signature): VTerm = UsageCompound(
     usageCompound.operation,
     usageCompound.operands.multiMap(transformVTerm),
   )
 
-  def transformEqDecidabilityType
-    (eqDecidabilityType: EqDecidabilityType)
-    (using ctx: C)
-    (using Σ: Signature)
-    : VTerm = eqDecidabilityType
+  def transformEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)(using ctx: C)(using Σ: Signature): VTerm =
+    eqDecidabilityType
 
   def transformEqDecidabilityLiteral
     (eqDecidabilityLiteral: EqDecidabilityLiteral)
@@ -764,11 +723,7 @@ trait Transformer[C]:
       redex.elims.map(transformElim),
     )(using redex.sourceInfo)
 
-  def transformElim
-    (elim: Elimination[VTerm])
-    (using ctx: C)
-    (using Σ: Signature)
-    : Elimination[VTerm] = elim match
+  def transformElim(elim: Elimination[VTerm])(using ctx: C)(using Σ: Signature): Elimination[VTerm] = elim match
     case Elimination.EProj(n) => Elimination.EProj(transformName(n))(using elim.sourceInfo)
     case Elimination.ETerm(v) => Elimination.ETerm(transformVTerm(v))(using elim.sourceInfo)
 
@@ -791,11 +746,7 @@ trait Transformer[C]:
       transformVTerm(recordType.effects),
     )(using recordType.sourceInfo)
 
-  def transformOperationCall
-    (operationCall: OperationCall)
-    (using ctx: C)
-    (using Σ: Signature)
-    : CTerm =
+  def transformOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): CTerm =
     OperationCall(
       transformEff(operationCall.eff),
       transformName(operationCall.name),

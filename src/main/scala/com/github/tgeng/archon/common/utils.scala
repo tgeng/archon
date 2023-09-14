@@ -265,8 +265,7 @@ type Nat = Int
 
 type Multiset[T] = Map[T, Nat]
 
-extension [T](ts: Iterable[T])
-  def toMultiset: Multiset[T] = ts.groupMapReduce(t => t)(_ => 1)(_ + _)
+extension [T](ts: Iterable[T]) def toMultiset: Multiset[T] = ts.groupMapReduce(t => t)(_ => 1)(_ + _)
 
 extension [T](ms: Multiset[T])
   def multiMap[R](f: T => R): Multiset[R] = ms.map((k, v) => (f(k), v))

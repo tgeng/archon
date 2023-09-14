@@ -8,8 +8,8 @@ import VTerm.*
   * @param tm
   *   the term to check
   * @param ty
-  *   the type of the term. If `None`, the term is assumed to be a type and is total. If the type is
-  *   present it must be normalized.
+  *   the type of the term. If `None`, the term is assumed to be a type and is total. If the type is present it must be
+  *   normalized.
   * @return
   */
 def isTotal(tm: CTerm, ty: Option[CTerm]): Boolean = {

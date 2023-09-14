@@ -81,8 +81,8 @@ trait DerivedSignature extends Signature:
       val highestDbIndex = data.tParamTys.size
       IndexedSeq(
         Clause(
-          usageBinding +: (data.tParamTys.map(_._1) ++ data.tIndexTys).zipWithIndex.map {
-            case (binding, i) => Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name)
+          usageBinding +: (data.tParamTys.map(_._1) ++ data.tIndexTys).zipWithIndex.map { case (binding, i) =>
+            Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name)
           },
           qVars(highestDbIndex),
           Return(DataType(qn, vars(highestDbIndex - 1))),
@@ -135,9 +135,7 @@ trait DerivedSignature extends Signature:
           val numAllParams = typeParams.size + constructor.paramTys.size
           IndexedSeq(
             Clause(
-              usageBinding +: (typeParams.map(b =>
-                Binding(b.ty, U0)(b.name),
-              ) ++ constructor.paramTys),
+              usageBinding +: (typeParams.map(b => Binding(b.ty, U0)(b.name), ) ++ constructor.paramTys),
               qVars(numAllParams),
               Return(Con(conName, vars(constructor.paramTys.size - 1))),
               F(
@@ -228,12 +226,11 @@ trait DerivedSignature extends Signature:
       FunctionType(
         usageBinding,
         effect.tParamTys.zipWithIndex
-          .foldRight[CTerm](F(EffectsType(), Var(effect.tParamTys.size))) {
-            case ((binding, i), bodyTy) =>
-              FunctionType(
-                Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name),
-                bodyTy,
-              )
+          .foldRight[CTerm](F(EffectsType(), Var(effect.tParamTys.size))) { case ((binding, i), bodyTy) =>
+            FunctionType(
+              Binding(binding.ty, UsageProd(binding.usage, Var(i)))(binding.name),
+              bodyTy,
+            )
           },
       ),
     )
@@ -314,8 +311,8 @@ trait DerivedSignature extends Signature:
           data <- getDataOption(dataQn)
           constructor <- getConstructorOption(dataQn, conName)
         yield (data.tParamTys.map(_._1) ++ constructor.paramTys)
-          .foldRight(CtTerm(Return(Con(conName, vars(constructor.paramTys.size - 1))))) {
-            case (binding, _Q) => CtLambda(_Q)(binding.name)
+          .foldRight(CtTerm(Return(Con(conName, vars(constructor.paramTys.size - 1))))) { case (binding, _Q) =>
+            CtLambda(_Q)(binding.name)
           }
       case _ => None
 

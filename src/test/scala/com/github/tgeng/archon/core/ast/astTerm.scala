@@ -14,11 +14,9 @@ enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
   case AstThunk(c: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstLevelLiteral(level: Nat)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstForce(v: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
-  case AstF(vTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo)
+  case AstF(vTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
+  case AstFunctionType(argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)(using sourceInfo: SourceInfo)
     extends AstTerm(sourceInfo)
-  case AstFunctionType
-    (argName: Name, argTy: AstTerm, bodyTy: AstTerm, effects: AstTerm)
-    (using sourceInfo: SourceInfo) extends AstTerm(sourceInfo)
   case AstRedex(head: AstTerm, elims: List[Elimination[AstTerm]])(using sourceInfo: SourceInfo)
     extends AstTerm(sourceInfo)
   case AstBlock(statements: List[Statement])(using sourceInfo: SourceInfo)

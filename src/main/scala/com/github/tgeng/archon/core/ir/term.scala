@@ -93,9 +93,7 @@ object LevelOrder:
 extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
-  case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo),
-    QualifiedNameOwner(TypeQn)
+  case Type(upperBound: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
 
   // The idea is that by default all usage declarations in bindings and `F` are 1 (linear) and types
   // determines how they can be used: strict linear types (for example thunks or user declared
@@ -115,10 +113,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
   case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  /** Execute a effect free computation and get the returned value. That is, `cTm` must be of type
-    * `F(V, Total()` for some value type `V`. This VTerm construct is used to embed effect free
-    * computations into values so that the type theory is as expressive as typical dependent type
-    * theory.
+  /** Execute a effect free computation and get the returned value. That is, `cTm` must be of type `F(V, Total()` for
+    * some value type `V`. This VTerm construct is used to embed effect free computations into values so that the type
+    * theory is as expressive as typical dependent type theory.
     */
   case Collapse(cTm: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -139,15 +136,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (using
       sourceInfo: SourceInfo,
     ) extends VTerm(sourceInfo), QualifiedNameOwner(qn)
-  case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
+  case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   // Note, `upper` here is in the sense of typing subsumption, not the usage lattice. This is the
   // lower bound in the usage lattice. Hence Option.None is used to represent unbounded case, as the
   // lattice is not bounded below. Note that the semantic of this `upperBound` is different from
   // `continuationUsage`.
-  case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
+  case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageCompound
     (operation: UsageOperation, operands: Multiset[VTerm])
@@ -162,31 +157,24 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     )
 
   /** @param continuationUsage
-    *   see `Effect` for the semantic of this. Some(Usage.UUnres) is the most general value and
-    *   allows any effects.
+    *   see `Effect` for the semantic of this. Some(Usage.UUnres) is the most general value and allows any effects.
     */
-  case EffectsType
-    (continuationUsage: Option[Usage] = Some(Usage.UUnres))
-    (using sourceInfo: SourceInfo)
+  case EffectsType(continuationUsage: Option[Usage] = Some(Usage.UUnres))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
       EffectsQn,
     )
-  case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
+  case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType(upperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(LevelQn)
 
-  case Level
-    (literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case Level(literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
 
   /** archon.builtin.Heap */
-  case HeapType()(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo),
-    QualifiedNameOwner(HeapQn)
+  case HeapType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(HeapQn)
 
   /** Internal only, created by [[CTerm.HeapHandler]]
     */
@@ -199,9 +187,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     */
   case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
-    * replaced with `Collapse(Application...(Meta(...)))` and solved through meta-variable
-    * unification.
+  /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is replaced with
+    * `Collapse(Application...(Meta(...)))` and solved through meta-variable unification.
     */
   case Auto()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -294,15 +281,15 @@ object VTerm:
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
 
-  /** Marker of a computation that surely diverges. Computation with this effect will not be
-    * executed by the type checker.
+  /** Marker of a computation that surely diverges. Computation with this effect will not be executed by the type
+    * checker.
     */
   def Div()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.DivQn, Nil), (Builtins.MaybeDivQn, Nil)),
   )
 
-  /** Marker of a computation that may or may not diverge. Computation with this effect will be
-    * executed by the type checker with timeout.
+  /** Marker of a computation that may or may not diverge. Computation with this effect will be executed by the type
+    * checker with timeout.
     */
   def MaybeDiv()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.MaybeDivQn, Nil)),
@@ -328,8 +315,8 @@ sealed trait IType:
   def effects: VTerm
 
 enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
-  /** Used in stack machine to represent the computations above the computation term containing
-    * this. For example, `f a b` converted to the stack machine becomes
+  /** Used in stack machine to represent the computations above the computation term containing this. For example, `f a
+    * b` converted to the stack machine becomes
     *   - f
     *   - Application(Hole, a)
     *   - Application(Hole, b)
@@ -344,13 +331,12 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case CTop
-    (level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))
-    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  case CTop(level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo)
+    extends CTerm(sourceInfo),
+    IType
 
-  /** Represents either a metavariable or a guarded constant in [2]. This is always created during
-    * type checking and user-term won't include this. Rather, user terms should contain `Auto` where
-    * needed.
+  /** Represents either a metavariable or a guarded constant in [2]. This is always created during type checking and
+    * user-term won't include this. Rather, user terms should contain `Auto` where needed.
     */
   case Meta(index: Nat)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case Def(qn: QualifiedName)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -390,16 +376,15 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   //     return. Since computations are always linear, this means clet has little flexibility in
   //     terms of resource counting. For example, `plus_1` can only be linear.
 
-  case Redex(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo)
+  case Redex(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** archon.builtin.Function */
   case FunctionType
     (
       binding: Binding[VTerm],
       bodyTy: CTerm, /* binding offset = 1 */
-      /** effects that needed for getting the function of this type. The effects caused by function
-        * application is tracked by the `bodyTy`.
+      /** effects that needed for getting the function of this type. The effects caused by function application is
+        * tracked by the `bodyTy`.
         */
       effects: VTerm = VTerm.Total()(using SiEmpty),
     )
@@ -421,23 +406,21 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param handler
     *   the handler that delimits this continuation
     * @param capturedStack
-    *   stack containing the delimited continuation from the tip (right below operation call) to the
-    *   computation right above corresponding handler. Note that the first term is at the bottom of
-    *   the stack and the last term is the tip of the stack.
+    *   stack containing the delimited continuation from the tip (right below operation call) to the computation right
+    *   above corresponding handler. Note that the first term is at the bottom of the stack and the last term is the tip
+    *   of the stack.
     */
-  case Continuation(handler: Handler, capturedStack: Seq[CTerm | Elimination[VTerm]])
-    extends CTerm(SiEmpty)
+  case Continuation(handler: Handler, capturedStack: Seq[CTerm | Elimination[VTerm]]) extends CTerm(SiEmpty)
 
   /** Internaly only. This is only created by reduction.
     *
-    * During reduction, this value is specially handled: any non-handlers are skipped and
-    * parameterReplicator in handlers are executed one by one to collect the replicated parameters.
-    * These replicated parameters are then collected into the two stacks, until reaching the handler
-    * at `handlerIndex` (the handler that contains the operation implementation which invokes the
-    * continuation replication).
+    * During reduction, this value is specially handled: any non-handlers are skipped and parameterReplicator in
+    * handlers are executed one by one to collect the replicated parameters. These replicated parameters are then
+    * collected into the two stacks, until reaching the handler at `handlerIndex` (the handler that contains the
+    * operation implementation which invokes the continuation replication).
     * @param handlerIndex:
-    *   index of this handler in the reduction machine stack. In other words, size of the stack
-    *   before this handler is pushed onto the stack.
+    *   index of this handler in the reduction machine stack. In other words, size of the stack before this handler is
+    *   pushed onto the stack.
     * @param stack1:
     *   the replicated stack
     * @param stack1:
@@ -454,23 +437,21 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *
     * A helper that marks the end of execution of a `parameterReplicator`.
     * @param paramPairs
-    *   computation that returns a pair of parameters. This should simply be application of
-    *   `parameterReplicator` in handlers.
+    *   computation that returns a pair of parameters. This should simply be application of `parameterReplicator` in
+    *   handlers.
     * @param handler
     *   the handler that should be replicated and contain the replicated params
     * @param state
     *   the target ContinuationReplicationState to which the replicated parameters is appended
     */
-  case ContinuationReplicationStateAppender
-    (paramPairs: CTerm, handler: Handler, state: ContinuationReplicationState)
+  case ContinuationReplicationStateAppender(paramPairs: CTerm, handler: Handler, state: ContinuationReplicationState)
     extends CTerm(SiEmpty)
 
   case Handler
     (
-      /** Handle general term here instead of a single effect. During type checking it will fail if
-        * this term is not convertible to a effect literal. The ability to handle multiple effects
-        * is useful when one needs to use a linear resource (as parameter to the handler) with
-        * multiple effects.
+      /** Handle general term here instead of a single effect. During type checking it will fail if this term is not
+        * convertible to a effect literal. The ability to handle multiple effects is useful when one needs to use a
+        * linear resource (as parameter to the handler) with multiple effects.
         */
       eff: VTerm,
       parameter: VTerm,
@@ -484,23 +465,22 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       outputEffects: VTerm,
       outputUsage: VTerm,
 
-      /** This is the output value type. The computation type of this handler is `F(outputType,
-        * outputEffects, outputUsage)`.
+      /** This is the output value type. The computation type of this handler is `F(outputType, outputEffects,
+        * outputUsage)`.
         */
       outputType: VTerm,
 
-      /** The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to
-        * `outputType`. for cases where `outputType` equals `F(someEffects, inputBinding.ty)`, a
-        * sensible default value is simply `return (var 0)`
+      /** The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
+        * where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var
+        * 0)`
         */
 
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
 
-      /** All handler implementations declared by the effect. Each handler is essentially a function
-        * body that takes the following arguments
+      /** All handler implementations declared by the effect. Each handler is essentially a function body that takes the
+        * following arguments
         *   - all declared parameters
-        *   - a continuation parameter of type `declared operation output type -> outputType` and
-        *     outputs `outputType`
+        *   - a continuation parameter of type `declared operation output type -> outputType` and outputs `outputType`
         */
       handlers: Map[
         QualifiedName,
@@ -517,22 +497,20 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  case AllocOp(heap: VTerm, ty: VTerm, value: VTerm)(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo)
+  case AllocOp(heap: VTerm, ty: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case SetOp(cell: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case HeapHandler
     (
-      /** Newly created heap handler should always set this to `None`. This key is instantiated
-        * during reduction to a fresh value.
+      /** Newly created heap handler should always set this to `None`. This key is instantiated during reduction to a
+        * fresh value.
         */
       key: Option[HeapKey],
       heapContent: IndexedSeq[VTerm],
 
-      /** Note that the logic here should not expose the heap variable (i.e. `var 0`) through
-        * existential types like (t: Type, x: t) where `t` can be `HeapType`. A syntax-based check
-        * is used to ensure this never happens. For cases where such flexibility is needed, one
-        * should use `GlobalHeapKey` instead.
+      /** Note that the logic here should not expose the heap variable (i.e. `var 0`) through existential types like (t:
+        * Type, x: t) where `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases
+        * where such flexibility is needed, one should use `GlobalHeapKey` instead.
         */
       /* binding offset + 1 */ input: CTerm,
     )
@@ -557,8 +535,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         FunctionType(binding, bodyTy, effects)
       case RecordType(qn, args, effects)  => RecordType(qn, args, effects)
       case OperationCall(eff, name, args) => OperationCall(eff, name, args)
-      case c: (Continuation | ContinuationReplicationState |
-          ContinuationReplicationStateAppender) =>
+      case c: (Continuation | ContinuationReplicationState | ContinuationReplicationStateAppender) =>
         c
       case h @ Handler(
           eff,
