@@ -328,7 +328,11 @@ def checkUsageSubsumption
       case _ => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
-  case _ => Left(NotUsageSubsumption(sub, sup))
+  case _ =>
+    if hasCollapse(sub) || hasCollapse(sup) then
+      // We can't decide if the term contains stuck computation underneath.
+      Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+    else Left(NotUsageSubsumption(sub, sup))
 
 private def checkEffSubsumption
   (sub: VTerm, sup: VTerm)
@@ -339,8 +343,17 @@ private def checkEffSubsumption
   case (
       Effects(literals1, unionOperands1),
       Effects(literals2, unionOperands2),
-    ) if literals1.subsetOf(literals2) && unionOperands1.subsetOf(unionOperands2) =>
-    Right(Set.empty)
+    ) =>
+    val spuriousOperands = unionOperands1 -- unionOperands2
+    if spuriousOperands.isEmpty && literals1.subsetOf(literals2) then Right(Set.empty)
+    else
+    // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
+    // ends up being assigned values that are part of sup
+    // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary effects and hence
+    // we can't decide subsumption yet.
+    if spuriousOperands.forall(hasCollapse) || unionOperands2.exists(hasCollapse) then
+      Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
+    else Left(NotEffectSubsumption(sub, sup))
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
@@ -362,58 +375,52 @@ private def checkEffSubsumption
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
       case _                                          => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
-  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
-    Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
-  case _ => Left(NotEffectSubsumption(sub, sup))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
+  case _                                                  => Left(NotEffectSubsumption(sub, sup))
 
 /** Checks if l1 is smaller than l2.
   */
 private def checkLevelSubsumption
-  (l1: VTerm, l2: VTerm)
+  (sub: VTerm, sup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
-  (using TypingContext)
-  : Either[IrError, Set[Constraint]] =
-  def extractLiteralAndOperands(level: VTerm): Either[IrError, Option[(LevelOrder, Map[VTerm, Nat])]] =
-    for level <- level.normalized
-    yield level match
-      case Level(l, operands) => Some((l, operands))
-      case v: Var             => Some((LevelOrder.zero, Map(v -> 0)))
-      // TODO: handle meta variable updates
-      case c: Collapse => None
-      case _           => throw IllegalStateException("type error")
-  for
-    l1Components <- extractLiteralAndOperands(l1)
-    l2Components <- extractLiteralAndOperands(l2)
-    r <-
-      (l1Components, l2Components) match
-        // Level 0 subsumes any level
-        case (Some((LevelOrder.zero, operands)), _) if operands.isEmpty => Right(Set.empty)
-        // Any stuck computation makes subsumption unknown so we just delay it.
-        case (None, _) | (_, None) => Right(Set(Constraint.LevelSubsumption(Γ, l1, l2)))
-        // Normal case where we can compare the literals and operands directly.
-        case (Some((l1, operands1)), Some((l2, operands2)))
-          if l1.compareTo(l2) <= 0 && operands1
-            .forall((operand1, offset1) => operands2.get(operand1).getOrElse(-1) >= offset1) =>
-          Right(Set.empty)
-        // If l2 has some stuck computation, it's possible for l2 to be arbitrarily large so we just delay it.
-        case (_, Some(_, operands)) if operands.keys.exists(hasCollapse) =>
-          Right(Set(Constraint.LevelSubsumption(Γ, l1, l2)))
-        // At this point l2 does not contain any meta variables. Hence, l2 is fixed and the only way for subsumption to
-        // possibly work is that l1 only contains some extra stuck computations under operands. Otherwise, subsumption
-        // eheck must fail.
-        case (Some(literal1, _), Some(literal2, _)) if literal1.compareTo(literal2) > 0 =>
-          Left(NotVSubsumption(l1, l2, Some(LevelType(LevelUpperBound()))))
-        case (Some(_, operands1), Some(_, operands2)) =>
-          // Offending operands are those that has an offset in l1 that is larger than the offset in l2 and is not a
-          // stuck computation.
-          val offendingOperands = operands1.filter { (operand1, offset1) =>
-            operands2.get(operand1).getOrElse(-1) < offset1 && !hasCollapse(operand1)
-          }
-          if offendingOperands.isEmpty
-          then Right(Set(Constraint.LevelSubsumption(Γ, l1, l2)))
-          else Left(NotVSubsumption(l1, l2, Some(LevelType(LevelUpperBound()))))
-  yield r
+  (using ctx: TypingContext)
+  : Either[IrError, Set[Constraint]] = check2(sub, sup):
+  case (Level(literal1, operands1), Level(literal2, operands2)) =>
+    val spuriousOperands =
+      operands1.filter((operand1, offset1) => operands2.get(operand1).getOrElse(-1) < offset1).keySet
+    if spuriousOperands.isEmpty && literal1.compareTo(literal2) <= 0 then Right(Set.empty)
+    else
+    // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
+    // ends up being assigned small levels
+    // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary large level and
+    // hence we can't decide subsumption yet.
+    if spuriousOperands.forall(hasCollapse) || operands2.keys.exists(hasCollapse) then
+      Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
+    else Left(NotLevelSubsumption(sub, sup))
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+    ctx.adaptForMetaVariable(u, sub) match
+      case None => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
+      case Some(value) =>
+        for newLowerBound <- constraint match
+            case UmcNothing                              => Right(value)
+            case UmcLevelSubsumption(existingLowerBound) => LevelMax(existingLowerBound, value).normalized
+            case _                                       => throw IllegalStateException("type error")
+        yield
+          ctx.updateConstraint(u, UmcLevelSubsumption(newLowerBound))
+          Set.empty
+  // If upper bound is zero, the meta variable can only take zero as the value.
+  case (
+      u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty),
+      Level(LevelOrder.zero, operands),
+    ) if operands.isEmpty =>
+    ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, Map())))
+  case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
+    ctx.adaptForMetaVariable(u, sub) match
+      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+      case _                                          => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
+  case _                                                  => Left(NotLevelSubsumption(sub, sup))
 
 private def check2
   (a: VTerm, b: VTerm)
