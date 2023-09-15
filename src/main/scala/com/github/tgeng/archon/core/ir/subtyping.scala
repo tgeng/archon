@@ -303,34 +303,29 @@ def checkUsageSubsumption
       case UsageType(Some(u1Bound)) =>
         checkUsageSubsumption(u1Bound, UsageLiteral(u2))
       case _ => Left(NotUsageSubsumption(sub, sup))
-  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
-    ctx.adaptForMetaVariable(u, sub) match
+  case (u @ RUnsolved(_, _, constraint, tm, ty), sup: VTerm) =>
+    ctx.adaptForMetaVariable(u, sup) match
       case None => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
       case Some(value) =>
         for
-          newLowerBound <- constraint match
+          newUpperBound <- constraint match
             case UmcNothing => Right(value)
-            case UmcUsageSubsumption(existingLowerBound) =>
-              UsageJoin(existingLowerBound, value).normalized
+            case UmcUsageSubsumption(existingUpperBound) =>
+              UsageJoin(existingUpperBound, value).normalized
             case _ => throw IllegalStateException("type error")
-          r <- newLowerBound match
-            // If lower bound is already U1 or U0, we know they must take one of those values.
-            case UsageLiteral(Usage.U1) | UsageLiteral(Usage.U0) =>
-              ctx.assignUnsolved(u, Return(newLowerBound))
+          r <- newUpperBound match
+            // If upper bound is already UUnres, we know they must take that values.
+            case UsageLiteral(Usage.UUnres) =>
+              ctx.assignUnsolved(u, Return(newUpperBound))
             case _ =>
-              ctx.updateConstraint(u, UmcUsageSubsumption(newLowerBound))
+              ctx.updateConstraint(u, UmcUsageSubsumption(newUpperBound))
               Right(Set.empty)
         yield r
-  // If upper bound is UUnres, the meta variable can only take UUnres as the value.
-  case (
-      u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty),
-      UsageLiteral(Usage.UUnres),
-    ) =>
-    ctx.assignUnsolved(u, Return(UsageLiteral(Usage.UUnres)))
-  case (u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
+  case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
-      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
-      case _                                          => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+      case Some(value) if value == existingUpperBound                      => ctx.assignUnsolved(u, Return(value))
+      case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) => ctx.assignUnsolved(u, Return(value))
+      case _ => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case _ => Left(NotUsageSubsumption(sub, sup))

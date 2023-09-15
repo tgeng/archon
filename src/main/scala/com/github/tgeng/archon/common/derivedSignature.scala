@@ -135,7 +135,7 @@ trait DerivedSignature extends Signature:
           val numAllParams = typeParams.size + constructor.paramTys.size
           IndexedSeq(
             Clause(
-              usageBinding +: (typeParams.map(b => Binding(b.ty, U0)(b.name), ) ++ constructor.paramTys),
+              usageBinding +: (typeParams.map(b => Binding(b.ty, U0)(b.name)) ++ constructor.paramTys),
               qVars(numAllParams),
               Return(Con(conName, vars(constructor.paramTys.size - 1))),
               F(
