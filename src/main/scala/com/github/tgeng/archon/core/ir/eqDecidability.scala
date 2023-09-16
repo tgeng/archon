@@ -14,3 +14,7 @@ package com.github.tgeng.archon.core.ir
   */
 enum EqDecidability:
   case EqDecidable, EqUnknown
+
+  infix def |(that: EqDecidability): EqDecidability = (this, that) match
+    case (EqDecidable, _) | (_, EqDecidable) => EqDecidable
+    case _                                   => EqUnknown

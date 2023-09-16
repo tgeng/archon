@@ -102,3 +102,5 @@ enum IrError extends HasException:
   case NotCConvertible(sub: CTerm, sup: CTerm, ty: Option[CTerm])
   case NotVSubtype(sub: VTerm, sup: VTerm)
   case NotCSubtype(sub: CTerm, sup: CTerm)
+  case CannotFindCTypeUnion(a: CTerm, b: CTerm)
+  case CannotFindVTypeUnion(a: VTerm, b: VTerm)

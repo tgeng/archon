@@ -144,13 +144,16 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageProd(operands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands)
-  case UsageSum(operands: Multiset[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands.keySet)
+  case UsageSum(operands: Multiset[VTerm])(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    UsageCompound(operands.keySet)
   case UsageJoin(operands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands)
   case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-  case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
-    extends VTerm(
-      sourceInfo,
-    )
+  // It's possible to introduce `EqDecidabilityJoin` that signifies the decidability of some compound data consisting of
+  // multiple pieces of data, each of which has some parameterized decidability. However, such a construct does not seem
+  // to increase expressiveness because eqDecidability can only take two values and user can always just declare a 
+  // single eqDecidability parameter and use this single parameter to constrain other parameters.
+  case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** @param continuationUsage
     *   see `Effect` for the semantic of this. Some(Usage.UUnres) is the most general value and allows any effects.

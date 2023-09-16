@@ -35,15 +35,12 @@ def checkIsSubtype
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.VSubType(Γ, sub, sup)))
       case Some(value) =>
-        for newConstraint <- constraint match
-            case UmcNothing => Right(UmcVSubtype(value))
-            case UmcVSubtype(existingLowerBound) =>
-              for lowerBound <- typeUnion(existingLowerBound, value)
-              yield UmcVSubtype(lowerBound)
-            case _ => throw IllegalStateException("type error")
-        yield
-          ctx.updateConstraint(u, newConstraint)
-          Set.empty
+        val newConstraint = constraint match
+          case UmcNothing                      => UmcVSubtype(Set(value))
+          case UmcVSubtype(existingLowerBound) => UmcVSubtype(existingLowerBound + value)
+          case _                               => throw IllegalStateException("type error")
+        ctx.updateConstraint(u, newConstraint)
+        Right(Set.empty)
   case (u @ RUnsolved(_, _, UmcVSubtype(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
@@ -55,7 +52,7 @@ def checkIsSubtype
     for
       level1 <- inferLevel(ty)
       levelConstraints <- checkLevelSubsumption(level1, level2)
-      eqD1 <- deriveTypeInherentEqDecidability(ty)
+      eqD1 <- inferEqDecidability(ty)
       eqDecidabilityConstraints <- checkEqDecidabilitySubsumption(eqD1, eqD2)
     yield levelConstraints ++ eqDecidabilityConstraints
   case (U(cty1), U(cty2)) => checkIsSubtype(cty1, cty2)
@@ -123,15 +120,12 @@ def checkIsSubtype
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.CSubType(Γ, sub, sup)))
       case Some(value) =>
-        for newConstraint <- constraint match
-            case UmcNothing => Right(UmcCSubtype(value))
-            case UmcCSubtype(existingLowerBound) =>
-              for lowerBound <- typeUnion(existingLowerBound, value)
-              yield UmcCSubtype(lowerBound)
-            case _ => throw IllegalStateException("type error")
-        yield
-          ctx.updateConstraint(u, newConstraint)
-          Set.empty
+        val newConstraint = constraint match
+          case UmcNothing                      => UmcCSubtype(Set(value))
+          case UmcCSubtype(existingLowerBound) => UmcCSubtype(existingLowerBound + value)
+          case _                               => throw IllegalStateException("type error")
+        ctx.updateConstraint(u, newConstraint)
+        Right(Set.empty)
   case ((u @ RUnsolved(_, _, UmcCSubtype(existingLowerBound), tm, ty), Nil), sup: CTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, value)
@@ -226,8 +220,97 @@ def checkIsSubtype
         yield effConstraint ++ argConstraint
   case _ => checkIsConvertible(sub, sup, None)
 
-private def typeUnion(a: CTerm, b: CTerm): Either[IrError, CTerm] = ???
+private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler | HeapHandler
+
+private def typeUnion
+  (a: CTerm, b: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : Either[IrError, CTerm] =
+  if a == b then Right(a)
+  else
+    (a, b) match
+      case (CType(upperBound1, effects1), CType(upperBound2, effects2)) =>
+        for
+          upperBound <- typeUnion(upperBound1, upperBound2)
+          effects <- EffectsUnion(effects1, effects2).normalized
+        yield CType(upperBound, effects)
+      case (CTop(level1, effects1), CTop(level2, effects2)) =>
+        for
+          level <- LevelMax(level1, level2).normalized
+          effects <- EffectsUnion(effects1, effects2).normalized
+        yield CTop(level, effects)
+      case (F(vty1, effects1, usage1), F(vty2, effects2, usage2)) =>
+        for
+          vty <- typeUnion(vty1, vty2)
+          effects <- EffectsUnion(effects1, effects2).normalized
+          usage <- UsageJoin(usage1, usage2).normalized
+        yield F(vty, effects, usage)
+      // for simplicity we just treat types at contravariant position as invariant
+      case (FunctionType(binding1, body1, effects1), FunctionType(binding2, body2, effects2)) if binding1 == binding2 =>
+        for
+          effects <- EffectsUnion(effects1, effects2).normalized
+          body <- typeUnion(body1, body2)(using Γ :+ binding1)
+        yield FunctionType(binding1, body, effects)
+      case (r1 @ RecordType(qn1, args1, effects1), r2 @ RecordType(qn2, args2, effects2)) if qn1 == qn2 =>
+        val record = Σ.getRecord(qn1)
+        for
+          effects <- EffectsUnion(effects1, effects2).normalized
+          args <- transpose(
+            args1
+              .zip(args2)
+              .zip(record.tParamTys)
+              .map { case ((arg1, arg2), (binding, variance)) =>
+                variance match
+                  case Variance.COVARIANT => typeUnion(arg1, arg2).map(Some(_))
+                  case Variance.INVARIANT | Variance.CONTRAVARIANT =>
+                    if arg1 == arg2 then Right(Some(arg1))
+                    else Right(None)
+              },
+          )
+          r <-
+            val actualArgs = args.collect { case Some(arg) => arg }
+            if actualArgs.size == args.size then Right(RecordType(qn1, actualArgs, effects))
+            else getCTop(r1, r2)
+        yield r
+      case (a: IType, b: IType) => getCTop(a, b)
+      // One may want to treat `Force(Var(...))` to be the upperbound stored in the context corresponding to this
+      // variable. But it doesn't seem to matter that much so let's not do that to keep things simple for now.
+      case (_: StuckComputationType, _) | (_, _: StuckComputationType) => Left(CannotFindCTypeUnion(a, b))
+      case _                                                           => throw IllegalStateException("type error")
+
+private def getCTop
+  (a: CTerm & IType, b: CTerm & IType)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : Either[IrError, CTerm] =
+  for
+    aLevel <- inferLevel(a)
+    bLevel <- inferLevel(b)
+    level <- LevelMax(aLevel, bLevel).normalized
+    effects <- EffectsUnion(a.effects, b.effects).normalized
+  yield CTop(level, effects)
+
 private def typeUnion(a: VTerm, b: VTerm): Either[IrError, VTerm] = ???
+
+private def getTop
+  (a: VTerm, b: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : Either[IrError, VTerm] =
+  for
+    aLevel <- inferLevel(a)
+    aEqDecidability <- inferEqDecidability(a)
+    bLevel <- inferLevel(b)
+    bEqDecidability <- inferEqDecidability(b)
+    level <- LevelMax(aLevel, bLevel).normalized
+    eqDecidability = (aEqDecidability, bEqDecidability) match
+      case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
+      case _                                                      => EqDecidabilityLiteral(EqDecidability.EqUnknown)
+  yield Top(level, eqDecidability)
 
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)

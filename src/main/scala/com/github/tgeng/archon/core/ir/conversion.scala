@@ -78,7 +78,7 @@ def checkIsConvertible
               level2,
               Some(LevelType(LevelUpperBound())),
             )
-            eqD1 <- deriveTypeInherentEqDecidability(ty)
+            eqD1 <- inferEqDecidability(ty)
             eqDecidabilityConstraints <- checkIsConvertible(eqD1, eqD2, Some(EqDecidabilityType()))
           yield levelConstraints ++ eqDecidabilityConstraints
         case (U(cty1), U(cty2), _) => checkIsConvertible(cty1, cty2, None)

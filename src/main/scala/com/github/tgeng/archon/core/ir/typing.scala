@@ -54,18 +54,18 @@ enum Constraint:
 
 enum UnsolvedMetaVariableConstraint:
   case UmcNothing
-  case UmcCSubtype(lowerBound: CTerm)
-  case UmcVSubtype(lowerBound: VTerm)
+  case UmcCSubtype(lowerBounds: Set[CTerm])
+  case UmcVSubtype(lowerBounds: Set[VTerm])
   case UmcEffSubsumption(lowerBound: VTerm)
   case UmcLevelSubsumption(lowerBound: VTerm)
   case UmcUsageSubsumption(upperBound: VTerm)
 
   def substLowers(args: VTerm*)(using Signature): UnsolvedMetaVariableConstraint = this match
     case UmcNothing => UmcNothing
-    case UmcCSubtype(lowerBound) =>
-      UmcCSubtype(lowerBound.substLowers(args: _*))
-    case UmcVSubtype(lowerBound) =>
-      UmcVSubtype(lowerBound.substLowers(args: _*))
+    case UmcCSubtype(lowerBounds) =>
+      UmcCSubtype(lowerBounds.map(_.substLowers(args: _*)))
+    case UmcVSubtype(lowerBounds) =>
+      UmcVSubtype(lowerBounds.map(_.substLowers(args: _*)))
     case UmcEffSubsumption(lowerBound) =>
       UmcEffSubsumption(lowerBound.substLowers(args: _*))
     case UmcLevelSubsumption(lowerBound) =>
@@ -283,9 +283,9 @@ class TypingContext
     : Either[IrError, Set[Constraint]] =
     assignValue(m.index, value)
     m.constraint match
-      case UmcNothing                    => Right(Set.empty)
-      case UmcCSubtype(lowerBound)       => checkIsSubtype(lowerBound, value)
-      case UmcVSubtype(lowerBound)       => checkIsSubtype(lowerBound, Collapse(value))
+      case UmcNothing               => Right(Set.empty)
+      case UmcCSubtype(lowerBounds) => transpose(lowerBounds.map(checkIsSubtype(_, value))).map(_.flatten)
+      case UmcVSubtype(lowerBounds) => transpose(lowerBounds.map(checkIsSubtype(_, Collapse(value)))).map(_.flatten)
       case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(value))
       case UmcLevelSubsumption(lowerBound) =>
         checkLevelSubsumption(lowerBound, Collapse(value))
@@ -1236,7 +1236,7 @@ private def checkInherentEqDecidable
       case Nil => Right(())
       case binding :: rest =>
         for
-          eqD <- deriveTypeInherentEqDecidability(binding.ty)
+          eqD <- inferEqDecidability(binding.ty)
           constraints <- checkEqDecidabilitySubsumption(eqD, dataEqD)
           _ <- constraints.isEmpty match
             case true  => Right(())
@@ -1319,7 +1319,7 @@ private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor:
     (using Σ: Signature)
     : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = this.combine()
 
-private def deriveTypeInherentEqDecidability
+def inferEqDecidability
   (ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -1332,7 +1332,7 @@ private def deriveTypeInherentEqDecidability
     for
       case (ty, tyTy, _) <- inferType(ty)
       r <- tyTy match
-        case Type(upperBound) => deriveTypeInherentEqDecidability(upperBound)
+        case Type(upperBound) => inferEqDecidability(upperBound)
         case _                => Left(ExpectVType(ty))
     yield r
   case _: U => Right(EqDecidabilityLiteral(EqUnknown))
@@ -1350,7 +1350,7 @@ private def checkIsEqDecidableTypes
   (using ctx: TypingContext)
   : Either[IrError, Unit] =
   for
-    eqD <- deriveTypeInherentEqDecidability(ty)
+    eqD <- inferEqDecidability(ty)
     constraints <- checkIsConvertible(
       eqD,
       EqDecidabilityLiteral(EqDecidable),
