@@ -146,9 +146,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageCompound
     (operation: UsageOperation, operands: Multiset[VTerm])
-    (using
-      sourceInfo: SourceInfo,
-    ) extends VTerm(sourceInfo)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
@@ -259,7 +257,9 @@ object VTerm:
     (usages.reduce(_ | _), terms) match
       case (u, Nil)    => UsageLiteral(u)
       case (UUnres, _) => UsageLiteral(UUnres)
-      case (u, terms)  => UsageCompound(UsageOperation.UJoin, (UsageLiteral(u) :: terms).toMultiset)
+      // Note that something joining itself is the same as the thing itself, so there is never any need to hold
+      // duplicates
+      case (u, terms)  => UsageCompound(UsageOperation.UJoin, (UsageLiteral(u) :: terms).distinct.map((_, 1)).toMap)
 
   private def collectUsage(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
     operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)) {

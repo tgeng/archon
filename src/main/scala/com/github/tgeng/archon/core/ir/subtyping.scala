@@ -293,9 +293,26 @@ def checkUsageSubsumption
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
   // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
-  case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 =>
+  case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Right(Set.empty)
+  case (UsageLiteral(UUnres), _)                        => Right(Set.empty)
+  case (UsageCompound(UsageOperation.UJoin, operands1), v: VTerm) =>
+    val operands2 = v match
+      case UsageCompound(UsageOperation.UJoin, operands2) => operands2.keySet
+      case v: VTerm                                       => Set(v)
+
+    val spuriousOperands = operands2 -- operands1.keySet
+    if spuriousOperands.isEmpty then Right(Set.empty)
+    else
+    // If spurious operands are all stuck computation, it's possible for sup to be anything if all of these stuck
+    // computation ends up being assigned values that are part of sub
+    // Also, if sub contains stuck computation, it's possible for sub to end up including arbitrary usage terms and
+    // hence we can't decide subsumption yet.
+    if spuriousOperands.forall(hasCollapse) || operands1.keySet.exists(hasCollapse) then
+      Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
+    else Left(NotUsageSubsumption(sub, sup))
+  // Handle the special case that the right hand side simply contains the left hand side as an operand.
+  case (UsageCompound(UsageOperation.UJoin, operands), RUnsolved(_, _, _, tm, _)) if operands.contains(Collapse(tm)) =>
     Right(Set.empty)
-  case (UsageLiteral(UUnres), _) => Right(Set.empty)
   case (v @ Var(_), UsageLiteral(u2)) =>
     Γ.resolve(v).ty match
       // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
@@ -341,9 +358,13 @@ private def checkEffSubsumption
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
   case (
-      Effects(literals1, unionOperands1),
+      sub: VTerm,
       Effects(literals2, unionOperands2),
     ) =>
+    // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
+    val (literals1, unionOperands1) = sub match
+      case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
+      case v: VTerm                           => (Set.empty, Set(v))
     val spuriousOperands = unionOperands1 -- unionOperands2
     if spuriousOperands.isEmpty && literals1.subsetOf(literals2) then Right(Set.empty)
     else
@@ -354,6 +375,8 @@ private def checkEffSubsumption
     if spuriousOperands.forall(hasCollapse) || unionOperands2.exists(hasCollapse) then
       Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
     else Left(NotEffectSubsumption(sub, sup))
+  // Handle the special case that the right hand side simply contains the left hand side as an operand.
+  case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) => Right(Set.empty)
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
@@ -386,7 +409,11 @@ private def checkLevelSubsumption
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
-  case (Level(literal1, operands1), Level(literal2, operands2)) =>
+  case (v: VTerm, Level(literal2, operands2)) =>
+    // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
+    val (literal1, operands1) = v match
+      case Level(literal1, operands1) => (literal1, operands1)
+      case v: VTerm                   => (LevelOrder.zero, Map(v -> 0))
     val spuriousOperands =
       operands1.filter((operand1, offset1) => operands2.get(operand1).getOrElse(-1) < offset1).keySet
     if spuriousOperands.isEmpty && literal1.compareTo(literal2) <= 0 then Right(Set.empty)
@@ -398,6 +425,8 @@ private def checkLevelSubsumption
     if spuriousOperands.forall(hasCollapse) || operands2.keys.exists(hasCollapse) then
       Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
     else Left(NotLevelSubsumption(sub, sup))
+  // Handle the special case that the right hand side simply contains the left hand side as an operand.
+  case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) => Right(Set.empty)
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
