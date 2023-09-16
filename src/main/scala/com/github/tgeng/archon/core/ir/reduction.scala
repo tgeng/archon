@@ -537,13 +537,9 @@ extension (v: VTerm)
     case u: UsageCompound =>
       def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match
         case UsageLiteral(u) => Right(uLubFromLiteral(u))
-        case UsageCompound(operation, operands) =>
-          transpose(operands.multiToSeq.toList.map(dfs)).map { operands =>
-            operation match
-              case UsageOperation.UProd => uLubProd(operands)
-              case UsageOperation.USum  => uLubSum(operands)
-              case UsageOperation.UJoin => uLubJoin(operands)
-          }
+        case UsageSum(operands) => transpose(operands.multiToSeq.map(dfs)).map(uLubProd)
+        case UsageProd(operands) => transpose(operands.map(dfs)).map(uLubProd)
+        case UsageJoin(operands) => transpose(operands.map(dfs)).map(uLubJoin)
         case c: Collapse => c.normalized.flatMap(dfs)
         case v: Var      => Right(uLubFromT(v))
         case _ =>

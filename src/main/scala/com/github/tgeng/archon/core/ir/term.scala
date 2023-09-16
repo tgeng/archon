@@ -70,9 +70,6 @@ sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
 
 extension (eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
-enum UsageOperation:
-  case USum, UProd, UJoin
-
 /** Represents an order number `m * ω + n`.
   */
 case class LevelOrder(m: Nat, n: Nat) extends Comparable[LevelOrder]:
@@ -91,6 +88,8 @@ object LevelOrder:
   val upperBound = LevelOrder(256, 0)
 
 extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
+
+sealed trait UsageCompound(val distinctOperands: Set[VTerm])
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
@@ -144,10 +143,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // `continuationUsage`.
   case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-  case UsageCompound
-    (operation: UsageOperation, operands: Multiset[VTerm])
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-
+  case UsageProd(operands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands)
+  case UsageSum(operands: Multiset[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands.keySet)
+  case UsageJoin(operands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands)
   case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
     extends VTerm(
@@ -191,7 +189,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Auto()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   this match
-    case UsageCompound(UsageOperation.UJoin, operands) if operands.isEmpty =>
+    case UsageJoin(operands) if operands.isEmpty =>
       throw IllegalArgumentException(
         "empty operands not allowed for join because join does not have an identity",
       )
@@ -211,7 +209,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case Con(name, args)                 => Con(name, args)
       case UsageType(u)                    => UsageType(u)
       case UsageLiteral(u)                 => UsageLiteral(u)
-      case UsageCompound(op, operands)     => UsageCompound(op, operands)
+      case UsageProd(operands)             => UsageProd(operands)
+      case UsageSum(operands)              => UsageSum(operands)
+      case UsageJoin(operands)             => UsageJoin(operands)
       case EqDecidabilityType()            => EqDecidabilityType()
       case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
       case EffectsType(continuationUsage)  => EffectsType(continuationUsage)
@@ -235,23 +235,23 @@ object VTerm:
   def Top(t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))(using SourceInfo) =
     new Top(t, eqDecidability)
 
+  def UsageProd(operands: VTerm*)(using SourceInfo): VTerm =
+    val (usages, terms) = collectUsage(operands)
+    (usages.foldLeft(U1)(_ * _), terms) match
+      case (u, Nil)    => UsageLiteral(u)
+      case (U1, terms) => UsageProd(terms.toSet)
+      case (U0, _)     => UsageLiteral(U0)
+      case (u, terms)  => UsageProd((UsageLiteral(u) :: terms).toSet)
+
   def UsageSum(operands: VTerm*)(using SourceInfo): VTerm =
     val (usages, terms) = collectUsage(operands)
     (usages.foldLeft(U0)(_ + _), terms) match
       case (u, Nil)    => UsageLiteral(u)
-      case (U0, terms) => UsageCompound(UsageOperation.USum, terms.toMultiset)
+      case (U0, terms) => UsageSum(terms.toMultiset)
       case (URel, _)   => UsageLiteral(URel)
-      case (u, terms)  => UsageCompound(UsageOperation.USum, (UsageLiteral(u) :: terms).toMultiset)
+      case (u, terms)  => UsageSum((UsageLiteral(u) :: terms).toMultiset)
 
-  def UsageProd(operands: VTerm*)(using SourceInfo) =
-    val (usages, terms) = collectUsage(operands)
-    (usages.foldLeft(U1)(_ * _), terms) match
-      case (u, Nil)    => UsageLiteral(u)
-      case (U1, terms) => UsageCompound(UsageOperation.UProd, terms.toMultiset)
-      case (U0, _)     => UsageLiteral(U0)
-      case (u, terms)  => UsageCompound(UsageOperation.UProd, (UsageLiteral(u) :: terms).toMultiset)
-
-  def UsageJoin(operands: VTerm*)(using SourceInfo) =
+  def UsageJoin(operands: VTerm*)(using SourceInfo): VTerm =
     if operands.isEmpty then throw IllegalStateException("UsageJoin cannot be empty")
     val (usages, terms) = collectUsage(operands)
     (usages.reduce(_ | _), terms) match
@@ -259,7 +259,7 @@ object VTerm:
       case (UUnres, _) => UsageLiteral(UUnres)
       // Note that something joining itself is the same as the thing itself, so there is never any need to hold
       // duplicates
-      case (u, terms)  => UsageCompound(UsageOperation.UJoin, (UsageLiteral(u) :: terms).distinct.map((_, 1)).toMap)
+      case (u, terms) => UsageJoin((UsageLiteral(u) :: terms).toSet)
 
   private def collectUsage(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
     operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)) {

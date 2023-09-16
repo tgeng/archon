@@ -295,23 +295,23 @@ def checkUsageSubsumption
   // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
   case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Right(Set.empty)
   case (UsageLiteral(UUnres), _)                        => Right(Set.empty)
-  case (UsageCompound(UsageOperation.UJoin, operands1), v: VTerm) =>
+  case (UsageJoin(operands1), v: VTerm) =>
     val operands2 = v match
-      case UsageCompound(UsageOperation.UJoin, operands2) => operands2.keySet
-      case v: VTerm                                       => Set(v)
+      case UsageJoin(operands2) => operands2
+      case v: VTerm             => Set(v)
 
-    val spuriousOperands = operands2 -- operands1.keySet
+    val spuriousOperands = operands2 -- operands1
     if spuriousOperands.isEmpty then Right(Set.empty)
     else
     // If spurious operands are all stuck computation, it's possible for sup to be anything if all of these stuck
     // computation ends up being assigned values that are part of sub
     // Also, if sub contains stuck computation, it's possible for sub to end up including arbitrary usage terms and
     // hence we can't decide subsumption yet.
-    if spuriousOperands.forall(hasCollapse) || operands1.keySet.exists(hasCollapse) then
+    if spuriousOperands.forall(hasCollapse) || operands1.exists(hasCollapse) then
       Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
     else Left(NotUsageSubsumption(sub, sup))
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
-  case (UsageCompound(UsageOperation.UJoin, operands), RUnsolved(_, _, _, tm, _)) if operands.contains(Collapse(tm)) =>
+  case (UsageJoin(operands), RUnsolved(_, _, _, tm, _)) if operands.contains(Collapse(tm)) =>
     Right(Set.empty)
   case (v @ Var(_), UsageLiteral(u2)) =>
     Γ.resolve(v).ty match

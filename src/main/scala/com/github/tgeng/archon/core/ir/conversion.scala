@@ -51,21 +51,21 @@ def checkIsConvertible
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (
-            UsageCompound(op, operands),
-            _: UsageLiteral | _: UsageCompound,
+            u: UsageCompound,
+            _,
             Some(UsageType(_)),
           ) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if operands.map(_._1).exists(hasCollapse)
+          if u.distinctOperands.exists(hasCollapse)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (
-            _: UsageLiteral | _: UsageCompound,
-            UsageCompound(op, operands),
+            _,
+            u: UsageCompound,
             Some(UsageType(_)),
           ) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if operands.map(_._1).exists(hasCollapse)
+          if u.distinctOperands.exists(hasCollapse)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (Type(upperBound1), Type(upperBound2), _) =>

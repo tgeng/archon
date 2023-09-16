@@ -173,17 +173,19 @@ trait Visitor[C, R]:
     )
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
-    case ty: Type                     => visitType(ty)
-    case top: Top                     => visitTop(top)
-    case v: Var                       => visitVar(v)
-    case collapse: Collapse           => visitCollapse(collapse)
-    case u: U                         => visitU(u)
-    case thunk: Thunk                 => visitThunk(thunk)
-    case dataType: DataType           => visitDataType(dataType)
-    case con: Con                     => visitCon(con)
-    case usageType: UsageType         => visitUsageType(usageType)
-    case usageLiteral: UsageLiteral   => visitUsageLiteral(usageLiteral)
-    case usageCompound: UsageCompound => visitUsageCompound(usageCompound)
+    case ty: Type                   => visitType(ty)
+    case top: Top                   => visitTop(top)
+    case v: Var                     => visitVar(v)
+    case collapse: Collapse         => visitCollapse(collapse)
+    case u: U                       => visitU(u)
+    case thunk: Thunk               => visitThunk(thunk)
+    case dataType: DataType         => visitDataType(dataType)
+    case con: Con                   => visitCon(con)
+    case usageType: UsageType       => visitUsageType(usageType)
+    case usageLiteral: UsageLiteral => visitUsageLiteral(usageLiteral)
+    case usageProd: UsageProd       => visitUsageProd(usageProd)
+    case usageSum: UsageSum         => visitUsageSum(usageSum)
+    case usageJoin: UsageJoin       => visitUsageJoin(usageJoin)
     case eqDecidabilityType: EqDecidabilityType =>
       visitEqDecidabilityType(eqDecidabilityType)
     case eqDecidabilityLiteral: EqDecidabilityLiteral =>
@@ -236,8 +238,14 @@ trait Visitor[C, R]:
   def visitUsageLiteral(usageLiteral: UsageLiteral)(using ctx: C)(using Σ: Signature): R =
     combine()
 
-  def visitUsageCompound(usageCompound: UsageCompound)(using ctx: C)(using Σ: Signature): R =
-    combine(usageCompound.operands.multiMap(visitVTerm).multiToSeq: _*)
+  def visitUsageProd(usageProd: UsageProd)(using ctx: C)(using Σ: Signature): R =
+    combine(usageProd.operands.toSeq.map(visitVTerm): _*)
+
+  def visitUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): R =
+    combine(usageSum.operands.multiMap(visitVTerm).multiToSeq: _*)
+
+  def visitUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): R =
+    combine(usageJoin.operands.toSeq.map(visitVTerm): _*)
 
   def visitEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(Builtins.EqDecidabilityQn)
@@ -567,17 +575,19 @@ trait Transformer[C]:
 
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm =
     tm match
-      case ty: Type                     => transformType(ty)
-      case top: Top                     => transformTop(top)
-      case v: Var                       => transformVar(v)
-      case collapse: Collapse           => transformCollapse(collapse)
-      case u: U                         => transformU(u)
-      case thunk: Thunk                 => transformThunk(thunk)
-      case dataType: DataType           => transformDataType(dataType)
-      case con: Con                     => transformCon(con)
-      case usageLiteral: UsageLiteral   => transformUsageLiteral(usageLiteral)
-      case usageCompound: UsageCompound => transformUsageCompound(usageCompound)
-      case usageType: UsageType         => transformUsageType(usageType)
+      case ty: Type                   => transformType(ty)
+      case top: Top                   => transformTop(top)
+      case v: Var                     => transformVar(v)
+      case collapse: Collapse         => transformCollapse(collapse)
+      case u: U                       => transformU(u)
+      case thunk: Thunk               => transformThunk(thunk)
+      case dataType: DataType         => transformDataType(dataType)
+      case con: Con                   => transformCon(con)
+      case usageLiteral: UsageLiteral => transformUsageLiteral(usageLiteral)
+      case usageProd: UsageProd       => transformUsageProd(usageProd)
+      case usageSum: UsageSum         => transformUsageSum(usageSum)
+      case usageJoin: UsageJoin       => transformUsageJoin(usageJoin)
+      case usageType: UsageType       => transformUsageType(usageType)
       case eqDecidabilityType: EqDecidabilityType =>
         transformEqDecidabilityType(eqDecidabilityType)
       case eqDecidabilityLiteral: EqDecidabilityLiteral =>
@@ -630,9 +640,16 @@ trait Transformer[C]:
   def transformUsageLiteral(usageLiteral: UsageLiteral)(using ctx: C)(using Σ: Signature): VTerm =
     usageLiteral
 
-  def transformUsageCompound(usageCompound: UsageCompound)(using ctx: C)(using Σ: Signature): VTerm = UsageCompound(
-    usageCompound.operation,
-    usageCompound.operands.multiMap(transformVTerm),
+  def transformUsageProd(usageProd: UsageProd)(using ctx: C)(using Σ: Signature): VTerm = UsageProd(
+    usageProd.operands.map(transformVTerm),
+  )
+
+  def transformUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): VTerm = UsageSum(
+    usageSum.operands.multiMap(transformVTerm),
+  )
+
+  def transformUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): VTerm = UsageJoin(
+    usageJoin.operands.map(transformVTerm),
   )
 
   def transformEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)(using ctx: C)(using Σ: Signature): VTerm =

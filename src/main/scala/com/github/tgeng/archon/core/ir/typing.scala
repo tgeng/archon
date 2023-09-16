@@ -760,16 +760,27 @@ def inferType
           yield (newTm, Type(newTm), usage)
     case _: Con          => throw IllegalArgumentException("cannot infer type")
     case u: UsageLiteral => Right(u, UsageType(Some(u)), Usages.zero)
-    case UsageCompound(op, operands) =>
+    case UsageProd(operands) =>
+      for
+        (operands, usages) <- transposeCheckTypeResults(
+          operands.map(o => checkType(o, UsageType(None))),
+        )
+        newTm <- UsageProd(operands.toSet)(using tm.sourceInfo).normalized
+      yield (newTm, UsageType(Some(newTm)), usages)
+    case UsageSum(operands) =>
       for
         (operands, usages) <- transposeCheckTypeResults(
           operands.multiToSeq.map(o => checkType(o, UsageType(None))),
         )
-        newTm = UsageCompound(op, operands.toMultiset)(using tm.sourceInfo)
-        bound <- newTm.normalized match
-          case Right(u) => Right(Some(u))
-          case _        => Right(None)
-      yield (newTm, UsageType(bound), usages)
+        newTm <- UsageSum(operands.toMultiset)(using tm.sourceInfo).normalized
+      yield (newTm, UsageType(Some(newTm)), usages)
+    case UsageJoin(operands) =>
+      for
+        (operands, usages) <- transposeCheckTypeResults(
+          operands.map(o => checkType(o, UsageType(None))),
+        )
+        newTm <- UsageJoin(operands.toSet)(using tm.sourceInfo).normalized
+      yield (newTm, UsageType(Some(newTm)), usages)
     case u: UsageType =>
       for result <- transpose(
           u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))),
