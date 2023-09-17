@@ -293,7 +293,59 @@ private def getCTop
     effects <- EffectsUnion(a.effects, b.effects).normalized
   yield CTop(level, effects)
 
-private def typeUnion(a: VTerm, b: VTerm): Either[IrError, VTerm] = ???
+private type StuckValueType = Var | Collapse
+
+private def typeUnion
+  (a: VTerm, b: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : Either[IrError, VTerm] =
+  if a == b then Right(a)
+  else
+    (a, b) match
+      case (Type(upperBound1), Type(upperBound2)) =>
+        for upperBound <- typeUnion(upperBound1, upperBound2)
+        yield Type(upperBound)
+      case (Top(level1, eqD1), Top(level2, eqD2)) =>
+        for level <- LevelMax(level1, level2).normalized
+        yield Top(level, eqDecidabilityJoin(eqD1, eqD2))
+      case (U(cty1), U(cty2)) =>
+        for cty <- typeUnion(cty1, cty2)
+        yield U(cty)
+      case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
+        val data = Σ.getData(qn1)
+        for
+          args <- transpose(
+            args1
+              .zip(args2)
+              .zip(data.tParamTys)
+              .map { case ((arg1, arg2), (binding, variance)) =>
+                variance match
+                  case Variance.COVARIANT => typeUnion(arg1, arg2).map(Some(_))
+                  case Variance.INVARIANT | Variance.CONTRAVARIANT =>
+                    if arg1 == arg2 then Right(Some(arg1))
+                    else Right(None)
+              },
+          )
+          r <-
+            val actualArgs = args.collect { case Some(arg) => arg }
+            if actualArgs.size == args.size then Right(DataType(qn1, actualArgs))
+            else getTop(a, b)
+        yield r
+      case (UsageType(_), UsageType(_))                    => Right(UsageType(None))
+      case (_: StuckValueType, _) | (_, _: StuckValueType) => Left(CannotFindVTypeUnion(a, b))
+      case (EffectsType(continuationUsage1), EffectsType(continuationUsage2)) =>
+        val continuationUsage = (continuationUsage1, continuationUsage2) match
+          case (None, None)         => None
+          case (Some(u), None)      => Some(u | U1)
+          case (None, Some(u))      => Some(u | U1)
+          case (Some(u1), Some(u2)) => Some(u1 | u2)
+        Right(EffectsType(continuationUsage))
+      case (LevelType(level1), LevelType(level2)) =>
+        for level <- LevelMax(level1, level2).normalized
+        yield LevelType(level)
+      case _ => throw IllegalStateException("type error")
 
 private def getTop
   (a: VTerm, b: VTerm)
@@ -307,10 +359,12 @@ private def getTop
     bLevel <- inferLevel(b)
     bEqDecidability <- inferEqDecidability(b)
     level <- LevelMax(aLevel, bLevel).normalized
-    eqDecidability = (aEqDecidability, bEqDecidability) match
-      case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
-      case _                                                      => EqDecidabilityLiteral(EqDecidability.EqUnknown)
-  yield Top(level, eqDecidability)
+  yield Top(level, eqDecidabilityJoin(aEqDecidability, bEqDecidability))
+
+private def eqDecidabilityJoin(t1: VTerm, t2: VTerm): VTerm =
+  (t1, t2) match
+    case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
+    case _                                                      => EqDecidabilityLiteral(EqDecidability.EqUnknown)
 
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)
