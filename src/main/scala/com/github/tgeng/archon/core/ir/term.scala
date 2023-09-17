@@ -123,18 +123,15 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  // I've treid adding sigma type since simulating this with inductive types requires functions for the dependent piece,
-  // which can be too unwieldy with the separation of computation from values. However, sigma type has its own problems
-  // 1. pattern matching on the type won't work nicely since the type of the non-index piece depends on the index.
-  // 2. value type constructor is no longer injective for the same reason above. (For function types, we have the
-  //    separation between computation types and value types and computation type constructor is never injective
-  //    anyway.)
+  // On sigma types, simulating this with inductive types requires functions for the dependent piece, which can be very
+  // unwieldy with the separation of computation from values. However, sigma type make type matching on them impossible
+  // because the second part depends on the first part. Also, it should be possible to add some user language sugar to
+  // make the inductive type version more palatable. So I'm removing sigma type for now to make the core language
+  // simpler.
 
-  case DataType
-    (qn: QualifiedName, args: Arguments = Nil)
-    (using
-      sourceInfo: SourceInfo,
-    ) extends VTerm(sourceInfo), QualifiedNameOwner(qn)
+  case DataType(qn: QualifiedName, args: Arguments = Nil)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    QualifiedNameOwner(qn)
   case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   // Note, `upper` here is in the sense of typing subsumption, not the usage lattice. This is the
@@ -151,7 +148,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   // It's possible to introduce `EqDecidabilityJoin` that signifies the decidability of some compound data consisting of
   // multiple pieces of data, each of which has some parameterized decidability. However, such a construct does not seem
-  // to increase expressiveness because eqDecidability can only take two values and user can always just declare a 
+  // to increase expressiveness because eqDecidability can only take two values and user can always just declare a
   // single eqDecidability parameter and use this single parameter to constrain other parameters.
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
