@@ -91,7 +91,7 @@ enum IrError extends HasException:
   case MissingDefaultTypeCase()
   case InsufficientResourceForSplit(x: VTerm.Var, binding: Binding[VTerm])
   case CyclicDeclarations(cycle: Seq[(DeclarationPart, PreDeclaration)])
-  case EffectTermToComplex(term: VTerm)
+  case EffectTermTooComplex(term: VTerm)
   case ExpectUnrestrictedTypeParameterBinding(binding: Binding[VTerm])
   case UnsatifisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])

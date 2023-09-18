@@ -474,6 +474,10 @@ extension (us1: Usages)
     if us1.size != us2.size then throw IllegalArgumentException("mismatched size")
     else us1.zip(us2).map { (u1, u2) => UsageSum(u1, u2) }
 
+  infix def |(us2: Usages): Usages =
+    if us1.size != us2.size then throw IllegalArgumentException("mismatched size")
+    else us1.zip(us2).map { (u1, u2) => UsageJoin(u1, u2) }
+
   infix def *(scalar: VTerm): Usages = us1.map(u => UsageProd(u, scalar))
   infix def *(scalar: Usage)(using SourceInfo): Usages =
     us1.map(u => UsageProd(u, UsageLiteral(scalar)))
@@ -1567,12 +1571,17 @@ def checkHandler
             },
           ),
         )
-      case _ => Left(EffectTermToComplex(normalizedEffects))
+      case _ => Left(EffectTermTooComplex(normalizedEffects))
   for
     eff <- eff.normalized
     effs <- eff match
       case Effects(effs, s) if s.isEmpty => Right(effs)
-      case _                             => Left(EffectTermToComplex(eff))
+      case _                             => Left(EffectTermTooComplex(eff))
+    continuationUsage = effs.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
+      Σ.getEffect(qn).continuationUsage match
+        case None    => acc | Usage.U1
+        case Some(u) => acc | u
+    }
     (eff, effUsages) <- checkType(eff, EffectsType())
     (parameterBindingTy, _) <- checkIsType(parameterBinding.ty)
     (parameterBindingUsage, _) <- checkType(parameterBinding.usage, UsageType(None))
@@ -1632,7 +1641,7 @@ def checkHandler
     transformΓ = Γ :+ newParameterBinding :+ inputBinding.weakened
     (outputUsage, _) <- checkType(outputUsage, UsageType(None))
     (transform, transformUsages) <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
-    transformUsages <- verifyUsages(transformUsages)(2)
+    transformUsages <- verifyUsages(transformUsages)(2).map(_.dropRight(1).map(_.strengthened))
     effConstraints <- checkEffSubsumption(
       inputEff,
       EffectsUnion(outputEffects, eff),
@@ -1744,7 +1753,7 @@ def checkHandler
             r <- transposeCheckTypeResults(effs.map(checkHandler(_)))
           yield r
 
-        case _ => Left(EffectTermToComplex(eff))
+        case _ => Left(EffectTermTooComplex(eff))
   yield (
     Handler(
       eff,
@@ -1761,9 +1770,10 @@ def checkHandler
     )(h.transformBoundName, h.handlersBoundNames)(using h.sourceInfo),
     outputCType,
     // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
-    (handlerUsages + transformUsages
-      .dropRight(1)
-      .map(_.strengthened) + effUsages) * UUnres + inputUsages,
+    (handlerUsages) * UUnres +
+      (inputUsages + transformUsages) * continuationUsage + // input term is captured as continuation and hence can be used according to the continuation usage
+      parameterDisposerUsages * UAff + // disposer may or may not be executed
+      parameterReplicatorUsages * UUnres, // replicator may or may not be executed arbitrary times
   )
 
 def checkHeapHandler
