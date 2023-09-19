@@ -843,18 +843,20 @@ def getEffectsContinuationUsage
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, Option[Usage]] =
-  effects.normalized.map {
+  : Either[IrError, VTerm] =
+  effects.normalized.flatMap {
     case effects: Effects =>
-      (effects.unionOperands.map { v => getEffVarContinuationUsage(v.asInstanceOf[Var]) } ++
-        effects.literal.map { (qn, _) => Σ.getEffect(qn).continuationUsage })
-        .foldLeft[Option[Usage]](None) {
-          case (None, None) => None
-          // None continuation usage is approximated as U1.
-          case (Some(u), None)      => Some(Usage.U1 | u)
-          case (None, Some(u))      => Some(Usage.U1 | u)
-          case (Some(u1), Some(u2)) => Some(u1 | u2)
-        }
+      val literal = UsageLiteral(
+        effects.literal
+          .map { (qn, _) => Σ.getEffect(qn).continuationUsage }
+          .foldLeft(U1) {
+            // None continuation usage is approximated as U1.
+            case (u, None)      => U1 | u
+            case (u1, Some(u2)) => u1 | u2
+          },
+      )
+      val operands = effects.unionOperands.map { v => getEffVarContinuationUsage(v.asInstanceOf[Var]) }
+      UsageJoin(operands + literal).normalized
     case _ => throw IllegalStateException("Effects should still be Effects after normalization")
   }
 
@@ -1182,7 +1184,7 @@ def inferType
       case h: HeapHandler => checkHeapHandler(h, None)
   yield r
 
-private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): Option[Usage] =
+private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): VTerm =
   Γ.resolve(v) match
     case Binding(EffectsType(usage), _) => usage
     case _ =>
@@ -1528,7 +1530,7 @@ private def checkLet
           usagesInBody
             .dropRight(1) // drop this binding
             .map(_.strengthened) *
-            (UsageLiteral(usagesInContinuation.getOrElse(Usage.U1) | Usage.U1)),
+            usagesInContinuation,
         )
   yield (newTm, augmentEffect(effects, bodyTy), usages)
 
@@ -1549,29 +1551,6 @@ def checkHandler
   val transform = h.transform
   val handlers = h.handlers
   val input = h.input
-  def filterSimpleEffects(normalizedEffects: VTerm): Either[IrError, VTerm] =
-    normalizedEffects match
-      case v: Var => filterSimpleEffects(Effects(Set.empty, Set(v)))
-      case Effects(literal, vars) =>
-        Right(
-          Effects(
-            literal.filter { case (effQn, _) =>
-              Σ.getEffect(effQn).continuationUsage match
-                // `None` means the effect is simple
-                case None => true
-                // Any other value means the effect is not simple and hence needs to be
-                // filtered out
-                case _ => false
-            },
-            vars.filter { v =>
-              Γ.resolve(v.asInstanceOf[Var]) match
-                // Only keep variables that are limited to simple effects
-                case Binding(EffectsType(None), _) => true
-                case _                             => false
-            },
-          ),
-        )
-      case _ => Left(EffectTermTooComplex(normalizedEffects))
   for
     eff <- eff.normalized
     effs <- eff match
@@ -1588,18 +1567,20 @@ def checkHandler
     newParameterBinding = Binding(parameterBindingTy, parameterBindingUsage)(parameterBinding.name)
     (parameter, singleParameterUsages) <- checkType(parameter, parameterBindingTy)
     parameterUsages = singleParameterUsages * parameterBindingUsage
+    // TODO: redo this check
     (outputEffects, _) <- parameterReplicator match
       case Some(_) => checkType(outputEffects, EffectsType())
       // parameterReplicator is not specified, in this case, the outputEffects must not be
       // re-entrant.
-      case None => checkType(outputEffects, EffectsType(Some(Usage.UAff)))
+      case None => checkType(outputEffects, EffectsType(UsageLiteral(Usage.UAff)))
     outputEffects <- outputEffects.normalized
-    parameterOpsEffects <- filterSimpleEffects(outputEffects)
     parameterOpsΓ = Γ :+ newParameterBinding
-    (parameterDisposer, parameterDisposerUsages) <- checkType(
-      parameterDisposer,
-      F(DataType(Builtins.UnitQn), parameterOpsEffects),
-    )(using parameterOpsΓ)
+    // TODO: redo this check
+    (_, parameterDisposerUsages) <- parameterDisposer match
+      case Some(parameterDisposer) =>
+        checkType(parameterDisposer, F(DataType(Builtins.UnitQn), outputEffects))(using parameterOpsΓ)
+      case None => Right(???)
+
     parameterTypeLevel <- inferLevel(newParameterBinding.ty)
     parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
     (parameterReplicator, parameterReplicatorUsages) <- parameterReplicator match
@@ -1619,7 +1600,7 @@ def checkHandler
                   newParameterBinding.ty,
                 ),
               ),
-              parameterOpsEffects,
+              outputEffects,
             ).weakened,
           )(using parameterOpsΓ)
           parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
@@ -1696,7 +1677,7 @@ def checkHandler
                                     newParameterBinding.ty,
                                     opResultUsage,
                                     opResultTy,
-                                    parameterOpsEffects,
+                                    outputEffects,
                                     outputEffects,
                                     outputUsage,
                                     outputType,

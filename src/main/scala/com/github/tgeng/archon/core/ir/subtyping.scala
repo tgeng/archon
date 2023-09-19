@@ -98,7 +98,7 @@ def checkIsSubtype
     // marks how the continuation can be invoked. Normally, checking usage is checking
     // how a resource is *consumed*. But here, checking usage is checking how the
     // continuation (as a resource) is provided.
-    checkContinuationUsageSubsumption(continuationUsage2, continuationUsage1)
+    checkUsageSubsumption(continuationUsage2, continuationUsage1)
   case (UsageType(Some(u1)), UsageType(Some(u2))) => checkUsageSubsumption(u1, u2)
   case (UsageType(Some(_)), UsageType(None))      => Right(Set.empty)
   case (v: Var, ty2: VTerm) =>
@@ -336,12 +336,9 @@ private def typeUnion
       case (UsageType(_), UsageType(_))                    => Right(UsageType(None))
       case (_: StuckValueType, _) | (_, _: StuckValueType) => Left(CannotFindVTypeUnion(a, b))
       case (EffectsType(continuationUsage1), EffectsType(continuationUsage2)) =>
-        val continuationUsage = (continuationUsage1, continuationUsage2) match
-          case (None, None)         => None
-          case (Some(u), None)      => Some(u | U1)
-          case (None, Some(u))      => Some(u | U1)
-          case (Some(u1), Some(u2)) => Some(u1 | u2)
-        Right(EffectsType(continuationUsage))
+        for 
+          continuationUsage <- UsageJoin(continuationUsage1, continuationUsage2).normalized
+        yield EffectsType(continuationUsage)
       case (LevelType(level1), LevelType(level2)) =>
         for level <- LevelMax(level1, level2).normalized
         yield LevelType(level)
@@ -401,27 +398,6 @@ private def checkUsagesSubsumption
     if invert then checkUsageSubsumption(consumedUsage, providedUsage)
     else checkUsageSubsumption(providedUsage, consumedUsage)
   }).map(_.flatten.toSet)
-
-private def checkContinuationUsageSubsumption
-  (usage1: Option[Usage], usage2: Option[Usage])
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, Set[Constraint]] = (usage1, usage2) match
-  case (None, None) => Right(Set.empty)
-  case (None, Some(u)) =>
-    checkUsageSubsumption(UsageLiteral(U1), UsageLiteral(u)) match
-      case r @ Right(_) => r
-      case Left(_: NotUsageSubsumption) =>
-        Left(NotContinuationUsageSubsumption(usage1, usage2))
-      case l @ Left(_) => l
-  case (Some(u1), Some(u2)) =>
-    checkUsageSubsumption(UsageLiteral(u1), UsageLiteral(u2)) match
-      case r @ Right(_) => r
-      case Left(_: NotUsageSubsumption) =>
-        Left(NotContinuationUsageSubsumption(usage1, usage2))
-      case l @ Left(_) => l
-  case _ => Left(NotContinuationUsageSubsumption(usage1, usage2))
 
 def checkUsageSubsumption
   (sub: VTerm, sup: VTerm)

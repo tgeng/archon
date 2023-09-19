@@ -573,15 +573,19 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                   withBindings(Seq(h.transformBoundName)) {
                     transform
                   },
-                ) +: Block(
-                  Whitespace,
-                  Wrap,
-                  FixedIncrement(2),
-                  Block(Whitespace, NoWrap, ".dispose", "->"),
-                  withBindings(Seq(h.parameterBinding.name)) {
-                    parameterDisposer
-                  },
-                ) +: (h.parameterReplicator
+                ) +: (parameterDisposer
+                  .map(disposer =>
+                    Block(
+                      Whitespace,
+                      Wrap,
+                      FixedIncrement(2),
+                      Block(Whitespace, NoWrap, ".dispose", "->"),
+                      withBindings(Seq(h.parameterBinding.name)) {
+                        disposer
+                      },
+                    ),
+                  )
+                  .toSeq ++ parameterReplicator
                   .map(replicator =>
                     Block(
                       Whitespace,

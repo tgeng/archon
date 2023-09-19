@@ -223,32 +223,32 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
             stack.pushAll(capturedStack)
             regenerateHandlerIndex(currentStackHeight)
             run(Return(arg))
-          case EProj(name) if name == n"dispose" =>
-            val ETerm(param) = stack.pop(): @unchecked
-            stack.push(
-              handler.copy(
-                parameter = param,
-                transform = handler.parameterDisposer.weakened,
-              )(
-                handler.transformBoundName,
-                handler.handlersBoundNames,
-              ),
-            )
-            capturedStack.foreach {
-              case handler: Handler =>
-                stack.push(
-                  handler.copy(
-                    // weakened because transform also takes a output value. But for disposer calls this
-                    // value is always unit and ignored by the parameterDisposer.
-                    transform = handler.parameterDisposer.weakened,
-                  )(
-                    handler.transformBoundName,
-                    handler.handlersBoundNames,
-                  ),
-                )
-              case _ => // ignore non-handler cases since they do not contain any disposing logic.
-            }
-            run(Return(Con(n"MkUnit", Nil)))
+          case EProj(name) if name == n"dispose" => ???
+            // val ETerm(param) = stack.pop(): @unchecked
+            // stack.push(
+            //   handler.copy(
+            //     parameter = param,
+            //     transform = handler.parameterDisposer.map(_.weakened),
+            //   )(
+            //     handler.transformBoundName,
+            //     handler.handlersBoundNames,
+            //   ),
+            // )
+            // capturedStack.foreach {
+            //   case handler: Handler =>
+            //     stack.push(
+            //       handler.copy(
+            //         // weakened because transform also takes a output value. But for disposer calls this
+            //         // value is always unit and ignored by the parameterDisposer.
+            //         transform = handler.parameterDisposer.weakened,
+            //       )(
+            //         handler.transformBoundName,
+            //         handler.handlersBoundNames,
+            //       ),
+            //     )
+            //   case _ => // ignore non-handler cases since they do not contain any disposing logic.
+            // }
+            // run(Return(Con(n"MkUnit", Nil)))
           case EProj(name) if name == n"replicate" =>
             val ETerm(param) = stack.pop(): @unchecked
             val currentStackSize = stack.size

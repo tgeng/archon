@@ -397,8 +397,9 @@ trait Visitor[C, R]:
         visitVTerm(handler.eff),
         visitVTerm(handler.parameter),
         visitBinding(handler.parameterBinding),
+      ) ++ handler.parameterDisposer.map(t =>
         withBindings(Seq(handler.parameterBinding.name)) {
-          visitCTerm(handler.parameterDisposer)
+          visitCTerm(t)
         },
       ) ++ handler.parameterReplicator.map(t =>
         withBindings(Seq(handler.parameterBinding.name)) {
@@ -810,9 +811,11 @@ trait Transformer[C]:
       transformVTerm(handler.eff),
       transformVTerm(handler.parameter),
       handler.parameterBinding.map(transformVTerm),
-      withBindings(Seq(handler.parameterBinding.name)) {
-        transformCTerm(handler.parameterDisposer)
-      },
+      handler.parameterDisposer.map(t =>
+        withBindings(Seq(handler.parameterBinding.name)) {
+          transformCTerm(t)
+        },
+      ),
       handler.parameterReplicator.map(t =>
         withBindings(Seq(handler.parameterBinding.name)) {
           transformCTerm(t)

@@ -152,10 +152,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // single eqDecidability parameter and use this single parameter to constrain other parameters.
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  /** @param continuationUsage
-    *   see `Effect` for the semantic of this. Some(Usage.UUnres) is the most general value and allows any effects.
-    */
-  case EffectsType(continuationUsage: Option[Usage] = Some(Usage.UUnres))(using sourceInfo: SourceInfo)
+  case EffectsType(continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UUnres))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
       EffectsQn,
@@ -456,11 +453,20 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       eff: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
-      // Effects of this term can not be re-entrant for simplicity
-      parameterDisposer: CTerm, // binding offset + 1 (for parameter)
-      // Replicator is optional: if it's present, outputEffects can be re-entrant; otherwise, output
-      // effects can only be linear or disposable
-      // Also, effects of this term can not be re-entrant for simplicity
+      /**
+        * This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
+        * clean up the parameter if a parent handler (whose effect is captured by outputEffects) decides to abort.
+        * 
+        * Therefore, it's not needed if the output effect has continuation uage always invoked at least once.
+        */
+      parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
+      /**
+        * This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
+        * replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke
+        * a continuation multiple times.
+        * 
+        * Therefore, it's not needed if the output effect has continuation uage always invoked at most once.
+        */
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
       outputEffects: VTerm,
       outputUsage: VTerm,
