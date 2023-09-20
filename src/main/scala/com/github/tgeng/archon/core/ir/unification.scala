@@ -220,7 +220,7 @@ private def solution
   Right(UYes(Δ, σ, τ))
 
 private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.size).map { i =>
-  Binding(tys(i).weaken(i, 0), Usage.UUnres)(gn"var$i")
+  Binding(tys(i).weaken(i, 0), Usage.UAny)(gn"var$i")
 }.toList
 
 /** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`. Note,u̅ and v̅ are at the

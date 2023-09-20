@@ -226,13 +226,13 @@ def checkIsConvertible
                   // Note on type used heres
                   // * The concrete type passed here does not affect correctness of type checking.
                   // * A combined effect is used to be safe (e.g. we don't want to normalize potentially diverging terms)
-                  // * Usage is not important during conversion checking, hence we just pass UUnres.
-                  Some(F(ty1, combinedEffects, UsageLiteral(UUnres))),
+                  // * Usage is not important during conversion checking, hence we just pass UAny.
+                  Some(F(ty1, combinedEffects, UsageLiteral(UAny))),
                 )
                 ctxConstraint <- checkIsConvertible(ctx1, ctx2, ty.map(_.weakened))(
                   // Using ty1 or ty2 doesn't really matter here. We don't need to do any lambda substitution because ty1
                   // or ty2 are not referenced by anything in ctx1 or ctx2 or ty.
-                  using Γ :+ Binding(ty1, UsageLiteral(UUnres))(gn"v"),
+                  using Γ :+ Binding(ty1, UsageLiteral(UAny))(gn"v"),
                 )
               yield tyConstraint ++ effConstraint ++ usageConstraint ++ tConstraint ++ ctxConstraint
             case (FunctionType(binding1, bodyTy1, eff1), FunctionType(binding2, bodyTy2, eff2)) =>

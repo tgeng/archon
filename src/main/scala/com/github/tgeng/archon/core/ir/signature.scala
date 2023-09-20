@@ -59,7 +59,7 @@ enum Declaration:
         *       inspected and more computation can be done after the continuation is resumed.
         *     - UAff: continuation can be resumed or disposed
         *     - URel: continuation can be resumed or replicated
-        *     - UUnres: continuation an be resumed, disposed, or replicated. Note that continuation is always captured
+        *     - UAny: continuation an be resumed, disposed, or replicated. Note that continuation is always captured
         *       linearly in `U`. It's difficult to sugarize the record type `U U1 Continuation` as a function type with
         *       various usages and automatically insert dispose and replicate wherever needed. This is because dispose
         *       and replicate can be effectful. The effect is captured by the `Continuation` record type, though such

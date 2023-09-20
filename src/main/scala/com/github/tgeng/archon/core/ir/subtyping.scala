@@ -405,9 +405,9 @@ def checkUsageSubsumption
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
-  // Note on direction of usage comparison: UUnres > U1 but UUnres subsumes U1 when counting usage
+  // Note on direction of usage comparison: UAny > U1 but UAny subsumes U1 when counting usage
   case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Right(Set.empty)
-  case (UsageLiteral(UUnres), _)                        => Right(Set.empty)
+  case (UsageLiteral(UAny), _)                        => Right(Set.empty)
   case (UsageJoin(operands1), v: VTerm) =>
     val operands2 = v match
       case UsageJoin(operands2) => operands2
@@ -428,8 +428,8 @@ def checkUsageSubsumption
     Right(Set.empty)
   case (v @ Var(_), UsageLiteral(u2)) =>
     Γ.resolve(v).ty match
-      // Only UUnres subsumes UUnres and UUnres is also convertible with itself.
-      case UsageType(Some(UsageLiteral(Usage.UUnres))) if u2 == Usage.UUnres => Right(Set.empty)
+      // Only UAny subsumes UAny and UAny is also convertible with itself.
+      case UsageType(Some(UsageLiteral(Usage.UAny))) if u2 == Usage.UAny => Right(Set.empty)
       case UsageType(Some(u1Bound)) =>
         checkUsageSubsumption(u1Bound, UsageLiteral(u2))
       case _ => Left(NotUsageSubsumption(sub, sup))
@@ -444,8 +444,8 @@ def checkUsageSubsumption
               UsageJoin(existingUpperBound, value).normalized
             case _ => throw IllegalStateException("type error")
           r <- newUpperBound match
-            // If upper bound is already UUnres, we know they must take that values.
-            case UsageLiteral(Usage.UUnres) =>
+            // If upper bound is already UAny, we know they must take that values.
+            case UsageLiteral(Usage.UAny) =>
               ctx.assignUnsolved(u, Return(newUpperBound))
             case _ =>
               ctx.updateConstraint(u, UmcUsageSubsumption(newUpperBound))

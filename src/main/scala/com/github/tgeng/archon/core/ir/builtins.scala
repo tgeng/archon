@@ -142,7 +142,7 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"A", Type(Top(Var(0)))), Variance.COVARIANT),
-        (binding(n"x", Var(0), UsageLiteral(UUnres)), Variance.INVARIANT),
+        (binding(n"x", Var(0), UsageLiteral(UAny)), Variance.INVARIANT),
       ),
       ty = FunctionType(Binding(Var(1))(n"y"), F(Type(Top(Var(2))))),
       constructors = List(
@@ -190,7 +190,7 @@ object Builtins:
         ),
         PreConstructor(
           n"UnrestrictedIsReplicable",
-          F(DataType(IsReplicableQn, List(UsageLiteral(UUnres)))),
+          F(DataType(IsReplicableQn, List(UsageLiteral(UAny)))),
         ),
       ),
     ),
@@ -212,7 +212,7 @@ object Builtins:
         ),
         PreConstructor(
           n"UnrestrictedIsResumable",
-          F(DataType(IsResumableQn, List(UsageLiteral(UUnres)))),
+          F(DataType(IsResumableQn, List(UsageLiteral(UAny)))),
         ),
       ),
     ),
@@ -552,7 +552,7 @@ object Builtins:
         binding(n"A", Type(Top(Var(1)))),
         binding(n"cell", CellType(Var(1), Var(0))),
       ),
-      ty = F(Var(1), EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(2))))), UsageLiteral(UUnres)),
+      ty = F(Var(1), EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(2))))), UsageLiteral(UAny)),
       clauses = List(
         PreClause(
           boundNames = Nil,

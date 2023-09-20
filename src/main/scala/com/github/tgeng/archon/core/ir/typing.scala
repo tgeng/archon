@@ -654,7 +654,7 @@ private def checkTParamsAreUnrestricted
   case Nil => Right(())
   case binding :: rest =>
     for
-      constarints <- checkUsageSubsumption(binding.usage, UsageLiteral(UUnres)).flatMap(ctx.solve)
+      constarints <- checkUsageSubsumption(binding.usage, UsageLiteral(UAny)).flatMap(ctx.solve)
       _ <- constarints.isEmpty match
         case true  => Right(())
         case false => Left(ExpectUnrestrictedTypeParameterBinding(binding))
@@ -1407,8 +1407,8 @@ private def verifyUsages
     catch
       // It's possible for a term's usage to reference a usage term after it. For example consider
       // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
-      // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UUnres.
-      case _: StrengthenException => UsageLiteral(Usage.UUnres)
+      // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UAny.
+      case _: StrengthenException => UsageLiteral(Usage.UAny)
   }
 
 def checkTypes
@@ -1470,7 +1470,7 @@ private def checkLet
       def areTUsagesZeroOrUnrestricted: Boolean =
         tUsages.forall { usage =>
           toBoolean(
-            checkIsConvertible(usage, UsageLiteral(Usage.UUnres), Some(UsageType())),
+            checkIsConvertible(usage, UsageLiteral(Usage.UAny), Some(UsageType())),
           ) ||
           toBoolean(
             checkIsConvertible(usage, UsageLiteral(Usage.U0), Some(UsageType())),
@@ -1750,11 +1750,11 @@ def checkHandler
       input,
     )(h.transformBoundName, h.handlersBoundNames)(using h.sourceInfo),
     outputCType,
-    // usages in handlers are multiplied by UUnres because handlers may be invoked any number of times.
-    (handlerUsages) * UUnres +
+    // usages in handlers are multiplied by UAny because handlers may be invoked any number of times.
+    (handlerUsages) * UAny +
       (inputUsages + transformUsages) * continuationUsage + // input term is captured as continuation and hence can be used according to the continuation usage
       parameterDisposerUsages * UAff + // disposer may or may not be executed
-      parameterReplicatorUsages * UUnres, // replicator may or may not be executed arbitrary times
+      parameterReplicatorUsages * UAny, // replicator may or may not be executed arbitrary times
   )
 
 def checkHeapHandler
@@ -1765,7 +1765,7 @@ def checkHeapHandler
   : Either[IrError, (CTerm, CTerm, Usages)] =
   val input = h.input
   val heapVarBinding =
-    Binding[VTerm](HeapType(), UsageLiteral(UUnres))(h.boundName)
+    Binding[VTerm](HeapType(), UsageLiteral(UAny))(h.boundName)
 
   given Context = Γ :+ heapVarBinding
 
