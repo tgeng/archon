@@ -55,7 +55,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
     stack.view.zipWithIndex.drop(startIndex).foreach {
       case (HeapHandler(Some(heapKey), _, _), index) =>
         updateHandlerIndex(
-          Effects(Set((Builtins.HeapEffQn, List(Heap(heapKey)))), Set.empty),
+          EffectsLiteral(Set((Builtins.HeapEffQn, List(Heap(heapKey))))),
           index,
         )
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
@@ -198,13 +198,21 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                 val handler = stack(handlerIdx).asInstanceOf[Handler]
                 val opHandler = handler.handlers(effQn / name)
                 Σ.getOperation(effQn, name).continuationUsage match
-                  case None => Right(opHandler.substLowers(args :+ handler.parameter: _*))
-                  case Some(_) =>
+                  case ContinuationUsage(U1, ControlMode.Simple) => Right(opHandler.substLowers(args :+ handler.parameter: _*))
+                  case ContinuationUsage(U0, ControlMode.Simple) =>
+                    val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
+                    stack.dropRightInPlace(stack.size - handlerIdx)
+                    trimHandlerIndex()
+                    // TODO[P0]: invoke disposer in capturedStack. Note, the handling handler doesn't need to be
+                    // processed because the parameter is passed to the corresponding operation handler below.
+                    Right(opHandler.substLowers(args :+ handler.parameter: _*))
+                  case ContinuationUsage(_, ControlMode.Complex) =>
                     val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
                     stack.dropRightInPlace(stack.size - handlerIdx)
                     trimHandlerIndex()
                     val continuation = Thunk(Continuation(handler, capturedStack))
                     Right(opHandler.substLowers(args :+ handler.parameter :+ continuation: _*))
+                  case _ => throw IllegalStateException("bad continuation type for operations")
             yield r) match
               case Right(pc) => run(pc)
               case Left(e)   => Left(e)
@@ -224,31 +232,31 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
             regenerateHandlerIndex(currentStackHeight)
             run(Return(arg))
           case EProj(name) if name == n"dispose" => ???
-            // val ETerm(param) = stack.pop(): @unchecked
-            // stack.push(
-            //   handler.copy(
-            //     parameter = param,
-            //     transform = handler.parameterDisposer.map(_.weakened),
-            //   )(
-            //     handler.transformBoundName,
-            //     handler.handlersBoundNames,
-            //   ),
-            // )
-            // capturedStack.foreach {
-            //   case handler: Handler =>
-            //     stack.push(
-            //       handler.copy(
-            //         // weakened because transform also takes a output value. But for disposer calls this
-            //         // value is always unit and ignored by the parameterDisposer.
-            //         transform = handler.parameterDisposer.weakened,
-            //       )(
-            //         handler.transformBoundName,
-            //         handler.handlersBoundNames,
-            //       ),
-            //     )
-            //   case _ => // ignore non-handler cases since they do not contain any disposing logic.
-            // }
-            // run(Return(Con(n"MkUnit", Nil)))
+          // val ETerm(param) = stack.pop(): @unchecked
+          // stack.push(
+          //   handler.copy(
+          //     parameter = param,
+          //     transform = handler.parameterDisposer.map(_.weakened),
+          //   )(
+          //     handler.transformBoundName,
+          //     handler.handlersBoundNames,
+          //   ),
+          // )
+          // capturedStack.foreach {
+          //   case handler: Handler =>
+          //     stack.push(
+          //       handler.copy(
+          //         // weakened because transform also takes a output value. But for disposer calls this
+          //         // value is always unit and ignored by the parameterDisposer.
+          //         transform = handler.parameterDisposer.weakened,
+          //       )(
+          //         handler.transformBoundName,
+          //         handler.handlersBoundNames,
+          //       ),
+          //     )
+          //   case _ => // ignore non-handler cases since they do not contain any disposing logic.
+          // }
+          // run(Return(Con(n"MkUnit", Nil)))
           case EProj(name) if name == n"replicate" =>
             val ETerm(param) = stack.pop(): @unchecked
             val currentStackSize = stack.size
@@ -438,7 +446,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           ) // this heap handler should be fresh if evaluating upwards
           val key = new HeapKey
           updateHandlerIndex(
-            Effects(Set((Builtins.HeapEffQn, List(Heap(key)))), Set.empty),
+            EffectsLiteral(Set((Builtins.HeapEffQn, List(Heap(key))))),
             stack.length,
           )
           stack.push(HeapHandler(Some(key), heapContent, input)(h.boundName))
@@ -536,12 +544,12 @@ extension (v: VTerm)
       yield r
     case u: UsageCompound =>
       def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match
-        case UsageLiteral(u) => Right(uLubFromLiteral(u))
-        case UsageSum(operands) => transpose(operands.multiToSeq.map(dfs)).map(uLubProd)
+        case UsageLiteral(u)     => Right(uLubFromLiteral(u))
+        case UsageSum(operands)  => transpose(operands.multiToSeq.map(dfs)).map(uLubProd)
         case UsageProd(operands) => transpose(operands.map(dfs)).map(uLubProd)
         case UsageJoin(operands) => transpose(operands.map(dfs)).map(uLubJoin)
-        case c: Collapse => c.normalized.flatMap(dfs)
-        case v: Var      => Right(uLubFromT(v))
+        case c: Collapse         => c.normalized.flatMap(dfs)
+        case v: Var              => Right(uLubFromT(v))
         case _ =>
           throw IllegalStateException(s"expect to be of Usage type: $tm")
 
@@ -707,3 +715,8 @@ def matchCoPattern
           throw IllegalArgumentException("type error")
         case _ => return MatchingStatus.Mismatch
       matchCoPattern(elims, mapping, status)
+
+private def joinContinuationUsages[K]
+  (m1: IterableOnce[(K, ContinuationUsage)], m2: IterableOnce[(K, ContinuationUsage)])
+  : Map[K, ContinuationUsage] =
+  (m1.iterator.to(Seq) ++ m2).groupMapReduce(_._1)(_._2)(_ | _)

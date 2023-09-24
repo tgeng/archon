@@ -339,7 +339,7 @@ trait DerivedSignature extends Signature:
   def getEffectDerivedCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
     for effect <- getEffectOption(qn)
     yield effect.tParamTys.foldRight(
-      CtTerm(Return(Effects(Set((qn, vars(effect.tParamTys.size - 1))), Set.empty))),
+      CtTerm(Return(EffectsLiteral(Set((qn, vars(effect.tParamTys.size - 1)))))),
     ) { case (binding, _Q) =>
       CtLambda(_Q)(binding.name)
     }

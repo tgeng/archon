@@ -27,6 +27,99 @@ object Binding:
   */
 type Arguments = List[VTerm]
 
+enum ControlMode extends Ordered[ControlMode]:
+  /** No continuation is captured, execution simply progresses.
+    */
+  case Simple
+
+  /** Continuation may be captured and complex control transfer may occur.
+    */
+  case Complex
+
+  override def compare(that: ControlMode): Int = this.ordinal - that.ordinal
+  infix def |(that: ControlMode): ControlMode = (this, that) match
+    case (Simple, Simple) => Simple
+    case _                => Complex
+
+  infix def &(that: ControlMode): ControlMode = (this, that) match
+    case (Complex, Complex) => Complex
+    case _                  => Simple
+
+/** Semantic:
+  *
+  *   - Usage: operations can manipulate continuations in ways according to `usage`. Specifically,
+  *     - U0: continuation can only be disposed
+  *     - U1: continuation can only be resumed. Difference from `None` is that output of continuation can be inspected
+  *       and more computation can be done after the continuation is resumed.
+  *     - UAff: continuation can be resumed or disposed
+  *     - URel: continuation can be resumed or replicated
+  *     - UAny: continuation an be resumed, disposed, or replicated. Note that continuation is always captured linearly
+  *       in `U`. It's difficult to sugarize the record type `U U1 Continuation` as a function type with various usages
+  *       and automatically insert dispose and replicate wherever needed. This is because dispose and replicate can be
+  *       effectful. The effect is captured by the `Continuation` record type, though such effects can only have `None`
+  *       continuation usage so that the operation semantic is simple.
+  *
+  *   - simplicity:
+  *     - `true` means the effect is a simple effect. That is, continuation won't be captured in any operation handlers.
+  *       This is only possible if `continuationUsage` is `U0` or `U1`, in which case
+  *       - `U0`: any handlers between the handling handler and the tip of the stack are disposed before the handling
+  *         handler starts execution.
+  *       - `U1`: the handling handler behaves just like a simple function call, with no continuation capturing at all.
+  *         In some literature, this is called "linear". That is, the computation executes immediately and the results
+  *         are returned to the caller intact.
+  *       - `UAff`: all operations are simple and some are U1, some are U0, or some are UAff (the operation may throw
+  * or return under the hood)
+  *   - any other values: this is not
+  *   - `false` means the effect may capture continuations and do something with them. For example, replicate it to
+  *     invoke multiple times (multi-shot continuation) or delay the execution to a later time.
+  *
+  * Also a handler implementation of a simple operation can only perform effects that are also simple. This is because
+  * otherwise continuation would be captured and violating the assumption that simple effect means no continuation
+  * capturing. Practically, this restriction is necessary to implement parameter disposers and parameter replicators,
+  * which can only perform simple effects.
+  *
+  * In addition, a simple linear operation cannot throw exceptions (a.k.a perform simple U0 effects) because that would
+  * violate resource usages at the callsite of this simple linear operation. In order to throw, the operation must be
+  * marked as "simple UAff" instead.
+  */
+case class ContinuationUsage(usage: Usage, controlMode: ControlMode) extends PartiallyOrdered[ContinuationUsage]:
+  infix def |(that: ContinuationUsage): ContinuationUsage =
+    ContinuationUsage(usage | that.usage, controlMode | that.controlMode)
+
+  infix def &(that: ContinuationUsage): Option[ContinuationUsage] =
+    usage & that.usage match
+      case Some(u) => Some(ContinuationUsage(u, controlMode & that.controlMode))
+      case _       => None
+
+  override def tryCompareTo[B >: ContinuationUsage: AsPartiallyOrdered](that: B): Option[Int] =
+    that match
+      case that: ContinuationUsage =>
+        this.controlMode.compare(that.controlMode) match
+          case 0 => this.usage.tryCompareTo(that.usage)
+          case i => Some(i)
+      case _ => None
+
+given PartialOrdering[ContinuationUsage] with
+  override def tryCompare(x: ContinuationUsage, y: ContinuationUsage): Option[Int] = x.tryCompareTo(y)
+  override def lteq(x: ContinuationUsage, y: ContinuationUsage): Boolean = x <= y
+  override def lt(x: ContinuationUsage, y: ContinuationUsage): Boolean = x < y
+  override def gteq(x: ContinuationUsage, y: ContinuationUsage): Boolean = x >= y
+  override def gt(x: ContinuationUsage, y: ContinuationUsage): Boolean = x > y
+  override def equiv(x: ContinuationUsage, y: ContinuationUsage): Boolean = x == y
+
+object ContinuationUsage:
+  import ControlMode.*
+  val CuAny = ContinuationUsage(Usage.UAny, Complex)
+  val CuRel = ContinuationUsage(Usage.URel, Complex)
+  val CuAff = ContinuationUsage(Usage.UAff, Complex)
+  val Cu1 = ContinuationUsage(Usage.U1, Complex)
+  val Cu0 = ContinuationUsage(Usage.U1, Complex)
+  val CuSimple = ContinuationUsage(Usage.UAff, Simple)
+  val CuException = ContinuationUsage(Usage.U0, Simple)
+  val CuLinear = ContinuationUsage(Usage.U0, Simple)
+
+import ContinuationUsage.*
+
 enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
   case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
   case EProj(n: Name)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
@@ -72,11 +165,11 @@ extension (eff: Eff) def map(f: VTerm => VTerm): Eff = (eff._1, eff._2.map(f))
 
 /** Represents an order number `m * ω + n`.
   */
-case class LevelOrder(m: Nat, n: Nat) extends Comparable[LevelOrder]:
-  override def compareTo(that: LevelOrder): Int =
+case class LevelOrder(m: Nat, n: Nat) extends Ordered[LevelOrder]:
+  override def compare(that: LevelOrder): Int =
     if this.m < that.m then -1
     else if this.m > that.m then 1
-    else this.n.compareTo(that.n)
+    else this.n.compare(that.n)
 
 object LevelOrder:
   def orderMax(a: LevelOrder, b: LevelOrder): LevelOrder =
@@ -152,7 +245,17 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // single eqDecidability parameter and use this single parameter to constrain other parameters.
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case EffectsType(continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny))(using sourceInfo: SourceInfo)
+  /** @param continuationUsage
+    *   see ContinuationUsage for explanation. The reason that we need this part to be a term instead of a literal usage
+    *   is because this part needs to participate in usage tracking of following computations (aka continuation). Having
+    *   a first-class value here makes definitions parametric in continuation usage.
+    * @param controlMode
+    *   see ContinuationUsage for explanation
+    * @param sourceInfo
+    */
+  case EffectsType
+    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: ControlMode = ControlMode.Complex)
+    (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
       EffectsQn,
@@ -188,7 +291,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   this match
     case UsageJoin(operands) if operands.isEmpty =>
       throw IllegalArgumentException(
-        "empty operands not allowed for join because join does not have an identity",
+        "Empty operands not allowed for join because join does not have an identity.",
       )
     case _ =>
 
@@ -196,30 +299,30 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Type(upperBound)                => Type(upperBound)
-      case Top(l, eqD)                     => Top(l, eqD)
-      case Var(index)                      => Var(index)
-      case Collapse(cTm)                   => Collapse(cTm)
-      case U(cTy)                          => U(cTy)
-      case Thunk(c)                        => Thunk(c)
-      case DataType(qn, args)              => DataType(qn, args)
-      case Con(name, args)                 => Con(name, args)
-      case UsageType(u)                    => UsageType(u)
-      case UsageLiteral(u)                 => UsageLiteral(u)
-      case UsageProd(operands)             => UsageProd(operands)
-      case UsageSum(operands)              => UsageSum(operands)
-      case UsageJoin(operands)             => UsageJoin(operands)
-      case EqDecidabilityType()            => EqDecidabilityType()
-      case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
-      case EffectsType(continuationUsage)  => EffectsType(continuationUsage)
-      case Effects(literal, unionOperands) => Effects(literal, unionOperands)
-      case LevelType(upperBound)           => LevelType(upperBound)
-      case Level(literal, maxOperands)     => Level(literal, maxOperands)
-      case HeapType()                      => HeapType()
-      case Heap(key)                       => Heap(key)
-      case CellType(heap, ty)              => CellType(heap, ty)
-      case Cell(heapKey, index)            => Cell(heapKey, index)
-      case Auto()                          => Auto()
+      case Type(upperBound)                            => Type(upperBound)
+      case Top(l, eqD)                                 => Top(l, eqD)
+      case Var(index)                                  => Var(index)
+      case Collapse(cTm)                               => Collapse(cTm)
+      case U(cTy)                                      => U(cTy)
+      case Thunk(c)                                    => Thunk(c)
+      case DataType(qn, args)                          => DataType(qn, args)
+      case Con(name, args)                             => Con(name, args)
+      case UsageType(u)                                => UsageType(u)
+      case UsageLiteral(u)                             => UsageLiteral(u)
+      case UsageProd(operands)                         => UsageProd(operands)
+      case UsageSum(operands)                          => UsageSum(operands)
+      case UsageJoin(operands)                         => UsageJoin(operands)
+      case EqDecidabilityType()                        => EqDecidabilityType()
+      case EqDecidabilityLiteral(eqD)                  => EqDecidabilityLiteral(eqD)
+      case EffectsType(continuationUsage, controlMode) => EffectsType(continuationUsage, controlMode)
+      case Effects(literal, unionOperands)             => Effects(literal, unionOperands)
+      case LevelType(upperBound)                       => LevelType(upperBound)
+      case Level(literal, maxOperands)                 => Level(literal, maxOperands)
+      case HeapType()                                  => HeapType()
+      case Heap(key)                                   => Heap(key)
+      case CellType(heap, ty)                          => CellType(heap, ty)
+      case Cell(heapKey, index)                        => Cell(heapKey, index)
+      case Auto()                                      => Auto()
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
     visitor.visitVTerm(this)
@@ -252,7 +355,7 @@ object VTerm:
     if operands.isEmpty then throw IllegalStateException("UsageJoin cannot be empty")
     val (usages, terms) = collectUsage(operands)
     (usages.reduce(_ | _), terms) match
-      case (u, Nil)    => UsageLiteral(u)
+      case (u, Nil)  => UsageLiteral(u)
       case (UAny, _) => UsageLiteral(UAny)
       // Note that something joining itself is the same as the thing itself, so there is never any need to hold
       // duplicates
@@ -285,8 +388,9 @@ object VTerm:
     Set((Builtins.DivQn, Nil), (Builtins.MaybeDivQn, Nil)),
   )
 
-  /** Marker of a computation that may or may not diverge. Computation with this effect will be executed by the type
-    * checker with timeout.
+  /** Marker of a computation that may or may not diverge. Computation with this effect will be further checked by
+    * statically at callsite (with additional information available) to ensure it's total before executed by the type
+    * checker.
     */
   def MaybeDiv()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.MaybeDivQn, Nil)),
@@ -407,6 +511,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   above corresponding handler. Note that the first term is at the bottom of the stack and the last term is the tip
     *   of the stack.
     */
+  // TODO[P0]: add typing information
   case Continuation(handler: Handler, capturedStack: Seq[CTerm | Elimination[VTerm]]) extends CTerm(SiEmpty)
 
   /** Internaly only. This is only created by reduction.
@@ -423,6 +528,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param stack1:
     *   the other replicated stack
     */
+  // TODO[P0]: move this to reduction
   case ContinuationReplicationState
     (
       handlerIndex: Nat,
@@ -441,9 +547,21 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param state
     *   the target ContinuationReplicationState to which the replicated parameters is appended
     */
+  // TODO[P0]: move this to reduction
   case ContinuationReplicationStateAppender(paramPairs: CTerm, handler: Handler, state: ContinuationReplicationState)
     extends CTerm(SiEmpty)
 
+  // Note on terminlogy:
+  //   - otherEffects: the effect of the input term without effects being handled by this handler
+  //   - paramOpsEffects: otherEffects with complex effects filtered out conservatively. This corresponds to the effects
+  //       of `dispose` and `replicate` call on the captured continuatin. Note that this does not include effects used
+  //       in the parameterDisposer and parameterReplicator of the current handler. This is because those are not
+  //       invoked on the captured continuation. Rather, they are invoked on the continuation captured by parent
+  //       handlers
+  //   - resumeEffects: otherEffects + effects used in transformer and operation handler implementations. This
+  //       correponds to the effects of `resume` call on the captured continuation
+  //   - outputEffects: resumeEffects + effects used in parameter disposer and parameter replicaor. This is also the
+  //     effect in the type of the curret handler being defined.
   case Handler
     (
       /** Handle general term here instead of a single effect. During type checking it will fail if this term is not
@@ -453,21 +571,22 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       eff: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
-      /**
-        * This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
+      /** This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
         * clean up the parameter if a parent handler (whose effect is captured by outputEffects) decides to abort.
-        * 
+        *
         * Therefore, it's not needed if the output effect has continuation uage always invoked at least once.
         */
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
-      /**
-        * This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
-        * replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke
-        * a continuation multiple times.
-        * 
+      /** This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
+        * replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke a
+        * continuation multiple times.
+        *
         * Therefore, it's not needed if the output effect has continuation uage always invoked at most once.
         */
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
+      // TODO[P0]: remove these type annotations since they should all be inferrable from the input term.serialize
+      // Also, we will do special handling here that removes the effects of this handler from the inferred effects.
+      // This should be doable since we require handler effects to be explicit anyway.
       outputEffects: VTerm,
       outputUsage: VTerm,
 

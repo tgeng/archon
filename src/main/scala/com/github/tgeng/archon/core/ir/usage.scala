@@ -21,35 +21,35 @@ enum Usage extends PartiallyOrdered[Usage]:
 
   @tailrec
   final infix def +(that: Usage): Usage = (this, that) match
-    case (U0, u)                         => u
+    case (U0, u)                       => u
     case (U1, U1 | UAff | URel | UAny) => URel
-    case (UAff, URel)                    => URel
+    case (UAff, URel)                  => URel
     case (UAff, UAff | UAny)           => UAny
     case (URel, URel | UAny)           => URel
-    case (UAny, UAny)                => UAny
-    case (u1, u2)                        => u2 + u1
+    case (UAny, UAny)                  => UAny
+    case (u1, u2)                      => u2 + u1
 
   @tailrec
   final infix def *(that: Usage): Usage = (this, that) match
-    case (U0, _)                 => U0
-    case (U1, u)                 => u
-    case (UAff, UAff)            => UAff
-    case (UAff, URel | UAny)   => UAny
-    case (URel, URel)            => URel
+    case (U0, _)             => U0
+    case (U1, u)             => u
+    case (UAff, UAff)        => UAff
+    case (UAff, URel | UAny) => UAny
+    case (URel, URel)        => URel
     case (URel | UAny, UAny) => UAny
-    case (u1, u2)                => u2 * u1
+    case (u1, u2)            => u2 * u1
 
   @tailrec
   final infix def |(that: Usage): Usage = (this, that) match
-    case (u1, u2) if u1 == u2    => u1
-    case (U0, U1 | UAff)         => UAff
-    case (U0, URel | UAny)     => UAny
-    case (U1, UAff)              => UAff
-    case (U1, URel)              => URel
-    case (U1, UAny)            => UAny
-    case (UAff, URel | UAny)   => UAny
-    case (URel | UAny, UAny) => UAny
-    case (u1, u2)                => u2 | u1
+    case (u1, u2) if u1 == u2 => u1
+    case (U0, U1 | UAff)      => UAff
+    case (U0, URel | UAny)    => UAny
+    case (U1, UAff)           => UAff
+    case (U1, URel)           => URel
+    case (U1, UAny)           => UAny
+    case (UAff, URel | UAny)  => UAny
+    case (URel | UAny, UAny)  => UAny
+    case (u1, u2)             => u2 | u1
 
   final infix def &(that: Usage): Option[Usage] = (this, that) match
     case (U0, U1) | (U1, U0)         => None
@@ -58,26 +58,26 @@ enum Usage extends PartiallyOrdered[Usage]:
     case (UAff, URel) | (URel, UAff) => Some(U1)
     case (UAff, _) | (_, UAff)       => Some(UAff)
     case (URel, _) | (_, URel)       => Some(URel)
-    case (UAny, UAny)            => Some(UAny)
+    case (UAny, UAny)                => Some(UAny)
 
   final infix def isSubUsageOf(that: Usage): Boolean = (this, that) match
-    case (u1, u2) if u1 == u2         => true
+    case (u1, u2) if u1 == u2       => true
     case (U0, _) | (_, URel | UAny) => true
-    case (U1, UAff)                   => true
-    case (UAff, U1)                   => true
-    case _                            => false
+    case (U1, UAff)                 => true
+    case (UAff, U1)                 => true
+    case _                          => false
 
   override def tryCompareTo[B >: Usage: AsPartiallyOrdered](that: B): Option[Int] =
     (this, that) match
-      case (u1, u2) if u1 == u2       => Some(0)
+      case (u1, u2) if u1 == u2     => Some(0)
       case (U0, UAff | UAny)        => Some(-1)
       case (U1, UAff | URel | UAny) => Some(-1)
       case (UAff, UAny)             => Some(-1)
       case (URel, UAny)             => Some(-1)
       case (UAny, _)                => Some(1)
-      case (URel, U1)                 => Some(1)
-      case (UAff, U0 | U1)            => Some(1)
-      case _                          => None
+      case (URel, U1)               => Some(1)
+      case (UAff, U0 | U1)          => Some(1)
+      case _                        => None
 
 private type UProd[T] = Seq[T | Usage]
 private type USum[T] = Seq[UProd[T]]

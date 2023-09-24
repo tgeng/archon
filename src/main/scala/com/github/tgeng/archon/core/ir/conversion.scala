@@ -45,7 +45,7 @@ def checkIsConvertible
           if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(((v, _) => hasCollapse(v)))
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
-        case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_))) =>
+        case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_, _))) =>
           // If meta some component is not reduced yet, we can't check subsumption
           if operands1.exists(hasCollapse) || operands2.exists(hasCollapse)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))

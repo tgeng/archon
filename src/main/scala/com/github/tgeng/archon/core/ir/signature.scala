@@ -47,25 +47,8 @@ enum Declaration:
     (val qn: QualifiedName)
     (
       val tParamTys: Context = IndexedSeq(),
-      /** Semantic:
-        *
-        *   - None: operations don't manipulate continuations at all (hence won't have access to a continuation
-        *     argument). Instead, implementation of an operation simply returns the operation result. Semantically None
-        *     subsumes `U1` because it's a more restricted case of U1.
-        *   - Some(u): operations can manipulate continuations in ways according to `u`. Specifically, for each value of
-        *     `u` as the following
-        *     - U0: continuation can only be disposed
-        *     - U1: continuation can only be resumed. Difference from `None` is that output of continuation can be
-        *       inspected and more computation can be done after the continuation is resumed.
-        *     - UAff: continuation can be resumed or disposed
-        *     - URel: continuation can be resumed or replicated
-        *     - UAny: continuation an be resumed, disposed, or replicated. Note that continuation is always captured
-        *       linearly in `U`. It's difficult to sugarize the record type `U U1 Continuation` as a function type with
-        *       various usages and automatically insert dispose and replicate wherever needed. This is because dispose
-        *       and replicate can be effectful. The effect is captured by the `Continuation` record type, though such
-        *       effects can only have `None` continuation usage so that the operation semantic is simple.
-        */
-      val continuationUsage: Option[Usage],
+      /** This value must be the join of the continuation usages of all operations. */
+      val continuationUsage: ContinuationUsage,
     )
 
   def qn: QualifiedName
@@ -97,7 +80,7 @@ case class Clause
 case class Operation
   (
     name: Name,
-    continuationUsage: Option[Usage],
+    continuationUsage: ContinuationUsage,
     paramTys: Telescope, /* + tParamTys */
     resultTy: VTerm /* + tParamTys + paramTys */,
     resultUsage: VTerm, /* + tParamTys + paramTys */

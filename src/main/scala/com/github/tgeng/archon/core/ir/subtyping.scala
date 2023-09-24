@@ -21,6 +21,7 @@ import DelimitPolicy.*
 import UnsolvedMetaVariableConstraint.*
 import ResolvedMetaVariable.*
 import scala.collection.mutable.ArrayBuffer
+import math.Ordering.ordered
 
 /** Preconditions: sub and sup are both checked to be types
   */
@@ -93,12 +94,14 @@ def checkIsSubtype
                     r
             },
         ).map(_.flatten.toSet)
-  case (EffectsType(continuationUsage1), EffectsType(continuationUsage2)) =>
-    // Note that subsumption checking is reversed because the effect of the computation
-    // marks how the continuation can be invoked. Normally, checking usage is checking
-    // how a resource is *consumed*. But here, checking usage is checking how the
-    // continuation (as a resource) is provided.
-    checkUsageSubsumption(continuationUsage2, continuationUsage1)
+  case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
+    if (controlMode1 == ControlMode.Simple || controlMode1 == controlMode2) then
+      // Note that subsumption checking is reversed because the effect of the computation
+      // marks how the continuation can be invoked. Normally, checking usage is checking
+      // how a resource is *consumed*. But here, checking usage is checking how the
+      // continuation (as a resource) is provided.
+      checkUsageSubsumption(continuationUsage2, continuationUsage1)
+    else Left(NotVSubtype(sub, sup))
   case (UsageType(Some(u1)), UsageType(Some(u2))) => checkUsageSubsumption(u1, u2)
   case (UsageType(Some(_)), UsageType(None))      => Right(Set.empty)
   case (v: Var, ty2: VTerm) =>
@@ -335,10 +338,11 @@ private def typeUnion
         yield r
       case (UsageType(_), UsageType(_))                    => Right(UsageType(None))
       case (_: StuckValueType, _) | (_, _: StuckValueType) => Left(CannotFindVTypeUnion(a, b))
-      case (EffectsType(continuationUsage1), EffectsType(continuationUsage2)) =>
-        for 
+      case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
+        for
           continuationUsage <- UsageJoin(continuationUsage1, continuationUsage2).normalized
-        yield EffectsType(continuationUsage)
+          controlMode = controlMode1 | controlMode2
+        yield EffectsType(continuationUsage, controlMode)
       case (LevelType(level1), LevelType(level2)) =>
         for level <- LevelMax(level1, level2).normalized
         yield LevelType(level)
@@ -407,7 +411,7 @@ def checkUsageSubsumption
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
   // Note on direction of usage comparison: UAny > U1 but UAny subsumes U1 when counting usage
   case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Right(Set.empty)
-  case (UsageLiteral(UAny), _)                        => Right(Set.empty)
+  case (UsageLiteral(UAny), _)                          => Right(Set.empty)
   case (UsageJoin(operands1), v: VTerm) =>
     val operands2 = v match
       case UsageJoin(operands2) => operands2
@@ -527,15 +531,14 @@ private def checkLevelSubsumption
     val (literal1, operands1) = v match
       case Level(literal1, operands1) => (literal1, operands1)
       case v: VTerm                   => (LevelOrder.zero, Map(v -> 0))
-    val spuriousOperands =
-      operands1.filter((operand1, offset1) => operands2.get(operand1).getOrElse(-1) < offset1).keySet
+    val spuriousOperands = getSpurious[VTerm, Int](operands1, operands2)
     if spuriousOperands.isEmpty && literal1.compareTo(literal2) <= 0 then Right(Set.empty)
     else
     // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
     // ends up being assigned small levels
     // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary large level and
     // hence we can't decide subsumption yet.
-    if spuriousOperands.forall(hasCollapse) || operands2.keys.exists(hasCollapse) then
+    if spuriousOperands.keys.forall(hasCollapse) || operands2.keys.exists(hasCollapse) then
       Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
     else Left(NotLevelSubsumption(sub, sup))
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
@@ -563,6 +566,13 @@ private def checkLevelSubsumption
       case _                                          => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
   case _                                                  => Left(NotLevelSubsumption(sub, sup))
+
+private def getSpurious[T, E: PartialOrdering](sub: Map[T, E], sup: Map[T, E]): Map[T, E] =
+  sub.filter { case (operand1, e1) =>
+    sup.get(operand1) match
+      case None     => true
+      case Some(e2) => summon[PartialOrdering[E]].gt(e1, e2)
+  }
 
 private def check2
   (a: VTerm, b: VTerm)

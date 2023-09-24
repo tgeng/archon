@@ -845,20 +845,23 @@ def getEffectsContinuationUsage
   (using ctx: TypingContext)
   : Either[IrError, VTerm] =
   effects.normalized.flatMap {
-    case effects: Effects =>
+    case Effects(literal, operands) =>
       val literal = UsageLiteral(
-        effects.literal
-          .map { (qn, _) => Σ.getEffect(qn).continuationUsage }
-          .foldLeft(U1) {
-            // None continuation usage is approximated as U1.
-            case (u, None)      => U1 | u
-            case (u1, Some(u2)) => u1 | u2
-          },
+        getLiteralEffectsContinuationUsage(effects.literal).usage,
       )
-      val operands = effects.unionOperands.map { v => getEffVarContinuationUsage(v.asInstanceOf[Var]) }
+      val operands = effects.unionOperands.map {
+        case v: Var => getEffVarContinuationUsage(v)
+        // TODO[P0]: handle meta variable here
+        case _      => UsageLiteral(Usage.UAny)
+      }.toSet
       UsageJoin(operands + literal).normalized
     case _ => throw IllegalStateException("Effects should still be Effects after normalization")
   }
+
+def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): ContinuationUsage =
+  effs
+    .map { (qn, _) => Σ.getEffect(qn).continuationUsage }
+    .foldLeft(ContinuationUsage.Cu1) { _ | _ }
 
 def checkType
   (tm: VTerm, ty: VTerm)
@@ -1186,7 +1189,7 @@ def inferType
 
 private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): VTerm =
   Γ.resolve(v) match
-    case Binding(EffectsType(usage), _) => usage
+    case Binding(EffectsType(usage, _), _) => usage
     case _ =>
       throw IllegalStateException("typing exception")
 
@@ -1556,11 +1559,7 @@ def checkHandler
     effs <- eff match
       case Effects(effs, s) if s.isEmpty => Right(effs)
       case _                             => Left(EffectTermTooComplex(eff))
-    continuationUsage = effs.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
-      Σ.getEffect(qn).continuationUsage match
-        case None    => acc | Usage.U1
-        case Some(u) => acc | u
-    }
+    continuationUsage = getLiteralEffectsContinuationUsage(effs).usage
     (eff, effUsages) <- checkType(eff, EffectsType())
     (parameterBindingTy, _) <- checkIsType(parameterBinding.ty)
     (parameterBindingUsage, _) <- checkType(parameterBinding.usage, UsageType(None))
@@ -1632,6 +1631,7 @@ def checkHandler
       else Left(NotVSubsumption(inputEff, EffectsUnion(outputEffects, eff), Some(EffectsType())))
     // Check handler implementations
     (handlerEntries, handlerUsages) <-
+      // TODO[P0]: honor filter here and only check filtered operations of the given effect
       def checkHandler(eff: Eff): Either[IrError, (List[(QualifiedName, CTerm)], Usages)] =
         val (qn, args) = eff
         for
@@ -1660,7 +1660,7 @@ def checkHandler
               for
                 opResultTyLevel <- inferLevel(opResultTy)
                 case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
-                  case Some(continuationUsage) =>
+                  case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
                     resumeNameOption match
                       case Some(resumeName) =>
                         for outputTypeLevel <- inferLevel(outputType)
@@ -1689,7 +1689,7 @@ def checkHandler
                         )
                       case None =>
                         throw IllegalArgumentException("missing name for continuation")
-                  case None =>
+                  case ContinuationUsage(continuationUsage, ControlMode.Simple) =>
                     Right(
                       (
                         opParamTys,
@@ -1731,7 +1731,7 @@ def checkHandler
               if unknownOperationQns.isEmpty
               then Right(())
               else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
-            r <- transposeCheckTypeResults(effs.map(checkHandler(_)))
+            r <- transposeCheckTypeResults(effs.map(checkHandler))
           yield r
 
         case _ => Left(EffectTermTooComplex(eff))

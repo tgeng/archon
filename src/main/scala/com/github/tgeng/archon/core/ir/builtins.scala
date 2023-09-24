@@ -222,12 +222,12 @@ object Builtins:
         (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
         (binding(n"paramUsage", UsageType()), Variance.CONTRAVARIANT),
         (binding(n"paramType", Type(Top(Var(1)))), Variance.CONTRAVARIANT),
-        (binding(n"resumeArgUsage", UsageType()), Variance.CONTRAVARIANT),
-        (binding(n"resumeArgType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
+        (binding(n"resultUsage", UsageType()), Variance.CONTRAVARIANT),
+        (binding(n"resultType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
         (binding(n"paramOpsEffects", EffectsType()), Variance.INVARIANT),
-        (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
-        (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
-        (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
+        (binding(n"resumeEffects", EffectsType()), Variance.INVARIANT),
+        (binding(n"resumeUsage", UsageType()), Variance.INVARIANT),
+        (binding(n"resumeType", Type(Top(Var(5)))), Variance.COVARIANT),
       ),
       ty = CTop(Var(9)),
       fields = List(
@@ -235,7 +235,7 @@ object Builtins:
           n"resume",
           Binding(DataType(IsResumableQn, List(Var(6))))(n"isResumable") ->:
             Binding(Var(7), Var(8))(n"param") ->:
-            Binding(Var(6), Var(7))(n"resumeArg") ->:
+            Binding(Var(6), Var(7))(n"result") ->:
             F(Var(3), Var(5), Var(4)),
         ),
         Field(

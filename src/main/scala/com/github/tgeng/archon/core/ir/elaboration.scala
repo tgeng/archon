@@ -752,13 +752,7 @@ private def elaborateHead(effect: PreEffect)(using Σ: Signature)(using ctx: Typ
       tParamTys <- elaborateContext(effect.tParamTys)
       e = new Effect(effect.qn)(
         tParamTys,
-        effect.operations.map(_.continuationUsage).foldLeft[Option[Usage]](None) {
-          case (None, None) => None
-          // None continuation usage is approximated as U1.
-          case (Some(u), None)      => Some(Usage.U1 | u)
-          case (None, Some(u))      => Some(Usage.U1 | u)
-          case (Some(u1), Some(u2)) => Some(u1 | u2)
-        },
+        effect.operations.map(_.continuationUsage).foldLeft(ContinuationUsage.CuLinear)(_ | _),
       )
       _ <- checkEffect(e)
     yield Σ.addDeclaration(e)
