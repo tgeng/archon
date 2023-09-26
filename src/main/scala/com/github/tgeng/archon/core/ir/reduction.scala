@@ -77,7 +77,7 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
     (using ctx: TypingContext)
     : Either[IrError, CTerm] =
     pc match
-      case Hole => throw IllegalStateException()
+      case Hole | CapturedContinuationTip(_) => throw IllegalStateException()
       // Take a shortcut when returning a collapsable computation
       case Return(Collapse(c)) => run(c, reduceDown)
       // terminal cases
@@ -205,27 +205,28 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                     val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
                     stack.dropRightInPlace(stack.size - handlerIdx)
                     trimHandlerIndex()
-                    val continuation = Thunk(Continuation(handler, capturedStack))
+                    // TODO[P0]: add type information here
+                    val continuation = Thunk(Continuation(???))
                     Right(opHandler.substLowers(args :+ handler.parameter :+ continuation: _*))
                   case _ => throw IllegalStateException("bad continuation type for operations")
             yield r) match
               case Right(pc) => run(pc)
               case Left(e)   => Left(e)
-      case Continuation(handler, capturedStack) =>
+      case Continuation(continuationTerm) =>
         stack.pop() match
-          case EProj(name) if name == n"resume" =>
-            val ETerm(param) = stack.pop(): @unchecked
-            val ETerm(arg) = stack.pop(): @unchecked
-            val currentStackHeight = stack.length
-            stack.push(
-              handler.copy(parameter = param)(
-                handler.transformBoundName,
-                handler.handlersBoundNames,
-              ),
-            )
-            stack.pushAll(capturedStack)
-            regenerateHandlerIndex(currentStackHeight)
-            run(Return(arg))
+          case EProj(name) if name == n"resume" => ???
+            // val ETerm(param) = stack.pop(): @unchecked
+            // val ETerm(arg) = stack.pop(): @unchecked
+            // val currentStackHeight = stack.length
+            // stack.push(
+            //   handler.copy(parameter = param)(
+            //     handler.transformBoundName,
+            //     handler.handlersBoundNames,
+            //   ),
+            // )
+            // stack.pushAll(capturedStack)
+            // regenerateHandlerIndex(currentStackHeight)
+            // run(Return(arg))
           case EProj(name) if name == n"dispose" => ???
           // val ETerm(param) = stack.pop(): @unchecked
           // stack.push(
@@ -252,99 +253,96 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           //   case _ => // ignore non-handler cases since they do not contain any disposing logic.
           // }
           // run(Return(Con(n"MkUnit", Nil)))
-          case EProj(name) if name == n"replicate" =>
-            val ETerm(param) = stack.pop(): @unchecked
-            val currentStackSize = stack.size
-            stack.push(
-              handler.copy(parameter = param)(
-                handler.transformBoundName,
-                handler.handlersBoundNames,
-              ),
-            )
-            stack.pushAll(capturedStack)
-            run(ContinuationReplicationState(currentStackSize, Nil, Nil), true)
+          case EProj(name) if name == n"replicate" => ???
+            // val ETerm(param) = stack.pop(): @unchecked
+            // val currentStackSize = stack.size
+            // stack.push(
+            //   handler.copy(parameter = param)(
+            //     handler.transformBoundName,
+            //     handler.handlersBoundNames,
+            //   ),
+            // )
+            // stack.pushAll(capturedStack)
+            // run(ContinuationReplicationState(currentStackSize, Nil, Nil), true)
           case _ => throw IllegalArgumentException("type error")
-      case cr @ ContinuationReplicationState(handlerIndex, stack1, stack2) =>
-        assert(
-          reduceDown,
-          "all calls to run with ContinuationReplicationState should pass reduceDown=True",
-        )
-        stack.pop() match
-          case handler: Handler =>
-            handler.parameterReplicator match
-              case None =>
-                throw IllegalArgumentException(
-                  "type error: handler missing parameterReplicator is not compatible with re-entrant effects.",
-                )
-              case Some(parameterReplicator) =>
-                run(
-                  ContinuationReplicationStateAppender(
-                    parameterReplicator.substLowers(handler.parameter),
-                    handler,
-                    cr,
-                  ),
-                )
-          case t =>
-            run(ContinuationReplicationState(handlerIndex, t +: stack1, t +: stack2), true)
-      case ContinuationReplicationStateAppender(
-          paramPairs,
-          handler,
-          cr @ ContinuationReplicationState(handlerIndex, stack1, stack2),
-        ) =>
-        if reduceDown then
-          paramPairs match
-            case Return(Con(name, param1 :: param2 :: Nil)) if name == n"MkPair" =>
-              val handler1 = handler
-                .copy(parameter = param1)(
-                  handler.transformBoundName,
-                  handler.handlersBoundNames,
-                )
-              val handler2 = handler
-                .copy(parameter = param2)(
-                  handler.transformBoundName,
-                  handler.handlersBoundNames,
-                )
-              if stack.size == handlerIndex then
-                run(
-                  Return(
-                    Con(
-                      n"MkPair",
-                      List(
-                        Thunk(Continuation(handler1, stack1)),
-                        Thunk(Continuation(handler2, stack2)),
-                      ),
-                    ),
-                  ),
-                )
-              else if stack.size < handlerIndex then
-                throw IllegalStateException(
-                  "stack is corruptted: somehow execution has passed root handler of replication",
-                )
-              else
-                run(
-                  ContinuationReplicationState(
-                    handlerIndex,
-                    handler1 +: stack1,
-                    handler2 +: stack2,
-                  ),
-                  true,
-                )
-            case _ =>
-              throw IllegalArgumentException(
-                "type error: parameterReplicator should have returned a pair of parameters",
-              )
-        else
-          stack.push(ContinuationReplicationStateAppender(Hole, handler, cr))
-          run(paramPairs)
+      // case cr @ ContinuationReplicationState(handlerIndex, stack1, stack2) =>
+      //   assert(
+      //     reduceDown,
+      //     "all calls to run with ContinuationReplicationState should pass reduceDown=True",
+      //   )
+      //   stack.pop() match
+      //     case handler: Handler =>
+      //       handler.parameterReplicator match
+      //         case None =>
+      //           throw IllegalArgumentException(
+      //             "type error: handler missing parameterReplicator is not compatible with re-entrant effects.",
+      //           )
+      //         case Some(parameterReplicator) =>
+      //           run(
+      //             ContinuationReplicationStateAppender(
+      //               parameterReplicator.substLowers(handler.parameter),
+      //               handler,
+      //               cr,
+      //             ),
+      //           )
+      //     case t =>
+      //       run(ContinuationReplicationState(handlerIndex, t +: stack1, t +: stack2), true)
+      // case ContinuationReplicationStateAppender(
+      //     paramPairs,
+      //     handler,
+      //     cr @ ContinuationReplicationState(handlerIndex, stack1, stack2),
+      //   ) =>
+      //   if reduceDown then
+      //     paramPairs match
+      //       case Return(Con(name, param1 :: param2 :: Nil)) if name == n"MkPair" =>
+      //         val handler1 = handler
+      //           .copy(parameter = param1)(
+      //             handler.transformBoundName,
+      //             handler.handlersBoundNames,
+      //           )
+      //         val handler2 = handler
+      //           .copy(parameter = param2)(
+      //             handler.transformBoundName,
+      //             handler.handlersBoundNames,
+      //           )
+      //         if stack.size == handlerIndex then
+      //           run(
+      //             Return(
+      //               Con(
+      //                 n"MkPair",
+      //                 List(
+      //                   Thunk(Continuation(handler1, stack1, ???)),
+      //                   Thunk(Continuation(handler2, stack2, ???)),
+      //                 ),
+      //               ),
+      //             ),
+      //           )
+      //         else if stack.size < handlerIndex then
+      //           throw IllegalStateException(
+      //             "stack is corruptted: somehow execution has passed root handler of replication",
+      //           )
+      //         else
+      //           run(
+      //             ContinuationReplicationState(
+      //               handlerIndex,
+      //               handler1 +: stack1,
+      //               handler2 +: stack2,
+      //             ),
+      //             true,
+      //           )
+      //       case _ =>
+      //         throw IllegalArgumentException(
+      //           "type error: parameterReplicator should have returned a pair of parameters",
+      //         )
+      //   else
+      //     stack.push(ContinuationReplicationStateAppender(Hole, handler, cr))
+      //     run(paramPairs)
       case h @ Handler(
           eff,
           parameter,
           parameterBinding,
           parameterDisposer,
           parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
           transform,
           handlers,
           input,
@@ -366,9 +364,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                   parameterBinding,
                   parameterDisposer,
                   parameterReplicator,
-                  outputEffects,
-                  outputUsage,
-                  outputType,
                   transform,
                   handlers,
                   Hole,
@@ -387,9 +382,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           parameter,
           parameterDisposer,
           parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
           transform,
           handlers,
           input,
@@ -400,9 +392,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           parameter,
           parameterDisposer,
           parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
           transform,
           handlers,
           c,

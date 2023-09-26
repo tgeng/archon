@@ -275,6 +275,9 @@ trait Visitor[C, R]:
 
   def visitHole(using ctx: C)(using Σ: Signature): R = combine()
 
+  def visitCapturedContinuationTip(cct: CapturedContinuationTip)(using ctx: C)(using Σ: Signature): R =
+    visitF(cct.ty)
+
   def visitCType(cType: CType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitCTerm(cType.upperBound),
@@ -347,30 +350,7 @@ trait Visitor[C, R]:
     )
 
   def visitContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): R =
-    combine(continuation.capturedStack.map {
-      case c: CTerm             => visitCTerm(c)
-      case elim: Elimination[_] => visitElim(elim)
-    }: _*)
-
-  def visitContinuationReplicationState(c: ContinuationReplicationState)(using ctx: C)(using Σ: Signature): R =
-    combine(c.stack1.map {
-      case c: CTerm             => visitCTerm(c)
-      case elim: Elimination[_] => visitElim(elim)
-    } ++ c.stack2.map {
-      case c: CTerm             => visitCTerm(c)
-      case elim: Elimination[_] => visitElim(elim)
-    }: _*)
-
-  def visitContinuationReplicationStateAppender
-    (c: ContinuationReplicationStateAppender)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    combine(
-      visitCTerm(c.paramPairs),
-      visitHandler(c.handler),
-      visitContinuationReplicationState(c.state),
-    )
+    visitCTerm(continuation.continuationTerm)
 
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
     combine(
@@ -387,9 +367,6 @@ trait Visitor[C, R]:
           visitCTerm(t)
         },
       ) ++ Seq(
-        visitVTerm(handler.outputEffects),
-        visitVTerm(handler.outputUsage),
-        visitVTerm(handler.outputType),
         withBindings(Seq(handler.parameterBinding.name, handler.transformBoundName)) {
           visitCTerm(handler.transform)
         },
@@ -415,23 +392,22 @@ trait Visitor[C, R]:
   def visitName(name: Name)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature): R = tm match
-    case Hole                                    => visitHole
-    case cType: CType                            => visitCType(cType)
-    case cTop: CTop                              => visitCTop(cTop)
-    case m: Meta                                 => visitMeta(m)
-    case d: Def                                  => visitDef(d)
-    case force: Force                            => visitForce(force)
-    case f: F                                    => visitF(f)
-    case r: Return                               => visitReturn(r)
-    case let: Let                                => visitLet(let)
-    case redex: Redex                            => visitRedex(redex)
-    case functionType: FunctionType              => visitFunctionType(functionType)
-    case recordType: RecordType                  => visitRecordType(recordType)
-    case operationCall: OperationCall            => visitOperationCall(operationCall)
-    case continuation: Continuation              => visitContinuation(continuation)
-    case c: ContinuationReplicationState         => visitContinuationReplicationState(c)
-    case c: ContinuationReplicationStateAppender => visitContinuationReplicationStateAppender(c)
-    case handler: Handler                        => visitHandler(handler)
+    case Hole                         => visitHole
+    case cct: CapturedContinuationTip => visitCapturedContinuationTip(cct)
+    case cType: CType                 => visitCType(cType)
+    case cTop: CTop                   => visitCTop(cTop)
+    case m: Meta                      => visitMeta(m)
+    case d: Def                       => visitDef(d)
+    case force: Force                 => visitForce(force)
+    case f: F                         => visitF(f)
+    case r: Return                    => visitReturn(r)
+    case let: Let                     => visitLet(let)
+    case redex: Redex                 => visitRedex(redex)
+    case functionType: FunctionType   => visitFunctionType(functionType)
+    case recordType: RecordType       => visitRecordType(recordType)
+    case operationCall: OperationCall => visitOperationCall(operationCall)
+    case continuation: Continuation   => visitContinuation(continuation)
+    case handler: Handler             => visitHandler(handler)
 
 trait Transformer[C]:
 
@@ -636,6 +612,9 @@ trait Transformer[C]:
 
   def transformHole(using ctx: C)(using Σ: Signature): CTerm = Hole
 
+  def transformCapturedContinuationTip(cct: CapturedContinuationTip)(using ctx: C)(using Σ: Signature): CTerm =
+    CapturedContinuationTip(transformF(cct.ty))
+
   def transformCType(cType: CType)(using ctx: C)(using Σ: Signature): CTerm =
     CType(transformCTerm(cType.upperBound), transformVTerm(cType.effects))(using cType.sourceInfo)
 
@@ -655,7 +634,7 @@ trait Transformer[C]:
   def transformForce(force: Force)(using ctx: C)(using Σ: Signature): CTerm =
     Force(transformVTerm(force.v))(using force.sourceInfo)
 
-  def transformF(f: F)(using ctx: C)(using Σ: Signature) =
+  def transformF(f: F)(using ctx: C)(using Σ: Signature): F =
     F(
       transformVTerm(f.vTy),
       transformVTerm(f.effects),
@@ -713,39 +692,7 @@ trait Transformer[C]:
     )(using operationCall.sourceInfo)
 
   def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
-    Continuation(
-      transformHandler(continuation.handler),
-      continuation.capturedStack.map {
-        case c: CTerm             => transformCTerm(c)
-        case elim: Elimination[_] => transformElim(elim)
-      },
-    )
-  def transformContinuationReplicationState
-    (c: ContinuationReplicationState)
-    (using ctx: C)
-    (using Σ: Signature)
-    : ContinuationReplicationState =
-    ContinuationReplicationState(
-      c.handlerIndex,
-      c.stack1.map {
-        case c: CTerm             => transformCTerm(c)
-        case elim: Elimination[_] => transformElim(elim)
-      },
-      c.stack2.map {
-        case c: CTerm             => transformCTerm(c)
-        case elim: Elimination[_] => transformElim(elim)
-      },
-    )
-
-  def transformContinuationReplicationStateAppender
-    (c: ContinuationReplicationStateAppender)
-    (using ctx: C)
-    (using Σ: Signature)
-    : CTerm = ContinuationReplicationStateAppender(
-    transformCTerm(c.paramPairs),
-    transformHandler(c.handler),
-    transformContinuationReplicationState(c.state),
-  )
+    Continuation(transformHandler(continuation.continuationTerm))
 
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
     Handler(
@@ -762,9 +709,6 @@ trait Transformer[C]:
           transformCTerm(t)
         },
       ),
-      transformVTerm(handler.outputEffects),
-      transformVTerm(handler.outputUsage),
-      transformVTerm(handler.outputType),
       withBindings(Seq(handler.parameterBinding.name, handler.transformBoundName)) {
         transformCTerm(handler.transform)
       },
@@ -796,21 +740,19 @@ trait Transformer[C]:
 
   def transformCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature): CTerm =
     tm match
-      case Hole                            => transformHole
-      case cType: CType                    => transformCType(cType)
-      case cTop: CTop                      => transformCTop(cTop)
-      case m: Meta                         => transformMeta(m)
-      case d: Def                          => transformDef(d)
-      case force: Force                    => transformForce(force)
-      case f: F                            => transformF(f)
-      case r: Return                       => transformReturn(r)
-      case let: Let                        => transformLet(let)
-      case redex: Redex                    => transformRedex(redex)
-      case functionType: FunctionType      => transformFunctionType(functionType)
-      case recordType: RecordType          => transformRecordType(recordType)
-      case operationCall: OperationCall    => transformOperationCall(operationCall)
-      case continuation: Continuation      => transformContinuation(continuation)
-      case c: ContinuationReplicationState => transformContinuationReplicationState(c)
-      case c: ContinuationReplicationStateAppender =>
-        transformContinuationReplicationStateAppender(c)
-      case handler: Handler         => transformHandler(handler)
+      case Hole                         => transformHole
+      case cct: CapturedContinuationTip => transformCapturedContinuationTip(cct)
+      case cType: CType                 => transformCType(cType)
+      case cTop: CTop                   => transformCTop(cTop)
+      case m: Meta                      => transformMeta(m)
+      case d: Def                       => transformDef(d)
+      case force: Force                 => transformForce(force)
+      case f: F                         => transformF(f)
+      case r: Return                    => transformReturn(r)
+      case let: Let                     => transformLet(let)
+      case redex: Redex                 => transformRedex(redex)
+      case functionType: FunctionType   => transformFunctionType(functionType)
+      case recordType: RecordType       => transformRecordType(recordType)
+      case operationCall: OperationCall => transformOperationCall(operationCall)
+      case continuation: Continuation   => transformContinuation(continuation)
+      case handler: Handler             => transformHandler(handler)

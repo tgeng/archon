@@ -273,7 +273,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // nat instead. The previous heap handler basically does two things under the hood: heap allocation and using it.
   // Since the old implementation actually allocates stuff on the heap, the allocation part is non-deterministic. So
   // one either has to make the type checker to do some hard work to prevent the heap variable from being leaked or
-  // just add a non-deterministc effect to all heap handler creations. By simulating heap hander with general handler, 
+  // just add a non-deterministc effect to all heap handler creations. By simulating heap hander with general handler,
   // the heap allocation (aka, heap key generation) can be a separate step. It can even be deterministically created so
   // that a total computation can rely on mutable states under the hood.
 
@@ -409,6 +409,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     */
   case Hole extends CTerm(SiEmpty)
 
+  /** Used to signify the tip of a captured continuation term.
+    */
+  case CapturedContinuationTip(ty: F) extends CTerm(SiEmpty)
+
   /** archon.builtin.CType */
   case CType
     (
@@ -437,6 +441,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       usage: VTerm = VTerm.UsageLiteral(Usage.U1),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
+  // TODO[P0]: add usage here
   case Return(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunk to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
@@ -489,52 +494,12 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   /** Internal only. This is only created by reduction.
     *
-    * @param handler
-    *   the handler that delimits this continuation
-    * @param capturedStack
-    *   stack containing the delimited continuation from the tip (right below operation call) to the computation right
-    *   above corresponding handler. Note that the first term is at the bottom of the stack and the last term is the tip
-    *   of the stack.
+    * @param continuationTerm
+    *   a term with a hole at the top. This is equivalent to the captured stack between the matching handler (inclusive)
+    *   and the computation right after the corresopnding handler operation (the tip of the stack, which must be a term
+    *   of type `ContinuationHole`.)
     */
-  // TODO[P0]: add typing information
-  case Continuation(handler: Handler, capturedStack: Seq[CTerm | Elimination[VTerm]]) extends CTerm(SiEmpty)
-
-  /** Internaly only. This is only created by reduction.
-    *
-    * During reduction, this value is specially handled: any non-handlers are skipped and parameterReplicator in
-    * handlers are executed one by one to collect the replicated parameters. These replicated parameters are then
-    * collected into the two stacks, until reaching the handler at `handlerIndex` (the handler that contains the
-    * operation implementation which invokes the continuation replication).
-    * @param handlerIndex:
-    *   index of this handler in the reduction machine stack. In other words, size of the stack before this handler is
-    *   pushed onto the stack.
-    * @param stack1:
-    *   the replicated stack
-    * @param stack1:
-    *   the other replicated stack
-    */
-  // TODO[P0]: move this to reduction
-  case ContinuationReplicationState
-    (
-      handlerIndex: Nat,
-      stack1: Seq[CTerm | Elimination[VTerm]],
-      stack2: Seq[CTerm | Elimination[VTerm]],
-    ) extends CTerm(SiEmpty)
-
-  /** Internaly only. This is only created by reduction.
-    *
-    * A helper that marks the end of execution of a `parameterReplicator`.
-    * @param paramPairs
-    *   computation that returns a pair of parameters. This should simply be application of `parameterReplicator` in
-    *   handlers.
-    * @param handler
-    *   the handler that should be replicated and contain the replicated params
-    * @param state
-    *   the target ContinuationReplicationState to which the replicated parameters is appended
-    */
-  // TODO[P0]: move this to reduction
-  case ContinuationReplicationStateAppender(paramPairs: CTerm, handler: Handler, state: ContinuationReplicationState)
-    extends CTerm(SiEmpty)
+  case Continuation(continuationTerm: Handler) extends CTerm(SiEmpty)
 
   // Note on terminlogy:
   //   - otherEffects: the effect of the input term without effects being handled by this handler
@@ -546,7 +511,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   //   - resumeEffects: otherEffects + effects used in transformer and operation handler implementations. This
   //       correponds to the effects of `resume` call on the captured continuation
   //   - outputEffects: resumeEffects + effects used in parameter disposer and parameter replicaor. This is also the
-  //     effect in the type of the curret handler being defined.
+  //       effect in the type of the curret handler being defined.
   case Handler
     (
       /** Handle general term here instead of a single effect. During type checking it will fail if this term is not
@@ -559,27 +524,16 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       /** This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
         * clean up the parameter if a parent handler (whose effect is captured by outputEffects) decides to abort.
         *
-        * Therefore, it's not needed if the output effect has continuation uage always invoked at least once.
+        * Therefore, it's needed if the otherEffect have continuation usage UAff.
         */
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
       /** This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
         * replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke a
         * continuation multiple times.
         *
-        * Therefore, it's not needed if the output effect has continuation uage always invoked at most once.
+        * Therefore, it's needed if the otherEffect have continuation usage URel, UAny.
         */
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
-      // TODO[P0]: remove these type annotations since they should all be inferrable from the input term.serialize
-      // Also, we will do special handling here that removes the effects of this handler from the inferred effects.
-      // This should be doable since we require handler effects to be explicit anyway.
-      outputEffects: VTerm,
-      outputUsage: VTerm,
-
-      /** This is the output value type. The computation type of this handler is `F(outputType, outputEffects,
-        * outputUsage)`.
-        */
-      outputType: VTerm,
-
       /** The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
         * where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var
         * 0)`
@@ -612,6 +566,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
     this match
       case Hole                            => Hole
+      case CapturedContinuationTip(ty)     => CapturedContinuationTip(ty)
       case CType(upperBound, effects)      => CType(upperBound, effects)
       case CTop(l, effects)                => CTop(l, effects)
       case Meta(index)                     => Meta(index)
@@ -625,17 +580,13 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         FunctionType(binding, bodyTy, effects)
       case RecordType(qn, args, effects)  => RecordType(qn, args, effects)
       case OperationCall(eff, name, args) => OperationCall(eff, name, args)
-      case c: (Continuation | ContinuationReplicationState | ContinuationReplicationStateAppender) =>
-        c
+      case c: Continuation                => c
       case h @ Handler(
           eff,
           paramterBinding,
           parameter,
           parameterDisposer,
           parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
           transform,
           handlers,
           input,
@@ -646,9 +597,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           parameter,
           parameterDisposer,
           parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
           transform,
           handlers,
           input,

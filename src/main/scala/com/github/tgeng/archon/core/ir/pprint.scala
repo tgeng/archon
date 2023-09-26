@@ -461,7 +461,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = Block(
-    s"<continuation#${continuation.systemId} ${continuation.capturedStack.size}>",
+    s"<continuation#${continuation.systemId}>",
   )
 
   override def visitHandler
@@ -486,9 +486,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           parameter,
           parameterDisposer,
           parameterReplicator,
-          outputEffects,
-          outputUsage,
-          outputType,
           transform,
           handlers,
           input,
@@ -500,9 +497,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               NoWrap,
               ".handler",
               visitVTerm(effTm),
-              eff(outputEffects),
-              Block("[", outputUsage, "]"),
-              outputType,
               handlerDefinition(
                 h.parameterBinding.name,
                 Block(
