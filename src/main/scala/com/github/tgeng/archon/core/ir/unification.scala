@@ -130,8 +130,6 @@ def unify
         unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
       case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
         unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
-      case (CellType(heap1, ty1), CellType(heap2, ty2), _) =>
-        unifyAll(List(heap1, ty1), List(heap2, ty2), telescope(HeapType(), Type(ty1)))
       // stuck
       case (_: Collapse | _: Thunk, _, _) => Right(UUndecided(u, v, ty))
       case (_, _: Collapse | _: Thunk, _) => Right(UUndecided(u, v, ty))
@@ -199,9 +197,6 @@ private object CycleVisitor
     super.visitEffectsType(effectsType)(using (ctx._1, true))
 
   // visitLevelType and visitHeapType are not needed since Refl does not contain any nested terms.
-
-  override def visitCellType(cellType: CellType)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
-    super.visitCellType(cellType)(using (ctx._1, true))
 
 private def isCyclic(x: Var, t: VTerm)(using Σ: Signature): Boolean =
   CycleVisitor.visitVTerm(t)(using (x.idx, false))

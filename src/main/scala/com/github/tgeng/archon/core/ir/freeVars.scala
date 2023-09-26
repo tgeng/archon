@@ -66,11 +66,6 @@ trait FreeVarsVisitor extends Visitor[Nat, ( /* positive */ Set[Nat], /* negativ
         .toSeq: _*,
     )
 
-  override def visitCellType(cellType: CellType)(using ctx: Nat)(using Σ: Signature): (Set[Nat], Set[Nat]) = combine(
-    visitVTerm(cellType.heap),
-    mix(visitVTerm(cellType.ty)),
-  )
-
   override def visitRecordType
     (recordType: RecordType)
     (using bar: Nat)

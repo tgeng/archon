@@ -113,11 +113,6 @@ def checkIsConvertible
               ).map(_.flatten.toSet)
         case (UsageType(Some(u1)), UsageType(Some(u2)), _) =>
           checkIsConvertible(u1, u2, Some(UsageType()))
-        case (CellType(heap1, ty1), CellType(heap2, ty2), _) =>
-          for
-            heapConstraints <- checkIsConvertible(heap1, heap2, Some(HeapType()))
-            tyConstraints <- checkIsConvertible(ty1, ty2, None)
-          yield heapConstraints ++ tyConstraints
         case (Collapse(c), v, ty) => checkIsConvertible(c, Return(v), ty.map(F(_)))
         case (v, Collapse(c), ty) => checkIsConvertible(Return(v), c, ty.map(F(_)))
         case _                    => Left(NotVConvertible(left, right, ty))

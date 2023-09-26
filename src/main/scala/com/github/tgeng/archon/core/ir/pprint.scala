@@ -317,31 +317,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         operands sepBy "∨"
       }
 
-  override def visitHeap
-    (heap: Heap)
-    (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
-    : Block = Block(heap.key.toString)
-
-  override def visitCellType
-    (cellType: CellType)
-    (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
-    : Block = app("Cell", cellType.heap, cellType.ty)
-
-  override def visitCell
-    (cell: Cell)
-    (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
-    : Block =
-    Block(".cell" + cell.index + "@" + cell.heapKey)
-
   override def visitHole(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block("<hole>")
 
@@ -497,44 +472,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     : Block = visitStatements(handler)
 
-  override def visitAllocOp
-    (allocOp: AllocOp)
-    (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
-    : Block =
-    app("alloc", allocOp.heap, allocOp.ty)
-
-  override def visitSetOp
-    (setOp: SetOp)
-    (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
-    : Block =
-    app("set", setOp.cell, setOp.value)
-
-  override def visitGetOp
-    (getOp: GetOp)
-    (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
-    : Block =
-    app("get", getOp.cell)
-
-  override def visitHeapHandler
-    (heapHandler: HeapHandler)
-    (using
-      ctx: PPrintContext,
-    )
-    (using Σ: Signature)
-    : Block = visitStatements(heapHandler)
-
   private def visitStatements
     (
-      handler: HeapHandler | Handler | Let,
+      handler: Handler | Let,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
@@ -623,19 +563,6 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
             ),
             input,
             Nil,
-          ),
-        )
-      case h @ HeapHandler(_, _, input) =>
-        Left(
-          (
-            Block(
-              Whitespace,
-              NoWrap,
-              ".heap",
-              h.boundName,
-            ),
-            input,
-            Seq(h.boundName),
           ),
         )
       case l @ Let(t, ty, eff, usage, body) =>

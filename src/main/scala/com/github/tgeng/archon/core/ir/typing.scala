@@ -701,12 +701,11 @@ private def inferLevel
     case Collapse(cTm)      => inferLevel(cTm)
     case U(cty)             => inferLevel(cty)
     case DataType(qn, args) => Right(Σ.getData(qn).level.substLowers(args: _*))
-    case _: UsageType | _: EqDecidabilityType | _: EffectsType | _: HeapType =>
+    case _: UsageType | _: EqDecidabilityType | _: EffectsType =>
       Right(LevelLiteral(0))
     case LevelType(upperBound) =>
       for (upperBound, _) <- checkLevel(upperBound)
       yield LevelSuc(upperBound)
-    case CellType(_, ty) => inferLevel(ty)
     case _               => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
 def inferType
@@ -822,20 +821,6 @@ def inferType
         })
         newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
       yield (newTm, LevelType(newTm), usages)
-    case HeapType() => Right(HeapType(), (Type(HeapType())), Usages.zero)
-    case h: Heap    => Right(h, HeapType(), Usages.zero)
-    case CellType(heap, ty) =>
-      for
-        (heap, heapUsages) <- checkType(heap, HeapType())
-        case (ty, tyTy, tyUsages) <- inferType(ty)
-        heap <- heap.normalized
-        ty <- ty.normalized
-        newTm = CellType(heap, ty)(using tm.sourceInfo)
-        r <- tyTy match
-          case Type(_) => Right(Type(newTm))
-          case _       => Left(NotTypeError(ty))
-      yield (newTm, r, (heapUsages + tyUsages))
-    case Cell(_, _) => throw IllegalArgumentException("cannot infer type")
     case Auto()     => throw IllegalArgumentException("cannot infer type")
 
 def getEffectsContinuationUsage
@@ -898,11 +883,6 @@ def checkType
                   else Left(UnmatchedDataIndex(c, dataType))
               yield (DataType(qn, args), usages)
         case _ => Left(ExpectDataType(ty))
-    case Cell(heapKey, _) =>
-      ty match
-        case CellType(heap, _) if Heap(heapKey) == heap => Right(tm, Usages.zero)
-        case _: CellType                                => Left(ExpectCellTypeWithHeap(heapKey))
-        case _                                          => Left(ExpectCellType(ty))
     case Auto() =>
       Right(
         (
@@ -1146,45 +1126,6 @@ def inferType
           "continuation is only created in reduction and hence should not be type checked.",
         )
       case h: Handler => checkHandler(h, None)
-      case AllocOp(heap, vTy, value) =>
-        for
-          (heap, heapUsages) <- checkType(heap, HeapType())
-          heap <- heap.normalized
-          (value, valueUsages) <- checkType(value, vTy)
-          (vTy, _) <- checkIsType(vTy)
-        yield (
-          AllocOp(heap, vTy, value),
-          F(
-            CellType(heap, vTy),
-            EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
-          ),
-          heapUsages + valueUsages,
-        )
-      case SetOp(cell, value) =>
-        for
-          (cell, cellTy, cellUsages) <- inferType(cell)
-          r <- cellTy match
-            case CellType(heap, vTy) =>
-              for (value, valueUsages) <- checkType(value, vTy)
-              yield (
-                SetOp(cell, value),
-                F(
-                  CellType(heap, vTy),
-                  EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil))),
-                ),
-                cellUsages + valueUsages,
-              )
-            case _ => Left(ExpectCell(cell))
-        yield r
-      case GetOp(cell) =>
-        for
-          case (cell, cellTy, cellUsages) <- inferType(cell)
-          r <- cellTy match
-            case CellType(heap, vTy) =>
-              Right(F(vTy, EffectsLiteral(Set((Builtins.HeapEffQn, heap :: Nil)))))
-            case _ => Left(ExpectCell(cell))
-        yield (GetOp(cell), r, cellUsages)
-      case h: HeapHandler => checkHeapHandler(h, None)
   yield r
 
 private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): VTerm =
@@ -1209,7 +1150,6 @@ def checkType
         case _               => Left(ExpectFType(ty))
     case l: Let         => checkLet(l, Some(ty)).map((v, _, usages) => (v, usages))
     case h: Handler     => checkHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
-    case h: HeapHandler => checkHeapHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
     case _ =>
       for
         case (tm, tmTy, usages) <- inferType(tm)
@@ -1334,7 +1274,7 @@ def inferEqDecidability
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] = ty match
-  case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType | _: LevelType | _: HeapType | _: CellType =>
+  case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType | _: LevelType =>
     Right(EqDecidabilityLiteral(EqDecidable))
   case Top(_, eqDecidability) => Right(eqDecidability)
   case _: Var | _: Collapse =>
@@ -1756,48 +1696,6 @@ def checkHandler
       parameterDisposerUsages * UAff + // disposer may or may not be executed
       parameterReplicatorUsages * UAny, // replicator may or may not be executed arbitrary times
   )
-
-def checkHeapHandler
-  (h: HeapHandler, inputTy: Option[CTerm])
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, (CTerm, CTerm, Usages)] =
-  val input = h.input
-  val heapVarBinding =
-    Binding[VTerm](HeapType(), UsageLiteral(UAny))(h.boundName)
-
-  given Context = Γ :+ heapVarBinding
-
-  for
-    case (input, inputCTy, inputUsages) <- inputTy match
-      case None          => inferType(input)
-      case Some(inputTy) => checkType(input, inputTy).map((inputTy, _))
-    r <- inputCTy match
-      case F(inputTy, eff, _) =>
-        for
-          // TODO[P2]: Use more sophisticated check here to catch leak through wrapping heap
-          //  variable inside things. If it's leaked, there is no point using this handler at
-          //  all. Simply using GlobalHeapKey is the right thing to do. This is because a
-          //  creating a leaked heap key itself is performing a side effect with global heap.
-          _ <- checkVar0Leak(
-            inputTy,
-            LeakedReferenceToHeapVariable(input),
-          )
-          outputEff = eff match
-            case Effects(literal, vars) =>
-              Effects(
-                literal.filter {
-                  // Filter out current heap effect. `Var(0)` binds to the heap key of this
-                  // handler.
-                  case (qn, args) => qn != Builtins.HeapEffQn && args != List(Var(0))
-                },
-                vars,
-              )
-            case _ => eff
-        yield F(inputTy.strengthened, outputEff)
-      case _ => Left(ExpectFType(inputCTy))
-  yield (input, r, inputUsages)
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[VTerm] = None)

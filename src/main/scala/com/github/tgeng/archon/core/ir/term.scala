@@ -138,22 +138,6 @@ enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Eliminat
     case ETerm(v) => f(v).map(ETerm(_))
     case EProj(n) => Right(EProj(n))
 
-class HeapKey:
-  private val id = HeapKey.nextId
-
-  override def toString: String = "heap" + id
-
-object HeapKey:
-  private var globalIdCounter = 0
-
-  private def nextId: Int =
-    val r = globalIdCounter
-    globalIdCounter += 1
-    r
-
-val GlobalHeapKey = new HeapKey:
-  override def toString = "<globalHeapKey>"
-
 type Eff = (QualifiedName, Arguments)
 
 import Builtins.*
@@ -261,7 +245,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       EffectsQn,
     )
 
-  /** Note: During development I once had a usage filter for each operand. The primary purpose was to filter out complex
+  /** Note: during development I once had a usage filter for each operand. The primary purpose was to filter out complex
     * effects so that the fact that disposing and replicating a continuation can only invoke simple effects can be
     * captured in the type system, in order to allow one to call dispose and replicate inside another parameter disposer
     * or replicator (aka, wrapping continuation inside a handler in order to manage the linear continuation resource).
@@ -278,24 +262,20 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Level(literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
-  /** archon.builtin.Heap */
-  case HeapType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(HeapQn)
-
-  /** Internal only, created by [[CTerm.HeapHandler]]
-    */
-  case Heap(key: HeapKey)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-
-  /** archon.builtin.Cell */
-  case CellType(heap: VTerm, ty: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-
-  /** Internal only, created by [[CTerm.AllocOp]]
-    */
-  case Cell(heapKey: HeapKey, index: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-
   /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is replaced with
     * `Collapse(Application...(Meta(...)))` and solved through meta-variable unification.
     */
   case Auto()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+
+  // Note: during development, I once had devoted constructs for heap handler, alloc, set, and get operations. But they
+  // are entirely redundant because one can just use a linear piece of data as the storage and do the same with the
+  // general handler. In addition, the heap key concept is arbitrary and it can actually be substitued with a simple
+  // nat instead. The previous heap handler basically does two things under the hood: heap allocation and using it.
+  // Since the old implementation actually allocates stuff on the heap, the allocation part is non-deterministic. So
+  // one either has to make the type checker to do some hard work to prevent the heap variable from being leaked or
+  // just add a non-deterministc effect to all heap handler creations. By simulating heap hander with general handler, 
+  // the heap allocation (aka, heap key generation) can be a separate step. It can even be deterministically created so
+  // that a total computation can rely on mutable states under the hood.
 
   this match
     case UsageJoin(operands) if operands.isEmpty =>
@@ -327,10 +307,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case Effects(literal, unionOperands)             => Effects(literal, unionOperands)
       case LevelType(upperBound)                       => LevelType(upperBound)
       case Level(literal, maxOperands)                 => Level(literal, maxOperands)
-      case HeapType()                                  => HeapType()
-      case Heap(key)                                   => Heap(key)
-      case CellType(heap, ty)                          => CellType(heap, ty)
-      case Cell(heapKey, index)                        => Cell(heapKey, index)
       case Auto()                                      => Auto()
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
@@ -631,26 +607,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
-  case AllocOp(heap: VTerm, ty: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-  case SetOp(cell: VTerm, value: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-  case GetOp(cell: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-  case HeapHandler
-    (
-      /** Newly created heap handler should always set this to `None`. This key is instantiated during reduction to a
-        * fresh value.
-        */
-      key: Option[HeapKey],
-      heapContent: IndexedSeq[VTerm],
-
-      /** Note that the logic here should not expose the heap variable (i.e. `var 0`) through existential types like (t:
-        * Type, x: t) where `t` can be `HeapType`. A syntax-based check is used to ensure this never happens. For cases
-        * where such flexibility is needed, one should use `GlobalHeapKey` instead.
-        */
-      /* binding offset + 1 */ input: CTerm,
-    )
-    (val boundName: Ref[Name])
-    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
-
   override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
     given SourceInfo = sourceInfo
 
@@ -700,15 +656,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
           h.transformBoundName,
           h.handlersBoundNames,
         )
-      case AllocOp(heap, ty, value) => AllocOp(heap, ty, value)
-      case SetOp(cell, value)       => SetOp(cell, value)
-      case GetOp(cell)              => GetOp(cell)
-      case h @ HeapHandler(key, heapContent, input) =>
-        HeapHandler(
-          key,
-          heapContent,
-          input,
-        )(h.boundName)
 
   // TODO[P3]: support array operations on heap
   // TODO[P3]: consider adding builtin set and maps with decidable equality because we do not

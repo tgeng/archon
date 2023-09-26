@@ -223,7 +223,7 @@ def checkIsSubtype
         yield effConstraint ++ argConstraint
   case _ => checkIsConvertible(sub, sup, None)
 
-private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler | HeapHandler
+private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler
 
 private def typeUnion
   (a: CTerm, b: CTerm)

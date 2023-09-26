@@ -196,10 +196,6 @@ trait Visitor[C, R]:
     case effects: Effects         => visitEffects(effects)
     case levelType: LevelType     => visitLevelType(levelType)
     case level: Level             => visitLevel(level)
-    case heapType: HeapType       => visitHeapType(heapType)
-    case heap: Heap               => visitHeap(heap)
-    case cellType: CellType       => visitCellType(cellType)
-    case cell: Cell               => visitCell(cell)
     case auto: Auto               => visitAuto(auto)
 
   def visitType(ty: Type)(using ctx: C)(using Σ: Signature): R =
@@ -274,21 +270,6 @@ trait Visitor[C, R]:
         visitVTerm(v)
       }.toSeq: _*,
     )
-
-  def visitHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): R =
-    visitQualifiedName(
-      Builtins.HeapQn,
-    )
-
-  def visitHeap(heap: Heap)(using ctx: C)(using Σ: Signature): R = combine()
-
-  def visitCellType(cellType: CellType)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(cellType.heap),
-      visitVTerm(cellType.ty),
-    )
-
-  def visitCell(cell: Cell)(using ctx: C)(using Σ: Signature): R = combine()
 
   def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -421,26 +402,6 @@ trait Visitor[C, R]:
         visitCTerm(handler.input): _*,
     )
 
-  def visitAllocOp(allocOp: AllocOp)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(allocOp.heap),
-      visitVTerm(allocOp.ty),
-    )
-
-  def visitSetOp(setOp: SetOp)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(setOp.cell),
-      visitVTerm(setOp.value),
-    )
-
-  def visitGetOp(getOp: GetOp)(using ctx: C)(using Σ: Signature): R =
-    combine(visitVTerm(getOp.cell))
-
-  def visitHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): R =
-    withBindings(Seq(heapHandler.boundName)) {
-      visitCTerm(heapHandler.input)
-    }
-
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(eff._1) +:
@@ -471,10 +432,6 @@ trait Visitor[C, R]:
     case c: ContinuationReplicationState         => visitContinuationReplicationState(c)
     case c: ContinuationReplicationStateAppender => visitContinuationReplicationStateAppender(c)
     case handler: Handler                        => visitHandler(handler)
-    case allocOp: AllocOp                        => visitAllocOp(allocOp)
-    case setOp: SetOp                            => visitSetOp(setOp)
-    case getOp: GetOp                            => visitGetOp(getOp)
-    case heapHandler: HeapHandler                => visitHeapHandler(heapHandler)
 
 trait Transformer[C]:
 
@@ -599,10 +556,6 @@ trait Transformer[C]:
       case effects: Effects         => transformEffects(effects)
       case levelType: LevelType     => transformLevelType(levelType)
       case level: Level             => transformLevel(level)
-      case heapType: HeapType       => transformHeapType(heapType)
-      case heap: Heap               => transformHeap(heap)
-      case cellType: CellType       => transformCellType(cellType)
-      case cell: Cell               => transformCell(cell)
       case auto: Auto               => transformAuto(auto)
 
   def transformType(ty: Type)(using ctx: C)(using Σ: Signature): VTerm =
@@ -678,18 +631,6 @@ trait Transformer[C]:
       level.literal,
       level.maxOperands.map((k, v) => (transformVTerm(k), v)),
     )(using level.sourceInfo)
-
-  def transformHeapType(heapType: HeapType)(using ctx: C)(using Σ: Signature): VTerm = heapType
-
-  def transformHeap(heap: Heap)(using ctx: C)(using Σ: Signature): VTerm = heap
-
-  def transformCellType(cellType: CellType)(using ctx: C)(using Σ: Signature): VTerm =
-    CellType(
-      transformVTerm(cellType.heap),
-      transformVTerm(cellType.ty),
-    )(using cellType.sourceInfo)
-
-  def transformCell(cell: Cell)(using ctx: C)(using Σ: Signature): VTerm = cell
 
   def transformAuto(auto: Auto)(using ctx: C)(using Σ: Signature): VTerm = auto
 
@@ -842,31 +783,6 @@ trait Transformer[C]:
       handler.handlersBoundNames,
     )(using handler.sourceInfo)
 
-  def transformAllocOp(allocOp: AllocOp)(using ctx: C)(using Σ: Signature): CTerm =
-    AllocOp(
-      transformVTerm(allocOp.heap),
-      transformVTerm(allocOp.ty),
-      transformVTerm(allocOp.value),
-    )(using allocOp.sourceInfo)
-
-  def transformSetOp(setOp: SetOp)(using ctx: C)(using Σ: Signature): CTerm =
-    SetOp(
-      transformVTerm(setOp.cell),
-      transformVTerm(setOp.value),
-    )(using setOp.sourceInfo)
-
-  def transformGetOp(getOp: GetOp)(using ctx: C)(using Σ: Signature): CTerm =
-    GetOp(transformVTerm(getOp.cell))(using getOp.sourceInfo)
-
-  def transformHeapHandler(heapHandler: HeapHandler)(using ctx: C)(using Σ: Signature): CTerm =
-    HeapHandler(
-      heapHandler.key,
-      heapHandler.heapContent,
-      withBindings(List(heapHandler.boundName)) {
-        transformCTerm(heapHandler.input)
-      },
-    )(heapHandler.boundName)(using heapHandler.sourceInfo)
-
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))
 
@@ -898,7 +814,3 @@ trait Transformer[C]:
       case c: ContinuationReplicationStateAppender =>
         transformContinuationReplicationStateAppender(c)
       case handler: Handler         => transformHandler(handler)
-      case allocOp: AllocOp         => transformAllocOp(allocOp)
-      case setOp: SetOp             => transformSetOp(setOp)
-      case getOp: GetOp             => transformGetOp(getOp)
-      case heapHandler: HeapHandler => transformHeapHandler(heapHandler)

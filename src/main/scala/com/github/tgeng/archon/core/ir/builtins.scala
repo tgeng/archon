@@ -75,7 +75,6 @@ object Builtins:
   val UCellQn = BuiltinType / "UCell"
   val EffectsQn = BuiltinType / "Effects"
   val LevelQn = BuiltinType / "Level"
-  val HeapQn = BuiltinType / "Heap"
 
   val UsageQn = BuiltinType / "Usage"
 
@@ -358,22 +357,6 @@ object Builtins:
       ),
     ),
 
-    /** Heap : Type(Heap)
-      *
-      * {} |- := Heap
-      */
-    PreDefinition(HeapQn)(
-      paramTys = Nil,
-      ty = F(Type(HeapType())),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(Return(HeapType())),
-        ),
-      ),
-    ),
-
     /** CType (level : LevelType) (effects: EffectsType) : CType(CType(CTop(level, effects))
       *
       * {} |- := CType(CTop(level, effects))
@@ -498,106 +481,6 @@ object Builtins:
           rhs = Some(Return(Total())),
         ),
       ),
-    ),
-    PreDefinition(CellQn)(
-      paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"heap", HeapType()),
-        binding(n"A", Type(Top(Var(1)))),
-      ),
-      ty = F(Type(CellType(Var(1), Var(0)))),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(Return(CellType(Var(1), Var(0)))),
-        ),
-      ),
-    ),
-    PreDefinition(UCellQn)(
-      paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"heap", HeapType()),
-        binding(n"A", Type(Top(Var(1)))),
-      ),
-      ty = F(Type(CellType(Var(1), Var(0)))),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(Return(CellType(Var(1), Var(0)))),
-        ),
-      ),
-    ),
-    PreDefinition(AllocOpQn)(
-      paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"heap", HeapType()),
-        binding(n"A", Type(Top(Var(1)))),
-        binding(n"value", Var(0)),
-      ),
-      ty = F(CellType(Var(2), Var(1))),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(AllocOp(Var(2), Var(1), Var(0))),
-        ),
-      ),
-    ),
-    PreDefinition(GetOpQn)(
-      paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"heap", HeapType()),
-        binding(n"A", Type(Top(Var(1)))),
-        binding(n"cell", CellType(Var(1), Var(0))),
-      ),
-      ty = F(Var(1), EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(2))))), UsageLiteral(UAny)),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(GetOp(Var(0))),
-        ),
-      ),
-    ),
-    PreDefinition(SetOpQn)(
-      paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"heap", HeapType()),
-        binding(n"A", Type(Top(Var(1)))),
-        binding(n"cell", CellType(Var(1), Var(0))),
-        binding(n"value", Var(1)),
-      ),
-      ty = F(
-        CellType(Var(3), Var(2)),
-        EffectsLiteral(Set((Builtins.HeapEffQn, List(Var(3))))),
-      ),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(SetOp(Var(1), Var(0))),
-        ),
-      ),
-    ),
-    PreDefinition(GlobalHeapKeyQn)(
-      paramTys = Nil,
-      ty = F(HeapType()),
-      clauses = List(
-        PreClause(
-          boundNames = Nil,
-          lhs = Nil,
-          rhs = Some(Return(Heap(GlobalHeapKey))),
-        ),
-      ),
-    ),
-    PreEffect(HeapEffQn)(
-      tParamTys = List(binding(n"heap", HeapType())),
-      // Note: we declare no operations here because operations of heap effect is represented
-      // specially in CTerm. Instead, the derived definitions for these operations (alloc, set, get)
-      // are directly added as builtin definitions.
-      operations = Nil,
     ),
   )
 

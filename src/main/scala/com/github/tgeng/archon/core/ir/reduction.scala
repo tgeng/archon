@@ -53,11 +53,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
 
   private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
     stack.view.zipWithIndex.drop(startIndex).foreach {
-      case (HeapHandler(Some(heapKey), _, _), index) =>
-        updateHandlerIndex(
-          EffectsLiteral(Set((Builtins.HeapEffQn, List(Heap(heapKey))))),
-          index,
-        )
       case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
       case _                         =>
     }
@@ -380,77 +375,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                 )(h.transformBoundName, h.handlersBoundNames),
               )
               run(input)
-      case AllocOp(heap, ty, value) =>
-        heap.normalized match
-          case Left(e) => Left(e)
-          case Right(_: Var | _: Collapse) =>
-            Right(reconstructTermFromStack(pc))
-          case Right(Heap(heapKey)) =>
-            val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
-            stack(heapHandlerIndex) match
-              case h @ HeapHandler(key, heapContent, input) =>
-                val cell = Cell(heapKey, heapContent.size)
-                stack(heapHandlerIndex) = HeapHandler(
-                  key,
-                  heapContent :+ value,
-                  input,
-                )(h.boundName)
-                run(Return(cell))
-              case _ => throw IllegalStateException("corrupted heap key index")
-          case _ => throw IllegalArgumentException("type error")
-      case SetOp(cell, value) =>
-        cell.normalized match
-          case Left(e) => Left(e)
-          case Right(_: Var | _: Collapse) =>
-            Right(reconstructTermFromStack(pc))
-          case Right(Cell(heapKey, index)) =>
-            value.normalized match
-              case Left(e) => Left(e)
-              case Right(value) =>
-                val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
-                stack(heapHandlerIndex) match
-                  case h @ HeapHandler(
-                      key,
-                      heapContent,
-                      input,
-                    ) =>
-                    stack(heapHandlerIndex) = HeapHandler(
-                      key,
-                      heapContent.updated(index, value),
-                      input,
-                    )(h.boundName)
-                    run(Return(Cell(heapKey, index)))
-                  case _ =>
-                    throw IllegalStateException("corrupted heap key index")
-          case _ => throw IllegalArgumentException("type error")
-      case GetOp(cell) =>
-        cell.normalized match
-          case Left(e) => Left(e)
-          case Right(_: Var | _: Collapse) =>
-            Right(reconstructTermFromStack(pc))
-          case Right(Cell(heapKey, index)) =>
-            val heapHandlerIndex = handlerIndex((Builtins.HeapEffQn, List(Heap(heapKey)))).top
-            stack(heapHandlerIndex) match
-              case HeapHandler(_, heapContent, _) =>
-                Right(Return(heapContent(index)))
-              case _ => throw IllegalStateException("corrupted heap key index")
-          case _ => throw IllegalArgumentException("type error")
-      case h @ HeapHandler(currentKey, heapContent, input) =>
-        if reduceDown then
-          assert(currentKey.nonEmpty)
-          handlerIndex((Builtins.HeapEffQn, List(Heap(currentKey.get)))).pop()
-          run(input)
-        else
-          assert(
-            currentKey.isEmpty,
-          ) // this heap handler should be fresh if evaluating upwards
-          val key = new HeapKey
-          updateHandlerIndex(
-            EffectsLiteral(Set((Builtins.HeapEffQn, List(Heap(key))))),
-            stack.length,
-          )
-          stack.push(HeapHandler(Some(key), heapContent, input)(h.boundName))
-          run(input.substLowers(Heap(key)))
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm =
     given SourceInfo = ctx.sourceInfo
@@ -486,7 +410,6 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           h.transformBoundName,
           h.handlersBoundNames,
         )
-      case h @ HeapHandler(key, heap, input) => HeapHandler(key, heap, c)(h.boundName)
       case _                                 => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =

@@ -10,9 +10,6 @@ import com.github.tgeng.archon.core.ir.UnificationResult
 enum IrError extends HasException:
   case Unknown
   case EffectfulCTermAsType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
-  case ExpectCell(tm: VTerm)
-  case ExpectCellType(ty: VTerm)
-  case ExpectCellTypeWithHeap(heapKey: HeapKey)
   case ExpectDataType(ty: VTerm, qn: Option[QualifiedName] = None)
   case ExpectEqualityType(ty: VTerm)
   case ExpectFType(cTy: CTerm)
