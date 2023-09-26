@@ -260,6 +260,15 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     QualifiedNameOwner(
       EffectsQn,
     )
+
+  /** Note: During development I once had a usage filter for each operand. The primary purpose was to filter out complex
+    * effects so that the fact that disposing and replicating a continuation can only invoke simple effects can be
+    * captured in the type system, in order to allow one to call dispose and replicate inside another parameter disposer
+    * or replicator (aka, wrapping continuation inside a handler in order to manage the linear continuation resource).
+    * However, this introduces extra complexity into the type checker and it does not seem to be very useful because one
+    * typically do not need to manage continuations like that: there are no operations on continuation that does
+    * something on it and return a "copy" of the linear resource for future consumptions.
+    */
   case Effects(literal: Set[Eff], unionOperands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType(upperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
