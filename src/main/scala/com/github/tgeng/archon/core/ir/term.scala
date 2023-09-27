@@ -409,7 +409,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     */
   case Hole extends CTerm(SiEmpty)
 
-  /** Used to signify the tip of a captured continuation term.
+  /** Internal only, created by reduction. This is used to signify the tip of a captured continuation term.
     */
   case CapturedContinuationTip(ty: F) extends CTerm(SiEmpty)
 
@@ -503,15 +503,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
   // Note on terminlogy:
   //   - otherEffects: the effect of the input term without effects being handled by this handler
-  //   - paramOpsEffects: otherEffects with complex effects filtered out conservatively. This corresponds to the effects
-  //       of `dispose` and `replicate` call on the captured continuatin. Note that this does not include effects used
-  //       in the parameterDisposer and parameterReplicator of the current handler. This is because those are not
-  //       invoked on the captured continuation. Rather, they are invoked on the continuation captured by parent
-  //       handlers
-  //   - resumeEffects: otherEffects + effects used in transformer and operation handler implementations. This
-  //       correponds to the effects of `resume` call on the captured continuation
-  //   - outputEffects: resumeEffects + effects used in parameter disposer and parameter replicaor. This is also the
-  //       effect in the type of the curret handler being defined.
+  //   - outputEffects: otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and
+  //       operation handler implementations. This is also the effect in the type of the curret handler being defined.
+  //   - disposeEffects: outputEffects with effects of complex continuation usage filtered out
   case Handler
     (
       /** Handle general term here instead of a single effect. During type checking it will fail if this term is not
@@ -519,6 +513,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * linear resource (as parameter to the handler) with multiple effects.
         */
       eff: VTerm,
+      otherEffects: VTerm,
+      outputEffects: VTerm,
+      outputUsage: VTerm,
+      outputType: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
       /** This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
@@ -565,45 +563,22 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Hole                            => Hole
-      case CapturedContinuationTip(ty)     => CapturedContinuationTip(ty)
-      case CType(upperBound, effects)      => CType(upperBound, effects)
-      case CTop(l, effects)                => CTop(l, effects)
-      case Meta(index)                     => Meta(index)
-      case Def(qn)                         => Def(qn)
-      case Force(v)                        => Force(v)
-      case F(vTy, effects, u)              => F(vTy, effects, u)
-      case Return(v)                       => Return(v)
-      case l @ Let(t, ty, eff, usage, ctx) => Let(t, ty, eff, usage, ctx)(l.boundName)
-      case Redex(t, elims)                 => Redex(t, elims)
-      case FunctionType(binding, bodyTy, effects) =>
-        FunctionType(binding, bodyTy, effects)
-      case RecordType(qn, args, effects)  => RecordType(qn, args, effects)
-      case OperationCall(eff, name, args) => OperationCall(eff, name, args)
-      case c: Continuation                => c
-      case h @ Handler(
-          eff,
-          paramterBinding,
-          parameter,
-          parameterDisposer,
-          parameterReplicator,
-          transform,
-          handlers,
-          input,
-        ) =>
-        Handler(
-          eff,
-          paramterBinding,
-          parameter,
-          parameterDisposer,
-          parameterReplicator,
-          transform,
-          handlers,
-          input,
-        )(
-          h.transformBoundName,
-          h.handlersBoundNames,
-        )
+      case Hole                       => Hole
+      case t: CapturedContinuationTip => t.copy()
+      case t: CType                   => t.copy()
+      case t: CTop                    => t.copy()
+      case t: Meta                    => t.copy()
+      case t: Def                     => t.copy()
+      case t: Force                   => t.copy()
+      case t: F                       => t.copy()
+      case t: Return                  => t.copy()
+      case t: Let                     => t.copy()(t.boundName)
+      case t: Redex                   => t.copy()
+      case t: FunctionType            => t.copy()
+      case t: RecordType              => t.copy()
+      case t: OperationCall           => t.copy()
+      case c: Continuation            => c
+      case h: Handler                 => h.copy()(h.transformBoundName, h.handlersBoundNames)
 
   // TODO[P3]: support array operations on heap
   // TODO[P3]: consider adding builtin set and maps with decidable equality because we do not

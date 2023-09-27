@@ -39,7 +39,7 @@ def checkIsConvertible
       left <- left.normalized
       right <- right.normalized
       r <- (left, right, ty) match
-        case (_, _, _) if left == right                                                   => Right(Set.empty)
+        case (_, _, _) if left == right                                      => Right(Set.empty)
         case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType(_))) =>
           // If meta some component is not reduced yet, we can't check subsumption
           if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(((v, _) => hasCollapse(v)))
@@ -182,6 +182,7 @@ def checkIsConvertible
                   ctx.adaptForMetaVariable(uBig, uSmall.tm) match
                     case Some(smallTm) => ctx.assignUnsolved(uBig, smallTm)
                     case None          => Right(Set(Constraint.CConversion(Γ, left, right, ty)))
+            case (CapturedContinuationTip(ty1), CapturedContinuationTip(ty2)) => checkIsConvertible(ty1, ty2, None)
             case (Return(v1), Return(v2)) =>
               ty match
                 case Some(F(ty, _, _)) => checkIsConvertible(v1, v2, Some(ty))

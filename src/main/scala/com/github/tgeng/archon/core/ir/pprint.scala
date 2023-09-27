@@ -480,8 +480,13 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block =
     val (statements, input) = unroll[Block, CTerm](handler) {
+      // TODO[P2]: print the extra effect and output type annotations
       case h @ Handler(
           effTm,
+          otherEffects,
+          outputEffects,
+          outputUsage,
+          outputType,
           parameterBinding,
           parameter,
           parameterDisposer,

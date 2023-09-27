@@ -27,22 +27,15 @@ extension [T](a: mutable.ArrayBuffer[T])
   def push(t: T) = a.addOne(t)
   def pushAll(ts: Iterable[T]) = a.addAll(ts)
 
-private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm]]):
+private case class ReplicationState
+  (currentHandler: Handler, baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm)
 
-  // Note: for now this does not seem to be useful because this stack machine is only used for type
-  // checking, in which case there are no builtin handlers at all because during type checking all
-  // computations carried by this machine should be total.
+private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm] | ReplicationState]):
 
-  // stack.prependAll(builtinHandlers)
-  // private val builtinHandlers = Seq(
-  //   CTerm.HeapHandler(
-  //     VTerm.Total(), // placeholder value, not important
-  //     Some(GlobalHeapKey),
-  //     IndexedSeq(),
-  //     CTerm.Hole
-  //   )
-  // )
-
+  /** Pre-constructed term before replicating continuation. This is used to avoid the need to represent partially
+    * replicated continuation in the stack.
+    */
+  private var preConstructedTerm: Option[CTerm] = None
   private val handlerIndex = mutable.WeakHashMap[Eff, mutable.Stack[Nat]]()
   regenerateHandlerIndex()
 
@@ -79,13 +72,28 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
     pc match
       case Hole | CapturedContinuationTip(_) => throw IllegalStateException()
       // Take a shortcut when returning a collapsable computation
-      case Return(Collapse(c)) => run(c, reduceDown)
+      case Return(Collapse(c)) => run(c)
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.isEmpty then Right(pc)
         else
           stack.pop() match
             case c: CTerm => run(substHole(c, pc), true)
+            case ReplicationState(handler, baseStackSize, continuationTerm1, continuationTerm2) =>
+              pc match
+                case Return(Con(name, param1 :: param2 :: Nil)) if name == n"MkPair" =>
+                  replicate(
+                    baseStackSize,
+                    handler.copy(parameter = param1, input = continuationTerm1)(
+                      handler.transformBoundName,
+                      handler.handlersBoundNames,
+                    ),
+                    handler.copy(parameter = param1, input = continuationTerm2)(
+                      handler.transformBoundName,
+                      handler.handlersBoundNames,
+                    ),
+                  )
+                case _ => throw IllegalStateException("type error")
             case _ =>
               throw IllegalStateException(
                 "type error: none of the terms above can take an argument or projection",
@@ -193,7 +201,8 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                 val handler = stack(handlerIdx).asInstanceOf[Handler]
                 val opHandler = handler.handlers(effQn / name)
                 Σ.getOperation(effQn, name).continuationUsage match
-                  case ContinuationUsage(U1, ControlMode.Simple) => Right(opHandler.substLowers(args :+ handler.parameter: _*))
+                  case ContinuationUsage(U1, ControlMode.Simple) =>
+                    Right(opHandler.substLowers(args :+ handler.parameter: _*))
                   case ContinuationUsage(U0, ControlMode.Simple) =>
                     val capturedStack = stack.slice(handlerIdx + 1, stack.size).toSeq
                     stack.dropRightInPlace(stack.size - handlerIdx)
@@ -213,57 +222,59 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
               case Right(pc) => run(pc)
               case Left(e)   => Left(e)
       case Continuation(continuationTerm) =>
+        def getContinuationTermWithNewParameter(param: VTerm) = continuationTerm.copy(parameter = param)(
+          continuationTerm.transformBoundName,
+          continuationTerm.handlersBoundNames,
+        )
         stack.pop() match
-          case EProj(name) if name == n"resume" => ???
-            // val ETerm(param) = stack.pop(): @unchecked
-            // val ETerm(arg) = stack.pop(): @unchecked
-            // val currentStackHeight = stack.length
-            // stack.push(
-            //   handler.copy(parameter = param)(
-            //     handler.transformBoundName,
-            //     handler.handlersBoundNames,
-            //   ),
-            // )
-            // stack.pushAll(capturedStack)
-            // regenerateHandlerIndex(currentStackHeight)
-            // run(Return(arg))
-          case EProj(name) if name == n"dispose" => ???
-          // val ETerm(param) = stack.pop(): @unchecked
-          // stack.push(
-          //   handler.copy(
-          //     parameter = param,
-          //     transform = handler.parameterDisposer.map(_.weakened),
-          //   )(
-          //     handler.transformBoundName,
-          //     handler.handlersBoundNames,
-          //   ),
-          // )
-          // capturedStack.foreach {
-          //   case handler: Handler =>
-          //     stack.push(
-          //       handler.copy(
-          //         // weakened because transform also takes a output value. But for disposer calls this
-          //         // value is always unit and ignored by the parameterDisposer.
-          //         transform = handler.parameterDisposer.weakened,
-          //       )(
-          //         handler.transformBoundName,
-          //         handler.handlersBoundNames,
-          //       ),
-          //     )
-          //   case _ => // ignore non-handler cases since they do not contain any disposing logic.
-          // }
-          // run(Return(Con(n"MkUnit", Nil)))
-          case EProj(name) if name == n"replicate" => ???
-            // val ETerm(param) = stack.pop(): @unchecked
-            // val currentStackSize = stack.size
-            // stack.push(
-            //   handler.copy(parameter = param)(
-            //     handler.transformBoundName,
-            //     handler.handlersBoundNames,
-            //   ),
-            // )
-            // stack.pushAll(capturedStack)
-            // run(ContinuationReplicationState(currentStackSize, Nil, Nil), true)
+          case EProj(name) if name == n"resume" =>
+            val ETerm(param) = stack.pop(): @unchecked
+            val ETerm(arg) = stack.pop(): @unchecked
+            run(
+              replaceTip(
+                getContinuationTermWithNewParameter(param),
+                arg,
+              ),
+            )
+          case EProj(name) if name == n"dispose" =>
+            val ETerm(param) = stack.pop(): @unchecked
+            val handlerStack = expandTermToStack(getContinuationTermWithNewParameter(param)):
+              // retain all handlers for two reasons
+              // 1. if it contains a parameter disposer, the disposer needs to be invoked
+              // 2. the handler may provide effects needed by upper disposers
+              case h: Handler =>
+                Some(
+                  h.copy(
+                    input = Hole,
+                    outputUsage = UsageLiteral(Usage.UAny),
+                    outputType = DataType(Builtins.UnitQn, Nil),
+                    // weakened because transform also takes a output value. But for disposer calls this
+                    // value is always unit and ignored by the parameterDisposer.
+                    transform = h.parameterDisposer match
+                      case Some(parameterDisposer) => parameterDisposer.weakened
+                      case None                    => Return(Con(n"MkUnit", Nil)),
+                  )(
+                    h.transformBoundName,
+                    h.handlersBoundNames,
+                  ),
+                )
+              case _ => None
+            val stackHeight = stack.size
+            stack.pushAll(handlerStack)
+            regenerateHandlerIndex(stackHeight)
+            run(Return(Con(n"MkUnit", Nil)))
+          case proj @ EProj(name) if name == n"replicate" =>
+            preConstructedTerm = Some(reconstructTermFromStack(redex(pc, proj)))
+            val ETerm(param) = stack.pop(): @unchecked
+            val baseStackHeight = stack.size
+            val stackToDuplicate = expandTermToStack(getContinuationTermWithNewParameter(param)):
+              case t: Redex   => Some(t.copy(t = Hole))
+              case t: Let     => Some(t.copy(t = Hole)(t.boundName))
+              case h: Handler => Some(h.copy(input = Hole)(h.transformBoundName, h.handlersBoundNames))
+              case t          => Some(t)
+            stack.pushAll(stackToDuplicate)
+            val tip = stack.pop().asInstanceOf[CapturedContinuationTip]
+            replicate(baseStackHeight, tip, tip)
           case _ => throw IllegalArgumentException("type error")
       // case cr @ ContinuationReplicationState(handlerIndex, stack1, stack2) =>
       //   assert(
@@ -339,6 +350,10 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
       //     run(paramPairs)
       case h @ Handler(
           eff,
+          otherEffects,
+          outputEffects,
+          outputUsage,
+          outputType,
           parameter,
           parameterBinding,
           parameterDisposer,
@@ -356,10 +371,13 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                 case Return(v) => run(transform.substLowers(parameter, v))
                 case _         => throw IllegalArgumentException("type error")
             else
-              updateHandlerIndex(eff, stack.length)
               stack.push(
                 Handler(
                   eff,
+                  otherEffects,
+                  outputEffects,
+                  outputUsage,
+                  outputType,
                   parameter,
                   parameterBinding,
                   parameterDisposer,
@@ -369,37 +387,78 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
                   Hole,
                 )(h.transformBoundName, h.handlersBoundNames),
               )
+              updateHandlerIndex(eff, stack.length)
               run(input)
+
+  /** @param baseStackSize
+    *   size of the base stack, excludng the part that needs to be replicated
+    * @param continuationTerm1
+    * @param continuationTerm2
+    * @return
+    */
+  @tailrec
+  private def replicate
+    (baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm)
+    (using Context)
+    (using Σ: Signature)
+    (using ctx: TypingContext)
+    : Either[IrError, CTerm] =
+    if stack.size == baseStackSize then
+      run(
+        Return(
+          Con(
+            n"MkPair",
+            List(
+              // This is safe because the continuationTerm1 and continuationTerm2 are both from the term as the index
+              // value of baseStackSize, which is the bottom handler in the original captured continuation.
+              Thunk(Continuation(continuationTerm1.asInstanceOf[Handler])),
+              Thunk(Continuation(continuationTerm2.asInstanceOf[Handler])),
+            ),
+          ),
+        ),
+      )
+    else
+      stack.pop() match
+        case t: Let =>
+          replicate(
+            baseStackSize,
+            t.copy(t = continuationTerm1)(t.boundName),
+            t.copy(t = continuationTerm2)(t.boundName),
+          )
+        case t: Redex =>
+          replicate(
+            baseStackSize,
+            t.copy(t = continuationTerm1),
+            t.copy(t = continuationTerm2),
+          )
+        case h: Handler =>
+          h.parameterReplicator match
+            case Some(parameterReplicator) =>
+              stack.push(
+                ReplicationState(
+                  h,
+                  baseStackSize,
+                  continuationTerm1,
+                  continuationTerm2,
+                ),
+              )
+              run(parameterReplicator.substLowers(h.parameter))
+            case None =>
+              replicate(
+                baseStackSize,
+                h.copy(input = continuationTerm1)(h.transformBoundName, h.handlersBoundNames),
+                h.copy(input = continuationTerm2)(h.transformBoundName, h.handlersBoundNames),
+              )
+        case _ => throw IllegalStateException("type error")
 
   private def substHole(ctx: CTerm, c: CTerm): CTerm =
     given SourceInfo = ctx.sourceInfo
 
     ctx match
-      case l @ Let(t, ty, effects, usage, ctx) => Let(c, ty, effects, usage, ctx)(l.boundName)
-      case h @ Handler(
-          eff,
-          parameterBinding,
-          parameter,
-          parameterDisposer,
-          parameterReplicator,
-          transform,
-          handlers,
-          input,
-        ) =>
-        Handler(
-          eff,
-          parameterBinding,
-          parameter,
-          parameterDisposer,
-          parameterReplicator,
-          transform,
-          handlers,
-          c,
-        )(
-          h.transformBoundName,
-          h.handlersBoundNames,
-        )
-      case _                                 => throw IllegalArgumentException("unexpected context")
+      case t: Let     => t.copy(t = c)(t.boundName)
+      case t: Handler => t.copy(input = c)(t.transformBoundName, t.handlersBoundNames)
+      case t: Redex   => t.copy(t = c)
+      case _          => throw IllegalArgumentException("unexpected context")
 
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
@@ -412,6 +471,10 @@ private final class StackMachine(val stack: mutable.ArrayBuffer[CTerm | Eliminat
           if elims.nonEmpty then
             current = Redex(current, elims.toList)(using c.sourceInfo)
             elims.clear()
+        case _: ReplicationState =>
+          preConstructedTerm match
+            case Some(t) => return t
+            case _       => throw IllegalStateException("type error")
     }
     current
 
@@ -627,6 +690,25 @@ def matchCoPattern
           throw IllegalArgumentException("type error")
         case _ => return MatchingStatus.Mismatch
       matchCoPattern(elims, mapping, status)
+
+private def replaceTip(continuationTerm: CTerm, newTip: VTerm)(using Σ: Signature): CTerm =
+  CapturedContinuationTipReplacer.transformCTerm(continuationTerm)(using newTip)
+
+private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
+  override def transformCapturedContinuationTip
+    (cct: CapturedContinuationTip)
+    (using newTip: VTerm)
+    (using Σ: Signature)
+    : CTerm =
+    // TODO: pass usage here
+    val usage = cct.ty.usage
+    Return(newTip)
+
+private def expandTermToStack(term: CTerm)(transform: CTerm => Option[CTerm]): Iterable[CTerm] = term match
+  case term: Redex   => transform(term) ++ expandTermToStack(term.t)(transform)
+  case term: Let     => transform(term) ++ expandTermToStack(term.t)(transform)
+  case term: Handler => transform(term) ++ expandTermToStack(term.input)(transform)
+  case _             => Iterable(term)
 
 private def joinContinuationUsages[K]
   (m1: IterableOnce[(K, ContinuationUsage)], m2: IterableOnce[(K, ContinuationUsage)])

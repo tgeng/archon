@@ -697,6 +697,10 @@ trait Transformer[C]:
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
     Handler(
       transformVTerm(handler.eff),
+      transformVTerm(handler.otherEffects),
+      transformVTerm(handler.outputEffects),
+      transformVTerm(handler.outputUsage),
+      transformVTerm(handler.outputType),
       transformVTerm(handler.parameter),
       handler.parameterBinding.map(transformVTerm),
       handler.parameterDisposer.map(t =>
