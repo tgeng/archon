@@ -541,12 +541,13 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
 
       /** All handler implementations declared by the effect. Each handler is essentially a function body that takes the
         * following arguments
+        *   - handler parameter
         *   - all declared parameters
         *   - a continuation parameter of type `declared operation output type -> outputType` and outputs `outputType`
         */
       handlers: Map[
         QualifiedName,
-        /* binding offset = 1 (for parameter) + paramTys + 1 (for resume if needed) */ CTerm,
+        /* binding offset = 1 (for parameter) + paramTys + 1 (for continuation if control mode is complex) */ CTerm,
       ],
       input: CTerm,
     )
