@@ -706,7 +706,7 @@ private def inferLevel
     case LevelType(upperBound) =>
       for (upperBound, _) <- checkLevel(upperBound)
       yield LevelSuc(upperBound)
-    case _               => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
+    case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
 def inferType
   (tm: VTerm)
@@ -821,7 +821,7 @@ def inferType
         })
         newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
       yield (newTm, LevelType(newTm), usages)
-    case Auto()     => throw IllegalArgumentException("cannot infer type")
+    case Auto() => throw IllegalArgumentException("cannot infer type")
 
 def getEffectsContinuationUsage
   (effects: Effects)
@@ -837,7 +837,7 @@ def getEffectsContinuationUsage
       val operands = effects.unionOperands.map {
         case v: Var => getEffVarContinuationUsage(v)
         // TODO[P0]: handle meta variable here
-        case _      => UsageLiteral(Usage.UAny)
+        case _ => UsageLiteral(Usage.UAny)
       }.toSet
       UsageJoin(operands + literal).normalized
     case _ => throw IllegalStateException("Effects should still be Effects after normalization")
@@ -958,7 +958,7 @@ def inferType
         throw IllegalArgumentException(
           "hole should only be present during reduction",
         )
-      case cct@CapturedContinuationTip(ty) => Right(cct, ty, Usages.zero)
+      case cct @ CapturedContinuationTip(ty) => Right(cct, ty, Usages.zero)
       case CType(upperBound, effects) =>
         for
           (effects, effUsages) <- checkType(effects, EffectsType())
@@ -1122,8 +1122,8 @@ def inferType
                   ),
                   effUsages + argsUsages,
                 )
-      case c@Continuation(handler) => ???
-      case h: Handler => checkHandler(h, None)
+      case c @ Continuation(handler) => ???
+      case h: Handler                => checkHandler(h, None)
   yield r
 
 private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): VTerm =
@@ -1146,8 +1146,8 @@ def checkType
       ty match
         case F(ty, _, usage) => checkType(v, ty).map((v, usages) => (Return(v), usages * usage))
         case _               => Left(ExpectFType(ty))
-    case l: Let         => checkLet(l, Some(ty)).map((v, _, usages) => (v, usages))
-    case h: Handler     => checkHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
+    case l: Let     => checkLet(l, Some(ty)).map((v, _, usages) => (v, usages))
+    case h: Handler => checkHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
     case _ =>
       for
         case (tm, tmTy, usages) <- inferType(tm)
@@ -1407,16 +1407,12 @@ private def checkLet
       // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
       // unrestricted usage. Hence, usage checking would still pass. On the other hand,
       // it's not possible for inlining to create usage out of nowhere.
-      // TODO[P0]: this is not safe!! conversion check could instantiate meta varaibles!!
       def areTUsagesZeroOrUnrestricted: Boolean =
-        tUsages.forall { usage =>
-          toBoolean(
-            checkIsConvertible(usage, UsageLiteral(Usage.UAny), Some(UsageType())),
-          ) ||
-          toBoolean(
-            checkIsConvertible(usage, UsageLiteral(Usage.U0), Some(UsageType())),
-          )
-        }
+        val uAny = UsageLiteral(Usage.UAny)
+        val u0 = UsageLiteral(Usage.U0)
+        // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
+        // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
+        tUsages.forall { usage => usage == uAny || usage == u0 }
       if isTotal(t, Some(F(ty, effects, usage))) && areTUsagesZeroOrUnrestricted then
         // Do the reduction onsite so that type checking in sub terms can leverage the
         // more specific type. More importantly, this way we do not need to reference
@@ -1481,216 +1477,216 @@ def checkHandler
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, (CTerm, CTerm, Usages)] = ???
-  // val eff = h.eff
-  // val parameter = h.parameter
-  // val parameterBinding = h.parameterBinding
-  // val parameterDisposer = h.parameterDisposer
-  // val parameterReplicator = h.parameterReplicator
-  // val transform = h.transform
-  // val handlers = h.handlers
-  // val input = h.input
-  // for
-  //   eff <- eff.normalized
-  //   effs <- eff match
-  //     case Effects(effs, s) if s.isEmpty => Right(effs)
-  //     case _                             => Left(EffectTermTooComplex(eff))
-  //   continuationUsage = getLiteralEffectsContinuationUsage(effs).usage
-  //   (eff, effUsages) <- checkType(eff, EffectsType())
-  //   (parameterBindingTy, _) <- checkIsType(parameterBinding.ty)
-  //   (parameterBindingUsage, _) <- checkType(parameterBinding.usage, UsageType(None))
-  //   newParameterBinding = Binding(parameterBindingTy, parameterBindingUsage)(parameterBinding.name)
-  //   (parameter, singleParameterUsages) <- checkType(parameter, parameterBindingTy)
-  //   parameterUsages = singleParameterUsages * parameterBindingUsage
-  //   // TODO: redo this check
-  //   (outputEffects, _) <- parameterReplicator match
-  //     case Some(_) => checkType(outputEffects, EffectsType())
-  //     // parameterReplicator is not specified, in this case, the outputEffects must not be
-  //     // re-entrant.
-  //     case None => checkType(outputEffects, EffectsType(UsageLiteral(Usage.UAff)))
-  //   outputEffects <- outputEffects.normalized
-  //   parameterOpsΓ = Γ :+ newParameterBinding
-  //   // TODO: redo this check
-  //   (_, parameterDisposerUsages) <- parameterDisposer match
-  //     case Some(parameterDisposer) =>
-  //       checkType(parameterDisposer, F(DataType(Builtins.UnitQn), outputEffects))(using parameterOpsΓ)
-  //     case None => Right(???)
+// val eff = h.eff
+// val parameter = h.parameter
+// val parameterBinding = h.parameterBinding
+// val parameterDisposer = h.parameterDisposer
+// val parameterReplicator = h.parameterReplicator
+// val transform = h.transform
+// val handlers = h.handlers
+// val input = h.input
+// for
+//   eff <- eff.normalized
+//   effs <- eff match
+//     case Effects(effs, s) if s.isEmpty => Right(effs)
+//     case _                             => Left(EffectTermTooComplex(eff))
+//   continuationUsage = getLiteralEffectsContinuationUsage(effs).usage
+//   (eff, effUsages) <- checkType(eff, EffectsType())
+//   (parameterBindingTy, _) <- checkIsType(parameterBinding.ty)
+//   (parameterBindingUsage, _) <- checkType(parameterBinding.usage, UsageType(None))
+//   newParameterBinding = Binding(parameterBindingTy, parameterBindingUsage)(parameterBinding.name)
+//   (parameter, singleParameterUsages) <- checkType(parameter, parameterBindingTy)
+//   parameterUsages = singleParameterUsages * parameterBindingUsage
+//   // TODO: redo this check
+//   (outputEffects, _) <- parameterReplicator match
+//     case Some(_) => checkType(outputEffects, EffectsType())
+//     // parameterReplicator is not specified, in this case, the outputEffects must not be
+//     // re-entrant.
+//     case None => checkType(outputEffects, EffectsType(UsageLiteral(Usage.UAff)))
+//   outputEffects <- outputEffects.normalized
+//   parameterOpsΓ = Γ :+ newParameterBinding
+//   // TODO: redo this check
+//   (_, parameterDisposerUsages) <- parameterDisposer match
+//     case Some(parameterDisposer) =>
+//       checkType(parameterDisposer, F(DataType(Builtins.UnitQn), outputEffects))(using parameterOpsΓ)
+//     case None => Right(???)
 
-  //   parameterTypeLevel <- inferLevel(newParameterBinding.ty)
-  //   parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
-  //   (parameterReplicator, parameterReplicatorUsages) <- parameterReplicator match
-  //     case Some(parameterReplicator) =>
-  //       for
-  //         (parameterReplicator, parameterReplicatorUsages) <- checkType(
-  //           parameterReplicator,
-  //           F(
-  //             DataType(
-  //               Builtins.PairQn,
-  //               List(
-  //                 parameterTypeLevel,
-  //                 EqDecidabilityLiteral(EqDecidability.EqUnknown),
-  //                 newParameterBinding.usage,
-  //                 newParameterBinding.ty,
-  //                 newParameterBinding.usage,
-  //                 newParameterBinding.ty,
-  //               ),
-  //             ),
-  //             outputEffects,
-  //           ).weakened,
-  //         )(using parameterOpsΓ)
-  //         parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
-  //           parameterOpsΓ,
-  //         )
-  //       yield (Some(parameterReplicator), parameterReplicatorUsages)
-  //     case None => Right(None, List.fill(Γ.size)(UsageLiteral(Usage.U0)))
-  //   case (input, inputCTy, inputUsages) <- inputTy match
-  //     case None => inferType(input)
-  //     case Some(inputTy) =>
-  //       checkType(input, inputTy).map((input, usages) => (input, inputTy, usages))
-  //   case (inputTy, inputEff, inputUsage) <- inputCTy match
-  //     case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
-  //     case _                                => Left(ExpectFType(inputCTy))
-  //   inputBinding = Binding(inputTy, inputUsage)(gn"v")
-  //   (outputType, _) <- checkIsType(outputType)
-  //   outputUsage <- outputUsage.normalized
-  //   outputCType = F(outputType, outputEffects, outputUsage)
-  //   transformΓ = Γ :+ newParameterBinding :+ inputBinding.weakened
-  //   (outputUsage, _) <- checkType(outputUsage, UsageType(None))
-  //   (transform, transformUsages) <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
-  //   transformUsages <- verifyUsages(transformUsages)(2).map(_.dropRight(1).map(_.strengthened))
-  //   effConstraints <- checkEffSubsumption(
-  //     inputEff,
-  //     EffectsUnion(outputEffects, eff),
-  //   )
-  //   _ <-
-  //     if effConstraints.isEmpty then Right(())
-  //     else Left(NotVSubsumption(inputEff, EffectsUnion(outputEffects, eff), Some(EffectsType())))
-  //   // Check handler implementations
-  //   (handlerEntries, handlerUsages) <-
-  //     // TODO[P0]: honor filter here and only check filtered operations of the given effect
-  //     def checkHandler(eff: Eff): Either[IrError, (List[(QualifiedName, CTerm)], Usages)] =
-  //       val (qn, args) = eff
-  //       for
-  //         effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
-  //         operations <- Σ.getOperationsOption(qn).toRight(MissingDeclaration(qn))
-  //         _ <-
-  //           val missingOperationQn =
-  //             operations.map(qn / _.name).filter(qn => !handlers.contains(qn)).toSet
-  //           if missingOperationQn.isEmpty then Right(())
-  //           else Left(MissingHandlerImplementation(missingOperationQn, h.sourceInfo))
-  //         (handlerEntries, handlerUsages) <- transposeCheckTypeResults(
-  //           operations.map { opDecl =>
-  //             val handlerQn = qn / opDecl.name
-  //             val handlerBody = handlers(handlerQn)
-  //             val (argNames, resumeNameOption) = h.handlersBoundNames(handlerQn)
-  //             // All of the following opXXX are weakened for handler parameter
-  //             val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
-  //             val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
-  //             val opParamTys = newParameterBinding +: opDecl.paramTys
-  //               .substLowers(args: _*)
-  //               .zip(argNames)
-  //               .map { case (binding, argName) =>
-  //                 Binding(binding.ty, binding.usage)(argName)
-  //               }
-  //               .weakened
-  //             for
-  //               opResultTyLevel <- inferLevel(opResultTy)
-  //               case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
-  //                 case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
-  //                   resumeNameOption match
-  //                     case Some(resumeName) =>
-  //                       for outputTypeLevel <- inferLevel(outputType)
-  //                       yield (
-  //                         opParamTys :+
-  //                           Binding(
-  //                             U(
-  //                               RecordType(
-  //                                 Builtins.ContinuationQn,
-  //                                 List(
-  //                                   outputTypeLevel,
-  //                                   UsageLiteral(continuationUsage),
-  //                                   newParameterBinding.usage,
-  //                                   newParameterBinding.ty,
-  //                                   opResultUsage,
-  //                                   opResultTy,
-  //                                   outputEffects,
-  //                                   outputEffects,
-  //                                   outputUsage,
-  //                                   outputType,
-  //                                 ),
-  //                               ).weaken(opDecl.paramTys.size + 1, 0),
-  //                             ),
-  //                           )(resumeName),
-  //                         outputCType.weaken(opParamTys.size + 1, 0),
-  //                       )
-  //                     case None =>
-  //                       throw IllegalArgumentException("missing name for continuation")
-  //                 case ContinuationUsage(continuationUsage, ControlMode.Simple) =>
-  //                   Right(
-  //                     (
-  //                       opParamTys,
-  //                       F(
-  //                         DataType(
-  //                           Builtins.PairQn,
-  //                           List(
-  //                             opResultTyLevel,
-  //                             EqDecidabilityLiteral(EqDecidability.EqUnknown),
-  //                             newParameterBinding.usage,
-  //                             newParameterBinding.ty,
-  //                             opResultUsage,
-  //                             opResultTy,
-  //                           ),
-  //                         ),
-  //                         outputEffects,
-  //                         opResultUsage,
-  //                       ).weaken(opDecl.paramTys.size, 0),
-  //                     ),
-  //                   )
-  //               (handlerBody, bodyUsages) <- checkType(handlerBody, opOutputTy)(using
-  //                 Γ ++ opParamTys,
-  //               )
-  //               bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
-  //             yield ((handlerQn -> handlerBody), bodyUsages)
-  //           },
-  //         )
-  //       yield (handlerEntries, handlerUsages)
-  //     eff match
-  //       case Effects(effs, s) if s.isEmpty =>
-  //         val effQns = effs.map(_._1)
-  //         for
-  //           _ <-
-  //             val unknownOperationQns = handlers.keySet
-  //               .filter {
-  //                 case QualifiedName.Node(parent, _) => !effQns.contains(parent)
-  //                 case qn                            => throw IllegalStateException(s"bad operation name $qn")
-  //               }
-  //             if unknownOperationQns.isEmpty
-  //             then Right(())
-  //             else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
-  //           r <- transposeCheckTypeResults(effs.map(checkHandler))
-  //         yield r
+//   parameterTypeLevel <- inferLevel(newParameterBinding.ty)
+//   parameterDisposerUsages <- verifyUsages(parameterDisposerUsages)(1)(using parameterOpsΓ)
+//   (parameterReplicator, parameterReplicatorUsages) <- parameterReplicator match
+//     case Some(parameterReplicator) =>
+//       for
+//         (parameterReplicator, parameterReplicatorUsages) <- checkType(
+//           parameterReplicator,
+//           F(
+//             DataType(
+//               Builtins.PairQn,
+//               List(
+//                 parameterTypeLevel,
+//                 EqDecidabilityLiteral(EqDecidability.EqUnknown),
+//                 newParameterBinding.usage,
+//                 newParameterBinding.ty,
+//                 newParameterBinding.usage,
+//                 newParameterBinding.ty,
+//               ),
+//             ),
+//             outputEffects,
+//           ).weakened,
+//         )(using parameterOpsΓ)
+//         parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages)(1)(using
+//           parameterOpsΓ,
+//         )
+//       yield (Some(parameterReplicator), parameterReplicatorUsages)
+//     case None => Right(None, List.fill(Γ.size)(UsageLiteral(Usage.U0)))
+//   case (input, inputCTy, inputUsages) <- inputTy match
+//     case None => inferType(input)
+//     case Some(inputTy) =>
+//       checkType(input, inputTy).map((input, usages) => (input, inputTy, usages))
+//   case (inputTy, inputEff, inputUsage) <- inputCTy match
+//     case F(inputTy, inputEff, inputUsage) => Right((inputTy, inputEff, inputUsage))
+//     case _                                => Left(ExpectFType(inputCTy))
+//   inputBinding = Binding(inputTy, inputUsage)(gn"v")
+//   (outputType, _) <- checkIsType(outputType)
+//   outputUsage <- outputUsage.normalized
+//   outputCType = F(outputType, outputEffects, outputUsage)
+//   transformΓ = Γ :+ newParameterBinding :+ inputBinding.weakened
+//   (outputUsage, _) <- checkType(outputUsage, UsageType(None))
+//   (transform, transformUsages) <- checkType(transform, outputCType.weaken(2, 0))(using transformΓ)
+//   transformUsages <- verifyUsages(transformUsages)(2).map(_.dropRight(1).map(_.strengthened))
+//   effConstraints <- checkEffSubsumption(
+//     inputEff,
+//     EffectsUnion(outputEffects, eff),
+//   )
+//   _ <-
+//     if effConstraints.isEmpty then Right(())
+//     else Left(NotVSubsumption(inputEff, EffectsUnion(outputEffects, eff), Some(EffectsType())))
+//   // Check handler implementations
+//   (handlerEntries, handlerUsages) <-
+//     // TODO[P0]: honor filter here and only check filtered operations of the given effect
+//     def checkHandler(eff: Eff): Either[IrError, (List[(QualifiedName, CTerm)], Usages)] =
+//       val (qn, args) = eff
+//       for
+//         effect <- Σ.getEffectOption(qn).toRight(MissingDeclaration(qn))
+//         operations <- Σ.getOperationsOption(qn).toRight(MissingDeclaration(qn))
+//         _ <-
+//           val missingOperationQn =
+//             operations.map(qn / _.name).filter(qn => !handlers.contains(qn)).toSet
+//           if missingOperationQn.isEmpty then Right(())
+//           else Left(MissingHandlerImplementation(missingOperationQn, h.sourceInfo))
+//         (handlerEntries, handlerUsages) <- transposeCheckTypeResults(
+//           operations.map { opDecl =>
+//             val handlerQn = qn / opDecl.name
+//             val handlerBody = handlers(handlerQn)
+//             val (argNames, resumeNameOption) = h.handlersBoundNames(handlerQn)
+//             // All of the following opXXX are weakened for handler parameter
+//             val opResultTy = opDecl.resultTy.substLowers(args: _*).weakened
+//             val opResultUsage = opDecl.resultUsage.substLowers(args: _*).weakened
+//             val opParamTys = newParameterBinding +: opDecl.paramTys
+//               .substLowers(args: _*)
+//               .zip(argNames)
+//               .map { case (binding, argName) =>
+//                 Binding(binding.ty, binding.usage)(argName)
+//               }
+//               .weakened
+//             for
+//               opResultTyLevel <- inferLevel(opResultTy)
+//               case (opParamTys, opOutputTy) <- opDecl.continuationUsage match
+//                 case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
+//                   resumeNameOption match
+//                     case Some(resumeName) =>
+//                       for outputTypeLevel <- inferLevel(outputType)
+//                       yield (
+//                         opParamTys :+
+//                           Binding(
+//                             U(
+//                               RecordType(
+//                                 Builtins.ContinuationQn,
+//                                 List(
+//                                   outputTypeLevel,
+//                                   UsageLiteral(continuationUsage),
+//                                   newParameterBinding.usage,
+//                                   newParameterBinding.ty,
+//                                   opResultUsage,
+//                                   opResultTy,
+//                                   outputEffects,
+//                                   outputEffects,
+//                                   outputUsage,
+//                                   outputType,
+//                                 ),
+//                               ).weaken(opDecl.paramTys.size + 1, 0),
+//                             ),
+//                           )(resumeName),
+//                         outputCType.weaken(opParamTys.size + 1, 0),
+//                       )
+//                     case None =>
+//                       throw IllegalArgumentException("missing name for continuation")
+//                 case ContinuationUsage(continuationUsage, ControlMode.Simple) =>
+//                   Right(
+//                     (
+//                       opParamTys,
+//                       F(
+//                         DataType(
+//                           Builtins.PairQn,
+//                           List(
+//                             opResultTyLevel,
+//                             EqDecidabilityLiteral(EqDecidability.EqUnknown),
+//                             newParameterBinding.usage,
+//                             newParameterBinding.ty,
+//                             opResultUsage,
+//                             opResultTy,
+//                           ),
+//                         ),
+//                         outputEffects,
+//                         opResultUsage,
+//                       ).weaken(opDecl.paramTys.size, 0),
+//                     ),
+//                   )
+//               (handlerBody, bodyUsages) <- checkType(handlerBody, opOutputTy)(using
+//                 Γ ++ opParamTys,
+//               )
+//               bodyUsages <- verifyUsages(bodyUsages)(opParamTys.size)(using Γ ++ opParamTys)
+//             yield ((handlerQn -> handlerBody), bodyUsages)
+//           },
+//         )
+//       yield (handlerEntries, handlerUsages)
+//     eff match
+//       case Effects(effs, s) if s.isEmpty =>
+//         val effQns = effs.map(_._1)
+//         for
+//           _ <-
+//             val unknownOperationQns = handlers.keySet
+//               .filter {
+//                 case QualifiedName.Node(parent, _) => !effQns.contains(parent)
+//                 case qn                            => throw IllegalStateException(s"bad operation name $qn")
+//               }
+//             if unknownOperationQns.isEmpty
+//             then Right(())
+//             else Left(UnknownHandlerImplementation(unknownOperationQns, h.sourceInfo))
+//           r <- transposeCheckTypeResults(effs.map(checkHandler))
+//         yield r
 
-  //       case _ => Left(EffectTermTooComplex(eff))
-  // yield (
-  //   Handler(
-  //     eff,
-  //     parameter,
-  //     newParameterBinding,
-  //     parameterDisposer,
-  //     parameterReplicator,
-  //     outputEffects,
-  //     outputUsage,
-  //     outputType,
-  //     transform,
-  //     Map(handlerEntries.flatten: _*),
-  //     input,
-  //   )(h.transformBoundName, h.handlersBoundNames)(using h.sourceInfo),
-  //   outputCType,
-  //   // usages in handlers are multiplied by UAny because handlers may be invoked any number of times.
-  //   (handlerUsages) * UAny +
-  //     (inputUsages + transformUsages) * continuationUsage + // input term is captured as continuation and hence can be used according to the continuation usage
-  //     parameterDisposerUsages * UAff + // disposer may or may not be executed
-  //     parameterReplicatorUsages * UAny, // replicator may or may not be executed arbitrary times
-  // )
+//       case _ => Left(EffectTermTooComplex(eff))
+// yield (
+//   Handler(
+//     eff,
+//     parameter,
+//     newParameterBinding,
+//     parameterDisposer,
+//     parameterReplicator,
+//     outputEffects,
+//     outputUsage,
+//     outputType,
+//     transform,
+//     Map(handlerEntries.flatten: _*),
+//     input,
+//   )(h.transformBoundName, h.handlersBoundNames)(using h.sourceInfo),
+//   outputCType,
+//   // usages in handlers are multiplied by UAny because handlers may be invoked any number of times.
+//   (handlerUsages) * UAny +
+//     (inputUsages + transformUsages) * continuationUsage + // input term is captured as continuation and hence can be used according to the continuation usage
+//     parameterDisposerUsages * UAff + // disposer may or may not be executed
+//     parameterReplicatorUsages * UAny, // replicator may or may not be executed arbitrary times
+// )
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[VTerm] = None)
