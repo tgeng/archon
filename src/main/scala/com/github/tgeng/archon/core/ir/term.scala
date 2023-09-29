@@ -511,7 +511,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and operation handler
     *   implementations. This is the effect of each operation handler implementation. This is also the effect of the
     *   resume call on continuations captured inside handlers implementations. This is also the effect in the type of
-    *   the curret handler being defined. The disposeEffects is this with complex effects filtered out.
+    *   the curret handler being defined. The paramOpsEffects is this with complex effects filtered out.
     * @param outputUsage
     *   the usage of the output of the handler. This is also the usage of the resume call on continuations captured
     *   inside handler implementations. This is also the usage of the final returned value in each operation handler

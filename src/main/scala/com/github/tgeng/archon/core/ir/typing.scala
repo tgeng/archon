@@ -1321,6 +1321,38 @@ private def checkAreEqDecidableTypes
       rest <- checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
     yield telescope
 
+/** @param input
+  *   input usage terms should live in Γ ++ telescope
+  * @param telescope
+  *   signifies which usages to verify
+  * @return
+  *   unverified usages
+  */
+private def verifyUsages
+  (inputUsages: Usages, telescope: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, Usages] =
+  val Γ2 = Γ ++ telescope
+  val count = telescope.size
+  for _ <- transpose(inputUsages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
+      for
+        constraint <- checkUsageSubsumption(v, Γ2.resolve(i).usage)
+        r <-
+          if constraint.isEmpty then Right(())
+          else Left(NotUsageSubsumption(v, Γ2.resolve(i).usage))
+      yield ()
+    })
+  yield inputUsages.drop(count).map { v =>
+    try v.strengthen(count, 0)
+    catch
+      // It's possible for a term's usage to reference a usage term after it. For example consider
+      // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
+      // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UAny.
+      case _: StrengthenException => UsageLiteral(Usage.UAny)
+  }
+
 /** @param usages
   *   usage terms should live in Γ
   * @param count
@@ -1328,6 +1360,7 @@ private def checkAreEqDecidableTypes
   * @return
   *   unverified usages
   */
+@deprecated("use verifyUsages above instead")
 private def verifyUsages
   (usages: Usages)
   (count: Nat = usages.size)
@@ -1480,6 +1513,9 @@ def checkHandler
   for
     (eff, _) <- checkType(h.eff, EffectsType())
     eff <- eff.normalized
+    effs <- eff match
+      case Effects(effs, s) if s.isEmpty => Right(effs)
+      case _                             => Left(EffectTermTooComplex(eff))
     (otherEffects, _) <- checkType(h.otherEffects, EffectsType())
     otherEffects <- otherEffects.normalized
     (outputEffects, _) <- checkType(h.outputEffects, EffectsType())
@@ -1490,6 +1526,7 @@ def checkHandler
     (parameterType, _) <- checkIsType(h.parameterBinding.ty)
     // parameter binding usage dictates how much resources the handler needs when consuming the parameter
     (parameterBindingUsage, _) <- checkType(h.parameterBinding.usage, UsageType())
+    parameterBinding = Binding(parameterType, parameterBindingUsage)(h.parameterBinding.name)
     (parameter, rawParameterUsages) <- checkType(h.parameter, parameterType)
     parameterUsages = rawParameterUsages * parameterBindingUsage
     (inputTy, _) <- checkIsType(h.inputBinding.ty)
@@ -1499,23 +1536,32 @@ def checkHandler
     inputEffects <- EffectsUnion(eff, otherEffects).normalized
     (input, inputUsages) <- checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
     inputEffectsContinuaionUsage <- getEffectsContinuationUsage(inputEffects)
-    parameterDisposerUsages <- h.parameterDisposer match
-      case Some(parameterDisposer) => ???
+    (parameterDisposerUsages, parameterDisposerEffects) <- h.parameterDisposer match
+      case Some(parameterDisposer) =>
+        for
+          (parameterDisposerEffects, _) <- checkType(Auto(), EffectsType(UsageLiteral(Usage.UAff), ControlMode.Simple))
+          (parameterDisposer, parameterDisposerUsages) <- checkType(
+            parameterDisposer,
+            F(DataType(Builtins.UnitQn, Nil), parameterDisposerEffects),
+          )(using Γ :+ parameterBinding)
+          parameterDisposerUsages <- verifyUsages(parameterDisposerUsages, parameterBinding :: Nil)
+        yield (parameterDisposerUsages, parameterDisposerEffects)
       case None =>
         (inputEffectsContinuaionUsage, parameterBindingUsage) match
           case (UsageLiteral(effUsage), UsageLiteral(paramUsage)) if effUsage <= Usage.URel || paramUsage >= Usage.U0 =>
-            Right(Usages.zero)
+            Right(Usages.zero, Total())
           case _ => Left(ExpectParameterDisposer(h))
-    parameterReplicatorUsages <- h.parameterReplicator match
+    (parameterReplicatorUsages, parameterReplicatorEffects) <- h.parameterReplicator match
       case Some(parameterReplicator) => ???
       case None =>
         (inputEffectsContinuaionUsage, parameterBindingUsage) match
           case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
             if effUsage <= Usage.UAff || paramUsage >= Usage.URel || paramUsage == Usage.U0 =>
-            Right(Usages.zero)
+            Right(Usages.zero, Total())
           case _ => Left(ExpectParameterReplicator(h))
   yield ???
 
+// returned effects should be normalized
 private def getEffectsContinuationUsage
   (effects: VTerm)
   (using Γ: Context)

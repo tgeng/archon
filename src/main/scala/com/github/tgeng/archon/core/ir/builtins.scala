@@ -223,7 +223,7 @@ object Builtins:
         (binding(n"paramType", Type(Top(Var(1)))), Variance.CONTRAVARIANT),
         (binding(n"resultUsage", UsageType()), Variance.CONTRAVARIANT),
         (binding(n"resultType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
-        (binding(n"disposeEffects", EffectsType()), Variance.INVARIANT),
+        (binding(n"paramOpsEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
         (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
