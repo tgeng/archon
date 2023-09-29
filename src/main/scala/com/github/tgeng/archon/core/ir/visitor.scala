@@ -367,7 +367,7 @@ trait Visitor[C, R]:
           visitCTerm(t)
         },
       ) ++ Seq(
-        withBindings(Seq(handler.parameterBinding.name, handler.transformBoundName)) {
+        withBindings(Seq(handler.parameterBinding.name, handler.inputBinding.name)) {
           visitCTerm(handler.transform)
         },
       ) ++ handler.handlers.map { (name, body) =>
@@ -375,8 +375,10 @@ trait Visitor[C, R]:
         withBindings((handler.parameterBinding.name +: argNames) ++ resumeName) {
           visitCTerm(body)
         }
-      } :+
-        visitCTerm(handler.input): _*,
+      } ++ Seq(
+        visitCTerm(handler.input),
+        visitBinding(handler.inputBinding),
+      ): _*,
     )
 
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
@@ -713,7 +715,7 @@ trait Transformer[C]:
           transformCTerm(t)
         },
       ),
-      withBindings(Seq(handler.parameterBinding.name, handler.transformBoundName)) {
+      withBindings(Seq(handler.parameterBinding.name, handler.inputBinding.name)) {
         transformCTerm(handler.transform)
       },
       handler.handlers.map { (name, body) =>
@@ -726,8 +728,8 @@ trait Transformer[C]:
         )
       },
       transformCTerm(handler.input),
+      handler.inputBinding.map(transformVTerm),
     )(
-      handler.transformBoundName,
       handler.handlersBoundNames,
     )(using handler.sourceInfo)
 

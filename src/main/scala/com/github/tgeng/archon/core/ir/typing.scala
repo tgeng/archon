@@ -1122,7 +1122,7 @@ def inferType
                   ),
                   effUsages + argsUsages,
                 )
-      case c @ Continuation(handler) => ???
+      case c @ Continuation(handler) => ??? // TODO[P0]
       case h: Handler                => checkHandler(h, None)
   yield r
 
@@ -1476,7 +1476,26 @@ def checkHandler
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, (CTerm, CTerm, Usages)] = ???
+  : Either[IrError, (CTerm, CTerm, Usages)] =
+  for
+    (eff, _) <- checkType(h.eff, EffectsType())
+    eff <- eff.normalized
+    (otherEffects, _) <- checkType(h.otherEffects, EffectsType())
+    otherEffects <- otherEffects.normalized
+    (outputEffects, _) <- checkType(h.outputEffects, EffectsType())
+    outputEffects <- outputEffects.normalized
+    (outputUsage, _) <- checkType(h.outputUsage, UsageType())
+    outputUsage <- outputUsage.normalized
+    (outputType, _) <- checkIsType(h.outputType)
+    (parameterType, _) <- checkIsType(h.parameterBinding.ty)
+    (parameterUsage, _) <- checkType(h.parameterBinding.usage, UsageType())
+    (parameter, rawParameterUsages) <- checkType(h.parameter, parameterType)
+    parameterUsages = rawParameterUsages * parameterUsage
+  yield ???
+
+private def checkEffectDisjointUnion
+  (effComponent1: VTerm, effComponent2: VTerm, effUnion: VTerm)
+  : Either[IrError, Unit] = ???
 // val eff = h.eff
 // val parameter = h.parameter
 // val parameterBinding = h.parameterBinding

@@ -47,7 +47,9 @@ enum Declaration:
     (val qn: QualifiedName)
     (
       val tParamTys: Context = IndexedSeq(),
-      /** This value must be the join of the continuation usages of all operations. */
+      /** This value must be the join of the continuation usages of all operations. If control mode is simple, this
+        * effect is a simple effect. Otherwise it's a complex effect.
+        */
       val continuationUsage: ContinuationUsage,
     )
 

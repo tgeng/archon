@@ -501,17 +501,51 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     */
   case Continuation(continuationTerm: Handler) extends CTerm(SiEmpty)
 
-  // Note on terminlogy:
-  //   - otherEffects: the effect of the input term without effects being handled by this handler
-  //   - outputEffects: otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and
-  //       operation handler implementations. This is also the effect in the type of the curret handler being defined.
-  //   - disposeEffects: outputEffects with effects of complex continuation usage filtered out
+  /** @param eff
+    *   Handle general term here instead of a single effect. During type checking it will fail if this term is not
+    *   convertible to a effect literal. The ability to handle multiple effects is useful when one needs to use a linear
+    *   resource (as parameter to the handler) with multiple effects.
+    * @param otherEffects
+    *   the effect of the input term without effects being handled by this handler
+    * @param outputEffects
+    *   otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and operation handler
+    *   implementations. This is the effect of each operation handler implementation. This is also the effect of the
+    *   resume call on continuations captured inside handlers implementations. This is also the effect in the type of
+    *   the curret handler being defined. The disposeEffects is this with complex effects filtered out.
+    * @param outputUsage
+    *   the usage of the output of the handler. This is also the usage of the resume call on continuations captured
+    *   inside handler implementations. This is also the usage of the final returned value in each operation handler
+    *   implementation.
+    * @param outputType
+    *   the type of the output of the handler. This is also the type of the resume call on continuations captured inside
+    *   handler implementations. This is also the type of the final returned value in each operation handler.
+    * @param parameter
+    * @param parameterBinding
+    * @param parameterDisposer
+    *   This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
+    *   clean up the parameter if a parent handler (whose effect is captured by outputEffects) decides to abort.
+    *   Therefore, it's needed if the otherEffect have continuation usage UAff.
+    * @param parameterReplicator
+    *   This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
+    *   replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke a
+    *   continuation multiple times. Therefore, it's needed if the otherEffect have continuation usage URel, UAny.
+    * @param transform
+    *   The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
+    *   where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var 0)`
+    * @param handlers
+    *   All handler implementations declared by the effect. Each handler is essentially a function body that takes the
+    *   following arguments
+    *   - handler parameter
+    *   - all declared parameters
+    *   - a continuation parameter of type `declared operation output type -> outputType` and outputs `outputType`
+    * @param input
+    * @param inputBinding
+    * @param transformBoundName
+    * @param handlersBoundNames
+    * @param sourceInfo
+    */
   case Handler
     (
-      /** Handle general term here instead of a single effect. During type checking it will fail if this term is not
-        * convertible to a effect literal. The ability to handle multiple effects is useful when one needs to use a
-        * linear resource (as parameter to the handler) with multiple effects.
-        */
       eff: VTerm,
       otherEffects: VTerm,
       outputEffects: VTerm,
@@ -519,40 +553,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       outputType: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
-      /** This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
-        * clean up the parameter if a parent handler (whose effect is captured by outputEffects) decides to abort.
-        *
-        * Therefore, it's needed if the otherEffect have continuation usage UAff.
-        */
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
-      /** This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
-        * replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke a
-        * continuation multiple times.
-        *
-        * Therefore, it's needed if the otherEffect have continuation usage URel, UAny.
-        */
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
-      /** The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
-        * where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var
-        * 0)`
-        */
-
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
-
-      /** All handler implementations declared by the effect. Each handler is essentially a function body that takes the
-        * following arguments
-        *   - handler parameter
-        *   - all declared parameters
-        *   - a continuation parameter of type `declared operation output type -> outputType` and outputs `outputType`
-        */
       handlers: Map[
         QualifiedName,
         /* binding offset = 1 (for parameter) + paramTys + 1 (for continuation if control mode is complex) */ CTerm,
       ],
       input: CTerm,
+      inputBinding: Binding[VTerm],
     )
     (
-      val transformBoundName: Ref[Name],
       val handlersBoundNames: Map[
         QualifiedName,
         (Seq[Ref[Name]], /* resume name */ Option[Ref[Name]]),
@@ -579,7 +590,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case t: RecordType              => t.copy()
       case t: OperationCall           => t.copy()
       case c: Continuation            => c
-      case h: Handler                 => h.copy()(h.transformBoundName, h.handlersBoundNames)
+      case h: Handler                 => h.copy()(h.handlersBoundNames)
 
   // TODO[P3]: support array operations on heap
   // TODO[P3]: consider adding builtin set and maps with decidable equality because we do not

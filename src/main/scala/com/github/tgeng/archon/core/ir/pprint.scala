@@ -494,6 +494,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           transform,
           handlers,
           input,
+          inputBinding,
         ) =>
         Left(
           (
@@ -508,8 +509,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                   Whitespace,
                   Wrap,
                   FixedIncrement(2),
-                  Block(Whitespace, NoWrap, ".return", h.transformBoundName, "->"),
-                  withBindings(Seq(h.transformBoundName)) {
+                  Block(Whitespace, NoWrap, ".return", h.inputBinding.name, "->"),
+                  withBindings(Seq(h.inputBinding.name)) {
                     transform
                   },
                 ) +: (parameterDisposer
