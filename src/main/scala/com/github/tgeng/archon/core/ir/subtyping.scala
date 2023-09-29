@@ -496,7 +496,13 @@ private def checkEffSubsumption
   case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) => Right(Set.empty)
   // TODO[P0]: handle the case where the left hand side contains a single meta variable which is the right hand side.
   // In this case, all the other parts on the left should be added as lower bound to the meta variable. This case is
-  // useful in solving effects in handlers.
+  // useful in solving effects in operation implementations in handlers, where the continuation carries the same type
+  // as the final return type of the handler.
+
+  // TODO[P0]: handle the case where the right hand side contains a single meta variable and some other literal effects.
+  // In such a case, the meta variable should be assigned the difference between the left hand side and the literal
+  // effects on the right. This is to accomodate the common use case when type checking handlers, where otherEffects
+  // is left out as a meta variable.
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))

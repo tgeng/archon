@@ -522,13 +522,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param parameter
     * @param parameterBinding
     * @param parameterDisposer
-    *   This is invoked by Continuation.dispose on continuations created by parent handlers. In other words, it's to
-    *   clean up the parameter if a parent handler (whose effect is captured by outputEffects) decides to abort.
-    *   Therefore, it's needed if the otherEffect have continuation usage UAff.
+    *   This is invoked by Continuation.dispose on continuations created by parent handlers or this handler. In other
+    *   words, it's to clean up the parameter when computation under this handler decides to abort (by calling some
+    *   aborting operation). Therefore, it's not needed if the inputEffects have continuation usage URel or U1 (which
+    *   means the handler will never need to be aborted) or if the parameter usage is U0, UAff, or UAny (which means the
+    *   parameter does not need to be explicitly cleaned up).
     * @param parameterReplicator
-    *   This is invoked by Continuation.replicate on continuatins created by parent handlrs. In other words, it's to
-    *   replicate the parameter if a parent handler (whose effect is captured by outputEffects) decides to invoke a
-    *   continuation multiple times. Therefore, it's needed if the otherEffect have continuation usage URel, UAny.
+    *   This is invoked by Continuation.replicate on continuations created by parent handlers or this handler. In other
+    *   words, it's to replicate the parameter when computation under this handler features non-deterministic behavior
+    *   (by calling some non-deterministic operation). Therefore, it's not needed if the inputEffects have continuation
+    *   usage UAff or U1 (which means the handler is never non-deterministic) or if the parameter usage is U0, URel or
+    *   UAny (which means the parameter does not need to be explicitly replicated).
     * @param transform
     *   The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
     *   where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var 0)`
@@ -540,7 +544,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   - a continuation parameter of type `declared operation output type -> outputType` and outputs `outputType`
     * @param input
     * @param inputBinding
-    * @param transformBoundName
     * @param handlersBoundNames
     * @param sourceInfo
     */

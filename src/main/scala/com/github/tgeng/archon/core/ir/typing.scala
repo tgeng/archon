@@ -1488,14 +1488,41 @@ def checkHandler
     outputUsage <- outputUsage.normalized
     (outputType, _) <- checkIsType(h.outputType)
     (parameterType, _) <- checkIsType(h.parameterBinding.ty)
-    (parameterUsage, _) <- checkType(h.parameterBinding.usage, UsageType())
+    // parameter binding usage dictates how much resources the handler needs when consuming the parameter
+    (parameterBindingUsage, _) <- checkType(h.parameterBinding.usage, UsageType())
     (parameter, rawParameterUsages) <- checkType(h.parameter, parameterType)
-    parameterUsages = rawParameterUsages * parameterUsage
+    parameterUsages = rawParameterUsages * parameterBindingUsage
+    (inputTy, _) <- checkIsType(h.inputBinding.ty)
+    // Unlike parameter, input is a computation and hence only executed linearly. The input binding usage is simply a
+    // requirement on the final return type of the input computation.
+    (inputBindingUsage, _) <- checkType(h.inputBinding.usage, UsageType())
+    inputEffects <- EffectsUnion(eff, otherEffects).normalized
+    (input, inputUsages) <- checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
+    inputEffectsContinuaionUsage <- getEffectsContinuationUsage(inputEffects)
+    parameterDisposerUsages <- h.parameterDisposer match
+      case Some(parameterDisposer) => ???
+      case None =>
+        (inputEffectsContinuaionUsage, parameterBindingUsage) match
+          case (UsageLiteral(effUsage), UsageLiteral(paramUsage)) if effUsage <= Usage.URel || paramUsage >= Usage.U0 =>
+            Right(Usages.zero)
+          case _ => Left(ExpectParameterDisposer(h))
+    parameterReplicatorUsages <- h.parameterReplicator match
+      case Some(parameterReplicator) => ???
+      case None =>
+        (inputEffectsContinuaionUsage, parameterBindingUsage) match
+          case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
+            if effUsage <= Usage.UAff || paramUsage >= Usage.URel || paramUsage == Usage.U0 =>
+            Right(Usages.zero)
+          case _ => Left(ExpectParameterReplicator(h))
   yield ???
 
-private def checkEffectDisjointUnion
-  (effComponent1: VTerm, effComponent2: VTerm, effUnion: VTerm)
-  : Either[IrError, Unit] = ???
+private def getEffectsContinuationUsage
+  (effects: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, VTerm] = ???
+
 // val eff = h.eff
 // val parameter = h.parameter
 // val parameterBinding = h.parameterBinding

@@ -101,3 +101,5 @@ enum IrError extends HasException:
   case NotCSubtype(sub: CTerm, sup: CTerm)
   case CannotFindCTypeUnion(a: CTerm, b: CTerm)
   case CannotFindVTypeUnion(a: VTerm, b: VTerm)
+  case ExpectParameterDisposer(h: CTerm.Handler)
+  case ExpectParameterReplicator(h: CTerm.Handler)
