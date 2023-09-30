@@ -24,8 +24,7 @@ enum IrError extends HasException:
   case ReductionStuck(stuckTerm: CTerm)
   case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case UninitializedCell(stuckTerm: CTerm)
-  case MissingHandlerImplementation(expectedOperations: Set[QualifiedName], handler: SourceInfo)
-  case UnknownHandlerImplementation(unknownOperations: Set[QualifiedName], handler: SourceInfo)
+  case HandlerOperationsMismatch(handler: CTerm.Handler, expected: Set[QualifiedName], actual: Set[QualifiedName])
   case NotVSubsumption
     (
       sub: VTerm,

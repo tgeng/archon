@@ -199,6 +199,7 @@ private final class StackMachine
                 operation.continuationUsage match
                   case ContinuationUsage(U1, ControlMode.Simple) =>
                     preConstructedTerm = Some(reconstructTermFromStack(pc))
+                    // TODO[P1]: redo the index with a HMAT instead so trimming is not needed.
                     // Remove all index into handlers between the matching handler and the current tip so that the
                     // corresponding operation handler implementation can run as if there are no inbetween handlers.
                     trimHandlerIndex(handlerIdx)

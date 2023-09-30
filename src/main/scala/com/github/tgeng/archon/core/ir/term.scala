@@ -537,11 +537,20 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
     *   where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var 0)`
     * @param handlers
-    *   All handler implementations declared by the effect. Each handler is essentially a function body that takes the
-    *   following arguments
-    *   - handler parameter
-    *   - all declared parameters
-    *   - a continuation parameter of type `declared operation output type -> outputType` and outputs `outputType`
+    *   All handler implementations declared by the effect. Each handler is essentially a function body that takes some
+    *   parameters and return a value, depending on the continuation usage of the operation.
+    *   - complex
+    *     - handler parameter
+    *     - all parameters declared in the operation
+    *     - a continuation taking in a `declared operation output type -> outputType` and outputs `outputType`
+    *     - return output type matching the handler output
+    *   - simple and linear
+    *     - handler parameter
+    *     - all parameters declared in the operation
+    *     - return pair of handler parameter and the output type declared in the operation
+    *   - simple and exceptional
+    *     - all parameters declared in the operation
+    *     - return output type matching the handler output
     * @param input
     * @param inputBinding
     * @param handlersBoundNames

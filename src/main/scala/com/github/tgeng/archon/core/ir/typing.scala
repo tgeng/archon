@@ -24,6 +24,7 @@ import IndentPolicy.*
 import DelimitPolicy.*
 import scala.collection.immutable.LazyList.cons
 import UnsolvedMetaVariableConstraint.*
+import z3.scala.dsl.Eq
 
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
@@ -1516,6 +1517,12 @@ def checkHandler
     effs <- eff match
       case Effects(effs, s) if s.isEmpty => Right(effs)
       case _                             => Left(EffectTermTooComplex(eff))
+    operations = effs.flatMap(e => Σ.getOperations(e._1).map(op => (e._1 / op.name, e._2, op)))
+    _ <-
+      val expectedOperatonNames = operations.map(_._1)
+      val actualOperationNames = h.handlers.keySet
+      if expectedOperatonNames == actualOperationNames then Right(())
+      else Left(HandlerOperationsMismatch(h, expectedOperatonNames, actualOperationNames))
     (otherEffects, _) <- checkType(h.otherEffects, EffectsType())
     otherEffects <- otherEffects.normalized
     (outputEffects, _) <- checkType(h.outputEffects, EffectsType())
@@ -1533,6 +1540,7 @@ def checkHandler
     // Unlike parameter, input is a computation and hence only executed linearly. The input binding usage is simply a
     // requirement on the final return type of the input computation.
     (inputBindingUsage, _) <- checkType(h.inputBinding.usage, UsageType())
+    inputBinding = Binding(inputTy, inputBindingUsage)(h.inputBinding.name)
     inputEffects <- EffectsUnion(eff, otherEffects).normalized
     (input, inputUsages) <- checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
     inputEffectsContinuaionUsage <- getEffectsContinuationUsage(inputEffects)
@@ -1542,7 +1550,7 @@ def checkHandler
           (parameterDisposerEffects, _) <- checkType(Auto(), EffectsType(UsageLiteral(Usage.UAff), ControlMode.Simple))
           (parameterDisposer, parameterDisposerUsages) <- checkType(
             parameterDisposer,
-            F(DataType(Builtins.UnitQn, Nil), parameterDisposerEffects),
+            F(DataType(Builtins.UnitQn, Nil), parameterDisposerEffects).weakened,
           )(using Γ :+ parameterBinding)
           parameterDisposerUsages <- verifyUsages(parameterDisposerUsages, parameterBinding :: Nil)
         yield (parameterDisposerUsages, parameterDisposerEffects)
@@ -1552,13 +1560,46 @@ def checkHandler
             Right(Usages.zero, Total())
           case _ => Left(ExpectParameterDisposer(h))
     (parameterReplicatorUsages, parameterReplicatorEffects) <- h.parameterReplicator match
-      case Some(parameterReplicator) => ???
+      case Some(parameterReplicator) =>
+        for
+          (parameterReplicatorEffects, _) <- checkType(
+            Auto(),
+            EffectsType(UsageLiteral(Usage.UAff), ControlMode.Simple),
+          )
+          (parameterReplicator, parameterReplicatorUsages) <- checkType(
+            parameterReplicator,
+            F(
+              DataType(
+                Builtins.PairQn,
+                List(
+                  LevelUpperBound(),
+                  EqDecidabilityLiteral(EqDecidability.EqUnknown),
+                  parameterBindingUsage,
+                  parameterType,
+                  parameterBindingUsage,
+                  parameterType,
+                ),
+              ),
+              parameterReplicatorEffects,
+            ).weakened,
+          )(using Γ :+ parameterBinding)
+          parameterReplicatorUsages <- verifyUsages(parameterReplicatorUsages, parameterBinding :: Nil)
+        yield (parameterReplicatorUsages, parameterReplicatorEffects)
       case None =>
         (inputEffectsContinuaionUsage, parameterBindingUsage) match
           case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
             if effUsage <= Usage.UAff || paramUsage >= Usage.URel || paramUsage == Usage.U0 =>
             Right(Usages.zero, Total())
           case _ => Left(ExpectParameterReplicator(h))
+    (transform, transformUsages) <- checkType(
+      h.transform,
+      F(outputType, outputEffects, outputUsage).weaken(2, 0),
+    )(using Γ :+ parameterBinding :+ inputBinding)
+    handlerAndUsages <- transpose(operations.map { (qn, effArgs, operation) =>
+      val handler = h.handlers(qn)
+      for _ <- Right(())
+      yield (qn, (???, ???))
+    })
   yield ???
 
 // returned effects should be normalized
