@@ -129,6 +129,8 @@ enum MetaVariable(val context: Context, val ty: CTerm):
   }
 
 enum ResolvedMetaVariable:
+  def ty: CTerm
+
   /** @param substitution:
     *   substitution that converts a term in the context in which this resolution happens to the context of this meta
     *   variable. That is, a term after this substitution can be assigned to the meta variable. Note that, caller must
@@ -146,8 +148,8 @@ enum ResolvedMetaVariable:
       tm: CTerm,
       ty: CTerm,
     )
-  case RGuarded()
-  case RSolved()
+  case RGuarded(ty: CTerm)
+  case RSolved(ty: CTerm)
 import ResolvedMetaVariable.*
 
 class TypingContext
@@ -221,9 +223,7 @@ class TypingContext
     metaVars(index) match
       case Unsolved(context, ty, constraints) =>
         if context.size > elims.size then return None
-        val args = elims.take(context.size).collect { case Elimination.ETerm(t) =>
-          t
-        }
+        val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
         val substitutionCandidate = args.zipWithIndex.collect { case (Var(v), i) =>
           (v, Var(context.size - 1 - i))
         }.toMap
@@ -243,8 +243,12 @@ class TypingContext
           ),
           extraElims,
         )
-      case Solved(context, _, _)     => Some(RSolved(), elims.drop(context.size))
-      case Guarded(context, _, _, _) => Some(RGuarded(), elims.drop(context.size))
+      case Solved(context, ty, _) =>
+        val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
+        Some(RSolved(ty.substLowers(args: _*)), elims.drop(context.size))
+      case Guarded(context, ty, _, _) =>
+        val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
+        Some(RGuarded(ty.substLowers(args: _*)), elims.drop(context.size))
 
   def resolveMetaVariableType(c: CTerm)(using Signature): Option[CTerm] = c match
     case m @ Meta(index) =>
@@ -1670,13 +1674,34 @@ def checkHandler
       .reduce(_ + _),
   )
 
+// Input effects should be type-checked.
 // returned effects should be normalized
 private def getEffectsContinuationUsage
   (effects: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Either[IrError, VTerm] = ???
+  : Either[IrError, VTerm] =
+  for
+    effects <- effects.normalized
+    usage <- ctx.withMetaResolved(effects):
+      case Effects(literal, operands) =>
+        val literalUsages = literal.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
+          Σ.getEffect(qn).continuationUsage.usage | acc
+        }
+        for usages <- transpose(operands.map(getEffectsContinuationUsage))
+        yield UsageJoin(usages + UsageLiteral(literalUsages))
+      case v: Var =>
+        Γ.resolve(v).ty match
+          case EffectsType(continuationUsage, _) => Right(continuationUsage)
+          case _                                 => throw IllegalStateException("type error")
+      case r: ResolvedMetaVariable =>
+        r.ty match
+          case F(EffectsType(continuationUsage, _), _, _) => Right(continuationUsage)
+          case _                                          => throw IllegalStateException("type error")
+      case _ => Right(UsageLiteral(UAny))
+    usage <- usage.normalized
+  yield usage
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[VTerm] = None)
