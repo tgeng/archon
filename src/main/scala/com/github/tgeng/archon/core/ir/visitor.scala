@@ -702,7 +702,7 @@ trait Transformer[C]:
       transformVTerm(handler.otherEffects),
       transformVTerm(handler.outputEffects),
       transformVTerm(handler.outputUsage),
-      transformVTerm(handler.outputType),
+      transformVTerm(handler.outputTy),
       transformVTerm(handler.parameter),
       handler.parameterBinding.map(transformVTerm),
       handler.parameterDisposer.map(t =>

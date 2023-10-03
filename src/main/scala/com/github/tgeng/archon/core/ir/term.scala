@@ -510,13 +510,15 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param outputEffects
     *   otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and operation handler
     *   implementations. This is the effect of each operation handler implementation. This is also the effect of the
-    *   resume call on continuations captured inside handlers implementations. This is also the effect in the type of
-    *   the curret handler being defined. The paramOpsEffects is this with complex effects filtered out.
+    *   resume, dispose, and replicate (strictly speaking the latter two would never perform any complex effects but
+    *   capturing this in the type system would require adding another filtering operation on effects based on control
+    *   mode and that seems to have little benefits as far as I can see) calls on continuations captured inside handlers
+    *   implementations. This is also the effect in the type of the curret handler being defined.
     * @param outputUsage
     *   the usage of the output of the handler. This is also the usage of the resume call on continuations captured
     *   inside handler implementations. This is also the usage of the final returned value in each operation handler
     *   implementation.
-    * @param outputType
+    * @param outputTy
     *   the type of the output of the handler. This is also the type of the resume call on continuations captured inside
     *   handler implementations. This is also the type of the final returned value in each operation handler.
     * @param parameter
@@ -539,17 +541,17 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param handlers
     *   All handler implementations declared by the effect. Each handler is essentially a function body that takes some
     *   parameters and return a value, depending on the continuation usage of the operation.
-    *   - complex
-    *     - handler parameter
-    *     - all parameters declared in the operation
-    *     - a continuation taking in a `declared operation output type -> outputType` and outputs `outputType`
-    *     - return output type matching the handler output
     *   - simple and linear
     *     - handler parameter
     *     - all parameters declared in the operation
     *     - return pair of handler parameter and the output type declared in the operation
     *   - simple and exceptional
     *     - all parameters declared in the operation
+    *     - return output type matching the handler output
+    *   - complex
+    *     - handler parameter
+    *     - all parameters declared in the operation
+    *     - a continuation taking in a `declared operation output type -> outputType` and outputs `outputType`
     *     - return output type matching the handler output
     * @param input
     * @param inputBinding
@@ -562,7 +564,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       otherEffects: VTerm,
       outputEffects: VTerm,
       outputUsage: VTerm,
-      outputType: VTerm,
+      outputTy: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)

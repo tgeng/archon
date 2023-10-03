@@ -632,7 +632,7 @@ private def processStackEntryForDisposerCall(input: CTerm)(entry: CTerm)(using S
       h.copy(
         input = input,
         outputUsage = UsageLiteral(Usage.UAny),
-        outputType = DataType(Builtins.UnitQn, Nil),
+        outputTy = DataType(Builtins.UnitQn, Nil),
         // weakened because transform also takes a output value. But for disposer calls this
         // value is always unit and ignored by the parameterDisposer.
         transform = h.parameterDisposer match
