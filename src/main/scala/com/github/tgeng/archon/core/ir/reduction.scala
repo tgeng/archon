@@ -28,7 +28,13 @@ extension [T](a: mutable.ArrayBuffer[T])
   def pushAll(ts: Iterable[T]) = a.addAll(ts)
 
 private case class ReplicationState
-  (currentHandler: Handler, baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm)
+  (
+    currentHandler: Handler,
+    baseStackSize: Nat,
+    continuationTerm1: CTerm,
+    continuationTerm2: CTerm,
+    continuationUsage: Usage,
+  )
 
 private case class SetHandlerParameter(handlerIndex: Nat)
 
@@ -83,7 +89,7 @@ private final class StackMachine
         else
           stack.pop() match
             case c: CTerm => run(substHole(c, pc), true)
-            case ReplicationState(handler, baseStackSize, continuationTerm1, continuationTerm2) =>
+            case ReplicationState(handler, baseStackSize, continuationTerm1, continuationTerm2, continuationUsage) =>
               pc match
                 case Return(Con(name, param1 :: param2 :: Nil)) if name == n"MkPair" =>
                   replicate(
@@ -94,6 +100,7 @@ private final class StackMachine
                     handler.copy(parameter = param1, input = continuationTerm2)(
                       handler.handlersBoundNames,
                     ),
+                    continuationUsage,
                   )
                 case _ => throw IllegalStateException("type error")
             case SetHandlerParameter(handlerIndex) =>
@@ -229,7 +236,7 @@ private final class StackMachine
                         gn"disposeResult",
                       ),
                     )
-                  case ContinuationUsage(_, ControlMode.Complex) =>
+                  case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
                     val allOperationArgs = effArgs ++ args
                     val tip = CapturedContinuationTip(
                       F(
@@ -248,13 +255,13 @@ private final class StackMachine
                         case _ => throw IllegalStateException("type error")
                     stack.dropRightInPlace(stack.size - handlerIdx)
                     trimHandlerIndex()
-                    val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler]))
+                    val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
                     Right(opHandler.substLowers(handler.parameter +: args :+ continuation: _*))
                   case _ => throw IllegalStateException("bad continuation type for operations")
             yield r) match
               case Right(pc) => run(pc)
               case Left(e)   => Left(e)
-      case Continuation(continuationTerm) =>
+      case Continuation(continuationTerm, continuationUsage) =>
         def getContinuationTermWithNewParameter(param: VTerm) = continuationTerm.copy(parameter = param)(
           continuationTerm.handlersBoundNames,
         )
@@ -287,7 +294,7 @@ private final class StackMachine
               case t          => Some(t)
             stack.pushAll(stackToDuplicate)
             val tip = stack.pop().asInstanceOf[CapturedContinuationTip]
-            replicate(baseStackHeight, tip, tip)
+            replicate(baseStackHeight, tip, tip, continuationUsage)
           case _ => throw IllegalArgumentException("type error")
       case h: Handler =>
         h.eff.normalized match
@@ -311,7 +318,7 @@ private final class StackMachine
     */
   @tailrec
   private def replicate
-    (baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm)
+    (baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm, continuationUsage: Usage)
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
@@ -324,8 +331,8 @@ private final class StackMachine
             List(
               // This is safe because the continuationTerm1 and continuationTerm2 are both from the term as the index
               // value of baseStackSize, which is the bottom handler in the original captured continuation.
-              Thunk(Continuation(continuationTerm1.asInstanceOf[Handler])),
-              Thunk(Continuation(continuationTerm2.asInstanceOf[Handler])),
+              Thunk(Continuation(continuationTerm1.asInstanceOf[Handler], continuationUsage)),
+              Thunk(Continuation(continuationTerm2.asInstanceOf[Handler], continuationUsage)),
             ),
           ),
         ),
@@ -337,12 +344,14 @@ private final class StackMachine
             baseStackSize,
             t.copy(t = continuationTerm1)(t.boundName),
             t.copy(t = continuationTerm2)(t.boundName),
+            continuationUsage,
           )
         case t: Redex =>
           replicate(
             baseStackSize,
             t.copy(t = continuationTerm1),
             t.copy(t = continuationTerm2),
+            continuationUsage,
           )
         case h: Handler =>
           h.parameterReplicator match
@@ -353,6 +362,7 @@ private final class StackMachine
                   baseStackSize,
                   continuationTerm1,
                   continuationTerm2,
+                  continuationUsage,
                 ),
               )
               run(parameterReplicator.substLowers(h.parameter))
@@ -361,6 +371,7 @@ private final class StackMachine
                 baseStackSize,
                 h.copy(input = continuationTerm1)(h.handlersBoundNames),
                 h.copy(input = continuationTerm2)(h.handlersBoundNames),
+                continuationUsage,
               )
         case _ => throw IllegalStateException("type error")
 

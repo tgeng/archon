@@ -499,7 +499,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   and the computation right after the corresopnding handler operation (the tip of the stack, which must be a term
     *   of type `ContinuationHole`.)
     */
-  case Continuation(continuationTerm: Handler) extends CTerm(SiEmpty)
+  case Continuation(continuationTerm: Handler, continuationUsage: Usage) extends CTerm(SiEmpty)
 
   /** @param eff
     *   Handle general term here instead of a single effect. During type checking it will fail if this term is not

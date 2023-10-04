@@ -1128,8 +1128,40 @@ def inferType
                   ),
                   effUsages + argsUsages,
                 )
-      case c @ Continuation(handler) => ??? // TODO[P0]
-      case h: Handler                => checkHandler(h, None)
+      case c @ Continuation(handler, continuationUsage) =>
+        def findTip(c: CTerm): CapturedContinuationTip = c match
+          case c: CapturedContinuationTip => c
+          case l: Let                     => findTip(l)
+          case h: Handler                 => findTip(h.input)
+          case r: Redex                   => findTip(r.t)
+          case _                          => throw IllegalStateException("impossible term")
+        val CapturedContinuationTip(F(resultTy, _, resultUsage)) = findTip(handler)
+        for
+          (checkedHandler, outputTy, handlerUsages) <- inferType(handler)
+          handler = checkedHandler.asInstanceOf[Handler]
+          paramLevel <- inferLevel(handler.parameterBinding.ty)
+          resultLevel <- inferLevel(resultTy)
+          outputLevel <- inferLevel(outputTy)
+          continuationLevel <- LevelMax(paramLevel, resultLevel, outputLevel).normalized
+        yield (
+          Continuation(handler, continuationUsage),
+          RecordType(
+            Builtins.ContinuationQn,
+            List(
+              continuationLevel,
+              UsageLiteral(continuationUsage),
+              handler.parameterBinding.usage,
+              handler.parameterBinding.ty,
+              resultUsage,
+              resultTy,
+              handler.outputEffects,
+              handler.outputUsage,
+              handler.outputTy,
+            ),
+          ),
+          handlerUsages,
+        )
+      case h: Handler => checkHandler(h, None)
   yield r
 
 private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): VTerm =

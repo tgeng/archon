@@ -32,8 +32,8 @@ object Renamer extends Visitor[RenamerContext, Unit]:
   def rename(tm: CTerm)(using Γ: Context)(using Σ: Signature): Unit =
     doRename(visitCTerm(tm))
 
-  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit = ???
-  // doRename(visitTelescope(t))
+  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit =
+    doRename(visitTelescope(t))
 
   private def createRenamerContext(using Γ: Context) =
     val ctx = RenamerContext()

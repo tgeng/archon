@@ -694,7 +694,7 @@ trait Transformer[C]:
     )(using operationCall.sourceInfo)
 
   def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
-    Continuation(transformHandler(continuation.continuationTerm))
+    Continuation(transformHandler(continuation.continuationTerm), continuation.continuationUsage)
 
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
     Handler(
