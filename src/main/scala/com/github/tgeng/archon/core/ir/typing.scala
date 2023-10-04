@@ -355,6 +355,8 @@ class TypingContext
               if newConstraints.isEmpty then assignValue(index, value)
               else updateGuarded(index, new Guarded(context, ty, value, newConstraints))
             case Left(e) => break(Left(e))
+        // TODO[P0]: we probably want to also assign values to bounded unsolved meta variables. Also, it may make sense
+        // to pass in a variable that controls when to solve those to allow more fined-grained controls.
         case _ => // do nothing
     solveConstraints(constraints)
 
@@ -373,10 +375,15 @@ class TypingContext
 
     def visitConstraints(constraints: Set[Constraint])(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
       constraints.flatMap {
-        case Constraint.Conversions(_, lhs, rhs, _) =>
-          lhs.flatMap(visitVTerm) ++ rhs.flatMap(visitVTerm)
-        // TODO[P0]: handle other constraints
-        case _ => ???
+        case Constraint.Conversions(_, lhs, rhs, _)            => lhs.flatMap(visitVTerm) ++ rhs.flatMap(visitVTerm)
+        case Constraint.VConversion(_, lhs, rhs, _)            => visitVTerm(lhs) ++ visitVTerm(rhs)
+        case Constraint.CConversion(_, lhs, rhs, _)            => visitCTerm(lhs) ++ visitCTerm(rhs)
+        case Constraint.VSubType(_, sub, sup)                  => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.CSubType(_, sub, sup)                  => visitCTerm(sub) ++ visitCTerm(sup)
+        case Constraint.EffSubsumption(_, sub, sup)            => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.LevelSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.UsageSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.EqDecidabilitySubsumption(_, sub, sup) => visitVTerm(sub) ++ visitVTerm(sup)
       }
 
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Either[IrError, Set[Constraint]] =
@@ -408,8 +415,18 @@ class TypingContext
             checkEffSubsumption(sub, sup)(using context) match
               case Right(constraints) => result ++= constraints
               case Left(e)            => break(Left(e))
-
-          case _ => ???
+          case Constraint.LevelSubsumption(context, sub, sup) =>
+            checkLevelSubsumption(sub, sup)(using context) match
+              case Right(constraints) => result ++= constraints
+              case Left(e)            => break(Left(e))
+          case Constraint.UsageSubsumption(context, sub, sup) =>
+            checkUsageSubsumption(sub, sup)(using context) match
+              case Right(constraints) => result ++= constraints
+              case Left(e)            => break(Left(e))
+          case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
+            checkEqDecidabilitySubsumption(sub, sup)(using context) match
+              case Right(constraints) => result ++= constraints
+              case Left(e)            => break(Left(e))
       Right(result.toSet)
 
   inline def trace[L, R]
