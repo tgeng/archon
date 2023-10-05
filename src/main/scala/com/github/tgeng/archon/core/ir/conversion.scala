@@ -39,15 +39,15 @@ def checkIsConvertible
       left <- left.normalized
       right <- right.normalized
       r <- (left, right, ty) match
-        case (_, _, _) if left == right                                      => Right(Set.empty)
+        case (_, _, _) if left == right                                                   => Right(Set.empty)
         case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType(_))) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if operands1.exists((v, _) => hasCollapse(v)) || operands2.exists(((v, _) => hasCollapse(v)))
+          if operands1.exists((v, _) => isMeta(v)) || operands2.exists(((v, _) => isMeta(v)))
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_, _))) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if operands1.exists(hasCollapse) || operands2.exists(hasCollapse)
+          if operands1.exists(isMeta) || operands2.exists(isMeta)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (
@@ -56,7 +56,7 @@ def checkIsConvertible
             Some(UsageType(_)),
           ) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if u.distinctOperands.exists(hasCollapse)
+          if u.distinctOperands.exists(isMeta)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (
@@ -65,7 +65,7 @@ def checkIsConvertible
             Some(UsageType(_)),
           ) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if u.distinctOperands.exists(hasCollapse)
+          if u.distinctOperands.exists(isMeta)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (Type(upperBound1), Type(upperBound2), _) =>

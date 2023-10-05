@@ -424,7 +424,7 @@ def checkUsageSubsumption
     // computation ends up being assigned values that are part of sub
     // Also, if sub contains stuck computation, it's possible for sub to end up including arbitrary usage terms and
     // hence we can't decide subsumption yet.
-    if spuriousOperands.forall(hasCollapse) || operands1.exists(hasCollapse) then
+    if spuriousOperands.forall(isMeta) || operands1.exists(isMeta) then
       Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
     else Left(NotUsageSubsumption(sub, sup))
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
@@ -463,8 +463,8 @@ def checkUsageSubsumption
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case _ =>
-    if hasCollapse(sub) || hasCollapse(sup) then
-      // We can't decide if the term contains stuck computation underneath.
+    if isMeta(sub) || isMeta(sup) then
+      // We can't decide if the terms are unsolved.
       Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
     else Left(NotUsageSubsumption(sub, sup))
 
@@ -474,35 +474,22 @@ private def checkEffSubsumption
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, Set[Constraint]] = check2(sub, sup):
-  case (
-      sub: VTerm,
-      Effects(literals2, unionOperands2),
-    ) =>
-    // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
-    val (literals1, unionOperands1) = sub match
-      case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
-      case v: VTerm                           => (Set.empty, Set(v))
-    val spuriousOperands = unionOperands1 -- unionOperands2
-    if spuriousOperands.isEmpty && literals1.subsetOf(literals2) then Right(Set.empty)
-    else
-    // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
-    // ends up being assigned values that are part of sup
-    // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary effects and hence
-    // we can't decide subsumption yet.
-    if spuriousOperands.forall(hasCollapse) || unionOperands2.exists(hasCollapse) then
-      Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
-    else Left(NotEffectSubsumption(sub, sup))
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
   case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) => Right(Set.empty)
-  // TODO[P0]: handle the case where the left hand side contains a single meta variable which is the right hand side.
-  // In this case, all the other parts on the left should be added as lower bound to the meta variable. This case is
-  // useful in solving effects in operation implementations in handlers, where the continuation carries the same type
-  // as the final return type of the handler.
-
-  // TODO[P0]: handle the case where the right hand side contains a single meta variable and some other literal effects.
-  // In such a case, the meta variable should be assigned the difference between the left hand side and the literal
-  // effects on the right. This is to accomodate the common use case when type checking handlers, where otherEffects
-  // is left out as a meta variable.
+  // The case where the left hand side contains a meta variable which is the right hand side. In this case, all the
+  // other parts on the left should be added as lower bound to the meta variable. This case is useful in solving effects
+  // in operation implementations in handlers, where the continuation carries the same type as the final return type of
+  // the handler.
+  case (Effects(literal, operands), u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _))
+    if operands.contains(Collapse(tm)) =>
+    val otherOperands = operands - Collapse(tm)
+    for newLowerBound <- c match
+        case UmcNothing => Right(Effects(literal, otherOperands))
+        case UmcEffSubsumption(existingLowerBound) =>
+          EffectsUnion(existingLowerBound, Effects(literal, otherOperands)).normalized
+    yield
+      ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
+      Set.empty
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
@@ -525,7 +512,38 @@ private def checkEffSubsumption
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
       case _                                          => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
-  case _                                                  => Left(NotEffectSubsumption(sub, sup))
+  case (_, Effects(literals2, unionOperands2))            =>
+    // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
+    val (literals1, unionOperands1) = sub match
+      case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
+      case v: VTerm                           => (Set.empty, Set(v))
+    val spuriousOperands = unionOperands1 -- unionOperands2
+    val spuriousLiterals = literals1 -- literals2
+    val metaOperands2 = unionOperands2.filter(isMeta)
+    if spuriousOperands.isEmpty && literals1.subsetOf(literals2) then Right(Set.empty)
+    else if metaOperands2.size == 1 then
+      // The case where the right hand side contains a single meta variable and some other stuff.
+      // In such a case, the meta variable should be assigned the difference between the left hand side and the literal
+      // effects on the right. This is to accomodate the common use case when type checking handlers, where otherEffects
+      // is left out as a meta variable.
+      ctx.withMetaResolved(metaOperands2.head):
+        case u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _) =>
+          for newLowerBound <- c match
+              case UmcNothing => Right(Effects(spuriousLiterals, spuriousOperands))
+              case UmcEffSubsumption(existingLowerBound) =>
+                EffectsUnion(existingLowerBound, Effects(spuriousLiterals, spuriousOperands)).normalized
+          yield
+            ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
+            Set.empty
+        case _ => Left(NotEffectSubsumption(sub, sup))
+    // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
+    // ends up being assigned values that are part of sup
+    // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary effects and hence
+    // we can't decide subsumption yet.
+    else if spuriousOperands.forall(isMeta) || unionOperands2.exists(isMeta) then
+      Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
+    else Left(NotEffectSubsumption(sub, sup))
+  case _ => Left(NotEffectSubsumption(sub, sup))
 
 /** Checks if l1 is smaller than l2.
   */
@@ -547,7 +565,7 @@ private def checkLevelSubsumption
     // ends up being assigned small levels
     // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary large level and
     // hence we can't decide subsumption yet.
-    if spuriousOperands.keys.forall(hasCollapse) || operands2.keys.exists(hasCollapse) then
+    if spuriousOperands.keys.forall(isMeta) || operands2.keys.exists(isMeta) then
       Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
     else Left(NotLevelSubsumption(sub, sup))
   // Handle the special case that the right hand side simply contains the left hand side as an operand.

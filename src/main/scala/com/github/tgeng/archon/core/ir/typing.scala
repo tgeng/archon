@@ -1890,13 +1890,10 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
     case Some(l) => Left(l)
     case _       => Right(())
 
-private object CollapseFinder extends Visitor[Unit, Boolean]:
-  override def combine(rs: Boolean*)(using ctx: Unit)(using Σ: Signature): Boolean =
-    rs.exists(b => b)
-  override def visitCollapse(collapse: Collapse)(using ctx: Unit)(using Σ: Signature): Boolean =
-    true
-
-def hasCollapse(t: VTerm)(using Σ: Signature): Boolean = CollapseFinder.visitVTerm(t)(using ())
+def isMeta(t: VTerm): Boolean = t match
+  case Collapse(Redex(Meta(_), _)) => true
+  case Collapse(Meta(_)) => true
+  case _ => false
 
 private def extractDistinctArgVars(args: Seq[VTerm]): Option[List[Nat]] =
   val argVars = args.collect { case v: Var => v.idx }
