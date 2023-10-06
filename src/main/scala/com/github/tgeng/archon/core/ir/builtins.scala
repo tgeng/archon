@@ -18,7 +18,7 @@ private case class SimpleSignature
     caseTrees: Map[QualifiedName, CaseTree] = Map(),
     operations: Map[QualifiedName, IndexedSeq[Operation]] = Map(),
   )
-  extends DerivedSignature:
+  extends Signature:
 
   override type S = SimpleSignature
 
@@ -35,11 +35,11 @@ private case class SimpleSignature
   override def addOperation(qn: QualifiedName, o: Operation): SimpleSignature =
     copy(operations = operations + (qn -> (operations.getOrElse(qn, IndexedSeq()) :+ o)))
 
-  override def getDeclaredDefinitionOption(qn: QualifiedName): Option[Definition] =
+  override def getDefinitionOption(qn: QualifiedName): Option[Definition] =
     declarations.get(qn).collect { case d: Definition => d }
-  override def getDeclaredClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     clauses.get(qn)
-  override def getDeclaredCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
+  override def getCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
     caseTrees.get(qn)
   override def getDataOption(qn: QualifiedName): Option[Data] =
     declarations.get(qn).collect { case d: Data => d }
@@ -124,8 +124,8 @@ object Builtins:
   import EqDecidability.*
   import CaseTree.*
 
-  private def binding(name: Name, t: VTerm, usage: VTerm = UsageLiteral(U1)): Binding[CTerm] =
-    Binding(Return(t), Return(usage))(name)
+  private def binding(name: Name, ty: VTerm, usage: VTerm = UsageLiteral(U1)): Binding[CTerm] =
+    Binding(Return(ty, uAny), Return(usage, uAny))(name)
 
   private val L0 = LevelLiteral(0)
 
@@ -274,7 +274,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(Type(Top(Var(0))))),
+          rhs = Some(Return(Type(Top(Var(0))), uAny)),
         ),
       ),
     ),
@@ -293,7 +293,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(Type(Var(0)))),
+          rhs = Some(Return(Type(Var(0)), uAny)),
         ),
       ),
     ),
@@ -308,7 +308,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(Top(Var(0)))),
+          rhs = Some(Return(Top(Var(0)), uAny)),
         ),
       ),
     ),
@@ -324,7 +324,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(EffectsType())),
+          rhs = Some(Return(EffectsType(), uAny)),
         ),
       ),
     ),
@@ -340,7 +340,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(LevelType())),
+          rhs = Some(Return(LevelType(), uAny)),
         ),
       ),
     ),
@@ -351,7 +351,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(UsageType())),
+          rhs = Some(Return(UsageType(), uAny)),
         ),
       ),
     ),
@@ -430,7 +430,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(EffectsUnion(Var(1), Var(0)))),
+          rhs = Some(Return(EffectsUnion(Var(1), Var(0)), uAny)),
         ),
       ),
     ),
@@ -447,7 +447,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(LevelSuc(Var(0)))),
+          rhs = Some(Return(LevelSuc(Var(0)), uAny)),
         ),
       ),
     ),
@@ -466,7 +466,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(LevelMax(Var(1), Var(0)))),
+          rhs = Some(Return(LevelMax(Var(1), Var(0)), uAny)),
         ),
       ),
     ),
@@ -477,7 +477,7 @@ object Builtins:
         PreClause(
           boundNames = Nil,
           lhs = Nil,
-          rhs = Some(Return(Total())),
+          rhs = Some(Return(Total(), uAny)),
         ),
       ),
     ),

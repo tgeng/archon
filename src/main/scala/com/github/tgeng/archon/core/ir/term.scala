@@ -365,6 +365,11 @@ object VTerm:
   def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, Map(ts.map(_ -> 0): _*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
+  val u0 = VTerm.UsageLiteral(Usage.U0)
+  val u1 = VTerm.UsageLiteral(Usage.U1)
+  val uAff = VTerm.UsageLiteral(Usage.UAff)
+  val uRel = VTerm.UsageLiteral(Usage.URel)
+  val uAny = VTerm.UsageLiteral(Usage.UAny)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be executed by the type
     * checker.
@@ -441,8 +446,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       usage: VTerm = VTerm.UsageLiteral(Usage.U1),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
-  // TODO[P0]: add usage here
-  case Return(v: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case Return(v: VTerm, usage: VTerm)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   // Note that we do not have DLet like [0]. Instead we use inductive type and thunk to simulate
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.

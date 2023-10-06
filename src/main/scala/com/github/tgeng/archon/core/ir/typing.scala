@@ -589,11 +589,7 @@ def checkRecordField
     Σ.getRecordOption(qn) match
       case None => Left(MissingDeclaration(qn))
       case Some(record) =>
-        given Context =
-          record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(
-            record,
-          )
-
+        given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
         for
           (ty, _) <- checkIsCType(field.ty, Some(record.level.weakened))
           _ <-
@@ -755,10 +751,13 @@ def inferType
     case Collapse(cTm) =>
       for
         case (cTm, cTy, usage) <- inferType(cTm)
-        case (vTy, u) <- cTy match
-          case F(vTy, eff, u) if isTotal(cTm, Some(cTy)) => Right((vTy, u))
-          case F(_, _, _)                                => Left(CollapsingEffectfulTerm(cTm))
-          case _                                         => Left(NotCollapsable(cTm))
+        case vTy <- cTy match
+          case F(vTy, eff, u) if isTotal(cTm, Some(cTy)) =>
+            checkUsageSubsumption(u, u1).flatMap(ctx.solve) match
+              case Right(constraints) if constraints.isEmpty => Right(vTy)
+              case _                                         => Left(CollapsingU0Term(cTm))
+          case F(_, _, _) => Left(CollapsingEffectfulTerm(cTm))
+          case _          => Left(NotCollapsable(cTm))
       yield (Collapse(cTm), vTy, usage)
     case U(cty) =>
       for
@@ -1036,9 +1035,9 @@ def inferType
             case Type(_) => Right(CType(newTm, Total()))
             case _       => Left(NotTypeError(vTy))
         yield (newTm, cTyTy, (effUsages + uUsages + vTyUsages))
-      case Return(v) =>
+      case Return(v, usage) =>
         for case (v, vTy, vUsages) <- inferType(v)
-        yield (Return(v), F(vTy, Total()), vUsages)
+        yield (Return(v, usage), F(vTy, Total(), usage), vUsages * usage)
       case tm: Let => checkLet(tm, None)
       case FunctionType(binding, bodyTy, effects) =>
         for
@@ -1197,10 +1196,15 @@ def checkType
   ty,
   tm match
     case Force(v) => checkType(v, U(ty)).map((v, usages) => (Force(v), usages))
-    case Return(v) =>
+    case Return(v, usage) =>
       ty match
-        case F(ty, _, usage) => checkType(v, ty).map((v, usages) => (Return(v), usages * usage))
-        case _               => Left(ExpectFType(ty))
+        case F(ty, _, expectedUsage) =>
+          for
+            (v, usages) <- checkType(v, ty)
+            constraints <- checkUsageSubsumption(usage, expectedUsage).flatMap(ctx.solve)
+            _ <- if constraints.isEmpty then Right(()) else Left(NotUsageSubsumption(usage, expectedUsage))
+          yield (Return(v, usage), usages * usage)
+        case _ => Left(ExpectFType(ty))
     case l: Let     => checkLet(l, Some(ty)).map((v, _, usages) => (v, usages))
     case h: Handler => checkHandler(h, Some(ty)).map((v, _, usages) => (v, usages))
     case _ =>
@@ -1496,8 +1500,6 @@ private def checkLet
       // unrestricted usage. Hence, usage checking would still pass. On the other hand,
       // it's not possible for inlining to create usage out of nowhere.
       def areTUsagesZeroOrUnrestricted: Boolean =
-        val uAny = UsageLiteral(Usage.UAny)
-        val u0 = UsageLiteral(Usage.U0)
         // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
         // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
         tUsages.forall { usage => usage == uAny || usage == u0 }
@@ -1508,7 +1510,7 @@ private def checkLet
         for
           t <- reduce(t)
           newBody = t match
-            case Return(v) => body.substLowers(v)
+            case Return(v, _) => body.substLowers(v)
             case c         => body.substLowers(Collapse(c))
           r <- bodyTy match
             case Some(bodyTy) =>
@@ -1694,6 +1696,7 @@ def checkHandler
         r <-
           given Context = implΓ
           val implOffset = implΓ.size - Γ.size
+          // TODO[P0]: limit effects to be simple for simple operations
           for (impl, usages) <- checkType(
               handler,
               F(outputTy.weaken(implOffset, 0), outputEffects.weaken(implOffset, 0), outputUsage.weaken(implOffset, 0)),
@@ -1804,7 +1807,7 @@ def reduceUsage(usage: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx:
       _ <- checkType(usage, F(UsageType()))
       reduced <- reduce(usage)
       usage <- reduced match
-        case Return(u) => Right(u)
+        case Return(u, _) => Right(u)
         case _ =>
           throw IllegalStateException(
             "type checking has bugs: reduced value of type `F(UsageType())` must be `Return(u)`.",
@@ -1821,7 +1824,7 @@ def reduceVType(vTy: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: T
           for
             reducedTy <- reduce(vTy)
             r <- reducedTy match
-              case Return(vTy) => Right(vTy)
+              case Return(vTy, _) => Right(vTy)
               case _ =>
                 throw IllegalStateException(
                   "type checking has bugs: reduced value of type `F ...` must be `Return ...`.",
@@ -1845,7 +1848,7 @@ def reduceCType(cTy: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: T
             case F(_, eff, _) if isTotal(cTy, Some(cTyTy)) =>
               def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
                 // Automatically promote a SomeVType to F(SomeVType).
-                case Return(vty) => Right(F(vty)(using cTy.sourceInfo))
+                case Return(vty, _) => Right(F(vty)(using cTy.sourceInfo))
                 case Let(t, _, _, _, ctx) =>
                   reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
                 case c =>
@@ -1892,8 +1895,8 @@ def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
 
 def isMeta(t: VTerm): Boolean = t match
   case Collapse(Redex(Meta(_), _)) => true
-  case Collapse(Meta(_)) => true
-  case _ => false
+  case Collapse(Meta(_))           => true
+  case _                           => false
 
 private def extractDistinctArgVars(args: Seq[VTerm]): Option[List[Nat]] =
   val argVars = args.collect { case v: Var => v.idx }

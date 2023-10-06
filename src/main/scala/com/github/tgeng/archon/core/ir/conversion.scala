@@ -113,9 +113,8 @@ def checkIsConvertible
               ).map(_.flatten.toSet)
         case (UsageType(Some(u1)), UsageType(Some(u2)), _) =>
           checkIsConvertible(u1, u2, Some(UsageType()))
-        case (Collapse(c), v, ty) => checkIsConvertible(c, Return(v), ty.map(F(_)))
-        case (v, Collapse(c), ty) => checkIsConvertible(Return(v), c, ty.map(F(_)))
-        case _                    => Left(NotVConvertible(left, right, ty))
+        case (Collapse(c1), Collapse(c2), ty) => checkIsConvertible(c1, c2, ty.map(F(_, u1)))
+        case _                                => Left(NotVConvertible(left, right, ty))
     yield r
 
 /** Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.
@@ -183,10 +182,14 @@ def checkIsConvertible
                     case Some(smallTm) => ctx.assignUnsolved(uBig, smallTm)
                     case None          => Right(Set(Constraint.CConversion(Γ, left, right, ty)))
             case (CapturedContinuationTip(ty1), CapturedContinuationTip(ty2)) => checkIsConvertible(ty1, ty2, None)
-            case (Return(v1), Return(v2)) =>
+            case (Return(v1, usage1), Return(v2, usage2)) =>
               ty match
-                case Some(F(ty, _, _)) => checkIsConvertible(v1, v2, Some(ty))
-                case _                 => throw IllegalStateException("should have been checked to be a F type")
+                case Some(F(ty, _, _)) =>
+                  for
+                    constraints1 <- checkIsConvertible(usage1, usage2, Some(UsageType()))
+                    constraints2 <- checkIsConvertible(v1, v2, Some(ty))
+                  yield constraints1 ++ constraints2
+                case _ => throw IllegalStateException("should have been checked to be a F type")
             case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
               for
                 effConstraint <- checkIsConvertible(eff1, eff2, Some(EffectsType()))
@@ -250,7 +253,7 @@ def checkIsConvertible
                             Collapse(
                               ctx.addGuarded(
                                 F(binding1.ty.weakened, Total(), binding1.usage.weakened),
-                                Return(Var(0)),
+                                Return(Var(0), u1),
                                 tyConstraint,
                               ),
                             ),

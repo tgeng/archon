@@ -44,7 +44,7 @@ def checkIsSubtype
         Right(Set.empty)
   case (u @ RUnsolved(_, _, UmcVSubtype(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
-      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _                                          => Right(Set(Constraint.VSubType(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _) | (_, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.VSubType(Γ, sub, sup)))
@@ -172,7 +172,7 @@ def checkIsSubtype
                   Collapse(
                     ctx.addGuarded(
                       F(binding1.ty.weakened, Total(), binding1.usage.weakened),
-                      Return(Var(0)),
+                      Return(Var(0), u1),
                       tyConstraint,
                     ),
                   ),
@@ -376,9 +376,9 @@ private def checkEqDecidabilitySubsumption
   case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) | (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
     Right(Set.empty)
   case (u: RUnsolved, EqDecidabilityLiteral(EqDecidability.EqDecidable)) =>
-    ctx.assignUnsolved(u, Return(eqD2))
+    ctx.assignUnsolved(u, Return(eqD2, u1))
   case (EqDecidabilityLiteral(EqDecidability.EqUnknown), u: RUnsolved) =>
-    ctx.assignUnsolved(u, Return(eqD1))
+    ctx.assignUnsolved(u, Return(eqD1, u1))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2)))
   case _ => Left(NotEqDecidabilitySubsumption(eqD1, eqD2))
@@ -449,16 +449,15 @@ def checkUsageSubsumption
             case _ => throw IllegalStateException("type error")
           r <- newUpperBound match
             // If upper bound is already UAny, we know they must take that values.
-            case UsageLiteral(Usage.UAny) =>
-              ctx.assignUnsolved(u, Return(newUpperBound))
+            case UsageLiteral(Usage.UAny) => ctx.assignUnsolved(u, Return(newUpperBound, u1))
             case _ =>
               ctx.updateConstraint(u, UmcUsageSubsumption(newUpperBound))
               Right(Set.empty)
         yield r
   case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
-      case Some(value) if value == existingUpperBound                      => ctx.assignUnsolved(u, Return(value))
-      case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) => ctx.assignUnsolved(u, Return(value))
+      case Some(value) if value == existingUpperBound                      => ctx.assignUnsolved(u, Return(value, u1))
+      case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) => ctx.assignUnsolved(u, Return(value, u1))
       case _ => Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Right(Set(Constraint.UsageSubsumption(Γ, sub, sup)))
@@ -506,10 +505,10 @@ private def checkEffSubsumption
       u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), tm, ty),
       Effects(literals, operands),
     ) if literals.isEmpty && operands.isEmpty =>
-    ctx.assignUnsolved(u, Return(Total()))
+    ctx.assignUnsolved(u, Return(Total(), u1))
   case (u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
-      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _                                          => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
   case (_, Effects(literals2, unionOperands2))            =>
@@ -586,10 +585,10 @@ private def checkLevelSubsumption
       u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty),
       Level(LevelOrder.zero, operands),
     ) if operands.isEmpty =>
-    ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, Map())))
+    ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, Map()), u1))
   case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
-      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value))
+      case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _                                          => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Right(Set(Constraint.LevelSubsumption(Γ, sub, sup)))
   case _                                                  => Left(NotLevelSubsumption(sub, sup))

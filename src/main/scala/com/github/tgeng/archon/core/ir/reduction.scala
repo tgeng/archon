@@ -82,7 +82,7 @@ private final class StackMachine
     pc match
       case Hole | CapturedContinuationTip(_) => throw IllegalStateException()
       // Take a shortcut when returning a collapsable computation
-      case Return(Collapse(c)) => run(c)
+      case Return(Collapse(c), _) => run(c)
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
         if stack.isEmpty then Right(pc)
@@ -91,7 +91,7 @@ private final class StackMachine
             case c: CTerm => run(substHole(c, pc), true)
             case ReplicationState(handler, baseStackSize, continuationTerm1, continuationTerm2, continuationUsage) =>
               pc match
-                case Return(Con(name, param1 :: param2 :: Nil)) if name == n"MkPair" =>
+                case Return(Con(name, param1 :: param2 :: Nil), _) if name == n"MkPair" =>
                   replicate(
                     baseStackSize,
                     handler.copy(parameter = param1, input = continuationTerm1)(
@@ -106,12 +106,15 @@ private final class StackMachine
             case SetHandlerParameter(handlerIndex) =>
               regenerateHandlerIndex(handlerIndex)
               pc match
-                case Return(Con(name, param :: result :: Nil)) if name == n"MkPair" =>
+                case Return(Con(name, param :: result :: Nil), _) if name == n"MkPair" =>
                   val handler = stack(handlerIndex).asInstanceOf[Handler]
                   stack(handlerIndex) = handler.copy(parameter = param)(
                     handler.handlersBoundNames,
                   )
-                  run(Return(result))
+                  // The usage here may not be correct. Technically it should be the usage of the result captured in the
+                  // type of the Pair. But we don't have that information here. Fortunately this information is not
+                  // needed anyway because reduction would substitute the result later.
+                  run(Return(result, uAny))
                 case _ => throw IllegalStateException("type error")
             case _ =>
               throw IllegalStateException(
@@ -172,8 +175,8 @@ private final class StackMachine
           case _ => throw IllegalArgumentException("type error")
       case Let(t, _, _, _, ctx) =>
         t match
-          case Return(v)       => run(ctx.substLowers(v))
-          case _ if reduceDown => throw IllegalArgumentException("type error")
+          case Return(v, usage) => run(ctx.substLowers(v))
+          case _ if reduceDown  => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(t)
@@ -221,7 +224,7 @@ private final class StackMachine
                     // invoke the corresponding operation handler implementation.
                     Right(
                       Let(
-                        capturedStack.foldRight[CTerm](Return(Con(n"MkUnit", Nil))):
+                        capturedStack.foldRight[CTerm](Return(Con(n"MkUnit", Nil), uAny)):
                           case (entry: CTerm, term) =>
                             processStackEntryForDisposerCall(term)(entry) match
                               case Some(t) => t
@@ -282,7 +285,7 @@ private final class StackMachine
             val stackHeight = stack.size
             stack.pushAll(handlerStack)
             regenerateHandlerIndex(stackHeight)
-            run(Return(Con(n"MkUnit", Nil)))
+            run(Return(Con(n"MkUnit", Nil), uAny))
           case proj @ EProj(name) if name == n"replicate" =>
             preConstructedTerm = Some(reconstructTermFromStack(redex(pc, proj)))
             val ETerm(param) = stack.pop(): @unchecked
@@ -303,8 +306,8 @@ private final class StackMachine
             if reduceDown then
               updateHandlerIndex(eff, stack.length)
               h.input match
-                case Return(v) => run(h.transform.substLowers(h.parameter, v))
-                case _         => throw IllegalArgumentException("type error")
+                case Return(v, usage) => run(h.transform.substLowers(h.parameter, v))
+                case _                => throw IllegalArgumentException("type error")
             else
               stack.push(h.copy(eff = eff, input = Hole)(h.handlersBoundNames))
               updateHandlerIndex(eff, stack.length)
@@ -335,6 +338,7 @@ private final class StackMachine
               Thunk(Continuation(continuationTerm2.asInstanceOf[Handler], continuationUsage)),
             ),
           ),
+          u1,
         ),
       )
     else
@@ -419,7 +423,7 @@ extension (c: CTerm)
       override def transformCollapse(c: Collapse)(using ctx: TypingContext)(using Σ: Signature): VTerm = transformCTerm(
         c.cTm,
       ) match
-        case Return(v) => transformVTerm(v)
+        case Return(v, _) => transformVTerm(v)
         case _         => c
 
     transformer.transformCTerm(c) match
@@ -438,7 +442,7 @@ extension (v: VTerm)
       for
         reduced <- Reducible.reduce(cTm)
         r <- reduced match
-          case Return(v) => Right(v)
+          case Return(v, _) => Right(v)
           case stuckC    => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case u: UsageCompound =>
@@ -623,10 +627,7 @@ private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
     (cct: CapturedContinuationTip)
     (using newTip: VTerm)
     (using Σ: Signature)
-    : CTerm =
-    // TODO: pass usage here
-    val usage = cct.ty.usage
-    Return(newTip)
+    : CTerm = Return(newTip, cct.ty.usage)
 
 private def expandTermToStack(term: CTerm)(transform: CTerm => Option[CTerm]): Iterable[CTerm] = term match
   case term: Redex   => transform(term) ++ expandTermToStack(term.t)(transform)
@@ -648,7 +649,7 @@ private def processStackEntryForDisposerCall(input: CTerm)(entry: CTerm)(using S
         // value is always unit and ignored by the parameterDisposer.
         transform = h.parameterDisposer match
           case Some(parameterDisposer) => parameterDisposer.weakened
-          case None                    => Return(Con(n"MkUnit", Nil)),
+          case None                    => Return(Con(n"MkUnit", Nil), uAny),
       )(
         h.handlersBoundNames,
       ),

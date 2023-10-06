@@ -63,6 +63,7 @@ enum IrError extends HasException:
   case NotEqDecidableType(ty: VTerm)
   case NormalizationError(ctm: CTerm)
   case CollapsingEffectfulTerm(ctm: CTerm)
+  case CollapsingU0Term(ctm: CTerm)
   case NotCollapsable(ctm: CTerm)
   case MissingDeclaration(qn: QualifiedName)
   case MissingDefinition(qn: QualifiedName)

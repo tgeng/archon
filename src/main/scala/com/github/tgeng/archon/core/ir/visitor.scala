@@ -644,7 +644,7 @@ trait Transformer[C]:
     )(using f.sourceInfo)
 
   def transformReturn(r: Return)(using ctx: C)(using Σ: Signature): CTerm =
-    Return(transformVTerm(r.v))(using r.sourceInfo)
+    Return(transformVTerm(r.v), transformVTerm(r.usage))(using r.sourceInfo)
 
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(
