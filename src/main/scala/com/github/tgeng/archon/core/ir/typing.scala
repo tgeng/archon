@@ -1511,7 +1511,7 @@ private def checkLet
           t <- reduce(t)
           newBody = t match
             case Return(v, _) => body.substLowers(v)
-            case c         => body.substLowers(Collapse(c))
+            case c            => body.substLowers(Collapse(c))
           r <- bodyTy match
             case Some(bodyTy) =>
               for
@@ -1660,10 +1660,37 @@ def checkHandler
       val paramTys = operation.paramTys.substLowers(effArgs: _*)
       val resultTy = operation.resultTy.substLowers(effArgs: _*)
       val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
-      for
-        implΓ <- operation.continuationUsage match
-          case ContinuationUsage(Usage.U1, ControlMode.Simple) => Right(Γ ++ (parameterBinding +: paramTys))
-          case ContinuationUsage(Usage.U0, ControlMode.Simple) => Right(Γ ++ paramTys)
+      for (impl, usages) <- operation.continuationUsage match
+          case ContinuationUsage(Usage.U1, ControlMode.Simple) =>
+            given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
+            val implOffset = implΓ.size - Γ.size
+            for
+              implTy = F(
+                DataType(
+                  Builtins.PairQn,
+                  List(
+                    Auto(),
+                    Auto(),
+                    parameterBindingUsage.weaken(implOffset, 0),
+                    parameterTy.weaken(implOffset, 0),
+                    resultUsage,
+                    resultTy,
+                  ),
+                ),
+                Auto(),
+                u1,
+              )
+              (implTy, _) <- checkIsCType(implTy)
+              (impl, usages) <- checkType(handler, implTy)
+              // TODO[P0]: check effects are simple
+            yield (impl, usages)
+          case ContinuationUsage(Usage.U0, ControlMode.Simple) =>
+            given implΓ: Context = Γ ++ paramTys
+            val implOffset = implΓ.size - Γ.size
+            checkType(
+              handler,
+              F(outputTy.weaken(implOffset, 0), outputEffects.weaken(implOffset, 0), outputUsage.weaken(implOffset, 0)),
+            )
           case ContinuationUsage(_, ControlMode.Simple) =>
             throw IllegalStateException("bad continuation usage on operation")
           case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
@@ -1673,36 +1700,36 @@ def checkHandler
             val continuationOutputTy = outputTy.weaken(continuationWeakenOffset, 0)
             val continuationOutputEffects = outputEffects.weaken(continuationWeakenOffset, 0)
             val continuationOutputUsage = outputUsage.weaken(continuationWeakenOffset, 0)
-            for
-              paramLevel <- inferLevel(continuationParameterTy)
-              resultLevel <- inferLevel(resultTy)
-              outputLevel <- inferLevel(continuationOutputTy)
-              continuationLevel <- LevelMax(paramLevel, resultLevel, outputLevel).normalized
-              continuationType = RecordType(
-                Builtins.ContinuationQn,
-                List(
-                  continuationLevel,
-                  UsageLiteral(continuationUsage),
-                  parameterBindingUsage.weaken(continuationWeakenOffset, 0),
-                  continuationParameterTy,
-                  resultUsage.weaken(continuationWeakenOffset, 0),
-                  resultTy,
-                  continuationOutputEffects,
-                  continuationOutputUsage,
-                  continuationOutputTy,
-                ),
-              )
-            yield continuationΓ :+ Binding(U(continuationType), UsageLiteral(Usage.U1))(gn"continuation")
-        r <-
-          given Context = implΓ
-          val implOffset = implΓ.size - Γ.size
-          // TODO[P0]: limit effects to be simple for simple operations
-          for (impl, usages) <- checkType(
-              handler,
-              F(outputTy.weaken(implOffset, 0), outputEffects.weaken(implOffset, 0), outputUsage.weaken(implOffset, 0)),
+            val continuationType = RecordType(
+              Builtins.ContinuationQn,
+              List(
+                Auto(),
+                UsageLiteral(continuationUsage),
+                parameterBindingUsage.weaken(continuationWeakenOffset, 0),
+                continuationParameterTy,
+                resultUsage.weaken(continuationWeakenOffset, 0),
+                resultTy,
+                continuationOutputEffects,
+                continuationOutputUsage,
+                continuationOutputTy,
+              ),
             )
-          yield (qn, impl, usages)
-      yield r
+            for
+              (continuationType, _) <- checkIsCType(continuationType)
+              r <-
+                given implΓ: Context =
+                  continuationΓ :+ Binding(U(continuationType), UsageLiteral(Usage.U1))(gn"continuation")
+                val implOffset = implΓ.size - Γ.size
+                checkType(
+                  handler,
+                  F(
+                    outputTy.weaken(implOffset, 0),
+                    outputEffects.weaken(implOffset, 0),
+                    outputUsage.weaken(implOffset, 0),
+                  ),
+                )
+            yield r
+      yield (qn, impl, usages)
     })
   yield (
     Handler(

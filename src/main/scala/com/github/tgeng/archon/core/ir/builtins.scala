@@ -153,9 +153,9 @@ object Builtins:
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
         (binding(n"usage1", UsageType()), Variance.INVARIANT),
-        (binding(n"A1", Top(Var(2), Var(1))), Variance.COVARIANT),
+        (binding(n"A1", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
         (binding(n"usage2", EqDecidabilityType()), Variance.INVARIANT),
-        (binding(n"A2", Top(Var(4), Var(3))), Variance.COVARIANT),
+        (binding(n"A2", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
       ty = F(Type(Top(Var(5), Var(4)))),
       constructors = List(
