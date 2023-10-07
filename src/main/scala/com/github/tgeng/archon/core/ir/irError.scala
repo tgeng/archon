@@ -50,6 +50,7 @@ enum IrError extends HasException:
   case NotContinuationUsageSubsumption(sub: Option[Usage], sup: Option[Usage])
   case NotEffectSubsumption(sub: VTerm, sup: VTerm)
   case NotEffectConvertible(sub: VTerm, sup: VTerm)
+  case ExepctSimpleEffects(effects: VTerm)
   case IllegalVarianceInData
     (
       qn: QualifiedName,

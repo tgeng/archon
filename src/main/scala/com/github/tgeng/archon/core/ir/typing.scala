@@ -335,6 +335,18 @@ class TypingContext
   private def updateGuarded(index: Nat, guarded: Guarded): Unit =
     metaVars(index) = guarded
 
+  def checkSolved
+    (constraints: Either[IrError, Set[Constraint]], error: => IrError)
+    (using Σ: Signature)
+    : Either[IrError, Unit] =
+    for
+      constraints <- constraints
+      r <- solve(constraints).flatMap { constraints =>
+        if constraints.isEmpty then Right(())
+        else Left(error)
+      }
+    yield r
+
   def solve(constraints: Set[Constraint])(using Σ: Signature): Either[IrError, Set[Constraint]] =
     var currentConstraints = constraints
     while (solvedVersion != version) {
@@ -844,26 +856,6 @@ def inferType
         newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
       yield (newTm, LevelType(newTm), usages)
     case Auto() => throw IllegalArgumentException("cannot infer type")
-
-def getEffectsContinuationUsage
-  (effects: Effects)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Either[IrError, VTerm] =
-  effects.normalized.flatMap {
-    case Effects(literal, operands) =>
-      val literal = UsageLiteral(
-        getLiteralEffectsContinuationUsage(effects.literal).usage,
-      )
-      val operands = effects.unionOperands.map {
-        case v: Var => getEffVarContinuationUsage(v)
-        // TODO[P0]: handle meta variable here
-        case _ => UsageLiteral(Usage.UAny)
-      }.toSet
-      UsageJoin(operands + literal).normalized
-    case _ => throw IllegalStateException("Effects should still be Effects after normalization")
-  }
 
 def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): ContinuationUsage =
   effs
@@ -1664,33 +1656,45 @@ def checkHandler
           case ContinuationUsage(Usage.U1, ControlMode.Simple) =>
             given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
             val implOffset = implΓ.size - Γ.size
-            for
-              implTy = F(
-                DataType(
-                  Builtins.PairQn,
-                  List(
-                    Auto(),
-                    Auto(),
-                    parameterBindingUsage.weaken(implOffset, 0),
-                    parameterTy.weaken(implOffset, 0),
-                    resultUsage,
-                    resultTy,
-                  ),
+            val implTy = F(
+              DataType(
+                Builtins.PairQn,
+                List(
+                  Auto(),
+                  Auto(),
+                  parameterBindingUsage.weaken(implOffset, 0),
+                  parameterTy.weaken(implOffset, 0),
+                  resultUsage,
+                  resultTy,
                 ),
-                Auto(),
-                u1,
-              )
+              ),
+              Auto(),
+              u1,
+            )
+            val implOutputEffects = outputEffects.weaken(implOffset, 0)
+            for
               (implTy, _) <- checkIsCType(implTy)
               (impl, usages) <- checkType(handler, implTy)
-              // TODO[P0]: check effects are simple
+              effects <- checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
+              _ <- ctx.checkSolved(
+                checkEffSubsumption(effects, implOutputEffects),
+                NotEffectSubsumption(effects, implOutputEffects),
+              )
             yield (impl, usages)
           case ContinuationUsage(Usage.U0, ControlMode.Simple) =>
             given implΓ: Context = Γ ++ paramTys
             val implOffset = implΓ.size - Γ.size
-            checkType(
-              handler,
-              F(outputTy.weaken(implOffset, 0), outputEffects.weaken(implOffset, 0), outputUsage.weaken(implOffset, 0)),
-            )
+            val implTy = F(outputTy.weaken(implOffset, 0), Auto(), outputUsage.weaken(implOffset, 0))
+            val implOutputEffects = outputEffects.weaken(implOffset, 0)
+            for
+              (implTy, _) <- checkIsCType(implTy)
+              (impl, usages) <- checkType(handler, implTy)
+              effects <- checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
+              _ <- ctx.checkSolved(
+                checkEffSubsumption(effects, implOutputEffects),
+                NotEffectSubsumption(effects, implOutputEffects),
+              )
+            yield (impl, usages)
           case ContinuationUsage(_, ControlMode.Simple) =>
             throw IllegalStateException("bad continuation usage on operation")
           case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
@@ -1781,6 +1785,36 @@ private def getEffectsContinuationUsage
       case _ => Right(UsageLiteral(UAny))
     usage <- usage.normalized
   yield usage
+
+private def checkEffectsAreSimple
+  (effects: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Either[IrError, VTerm] =
+  for
+    effects <- effects.normalized
+    _ <- ctx.withMetaResolved(effects):
+      case Effects(literal, operands) =>
+        if literal.exists { case (qn, _) =>
+            Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Complex
+          }
+        then Left(ExepctSimpleEffects(effects))
+        else
+          for _ <- transpose(operands.map(getEffectsContinuationUsage))
+          yield ()
+      case v: Var =>
+        Γ.resolve(v).ty match
+          case EffectsType(_, ControlMode.Simple)  => Right(())
+          case EffectsType(_, ControlMode.Complex) => Left(ExepctSimpleEffects(effects))
+          case _                                   => throw IllegalStateException("type error")
+      case r: ResolvedMetaVariable =>
+        r.ty match
+          case F(EffectsType(_, ControlMode.Simple), _, _)  => Right(())
+          case F(EffectsType(_, ControlMode.Complex), _, _) => Left(ExepctSimpleEffects(effects))
+          case _                                            => throw IllegalStateException("type error")
+      case _ => Right(UsageLiteral(UAny))
+  yield effects
 
 def checkIsType
   (vTy: VTerm, levelBound: Option[VTerm] = None)
