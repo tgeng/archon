@@ -1472,6 +1472,16 @@ private def checkLet
   val body = tm.ctx
   for
     (ty, _) <- checkIsType(ty)
+    // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages in body can all
+    // be trivialized by multiple U0 since they won't execute. But inhabitability is not decidable. Even if we only 
+    // do some converative checking, it's hard to check polymorphic type `A` for any `A` passed by the caller. An
+    // alternative is to designate a bottom type and just check that. But to make this ergonomic we need to tweak the
+    // type checker to make this designated type a subtype of everything else. But type inference becomes impossible
+    // with `force t` where `t` has type bottom. If we raise a type error for `force t`, this would violate substitution
+    // principle of subtypes.
+    // On the other hand, if we don't check inhabitability, the usages in body would simply be multipled with UAff 
+    // instead of U0, which seems to be a reasonable approximation. The primary reason for such a check is just to flag 
+    // phantom usages of terms, but I think it's not worth all these complexity.
     (effects, _) <- checkType(effects, EffectsType())
     (usage, _) <- checkType(usage, UsageType())
     (t, tUsages) <- checkType(t, F(ty, effects, usage))
