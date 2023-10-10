@@ -1495,12 +1495,13 @@ private def checkLet
         // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
         // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
         tUsages.forall { usage => usage == uAny || usage == u0 }
-      if isTotal(t, Some(F(ty, effects, usage))) && areTUsagesZeroOrUnrestricted then
+      val tTy = F(ty, effects, usage)
+      if isTotal(t, Some(tTy)) && areTUsagesZeroOrUnrestricted then
         // Do the reduction onsite so that type checking in sub terms can leverage the
         // more specific type. More importantly, this way we do not need to reference
         // the result of a computation in the inferred type.
         for
-          t <- reduce(t)
+          t <- t.normalized(Some(tTy))
           newBody = t match
             case Return(v, _) => body.substLowers(v)
             case c            => body.substLowers(Collapse(c))
@@ -1514,42 +1515,24 @@ private def checkLet
         yield r
       // Otherwise, just add the binding to the context and continue type checking.
       else
+        val tBinding = Binding(ty, usage)(gn"v")
         for
-          case (body, bodyTy, usagesInBody) <- bodyTy match
-            case None => inferType(body)(using Γ :+ Binding(ty, usage)(gn"v"))
-            case Some(bodyTy) =>
-              for
-                (bodyTy, _) <- checkIsCType(bodyTy)
-                (body, usages) <- checkType(body, bodyTy.weakened)(using
-                  Γ :+ Binding(ty, usage)(gn"v"),
-                )
-              yield (body, bodyTy, usages)
-          // Report an error if the type of `body` needs to reference the effectful
-          // computation. User should use a dependent sum type to wrap such
-          // references manually to avoid the leak.
-          // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
-          //  the bound variable
-          _ <- checkVar0Leak(
-            bodyTy,
-            LeakedReferenceToEffectfulComputationResult(t),
-          )
-          constraints <- checkUsageSubsumption(usagesInBody.last.strengthened, usage)
-          _ <-
-            if constraints.isEmpty then Right(())
-            else Left(NotVSubsumption(usagesInBody.last.strengthened, usage, Some(UsageType())))
-          usagesInContinuation <- effects match
-            // Join with U1 for normal execution without any call to effect handlers
-            case v: Var                           => Right(getEffVarContinuationUsage(v))
-            case eff @ Effects(literal, operands) => getEffectsContinuationUsage(eff)
-            case _ =>
-              throw IllegalStateException(s"expect to be of Effects type: $tm")
+          case (body, bodyTy, usagesInBody) <-
+            given Context = Γ :+ tBinding
+            bodyTy match
+              case None => inferType(body)
+              case Some(bodyTy) =>
+                for
+                  (bodyTy, _) <- checkIsCType(bodyTy)(using Γ)
+                  (body, usages) <- checkType(body, bodyTy.weakened)
+                yield (body, bodyTy, usages)
+          bodyTy <- checkVar0Leak(bodyTy, LeakedReferenceToEffectfulComputationResult(t))
+          usagesInBody <- verifyUsages(usagesInBody, tBinding :: Nil)
+          usagesInContinuation <- getEffectsContinuationUsage(effects)
         yield (
           Let(t, ty, effects, usage, body)(tm.boundName)(using tm.sourceInfo),
           bodyTy.strengthened,
-          usagesInBody
-            .dropRight(1) // drop this binding
-            .map(_.strengthened) *
-            usagesInContinuation,
+          usagesInBody * usagesInContinuation,
         )
   yield (newTm, augmentEffect(effects, bodyTy), usages)
 
@@ -1976,12 +1959,21 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
     RecordType(qn, args, EffectsUnion(eff, effects))
   case _ => throw IllegalArgumentException(s"trying to augment $cty with $eff")
 
-private def checkVar0Leak(ty: CTerm | VTerm, error: => IrError)(using Σ: Signature): Either[IrError, Unit] =
+// Report an error if the type of `body` needs to reference the effectful
+// computation. User should use a dependent sum type to wrap such
+// references manually to avoid the leak.
+// TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
+//  the bound variable
+private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ: Signature): Either[IrError, T] =
   val (positiveFreeVars, negativeFreeVars) = ty match
     case ty: CTerm => getFreeVars(ty)(using 0)
     case ty: VTerm => getFreeVars(ty)(using 0)
   if positiveFreeVars(0) || negativeFreeVars(0) then Left(error)
-  else Right(())
+  else
+    Right(ty match
+      case ty: CTerm => ty.strengthened
+      case ty: VTerm => ty.strengthened,
+    )
 
 // TODO: delete this.
 def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
