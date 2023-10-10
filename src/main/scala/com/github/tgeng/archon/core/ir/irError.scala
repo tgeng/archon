@@ -105,3 +105,4 @@ enum IrError extends HasException:
   case ExpectParameterDisposer(h: CTerm.Handler)
   case ExpectParameterReplicator(h: CTerm.Handler)
   case ExpectU1Effect(operationQn: QualifiedName)
+  case HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(hanlder: CTerm.Handler)

@@ -1473,14 +1473,14 @@ private def checkLet
   for
     (ty, _) <- checkIsType(ty)
     // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages in body can all
-    // be trivialized by multiple U0 since they won't execute. But inhabitability is not decidable. Even if we only 
+    // be trivialized by multiple U0 since they won't execute. But inhabitability is not decidable. Even if we only
     // do some converative checking, it's hard to check polymorphic type `A` for any `A` passed by the caller. An
     // alternative is to designate a bottom type and just check that. But to make this ergonomic we need to tweak the
     // type checker to make this designated type a subtype of everything else. But type inference becomes impossible
     // with `force t` where `t` has type bottom. If we raise a type error for `force t`, this would violate substitution
     // principle of subtypes.
-    // On the other hand, if we don't check inhabitability, the usages in body would simply be multipled with UAff 
-    // instead of U0, which seems to be a reasonable approximation. The primary reason for such a check is just to flag 
+    // On the other hand, if we don't check inhabitability, the usages in body would simply be multipled with UAff
+    // instead of U0, which seems to be a reasonable approximation. The primary reason for such a check is just to flag
     // phantom usages of terms, but I think it's not worth all these complexity.
     (effects, _) <- checkType(effects, EffectsType())
     (usage, _) <- checkType(usage, UsageType())
@@ -1581,6 +1581,24 @@ def checkHandler
     (parameterTy, _) <- checkIsType(h.parameterBinding.ty)
     // parameter binding usage dictates how much resources the handler needs when consuming the parameter
     (parameterBindingUsage, _) <- checkType(h.parameterBinding.usage, UsageType())
+    _ <-
+      // If the handler implements some simple exceptional operation, then this operation may throw an exception, which
+      // would trigger disposers of all handlers above the current handler, which, in turn, may call operations on this
+      // handler again. But this is problematic if the parameter disallows multiple usages (aka, it's linear or affine)
+      // because the current operation is consuming the parameter already, which means another call to an operation of
+      // this handler should not be allowed.
+      // This issue is solved by requiring parameter to be URel or UAny if the handler implements any simple exceptional
+      // operation. Hopefully this limitation is not a big deal in practice.
+      val simpleExceptionalOperations = operations
+        .filter((_, _, operation) =>
+          operation.continuationUsage.controlMode == ControlMode.Simple && operation.continuationUsage.usage != Usage.U1,
+        )
+      if simpleExceptionalOperations.isEmpty then Right(())
+      else
+        ctx.checkSolved(
+          checkUsageSubsumption(parameterBindingUsage, uRel),
+          HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(h),
+        )
     parameterBinding = Binding(parameterTy, parameterBindingUsage)(h.parameterBinding.name)
     (parameter, rawParameterUsages) <- checkType(h.parameter, parameterTy)
     parameterUsages = rawParameterUsages * parameterBindingUsage
@@ -1981,8 +1999,8 @@ private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ
   if positiveFreeVars(0) || negativeFreeVars(0) then Left(error)
   else
     Right(ty match
-      case ty: CTerm => ty.strengthened
-      case ty: VTerm => ty.strengthened,
+      case ty: CTerm => ty.strengthened.asInstanceOf[T]
+      case ty: VTerm => ty.strengthened.asInstanceOf[T],
     )
 
 // TODO: delete this.
