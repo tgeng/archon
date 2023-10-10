@@ -36,10 +36,10 @@ private case class ReplicationState
     continuationUsage: Usage,
   )
 
-private case class SetHandlerParameter(handlerIndex: Nat)
+private case class FinishSimpleOperation(handlerIndex: Nat, operationContinuationUsage: Usage)
 
 private final class StackMachine
-  (val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm] | ReplicationState | SetHandlerParameter]):
+  (val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm] | ReplicationState | FinishSimpleOperation]):
 
   /** Pre-constructed term before replicating continuation. This is used to avoid the need to represent partially
     * replicated continuation in the stack.
@@ -103,7 +103,7 @@ private final class StackMachine
                     continuationUsage,
                   )
                 case _ => throw IllegalStateException("type error")
-            case SetHandlerParameter(handlerIndex) =>
+            case FinishSimpleOperation(handlerIndex, operationContinuationUsage) =>
               regenerateHandlerIndex(handlerIndex)
               pc match
                 case Return(Con(name, param :: result :: Nil), _) if name == n"MkPair" =>
@@ -111,10 +111,48 @@ private final class StackMachine
                   stack(handlerIndex) = handler.copy(parameter = param)(
                     handler.handlersBoundNames,
                   )
-                  // The usage here may not be correct. Technically it should be the usage of the result captured in the
-                  // type of the Pair. But we don't have that information here. Fortunately this information is not
-                  // needed anyway because reduction would substitute the result later.
-                  run(Return(result, uAny))
+                  def getU0Term(result: VTerm): CTerm =
+                    val capturedStack = stack.slice(handlerIndex, stack.size).toIndexedSeq
+                    stack.dropRightInPlace(stack.size - handlerIndex)
+                    trimHandlerIndex()
+                    // Construct a term that contains all invocations of parameter disposers in captured handlers. Then
+                    // this result is passed to a let term which discards the unit result from the handlers and then
+                    // invoke the corresponding operation handler implementation.
+                    Let(
+                      capturedStack.foldRight[CTerm](Return(Con(n"MkUnit", Nil), uAny)):
+                        case (entry: CTerm, term) =>
+                          processStackEntryForDisposerCall(term)(entry) match
+                            case Some(t) => t
+                            case _       => term
+                        case (_, term) => term
+                      ,
+                      DataType(Builtins.UnitQn, Nil),
+                      handler.outputEffects,
+                      UsageLiteral(UAny),
+                      // The usage here may not be correct. Technically it should be the usage of the result captured in
+                      // the type of the Pair. But we don't have that information here. Fortunately this information is
+                      // not needed anyway because reduction would substitute the result later.
+                      Return(result.weakened, uAny),
+                    )(
+                      gn"disposeResult",
+                    )
+                  def getU1Term(result: VTerm): CTerm =
+                    // The usage here may not be correct. Technically it should be the usage of the result captured in
+                    // the type of the Pair. But we don't have that information here. Fortunately this information is
+                    // not needed anyway because reduction would substitute the result later.
+                    Return(result, uAny)
+
+                  val term = operationContinuationUsage match
+                    case U0 => getU0Term(result)
+                    case U1 => getU1Term(result)
+                    case UAff =>
+                      result match
+                        case Con(name, result :: Nil) if name == n"Left"  => getU0Term(result)
+                        case Con(name, result :: Nil) if name == n"Right" => getU1Term(result)
+                        case _                                            => throw IllegalStateException("type error")
+                    case _ => throw IllegalStateException("type error")
+
+                  run(term)
                 case _ => throw IllegalStateException("type error")
             case _ =>
               throw IllegalStateException(
@@ -207,38 +245,14 @@ private final class StackMachine
                 val opHandler = handler.handlers(effQn / name)
                 val operation = Σ.getOperation(effQn, name)
                 operation.continuationUsage match
-                  case ContinuationUsage(U1, ControlMode.Simple) =>
+                  case ContinuationUsage(usage, ControlMode.Simple) =>
                     preConstructedTerm = Some(reconstructTermFromStack(pc))
                     // TODO[P1]: redo the index with a HMAT instead so trimming is not needed.
                     // Remove all index into handlers between the matching handler and the current tip so that the
                     // corresponding operation handler implementation can run as if there are no inbetween handlers.
                     trimHandlerIndex(handlerIdx)
-                    stack.push(SetHandlerParameter(handlerIdx))
+                    stack.push(FinishSimpleOperation(handlerIdx, usage))
                     Right(opHandler.substLowers(handler.parameter :: args: _*))
-                  case ContinuationUsage(U0, ControlMode.Simple) =>
-                    val capturedStack = stack.slice(handlerIdx, stack.size).toIndexedSeq
-                    stack.dropRightInPlace(stack.size - handlerIdx)
-                    trimHandlerIndex()
-                    // Construct a term that contains all invocations of parameter disposers in captured handlers. Then
-                    // this result is passed to a let term which discards the unit result from the handlers and then
-                    // invoke the corresponding operation handler implementation.
-                    Right(
-                      Let(
-                        capturedStack.foldRight[CTerm](Return(Con(n"MkUnit", Nil), uAny)):
-                          case (entry: CTerm, term) =>
-                            processStackEntryForDisposerCall(term)(entry) match
-                              case Some(t) => t
-                              case _       => term
-                          case (_, term) => term
-                        ,
-                        DataType(Builtins.UnitQn, Nil),
-                        handler.outputEffects,
-                        UsageLiteral(UAny),
-                        opHandler.substLowers(args: _*).weakened,
-                      )(
-                        gn"disposeResult",
-                      ),
-                    )
                   case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
                     val allOperationArgs = effArgs ++ args
                     val tip = CapturedContinuationTip(
@@ -260,7 +274,6 @@ private final class StackMachine
                     trimHandlerIndex()
                     val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
                     Right(opHandler.substLowers(handler.parameter +: args :+ continuation: _*))
-                  case _ => throw IllegalStateException("bad continuation type for operations")
             yield r) match
               case Right(pc) => run(pc)
               case Left(e)   => Left(e)
@@ -399,7 +412,7 @@ private final class StackMachine
           if elims.nonEmpty then
             current = Redex(current, elims.toList)(using c.sourceInfo)
             elims.clear()
-        case _: ReplicationState | _: SetHandlerParameter =>
+        case _: ReplicationState | _: FinishSimpleOperation =>
           preConstructedTerm match
             case Some(t) => return t
             case _       => throw IllegalStateException("type error")
@@ -424,7 +437,7 @@ extension (c: CTerm)
         c.cTm,
       ) match
         case Return(v, _) => transformVTerm(v)
-        case _         => c
+        case _            => c
 
     transformer.transformCTerm(c) match
       case Redex(t, elims) =>
@@ -443,7 +456,7 @@ extension (v: VTerm)
         reduced <- Reducible.reduce(cTm)
         r <- reduced match
           case Return(v, _) => Right(v)
-          case stuckC    => Right(Collapse(stuckC)(using v.sourceInfo))
+          case stuckC       => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case u: UsageCompound =>
       def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match

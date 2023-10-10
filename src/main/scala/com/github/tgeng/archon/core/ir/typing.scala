@@ -1653,50 +1653,88 @@ def checkHandler
       val resultTy = operation.resultTy.substLowers(effArgs: _*)
       val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
       for (impl, usages) <- operation.continuationUsage match
-          case ContinuationUsage(Usage.U1, ControlMode.Simple) =>
+          case ContinuationUsage(usage, ControlMode.Simple) =>
             given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
             val implOffset = implΓ.size - Γ.size
-            val implTy = F(
-              DataType(
-                Builtins.PairQn,
-                List(
+            val implTy = usage match
+              case U1 =>
+                F(
+                  DataType(
+                    Builtins.PairQn,
+                    List(
+                      Auto(),
+                      Auto(),
+                      parameterBindingUsage.weaken(implOffset, 0),
+                      parameterTy.weaken(implOffset, 0),
+                      resultUsage,
+                      resultTy,
+                    ),
+                  ),
                   Auto(),
+                  u1,
+                )
+              case U0 =>
+                F(
+                  DataType(
+                    Builtins.PairQn,
+                    List(
+                      Auto(),
+                      Auto(),
+                      parameterBindingUsage.weaken(implOffset, 0),
+                      parameterTy.weaken(implOffset, 0),
+                      outputUsage.weaken(implOffset, 0),
+                      outputTy.weaken(implOffset, 0),
+                    ),
+                  ),
                   Auto(),
-                  parameterBindingUsage.weaken(implOffset, 0),
-                  parameterTy.weaken(implOffset, 0),
-                  resultUsage,
-                  resultTy,
-                ),
-              ),
-              Auto(),
-              u1,
-            )
+                  u1,
+                )
+              case UAff =>
+                F(
+                  DataType(
+                    Builtins.PairQn,
+                    List(
+                      Auto(),
+                      Auto(),
+                      parameterBindingUsage.weaken(implOffset, 0),
+                      parameterTy.weaken(implOffset, 0),
+                      u1,
+                      DataType(
+                        Builtins.EitherQn,
+                        List(
+                          Auto(),
+                          Auto(),
+                          outputUsage.weaken(implOffset, 0),
+                          outputTy.weaken(implOffset, 0),
+                          resultUsage,
+                          resultTy,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Auto(),
+                  u1,
+                )
+              case _ => throw IllegalStateException("bad continuation usage on operation")
             val implOutputEffects = outputEffects.weaken(implOffset, 0)
             for
               (implTy, _) <- checkIsCType(implTy)
               (impl, usages) <- checkType(handler, implTy)
               effects <- checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
+              _ <- usage match
+                // Simple U1 operation can only perform U1 effects so that linear resources in the contination are
+                // managed correctly.
+                case U1 =>
+                  for
+                    continuationUsage <- getEffectsContinuationUsage(effects)
+                    _ <- ctx.checkSolved(checkUsageSubsumption(continuationUsage, u1), ExpectU1Effect(qn))
+                  yield ()
+                case _ => Right(())
               _ <- ctx.checkSolved(
                 checkEffSubsumption(effects, implOutputEffects),
                 NotEffectSubsumption(effects, implOutputEffects),
               )
             yield (impl, usages)
-          case ContinuationUsage(Usage.U0, ControlMode.Simple) =>
-            given implΓ: Context = Γ ++ paramTys
-            val implOffset = implΓ.size - Γ.size
-            val implTy = F(outputTy.weaken(implOffset, 0), Auto(), outputUsage.weaken(implOffset, 0))
-            val implOutputEffects = outputEffects.weaken(implOffset, 0)
-            for
-              (implTy, _) <- checkIsCType(implTy)
-              (impl, usages) <- checkType(handler, implTy)
-              effects <- checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
-              _ <- ctx.checkSolved(
-                checkEffSubsumption(effects, implOutputEffects),
-                NotEffectSubsumption(effects, implOutputEffects),
-              )
-            yield (impl, usages)
-          case ContinuationUsage(_, ControlMode.Simple) =>
-            throw IllegalStateException("bad continuation usage on operation")
           case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
             given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
             val continuationWeakenOffset = continuationΓ.size - Γ.size

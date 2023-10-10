@@ -104,3 +104,4 @@ enum IrError extends HasException:
   case CannotFindVTypeUnion(a: VTerm, b: VTerm)
   case ExpectParameterDisposer(h: CTerm.Handler)
   case ExpectParameterReplicator(h: CTerm.Handler)
+  case ExpectU1Effect(operationQn: QualifiedName)

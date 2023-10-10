@@ -84,6 +84,10 @@ object Builtins:
   val PairQn = BuiltinType / "Pair"
   val MkPairQn = PairQn / "MkPair"
 
+  val EitherQn = BuiltinType / "Either"
+  val LeftQn = EitherQn / "Left"
+  val RightQn = EitherQn / "Right"
+
   val ContinuationQn = BuiltinType / "Continuation"
   val ResumeQn = ContinuationQn / "resume"
   val DisposeQn = ContinuationQn / "dispose"
@@ -166,6 +170,21 @@ object Builtins:
             FunctionType(Binding(Var(1), Var(2))(n"y"), F(DataType(PairQn, vars(4, 2)))),
           ),
         ),
+      ),
+    ),
+    PreData(EitherQn)(
+      tParamTys = List(
+        (binding(n"level", LevelType()), Variance.INVARIANT),
+        (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
+        (binding(n"usageL", UsageType()), Variance.INVARIANT),
+        (binding(n"AL", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
+        (binding(n"usageR", EqDecidabilityType()), Variance.INVARIANT),
+        (binding(n"AR", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
+      ),
+      ty = F(Type(Top(Var(5), Var(4)))),
+      constructors = List(
+        PreConstructor(n"Left", FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(4, 2))))),
+        PreConstructor(n"Right", FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(4, 2))))),
       ),
     ),
     PreData(IsDisposableQn)(
