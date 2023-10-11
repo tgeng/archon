@@ -515,10 +515,15 @@ private def checkEffSubsumption
     // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
     val (literals1, unionOperands1) = sub match
       case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
-      case v: VTerm                           => (Set.empty, Set(v))
-    val spuriousOperands = unionOperands1 -- unionOperands2
+      case v: VTerm                           => (Set.empty, Map(v -> false))
+    // false is considered "greater" because false means complex effects are not filtered out, which is "greater" than
+    // true where complex effects are filtered out.
+    given PartialOrdering[Boolean] = Ordering.fromLessThan[Boolean]:
+      case (true, false) => true
+      case _             => false
+    val spuriousOperands = getSpurious(unionOperands1, unionOperands2)
     val spuriousLiterals = literals1 -- literals2
-    val metaOperands2 = unionOperands2.filter(isMeta)
+    val metaOperands2 = unionOperands2.keys.filter(isMeta)
     if spuriousOperands.isEmpty && literals1.subsetOf(literals2) then Right(Set.empty)
     else if metaOperands2.size == 1 then
       // The case where the right hand side contains a single meta variable and some other stuff.
@@ -539,7 +544,7 @@ private def checkEffSubsumption
     // ends up being assigned values that are part of sup
     // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary effects and hence
     // we can't decide subsumption yet.
-    else if spuriousOperands.forall(isMeta) || unionOperands2.exists(isMeta) then
+    else if spuriousOperands.keys.forall(isMeta) || unionOperands2.keys.exists(isMeta) then
       Right(Set(Constraint.EffSubsumption(Γ, sub, sup)))
     else Left(NotEffectSubsumption(sub, sup))
   case _ => Left(NotEffectSubsumption(sub, sup))

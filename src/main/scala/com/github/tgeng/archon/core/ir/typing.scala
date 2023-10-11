@@ -720,7 +720,7 @@ private def inferLevel
     case u: ResolvedMetaVariable =>
       u.ty match
         case F(Type(upperBound), _, _) => inferLevel(upperBound)
-        case _                => Left(NotTypeError(tm))
+        case _                         => Left(NotTypeError(tm))
     case Type(upperBound) => inferLevel(upperBound).map(LevelSuc(_))
     case Top(level, eqD)  => Right(level)
     case r: Var =>
@@ -842,9 +842,11 @@ def inferType
           },
         )
         (operands, operandsUsages) <- transposeCheckTypeResults(
-          operands.map { ref => checkType(ref, EffectsType()) }.toList,
+          operands.map { (ref, retainSimple) =>
+            checkType(ref, EffectsType()).map((v, usages) => ((v, retainSimple), usages))
+          }.toList,
         )
-        newTm: Effects = Effects(literal, operands.toSet)(using tm.sourceInfo)
+        newTm: Effects = Effects(literal, operands.toMap)(using tm.sourceInfo)
         usage <- getEffectsContinuationUsage(newTm)
       yield (
         newTm,
@@ -1835,7 +1837,7 @@ private def getEffectsContinuationUsage
         val literalUsages = literal.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
           Σ.getEffect(qn).continuationUsage.usage | acc
         }
-        for usages <- transpose(operands.map(getEffectsContinuationUsage))
+        for usages <- transpose(operands.keySet.map(getEffectsContinuationUsage))
         yield UsageJoin(usages + UsageLiteral(literalUsages))
       case v: Var =>
         Γ.resolve(v).ty match
@@ -1864,7 +1866,7 @@ private def checkEffectsAreSimple
           }
         then Left(ExepctSimpleEffects(effects))
         else
-          for _ <- transpose(operands.map(getEffectsContinuationUsage))
+          for _ <- transpose(operands.keySet.map(getEffectsContinuationUsage))
           yield ()
       case v: Var =>
         Γ.resolve(v).ty match

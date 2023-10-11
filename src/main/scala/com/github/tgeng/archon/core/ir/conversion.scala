@@ -47,7 +47,7 @@ def checkIsConvertible
           else Left(NotVConvertible(left, right, ty))
         case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_, _))) =>
           // If meta some component is not reduced yet, we can't check subsumption
-          if operands1.exists(isMeta) || operands2.exists(isMeta)
+          if operands1.keys.exists(isMeta) || operands2.keys.exists(isMeta)
           then Right(Set(Constraint.VConversion(Γ, left, right, ty)))
           else Left(NotVConvertible(left, right, ty))
         case (

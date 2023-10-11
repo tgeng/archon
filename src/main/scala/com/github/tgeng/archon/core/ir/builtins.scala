@@ -260,7 +260,7 @@ object Builtins:
           n"dispose",
           Binding(DataType(IsDisposableQn, List(Var(5))))(n"isDisposable") ->:
             Binding(Var(6), Var(7))(n"param") ->:
-            F(DataType(UnitQn, Nil), Var(4)),
+            F(DataType(UnitQn, Nil), EffectsRetainSimple(Var(4))),
         ),
         Field(
           n"replicate",
@@ -278,7 +278,7 @@ object Builtins:
                   U(RecordType(ContinuationQn, vars(10, 2))),
                 ),
               ),
-              Var(4),
+              EffectsRetainSimple(Var(4)),
             ),
         ),
       ),

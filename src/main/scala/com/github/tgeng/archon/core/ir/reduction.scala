@@ -450,7 +450,7 @@ extension (c: CTerm)
     else c.normalized
 
 extension (v: VTerm)
-  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, VTerm] = v match
+  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, VTerm] = v match
     case Collapse(cTm) =>
       for
         reduced <- Reducible.reduce(cTm)
@@ -459,47 +459,59 @@ extension (v: VTerm)
           case stuckC       => Right(Collapse(stuckC)(using v.sourceInfo))
       yield r
     case u: UsageCompound =>
-      def dfs(tm: VTerm): Either[IrError, ULub[Var]] = tm match
-        case UsageLiteral(u)     => Right(uLubFromLiteral(u))
-        case UsageSum(operands)  => transpose(operands.multiToSeq.map(dfs)).map(uLubProd)
-        case UsageProd(operands) => transpose(operands.map(dfs)).map(uLubProd)
-        case UsageJoin(operands) => transpose(operands.map(dfs)).map(uLubJoin)
-        case c: Collapse         => c.normalized.flatMap(dfs)
-        case v: Var              => Right(uLubFromT(v))
+      def dfs(tm: VTerm): Either[IrError, ULub[VTerm]] = ctx.withMetaResolved(tm):
+        case UsageLiteral(u)                  => Right(uLubFromLiteral(u))
+        case UsageSum(operands)               => transpose(operands.multiToSeq.map(dfs)).map(uLubProd)
+        case UsageProd(operands)              => transpose(operands.map(dfs)).map(uLubProd)
+        case UsageJoin(operands)              => transpose(operands.map(dfs)).map(uLubJoin)
+        case c: Collapse                      => c.normalized.flatMap(dfs)
+        case _: ResolvedMetaVariable | _: Var => Right(uLubFromT(tm))
         case _ =>
           throw IllegalStateException(s"expect to be of Usage type: $tm")
 
-      def lubToTerm(lub: ULub[Var]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq: _*)
+      def lubToTerm(lub: ULub[VTerm]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq: _*)
 
-      def sumToTerm(sum: USum[Var]): VTerm = UsageSum(sum.map(prodToTerm).toSeq: _*)
+      def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm).toSeq: _*)
 
-      def prodToTerm(prod: UProd[Var]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq: _*)
+      def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq: _*)
 
-      def varOrUsageToTerm(t: Var | Usage): VTerm = t match
-        case v: Var   => v
+      def varOrUsageToTerm(t: VTerm | Usage): VTerm = t match
+        case v: VTerm   => v
         case u: Usage => UsageLiteral(u)
 
       dfs(u).map(lubToTerm)
     case e: Effects =>
-      def dfs(tm: VTerm): Either[IrError, (Set[Eff], Set[VTerm])] = tm match
-        case Effects(literal, operands) =>
-          for literalsAndOperands: Set[(Set[Eff], Set[VTerm])] <- transpose(
-              operands.map(_.normalized.flatMap(dfs)),
+      def dfs(tm: VTerm, retainSimpleOnly: Boolean): Either[IrError, (Set[Eff], Map[VTerm, Boolean])] =
+        ctx.withMetaResolved(tm):
+          case Effects(literal, operands) =>
+            for literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] <- transpose(
+                operands.map((k, v) => k.normalized.flatMap(dfs(_, v))),
+              )
+            yield (
+              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal).filter((qn, _) =>
+                if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
+                else true,
+              ).toSet,
+              literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap,
             )
-          yield (
-            literalsAndOperands.flatMap { case (l, _) => l } ++ literal,
-            literalsAndOperands.flatMap { case (_, o) => o },
-          )
-        case _: Var | _: Collapse => Right((Set.empty, Set(tm)))
-        case _ =>
-          throw IllegalStateException(s"expect to be of Effects type: $tm")
+          case _: Collapse => Right((Set.empty, Map(tm -> false)))
+          case v: Var =>
+            Γ.resolve(v).ty match
+              case EffectsType(_, ControlMode.Simple) => Right((Set.empty, Map(tm -> true)))
+              case _                                  => Right((Set.empty, Map(tm -> false)))
+          case r: ResolvedMetaVariable =>
+            r.ty match
+              case F(EffectsType(_, ControlMode.Simple), _, _) => Right((Set.empty, Map(tm -> true)))
+              case _                                           => Right((Set.empty, Map(tm -> false)))
+          case _ =>
+            throw IllegalStateException(s"expect to be of Effects type: $tm")
 
-      dfs(e).map { case (eff, operands) =>
-        if eff.isEmpty && operands.size == 1 then operands.head
+      dfs(e, false).map { case (eff, operands) =>
+        if eff.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
         else Effects(eff, operands)
       }
     case l: Level =>
-      def dfs(tm: VTerm): Either[IrError, (LevelOrder, Map[VTerm, Nat])] = tm match
+      def dfs(tm: VTerm): Either[IrError, (LevelOrder, Map[VTerm, Nat])] = ctx.withMetaResolved(tm):
         case Level(literal, operands) =>
           for literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] <- transpose(
               operands.map { (tm, offset) =>
@@ -516,8 +528,8 @@ extension (v: VTerm)
               .groupMap(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) },
           )
-        case _: Var | _: Collapse => Right(LevelOrder.zero, Map((tm, 0)))
-        case _                    => throw IllegalStateException(s"expect to be of Level type: $tm")
+        case _: ResolvedMetaVariable | _: Var | _: Collapse => Right(LevelOrder.zero, Map((tm, 0)))
+        case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
       dfs(l).map { case (l, m) =>
         if l == LevelOrder.zero && m.size == 1 && m.head._2 == 0
