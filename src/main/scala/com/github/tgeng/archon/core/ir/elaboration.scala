@@ -164,7 +164,8 @@ private def elaborateHead(preData: PreData)(using Σ: Signature)(using ctx: Typi
       (using ctx: TypingContext)
       : Either[IrError, (Telescope, VTerm, VTerm)] =
       for
-        ty <- reduceCType(ty)
+        (ty, _) <- checkIsCType(ty)
+        ty <- ty.normalized(None)
         r <- ty match
           // Here and below we do not care about the declared effect types because data type
           // constructors are always total. Declaring non-total signature is not necessary (nor
@@ -205,7 +206,8 @@ private def elaborateBody(preData: PreData)(using Σ: Signature)(using ctx: Typi
       (using ctx: TypingContext)
       : Either[IrError, (Telescope, /* constructor tArgs */ List[VTerm])] =
       for
-        ty <- reduceCType(ty)
+        (ty, _) <- checkIsCType(ty)
+        ty <- ty.normalized(None)
         r <- ty match
           // Here and below we do not care the declared effect types because data type constructors
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
@@ -246,7 +248,8 @@ private def elaborateHead(record: PreRecord)(using Σ: Signature)(using ctx: Typ
   ctx.trace(s"elaborating record signature ${record.qn}") {
     for
       tParamTys <- elaborateTContext(record.tParamTys)
-      ty <- reduceCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
+      (ty, _) <- checkIsCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
+      ty <- ty.normalized(None)(using tParamTys.map(_._1).toIndexedSeq)
       r <- ty match
         case CType(CTop(level, _), _) => Right(new Record(record.qn)(tParamTys, level))
         case t                        => Left(ExpectCType(t))
@@ -273,7 +276,8 @@ private def elaborateBody
       case (Right(_Σ), field) =>
         ctx.trace(s"elaborating field ${field.name}") {
           for
-            ty <- reduceCType(field.ty)
+            (ty, _) <- checkIsCType(field.ty)
+            ty <- field.ty.normalized(None)
             f = new Field(field.name, ty)
             _ <- checkRecordField(preRecord.qn, f)
           yield _Σ.addField(preRecord.qn, f)
@@ -292,7 +296,8 @@ private def elaborateHead
   ctx.trace(s"elaborating def signature ${definition.qn}") {
     for
       paramTys <- elaborateContext(definition.paramTys)
-      ty <- reduceCType(definition.ty)(using paramTys.toIndexedSeq)
+      (ty, _) <- checkIsCType(definition.ty)(using paramTys.toIndexedSeq)
+      ty <- ty.normalized(None)(using paramTys.toIndexedSeq)
       d = new Definition(definition.qn)(
         paramTys.foldRight(ty) { (binding, bodyTy) =>
           FunctionType(binding, bodyTy)
@@ -457,7 +462,8 @@ private def elaborateBody
     (using Σ: Signature)
     : Either[IrError, (Signature, CaseTree)] =
     for
-      _C <- reduceCType(_C)
+      (_C, _) <- checkIsCType(_C)
+      _C <- _C.normalized(None)
       r <- (problem, _C) match
         // [cosplit]
         case (
@@ -778,7 +784,8 @@ private def elaborateBody
         (Telescope, /* operation return type */ VTerm, /* operation return usage */ VTerm),
       ] =
       for
-        ty <- reduceCType(ty)
+        (ty, _) <- checkIsCType(ty)
+        ty <- ty.normalized(None)
         r <- ty match
           // Here and below we do not care the declared effect types because data type constructors
           // are always total. Declaring non-total signature is not necessary (nor desirable) but
