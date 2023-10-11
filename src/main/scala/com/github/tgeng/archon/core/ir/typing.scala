@@ -716,10 +716,10 @@ private def inferLevel
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] =
-  withMetaResolved(tm):
+  ctx.withMetaResolved(tm):
     case u: ResolvedMetaVariable =>
       u.ty match
-        case Type(upperBound) => inferLevel(upperBound)
+        case F(Type(upperBound), _, _) => inferLevel(upperBound)
         case _                => Left(NotTypeError(tm))
     case Type(upperBound) => inferLevel(upperBound).map(LevelSuc(_))
     case Top(level, eqD)  => Right(level)
@@ -727,7 +727,7 @@ private def inferLevel
       Γ.resolve(r).ty match
         case Type(upperBound) => inferLevel(upperBound)
         case _                => Left(NotTypeError(tm))
-    case t: Collapse(cTm) => 
+    case t: Collapse =>
       for
         (_, ty, _) <- inferType(t)
         r <- ty match
