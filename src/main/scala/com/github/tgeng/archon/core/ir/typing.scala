@@ -977,7 +977,7 @@ def inferType
         for
           (effects, effUsages) <- checkType(effects, EffectsType())
           (upperBound, upperBoundUsages) <- checkIsCType(upperBound)
-          upperBound <- reduceCType(upperBound)
+          upperBound <- upperBound.normalized(None)
           effects <- effects.normalized
           newTm = CType(upperBound, effects)
         yield (
@@ -1081,9 +1081,11 @@ def inferType
                 case FunctionType(binding, bodyTy, effects) =>
                   for
                     (arg, argUsages) <- checkType(arg, binding.ty)
-                    cty <- reduceCType(bodyTy.substLowers(arg))
+                    (bodyTy, _) <- checkIsCType(bodyTy)(using Γ :+ binding)
+                    cty <- bodyTy.substLowers(arg).normalized(None)
                     (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
-                  yield (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages))
+                    continuationUsage <- getEffectsContinuationUsage(effects)
+                  yield (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages * continuationUsage))
                 case _ => Left(ExpectFunction(redex(c, checkedElims.reverse)))
             case (e @ EProj(name)) :: rest =>
               cty match
@@ -1092,11 +1094,12 @@ def inferType
                     case None => Left(MissingField(name, qn))
                     case Some(f) =>
                       for
-                        cty <- reduceCType(
-                          f.ty.substLowers(args :+ Thunk(redex(c, checkedElims)): _*),
-                        )
+                        _ <- checkTypes(args, Σ.getRecord(qn).tParamTys.map(_._1).toList)
+                        cty <- f.ty.substLowers(args :+ Thunk(redex(c, checkedElims)): _*).normalized(None)
                         (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
-                      yield (EProj(name) :: rest, augmentEffect(effects, cty), restUsages)
+                        continuationUsage <- getEffectsContinuationUsage(effects)
+                        // TODO[P0]: think about how to check self reference in record.
+                      yield (EProj(name) :: rest, augmentEffect(effects, cty), restUsages * continuationUsage)
                 case _ => Left(ExpectRecord(redex(c, checkedElims.reverse)))
         for
           (c, cty, usages) <- inferType(c)
@@ -1202,7 +1205,7 @@ def checkType
     case _ =>
       for
         case (tm, tmTy, usages) <- inferType(tm)
-        ty <- reduceCType(ty)
+        ty <- ty.normalized(None)
         constraints <- checkIsSubtype(tmTy, ty).flatMap(ctx.solve)
         _ <-
           if constraints.isEmpty then Right(())
@@ -1538,11 +1541,11 @@ private def checkLet
                 yield (body, bodyTy, usages)
           bodyTy <- checkVar0Leak(bodyTy, LeakedReferenceToEffectfulComputationResult(t))
           usagesInBody <- verifyUsages(usagesInBody, tBinding :: Nil)
-          usagesInContinuation <- getEffectsContinuationUsage(effects)
+          continuationUsage <- getEffectsContinuationUsage(effects)
         yield (
           Let(t, ty, effects, usage, body)(tm.boundName)(using tm.sourceInfo),
           bodyTy.strengthened,
-          usagesInBody * usagesInContinuation,
+          usagesInBody * continuationUsage,
         )
   yield (newTm, augmentEffect(effects, bodyTy), usages)
 
@@ -1907,7 +1910,7 @@ def checkIsCType
             case _ => Right(())
         case _: CType => Left(EffectfulCTermAsType(cTy))
         case _        => Left(NotCTypeError(cTy))
-      cty <- reduceCType(cty)
+      cty <- cty.normalized(None)
     yield (cty, usages)
   }
 
@@ -1943,33 +1946,6 @@ def reduceVType(vTy: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: T
         case F(_, _, _) => Left(EffectfulCTermAsType(vTy))
         case _          => Left(ExpectFType(vTy))
     yield r
-  }
-
-def reduceCType(cTy: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, CTerm] =
-  ctx.trace("reduce C type", Block(yellow(cTy.sourceInfo), pprint(cTy))) {
-    cTy match
-      case _: CType | _: F | _: FunctionType | _: RecordType | _: CTop =>
-        Right(cTy)
-      case _ =>
-        for
-          case (cTy, cTyTy, _) <- inferType(cTy)
-          r <- cTyTy match
-            case CType(_, eff) if isTotal(cTy, Some(cTyTy)) => reduce(cTy)
-            case F(_, eff, _) if isTotal(cTy, Some(cTyTy)) =>
-              def unfoldLet(cTy: CTerm): Either[IrError, CTerm] = cTy match
-                // Automatically promote a SomeVType to F(SomeVType).
-                case Return(vty, _) => Right(F(vty)(using cTy.sourceInfo))
-                case Let(t, _, _, _, ctx) =>
-                  reduce(ctx.substLowers(Collapse(t))).flatMap(unfoldLet)
-                case c =>
-                  throw IllegalStateException(
-                    s"type checking has bugs: $c should be of form `Return(...)`",
-                  )
-
-              reduce(cTy).flatMap(unfoldLet)
-            case _: CType => Left(EffectfulCTermAsType(cTy))
-            case _        => Left(NotCTypeError(cTy))
-        yield r
   }
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
