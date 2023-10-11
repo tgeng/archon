@@ -716,15 +716,24 @@ private def inferLevel
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Either[IrError, VTerm] =
-  tm match
+  withMetaResolved(tm):
+    case u: ResolvedMetaVariable =>
+      u.ty match
+        case Type(upperBound) => inferLevel(upperBound)
+        case _                => Left(NotTypeError(tm))
     case Type(upperBound) => inferLevel(upperBound).map(LevelSuc(_))
     case Top(level, eqD)  => Right(level)
     case r: Var =>
       Γ.resolve(r).ty match
         case Type(upperBound) => inferLevel(upperBound)
         case _                => Left(NotTypeError(tm))
-    // TODO[P0]: this is not right, we need to handle collapse of redux here.
-    case Collapse(cTm)      => inferLevel(cTm)
+    case t: Collapse(cTm) => 
+      for
+        (_, ty, _) <- inferType(t)
+        r <- ty match
+          case Type(upperBound) => inferLevel(upperBound)
+          case _                => Left(NotTypeError(tm))
+      yield r
     case U(cty)             => inferLevel(cty)
     case DataType(qn, args) => Right(Σ.getData(qn).level.substLowers(args: _*))
     case _: UsageType | _: EqDecidabilityType | _: EffectsType =>
