@@ -589,7 +589,13 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
       tParamTys = Context.fromTelescope(tParamTysTelescope)
       _ <- checkTParamsAreUnrestricted(tParams.toList)
       (level, _) <- checkLevel(record.level)(using tParams.toIndexedSeq)
-    yield Record(record.qn)(tParamTys.zip(record.tParamTys.map(_._2)), level, record.selfName)
+      (selfUsage, _) <- checkType(record.selfBinding.usage, UsageType())(using tParams.toIndexedSeq)
+      (selfTy, _) <- checkIsType(record.selfBinding.ty)(using tParams.toIndexedSeq)
+    yield Record(record.qn)(
+      tParamTys.zip(record.tParamTys.map(_._2)),
+      level,
+      Binding(selfTy, selfUsage)(record.selfBinding.name),
+    )
   }
 
 def checkRecordField
@@ -601,7 +607,7 @@ def checkRecordField
     Σ.getRecordOption(qn) match
       case None => Left(MissingDeclaration(qn))
       case Some(record) =>
-        given Context = record.tParamTys.map(_._1).toIndexedSeq :+ getRecordSelfBinding(record)
+        given Context = record.tParamTys.map(_._1).toIndexedSeq :+ record.selfBinding
         for
           (ty, _) <- checkIsCType(field.ty, Some(record.level.weakened))
           _ <-
@@ -627,17 +633,6 @@ def checkRecordField
               )
         yield Field(field.name, ty)
   }
-
-def getRecordSelfBinding(record: Record): Binding[VTerm] = Binding(
-  U(
-    RecordType(
-      record.qn,
-      (record.tParamTys.size - 1).to(0, -1).map(Var(_)).toList,
-      Total(),
-    ),
-  ),
-  U1,
-)(record.selfName)
 
 def checkDef(definition: Definition)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Definition] =
   ctx.trace(s"checking def signature ${definition.qn}") {
@@ -1093,13 +1088,20 @@ def inferType
                   Σ.getFieldOption(qn, name) match
                     case None => Left(MissingField(name, qn))
                     case Some(f) =>
+                      val record = Σ.getRecord(qn)
                       for
-                        _ <- checkTypes(args, Σ.getRecord(qn).tParamTys.map(_._1).toList)
-                        cty <- f.ty.substLowers(args :+ Thunk(redex(c, checkedElims)): _*).normalized(None)
+                        _ <- checkTypes(args, record.tParamTys.map(_._1).toList)
+                        // TODO[P2]: refactor this and track an accumulating usage so that checking record usage here
+                        // won't be O(n^2)
+                        (recordTerm, recordUsages) <- checkType(redex(c, checkedElims), cty)
+                        cty <- f.ty.substLowers(args :+ Thunk(recordTerm): _*).normalized(None)
                         (rest, cty, restUsages) <- checkElims(e :: checkedElims, cty, rest)
                         continuationUsage <- getEffectsContinuationUsage(effects)
-                        // TODO[P0]: think about how to check self reference in record.
-                      yield (EProj(name) :: rest, augmentEffect(effects, cty), restUsages * continuationUsage)
+                      yield (
+                        EProj(name) :: rest,
+                        augmentEffect(effects, cty),
+                        recordUsages * record.selfBinding.usage + restUsages * continuationUsage,
+                      )
                 case _ => Left(ExpectRecord(redex(c, checkedElims.reverse)))
         for
           (c, cty, usages) <- inferType(c)

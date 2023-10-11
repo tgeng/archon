@@ -27,8 +27,10 @@ enum PreDeclaration:
       val tParamTys: PreTContext,
       // Unlike data, for record, this `ty` is expected to be a simple computation type.
       val ty: CTerm,
+      val selfUsage: CTerm,
       // There is no difference for field
       val fields: List[Field],
+      val selfName: Name = n"self",
     )
   case PreDefinition
     (val qn: QualifiedName)

@@ -31,9 +31,8 @@ enum Declaration:
     (val qn: QualifiedName)
     (
       val tParamTys: TContext = IndexedSeq(),
-      // TODO[P0]: declare a self binding here with type `RecordType(qn, vars(...))`.
       val level: VTerm, // binding + tParamTys
-      val selfName: Ref[Name] = n"self",
+      val selfBinding: Binding[VTerm],
     )
   case Definition(val qn: QualifiedName)(val ty: CTerm)
 

@@ -248,11 +248,21 @@ private def elaborateHead(record: PreRecord)(using Σ: Signature)(using ctx: Typ
   ctx.trace(s"elaborating record signature ${record.qn}") {
     for
       tParamTys <- elaborateTContext(record.tParamTys)
-      (ty, _) <- checkIsCType(record.ty)(using tParamTys.map(_._1).toIndexedSeq)
-      ty <- ty.normalized(None)(using tParamTys.map(_._1).toIndexedSeq)
+      given Context = tParamTys.map(_._1).toIndexedSeq
+      (selfUsage, _) <- checkType(record.selfUsage, F(UsageType(), Total()))
+      selfUsage <- Collapse(selfUsage).normalized
+      (ty, _) <- checkIsCType(record.ty)
+      ty <- ty.normalized(None)
       r <- ty match
-        case CType(CTop(level, _), _) => Right(new Record(record.qn)(tParamTys, level))
-        case t                        => Left(ExpectCType(t))
+        case CType(CTop(level, _), _) =>
+          Right(
+            new Record(record.qn)(
+              tParamTys,
+              level,
+              Binding(Thunk(RecordType(record.qn, vars(tParamTys.size - 1))), selfUsage)(record.selfName),
+            ),
+          )
+        case t => Left(ExpectCType(t))
       _ <- checkRecord(r)
     yield Σ.addDeclaration(r)
   }
@@ -269,7 +279,7 @@ private def elaborateBody
 
     given Context = record.tParamTys.map(_._1).toIndexedSeq :+
       Binding(U(RecordType(record.qn, vars(record.tParamTys.size - 1))), Total())(
-        record.selfName,
+        record.selfBinding.name,
       )
 
     preRecord.fields.foldLeft[Either[IrError, Signature]](Right(Σ)) {
