@@ -191,7 +191,7 @@ private def elaborateHead(preData: PreData)(using Σ: Signature)(using ctx: Typi
         level,
         eqDecidability,
       )
-      _ <- checkData(data)
+      data <- checkData(data)
     yield Σ.addDeclaration(data)
   }
 
@@ -237,7 +237,7 @@ private def elaborateBody(preData: PreData)(using Σ: Signature)(using ctx: Typi
           for
             case (paramTys, tArgs) <- elaborateTy(ty)
             con = new Constructor(constructor.name, paramTys, tArgs)
-            _ <- checkDataConstructor(preData.qn, con)
+            con <- checkDataConstructor(preData.qn, con)
           yield _Σ.addConstructor(preData.qn, con)
         }
       case (Left(e), _) => Left(e)
@@ -263,7 +263,7 @@ private def elaborateHead(record: PreRecord)(using Σ: Signature)(using ctx: Typ
             ),
           )
         case t => Left(ExpectCType(t))
-      _ <- checkRecord(r)
+      r <- checkRecord(r)
     yield Σ.addDeclaration(r)
   }
 
@@ -289,7 +289,7 @@ private def elaborateBody
             (ty, _) <- checkIsCType(field.ty)
             ty <- field.ty.normalized(None)
             f = new Field(field.name, ty)
-            _ <- checkRecordField(preRecord.qn, f)
+            f <- checkRecordField(preRecord.qn, f)
           yield _Σ.addField(preRecord.qn, f)
         }
       case (Left(e), _) => Left(e)
@@ -314,7 +314,6 @@ private def elaborateHead
         },
       )
       d <- checkDef(d)
-    // TODO: use rewritten term here
     yield Σ.addDeclaration(d)
   }
 
@@ -770,7 +769,7 @@ private def elaborateHead(effect: PreEffect)(using Σ: Signature)(using ctx: Typ
         tParamTys,
         effect.operations.map(_.continuationUsage).foldLeft(ContinuationUsage.CuLinear)(_ | _),
       )
-      _ <- checkEffect(e)
+      e <- checkEffect(e)
     yield Σ.addDeclaration(e)
   }
 
@@ -816,7 +815,7 @@ private def elaborateBody
           for
             case (paramTys, resultTy, usage) <- elaborateTy(operation.ty)
             o = Operation(operation.name, operation.continuationUsage, paramTys, resultTy, usage)
-            _ <- checkOperation(effect.qn, o)
+            o <- checkOperation(effect.qn, o)
           yield _Σ.addOperation(effect.qn, o)
         }
       case (Left(e), _) => Left(e)
