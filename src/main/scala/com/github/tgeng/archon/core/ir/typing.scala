@@ -976,7 +976,7 @@ def checkType
         constraints <- checkIsSubtype(inferred, ty)
         _ <-
           if constraints.isEmpty then Right(())
-          else Left(NotVSubsumption(inferred, ty, None))
+          else Left(NotVSubtype(inferred, ty))
       yield (newTm, usages),
 )
 
@@ -1084,7 +1084,7 @@ def inferType
             .flatMap(ctx.solve)
           _ <-
             if usageConstraints.isEmpty then Right(())
-            else Left(NotVSubsumption(usage, UsageLiteral(Usage.U1), Some(UsageType())))
+            else Left(NotUsageSubsumption(usage, UsageLiteral(Usage.U1)))
           case (vTy, vTyTy, vTyUsages) <- inferType(vTy)
           vTy <- vTy.normalized
           usage <- usage.normalized
@@ -1282,7 +1282,7 @@ def checkType
         constraints <- checkIsSubtype(tmTy, ty).flatMap(ctx.solve)
         _ <-
           if constraints.isEmpty then Right(())
-          else Left(NotCSubsumption(tmTy, ty, None))
+          else Left(NotCSubtype(tmTy, ty))
       yield (tm, usages),
 )
 private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
@@ -1316,57 +1316,57 @@ private def checkInherentEqDecidable
         yield ()
 
   def checkComponentUsage(constructor: Constructor) = Right(())
-    // TODO[P0]: rethink how to do this. It should be able to handle Vector type where the size index has usage 0 but
-    // it's still eq-decidable.
-    // 2. inductively define a set of constructor params and this set must contain all constructor
-    //    params in order for the data to be eq-decidable
-    //  base: constructor type and component types whose binding has non-0 usage (component usage is
-    //        calculated by product of declared usage in binding and data.inherentUsage).
-    //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
-    // val numParams = constructor.paramTys.size
-    // // all paramTys and usages are weakened to be in the same context with constructor.tArgs
-    // val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
-    //   constructor.paramTys.zipWithIndex.map { (binding, i) =>
-    //     (
-    //       numParams - i,
-    //       (
-    //         binding.ty.weaken(numParams - i, 0),
-    //         binding.usage.weaken(
-    //           numParams - i,
-    //           0,
-    //         ),
-    //       ),
-    //     )
-    //   }.toMap
+  // TODO[P0]: rethink how to do this. It should be able to handle Vector type where the size index has usage 0 but
+  // it's still eq-decidable.
+  // 2. inductively define a set of constructor params and this set must contain all constructor
+  //    params in order for the data to be eq-decidable
+  //  base: constructor type and component types whose binding has non-0 usage (component usage is
+  //        calculated by product of declared usage in binding and data.inherentUsage).
+  //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
+  // val numParams = constructor.paramTys.size
+  // // all paramTys and usages are weakened to be in the same context with constructor.tArgs
+  // val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
+  //   constructor.paramTys.zipWithIndex.map { (binding, i) =>
+  //     (
+  //       numParams - i,
+  //       (
+  //         binding.ty.weaken(numParams - i, 0),
+  //         binding.usage.weaken(
+  //           numParams - i,
+  //           0,
+  //         ),
+  //       ),
+  //     )
+  //   }.toMap
 
-    // val validatedParams = allParams.filter { case (_, (_, usage)) =>
-    //   usage match
-    //     case UsageLiteral(u) if u >= Usage.U1 => true
-    //     case _                                => false
-    // }
+  // val validatedParams = allParams.filter { case (_, (_, usage)) =>
+  //   usage match
+  //     case UsageLiteral(u) if u >= Usage.U1 => true
+  //     case _                                => false
+  // }
 
-    // def getReferencedConstructorArgs(tm: VTerm): Set[Nat] =
-    //   val (positive, negative) =
-    //     SkippingCollapseFreeVarsVisitor.visitVTerm(tm)(using 0)
-    //   (positive ++ negative).filter(_ < numParams)
+  // def getReferencedConstructorArgs(tm: VTerm): Set[Nat] =
+  //   val (positive, negative) =
+  //     SkippingCollapseFreeVarsVisitor.visitVTerm(tm)(using 0)
+  //   (positive ++ negative).filter(_ < numParams)
 
-    // val startingValidatedParamIndices: Set[Int] =
-    //   validatedParams.map(numParams - _._1).to(Set) ++ constructor.tArgs
-    //     .flatMap(
-    //       getReferencedConstructorArgs,
-    //     )
+  // val startingValidatedParamIndices: Set[Int] =
+  //   validatedParams.map(numParams - _._1).to(Set) ++ constructor.tArgs
+  //     .flatMap(
+  //       getReferencedConstructorArgs,
+  //     )
 
-    // // Note that we do not add usage because the usage of a component is not present at runtime
-    // val allValidatedParamIndices = startingValidatedParamIndices
-    //   .bfs(dbIndex =>
-    //     getReferencedConstructorArgs(
-    //       allParams(dbIndex)._1,
-    //     ),
-    //   )
-    //   .iterator
-    //   .to(Set)
-    // if allValidatedParamIndices.size == constructor.paramTys.size then Right(())
-    // else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
+  // // Note that we do not add usage because the usage of a component is not present at runtime
+  // val allValidatedParamIndices = startingValidatedParamIndices
+  //   .bfs(dbIndex =>
+  //     getReferencedConstructorArgs(
+  //       allParams(dbIndex)._1,
+  //     ),
+  //   )
+  //   .iterator
+  //   .to(Set)
+  // if allValidatedParamIndices.size == constructor.paramTys.size then Right(())
+  // else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
 
   if data.inherentEqDecidability == EqDecidabilityLiteral(EqUnknown)
     // short circuit since there is no need to do any check
