@@ -485,7 +485,7 @@ extension (v: VTerm)
         ctx.withMetaResolved(tm):
           case Effects(literal, operands) =>
             for literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] <- transpose(
-                operands.map((k, v) => k.normalized.flatMap(dfs(_, v))),
+                operands.map((k, v) => k.normalized.flatMap(dfs(_, retainSimpleOnly || v))),
               )
             yield (
               (literalsAndOperands.flatMap { case (l, _) => l } ++ literal).filter((qn, _) =>
