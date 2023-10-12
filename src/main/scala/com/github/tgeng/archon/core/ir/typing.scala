@@ -26,6 +26,7 @@ import scala.collection.immutable.LazyList.cons
 import UnsolvedMetaVariableConstraint.*
 import z3.scala.dsl.Eq
 import scala.annotation.meta.param
+import com.github.tgeng.archon.core.ir.FreeVarsVisitor
 
 private val ANSI_RESET = "\u001b[0m"
 private val ANSI_GRAY = "\u001b[90m"
@@ -310,15 +311,14 @@ class TypingContext
   def adaptForMetaVariable(m: RUnsolved, value: CTerm)(using Signature): Option[CTerm] =
     // Make sure meta variable assignment won't cause cyclic meta variable references.
     if MetaVarVisitor.visitCTerm(value)(m.index) then return None
-    val (a, b) = getFreeVars(value)(using 0)
-    if (a ++ b -- m.substitution.keySet).nonEmpty then return None
+
+    if (FreeVarsVisitor.visitCTerm(value)(using 0).map(_.idx).toSet -- m.substitution.keySet).nonEmpty then return None
     Some(value.subst(m.substitution.lift))
 
   def adaptForMetaVariable(m: RUnsolved, value: VTerm)(using Signature): Option[VTerm] =
     // Make sure meta variable assignment won't cause cyclic meta variable references.
     if MetaVarVisitor.visitVTerm(value)(m.index) then return None
-    val (a, b) = getFreeVars(value)(using 0)
-    if (a ++ b -- m.substitution.keySet).nonEmpty then return None
+    if (FreeVarsVisitor.visitVTerm(value)(using 0).map(_.idx).toSet -- m.substitution.keySet).nonEmpty then return None
     Some(value.subst(m.substitution.lift))
 
   def updateConstraint(u: RUnsolved, constraint: UnsolvedMetaVariableConstraint): Unit =
@@ -1311,87 +1311,72 @@ private def checkInherentEqDecidable
       case binding :: rest =>
         for
           eqD <- inferEqDecidability(binding.ty)
-          constraints <- checkEqDecidabilitySubsumption(eqD, dataEqD)
-          _ <- constraints.isEmpty match
-            case true  => Right(())
-            case false => Left(NotEqDecidableType(binding.ty))
+          _ <- ctx.checkSolved(checkEqDecidabilitySubsumption(eqD, dataEqD), NotEqDecidableType(binding.ty))
           _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
         yield ()
 
-  // 2. inductively define a set of constructor params and this set must contain all constructor
-  //    params in order for the data to be non-EqUnknown
-  //  base: constructor type and component types whose binding has non-0 usage (component usage is
-  //        calculated by product of declared usage in binding and data.inherentUsage).
-  //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
-  def checkComponentUsage(constructor: Constructor) =
-    val numParams = constructor.paramTys.size
-    // all paramTys and usages are weakened to be in the same context with constructor.tArgs
-    val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
-      constructor.paramTys.zipWithIndex.map { (binding, i) =>
-        (
-          numParams - i,
-          (
-            binding.ty.weaken(numParams - i, 0),
-            binding.usage.weaken(
-              numParams - i,
-              0,
-            ),
-          ),
-        )
-      }.toMap
+  def checkComponentUsage(constructor: Constructor) = Right(())
+    // TODO[P0]: rethink how to do this. It should be able to handle Vector type where the size index has usage 0 but
+    // it's still eq-decidable.
+    // 2. inductively define a set of constructor params and this set must contain all constructor
+    //    params in order for the data to be eq-decidable
+    //  base: constructor type and component types whose binding has non-0 usage (component usage is
+    //        calculated by product of declared usage in binding and data.inherentUsage).
+    //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
+    // val numParams = constructor.paramTys.size
+    // // all paramTys and usages are weakened to be in the same context with constructor.tArgs
+    // val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
+    //   constructor.paramTys.zipWithIndex.map { (binding, i) =>
+    //     (
+    //       numParams - i,
+    //       (
+    //         binding.ty.weaken(numParams - i, 0),
+    //         binding.usage.weaken(
+    //           numParams - i,
+    //           0,
+    //         ),
+    //       ),
+    //     )
+    //   }.toMap
 
-    val validatedParams = allParams.filter { case (_, (_, usage)) =>
-      checkUsageSubsumption(usage, UsageLiteral(U1)) match
-        case Right(_) => true
-        case _        => false
-    }
+    // val validatedParams = allParams.filter { case (_, (_, usage)) =>
+    //   usage match
+    //     case UsageLiteral(u) if u >= Usage.U1 => true
+    //     case _                                => false
+    // }
 
-    def getReferencedConstructorArgs(tm: VTerm): Set[Nat] =
-      val (positive, negative) =
-        SkippingCollapseFreeVarsVisitor.visitVTerm(tm)(using 0)
-      (positive ++ negative).filter(_ < numParams)
+    // def getReferencedConstructorArgs(tm: VTerm): Set[Nat] =
+    //   val (positive, negative) =
+    //     SkippingCollapseFreeVarsVisitor.visitVTerm(tm)(using 0)
+    //   (positive ++ negative).filter(_ < numParams)
 
-    val startingValidatedParamIndices: Set[Int] =
-      validatedParams.map(numParams - _._1).to(Set) ++ constructor.tArgs
-        .flatMap(
-          getReferencedConstructorArgs,
-        )
+    // val startingValidatedParamIndices: Set[Int] =
+    //   validatedParams.map(numParams - _._1).to(Set) ++ constructor.tArgs
+    //     .flatMap(
+    //       getReferencedConstructorArgs,
+    //     )
 
-    // Note that we do not add usage because the usage of a component is not present at runtime
-    val allValidatedParamIndices = startingValidatedParamIndices
-      .bfs(dbIndex =>
-        getReferencedConstructorArgs(
-          allParams(dbIndex)._1,
-        ),
-      )
-      .iterator
-      .to(Set)
-    if allValidatedParamIndices.size == constructor.paramTys.size then Right(())
-    else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
+    // // Note that we do not add usage because the usage of a component is not present at runtime
+    // val allValidatedParamIndices = startingValidatedParamIndices
+    //   .bfs(dbIndex =>
+    //     getReferencedConstructorArgs(
+    //       allParams(dbIndex)._1,
+    //     ),
+    //   )
+    //   .iterator
+    //   .to(Set)
+    // if allValidatedParamIndices.size == constructor.paramTys.size then Right(())
+    // else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
 
-  checkIsConvertible(
-    data.inherentEqDecidability,
-    EqDecidabilityLiteral(EqUnknown),
-    Some(EqDecidabilityType()),
-  ) match
+  if data.inherentEqDecidability == EqDecidabilityLiteral(EqUnknown)
     // short circuit since there is no need to do any check
-    case Right(_) => Right(())
-    // Call 1, 2, 3
-    case _ =>
-      for
-        _ <- checkComponentTypes(
-          constructor.paramTys,
-          data.inherentEqDecidability,
-        )
-        _ <- checkComponentUsage(constructor)
-      yield ()
-
-private object SkippingCollapseFreeVarsVisitor extends FreeVarsVisitor:
-  override def visitCollapse
-    (collapse: Collapse)
-    (using bar: Nat)
-    (using Σ: Signature)
-    : ( /* positive */ Set[Nat], /* negative */ Set[Nat]) = this.combine()
+  then Right(())
+  // Call 1, 2
+  else
+    for
+      _ <- checkComponentTypes(constructor.paramTys, data.inherentEqDecidability)
+      _ <- checkComponentUsage(constructor)
+    yield ()
 
 def inferEqDecidability
   (ty: VTerm)
@@ -2042,10 +2027,10 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
 // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
 //  the bound variable
 private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ: Signature): Either[IrError, T] =
-  val (positiveFreeVars, negativeFreeVars) = ty match
-    case ty: CTerm => getFreeVars(ty)(using 0)
-    case ty: VTerm => getFreeVars(ty)(using 0)
-  if positiveFreeVars(0) || negativeFreeVars(0) then Left(error)
+  val freeVars = ty match
+    case ty: CTerm => FreeVarsVisitor.visitCTerm(ty)(using 0)
+    case ty: VTerm => FreeVarsVisitor.visitVTerm(ty)(using 0)
+  if freeVars.exists(_.idx == 0) then Left(error)
   else
     Right(ty match
       case ty: CTerm => ty.strengthened.asInstanceOf[T]

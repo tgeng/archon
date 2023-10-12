@@ -20,6 +20,7 @@ import WrapPolicy.*
 import IndentPolicy.*
 import DelimitPolicy.*
 import ResolvedMetaVariable.*
+import com.github.tgeng.archon.core.ir.FreeVarsVisitor
 
 // def expectConvertible(target: CTerm, )
 
@@ -354,14 +355,12 @@ def checkAreConvertible
         r <-
           if headConstraints.isEmpty
           then checkAreConvertible(tailLefts, tailRights, tys.substLowers(left))
-          else
-            val (a, b) = getFreeVars(tys)(using 0)
-            if a(0) || b(0)
-              // if the head term is referenced in the tail, add the whole thing as a constraint
-            then Right(Set(Constraint.Conversions(Γ, lefts, rights, tys)))
-            // the head term is not referenced in the tail, add the tail constraint in addition to the head
-            // constraints
-            else checkAreConvertible(tailLefts, tailRights, tys.strengthened).map(headConstraints ++ _)
+          else if FreeVarsVisitor.visitTelescope(tys)(using 0).exists(_.idx == 0)
+            // if the head term is referenced in the tail, add the whole thing as a constraint
+          then Right(Set(Constraint.Conversions(Γ, lefts, rights, tys)))
+          // the head term is not referenced in the tail, add the tail constraint in addition to the head
+          // constraints
+          else checkAreConvertible(tailLefts, tailRights, tys.strengthened).map(headConstraints ++ _)
       yield r
     case _ => throw IllegalArgumentException("length mismatch")
 
@@ -402,17 +401,15 @@ private def checkElimIsConvertible
             headConstraints <- checkIsConvertible(left, right, Some(binding.ty)).flatMap(ctx.solve)
             r <-
               if headConstraints.isEmpty then checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)
+              else if FreeVarsVisitor.visitCTerm(bodyTy)(using 0).exists(_.idx == 0) then Right(resultConstraint)
               else
-                val (a, b) = getFreeVars(bodyTy)(using 0)
-                if a(0) || b(0) then Right(resultConstraint)
-                else
-                  checkElimIsConvertible(
-                    Application(head, left),
-                    lefts,
-                    rights,
-                    bodyTy.strengthened,
-                    ty,
-                  ).map(headConstraints ++ _)
+                checkElimIsConvertible(
+                  Application(head, left),
+                  lefts,
+                  rights,
+                  bodyTy.strengthened,
+                  ty,
+                ).map(headConstraints ++ _)
           yield r
         case _ => throw IllegalStateException("should have been checked to be a function type")
     case (EProj(leftName) :: lefts, EProj(rightName) :: rights, rt) =>
