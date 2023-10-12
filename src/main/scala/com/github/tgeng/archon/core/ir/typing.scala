@@ -556,25 +556,10 @@ def checkDataConstructor
           )
           _ <- checkInherentEqDecidable(Σ.getData(qn), con)
           _ <- {
-            // binding of positiveVars must be either covariant or invariant
-            // binding of negativeVars must be either contravariant or invariant
-            val (positiveVars, negativeVars) = getFreeVars(con.paramTys)(using 0)
-            val tParamTysSize = data.tParamTys.size
-            val bindingWithIncorrectUsage = data.tParamTys.zipWithIndex.filter { case ((_, variance), reverseIndex) =>
-              val index = tParamTysSize - reverseIndex - 1
-              variance match
-                case Variance.INVARIANT     => false
-                case Variance.COVARIANT     => negativeVars(index)
-                case Variance.CONTRAVARIANT => positiveVars(index)
-            }
-            if bindingWithIncorrectUsage.isEmpty then Right(())
-            else
-              Left(
-                IllegalVarianceInData(
-                  data.qn,
-                  bindingWithIncorrectUsage.map(_._2),
-                ),
-              )
+            val violatingVars =
+              VarianceChecker.visitTelescope(con.paramTys)(using data.tParamTys, Variance.COVARIANT, 0)
+            if violatingVars.isEmpty then Right(())
+            else Left(IllegalVarianceInData(data.qn, violatingVars))
           }
         yield Constructor(con.name, paramTys, tArgs)
   }
@@ -611,28 +596,103 @@ def checkRecordField
         for
           (ty, _) <- checkIsCType(field.ty, Some(record.level.weakened))
           _ <-
-            // binding of positiveVars must be either covariant or invariant
-            // binding of negativeVars must be either contravariant or invariant
-            val (positiveVars, negativeVars) = getFreeVars(field.ty)(using 0)
-            val tParamTysSize = record.tParamTys.size
-            val bindingWithIncorrectUsage = record.tParamTys.zipWithIndex.filter { case ((_, variance), reverseIndex) =>
-              val index =
-                tParamTysSize - reverseIndex // Offset by 1 to accommodate self reference
-              variance match
-                case Variance.INVARIANT     => false
-                case Variance.COVARIANT     => negativeVars(index)
-                case Variance.CONTRAVARIANT => positiveVars(index)
-            }
-            if bindingWithIncorrectUsage.isEmpty then Right(())
-            else
-              Left(
-                IllegalVarianceInRecord(
-                  record.qn,
-                  bindingWithIncorrectUsage.map(_._2),
-                ),
-              )
+            val violatingVars = VarianceChecker.visitCTerm(field.ty)(using record.tParamTys, Variance.COVARIANT, 0)
+            if violatingVars.isEmpty then Right(())
+            else Left(IllegalVarianceInRecord(record.qn, violatingVars))
         yield Field(field.name, ty)
   }
+
+private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Var]]:
+  override def combine(violatedVars: Seq[Var]*)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    violatedVars.flatten
+
+  override def withBindings
+    (bindingNames: => Seq[Ref[Name]])
+    (action: ((TContext, Variance, Nat)) ?=> Seq[Var])
+    (using ctx: (TContext, Variance, Nat))
+    (using Σ: Signature)
+    : Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    action(using (tContext, variance, offset + bindingNames.size))
+
+  override def visitVar(v: Var)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    val index = v.idx - offset
+    if index < 0 then return Nil
+    tContext(index)._2 match
+      case Variance.INVARIANT => Nil
+      case declaredVariance =>
+        if declaredVariance == variance then Nil
+        else Seq(v.strengthen(offset, 0).asInstanceOf[Var])
+
+  override def visitVTerm(tm: VTerm)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    tm match
+      case _: (Type | Var | U | DataType) => super.visitVTerm(tm)(using ctx)
+      case _                              => super.visitVTerm(tm)(using (tContext, Variance.INVARIANT, offset))
+
+  override def visitDataType(dataType: DataType)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    val data = Σ.getData(dataType.qn)
+    (data.tParamTys.map(_._2) ++ data.tIndexTys.map(_ => Variance.INVARIANT))
+      .zip(dataType.args)
+      .flatMap:
+        case (Variance.INVARIANT, arg)     => visitVTerm(arg)(using (tContext, Variance.INVARIANT, offset))
+        case (Variance.COVARIANT, arg)     => visitVTerm(arg)(using ctx)
+        case (Variance.CONTRAVARIANT, arg) => visitVTerm(arg)(using (tContext, variance.flip, offset))
+      .toSeq
+
+  override def visitCTerm(tm: CTerm)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    tm match
+      case _: (CType | F | FunctionType | RecordType) => super.visitCTerm(tm)(using ctx)
+      case _ => super.visitCTerm(tm)(using (tContext, Variance.INVARIANT, offset))
+
+  override def visitCType(cType: CType)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    combine(
+      visitCTerm(cType.upperBound),
+      visitVTerm(cType.effects)(using (tContext, Variance.INVARIANT, offset)),
+    )
+  override def visitF(f: F)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    val invariantCtx = (tContext, Variance.INVARIANT, offset)
+    combine(
+      visitVTerm(f.vTy),
+      visitVTerm(f.effects)(using invariantCtx),
+      visitVTerm(f.usage)(using invariantCtx),
+    )
+
+  override def visitFunctionType
+    (functionType: FunctionType)
+    (using ctx: (TContext, Variance, Nat))
+    (using Σ: Signature)
+    : Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    val invariantCtx = (tContext, Variance.INVARIANT, offset)
+    val contravariantCtx = (tContext, variance.flip, offset)
+    combine(
+      visitVTerm(functionType.binding.ty)(using contravariantCtx),
+      withBindings(Seq(functionType.binding.name)) {
+        visitCTerm(functionType.bodyTy)
+      },
+      visitVTerm(functionType.effects)(using invariantCtx),
+    )
+  override def visitRecordType
+    (recordType: RecordType)
+    (using ctx: (TContext, Variance, Nat))
+    (using Σ: Signature)
+    : Seq[Var] =
+    val (tContext, variance, offset) = ctx
+    val record = Σ.getRecord(recordType.qn)
+    (record.tParamTys
+      .map(_._2))
+      .zip(recordType.args)
+      .flatMap:
+        case (Variance.INVARIANT, arg)     => visitVTerm(arg)(using (tContext, Variance.INVARIANT, offset))
+        case (Variance.COVARIANT, arg)     => visitVTerm(arg)(using ctx)
+        case (Variance.CONTRAVARIANT, arg) => visitVTerm(arg)(using (tContext, variance.flip, offset))
+      .toSeq
 
 def checkDef(definition: Definition)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, Definition] =
   ctx.trace(s"checking def signature ${definition.qn}") {

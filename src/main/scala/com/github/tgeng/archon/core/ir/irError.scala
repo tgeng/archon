@@ -54,12 +54,12 @@ enum IrError extends HasException:
   case IllegalVarianceInData
     (
       qn: QualifiedName,
-      illegallyUsedBindingIndices: collection.Seq[Nat],
+      violatingVars: collection.Seq[VTerm.Var],
     )
   case IllegalVarianceInRecord
     (
       qn: QualifiedName,
-      illegallyUsedBindingIndices: collection.Seq[Nat],
+      violatingVars: collection.Seq[VTerm.Var],
     )
   case NotEqDecidableType(ty: VTerm)
   case NormalizationError(ctm: CTerm)

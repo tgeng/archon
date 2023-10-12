@@ -7,6 +7,10 @@ import SourceInfo.*
 
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
+  def flip: Variance = this match
+    case INVARIANT => INVARIANT
+    case COVARIANT => CONTRAVARIANT
+    case CONTRAVARIANT => COVARIANT
 
 enum Essentiality:
   case ESSENTIAL, AUXILIARY
