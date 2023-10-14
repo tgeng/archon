@@ -6,7 +6,6 @@ import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence
 import com.github.tgeng.archon.core.ir.UnificationResult
 
-// TODO[P0]: clean up unused cases
 enum IrError extends HasException:
   case CannotFindCTypeUnion(a: CTerm, b: CTerm)
   case CannotFindVTypeUnion(a: VTerm, b: VTerm)
@@ -57,7 +56,7 @@ enum IrError extends HasException:
   case NotEffectConvertible(sub: VTerm, sup: VTerm)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm)
   case NotEqDecidabilitySubsumption(sub: VTerm, sup: VTerm)
-  case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name)
+  case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name, badBindings: Seq[Binding[VTerm]])
   case NotEqDecidableType(ty: VTerm)
   case NotLevelConvertible(sub: VTerm, sup: VTerm)
   case NotLevelSubsumption(sub: VTerm, sup: VTerm)

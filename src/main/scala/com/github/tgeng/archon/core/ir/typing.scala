@@ -522,9 +522,9 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Either
     given Context = IndexedSeq()
 
     for
-      tParamsTysTelescope <- checkparameterTyDeclarations(data.tParamTys.map(_._1).toTelescope)
+      tParamsTysTelescope <- checkParameterTyDeclarations(data.tParamTys.map(_._1).toTelescope)
       tParamTys = Context.fromTelescope(tParamsTysTelescope)
-      tIndexTys <- checkparameterTyDeclarations(data.tIndexTys)(using tParamTys)
+      tIndexTys <- checkParameterTyDeclarations(data.tIndexTys)(using tParamTys)
       tContext = tParamTys ++ tIndexTys
       (level, _) <- checkLevel(data.level)(using tContext)
       (inherentEqDecidability, _) <- checkType(data.inherentEqDecidability, EqDecidabilityType())(using
@@ -550,7 +550,7 @@ def checkDataConstructor
       case Some(data) =>
         given Γ: Context = data.tParamTys.map(_._1)
         for
-          paramTys <- checkparameterTyDeclarations(con.paramTys, Some(data.level))
+          paramTys <- checkParameterTyDeclarations(con.paramTys, Some(data.level))
           (tArgs, _) <- checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using
             Γ ++ paramTys,
           )
@@ -570,7 +570,7 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
 
     val tParams = record.tParamTys.map(_._1)
     for
-      tParamTysTelescope <- checkparameterTyDeclarations(tParams.toList)
+      tParamTysTelescope <- checkParameterTyDeclarations(tParams.toList)
       tParamTys = Context.fromTelescope(tParamTysTelescope)
       _ <- checkTParamsAreUnrestricted(tParams.toList)
       (level, _) <- checkLevel(record.level)(using tParams.toIndexedSeq)
@@ -707,7 +707,7 @@ def checkEffect(effect: Effect)(using Σ: Signature)(using ctx: TypingContext): 
     given Context = IndexedSeq()
 
     for
-      telescope <- checkparameterTyDeclarations(effect.tParamTys.toTelescope)
+      telescope <- checkParameterTyDeclarations(effect.tParamTys.toTelescope)
       _ <- checkTParamsAreUnrestricted(telescope)
       _ <- checkAreEqDecidableTypes(telescope)
     yield Effect(effect.qn)(telescope.reverse.toIndexedSeq, effect.continuationUsage)
@@ -725,7 +725,7 @@ def checkOperation
         val Γ = effect.tParamTys.toIndexedSeq
 
         for
-          paramTys <- checkparameterTyDeclarations(operation.paramTys)(using Γ)
+          paramTys <- checkParameterTyDeclarations(operation.paramTys)(using Γ)
           (resultTy, _) <- checkIsType(operation.resultTy)(using Γ ++ operation.paramTys)
           (resultUsage, _) <- checkType(operation.resultUsage, UsageType(None))
         yield operation.copy(paramTys = paramTys, resultTy = resultTy, resultUsage = resultUsage)
@@ -747,7 +747,7 @@ private def checkTParamsAreUnrestricted
       _ <- checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
     yield ()
 
-private def checkparameterTyDeclarations
+private def checkParameterTyDeclarations
   (tParamTys: Telescope, levelBound: Option[VTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
@@ -757,9 +757,8 @@ private def checkparameterTyDeclarations
   case binding :: rest =>
     for
       (ty, _) <- checkIsType(binding.ty, levelBound)
-      _ <- checkIsEqDecidableTypes(ty)
       (usage, _) <- checkType(binding.usage, UsageType(None))
-      rest <- checkparameterTyDeclarations(rest)(using Γ :+ binding)
+      rest <- checkParameterTyDeclarations(rest)(using Γ :+ binding)
     yield Binding(ty, usage)(binding.name) :: rest
 
 private def checkLevel
@@ -1304,7 +1303,7 @@ private def checkInherentEqDecidable
   : Either[IrError, Unit] =
   given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
 
-  // 1. check that eqD of component type ⪯ eqD of data
+  // 1. check that a the component types are all eq-decidable if the data is eq-decidable
   def checkComponentTypes(tys: Telescope, dataEqD: VTerm)(using Γ: Context): Either[IrError, Unit] =
     tys match
       case Nil => Right(())
@@ -1315,58 +1314,27 @@ private def checkInherentEqDecidable
           _ <- checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
         yield ()
 
-  def checkComponentUsage(constructor: Constructor) = Right(())
-  // TODO[P0]: rethink how to do this. It should be able to handle Vector type where the size index has usage 0 but
-  // it's still eq-decidable.
-  // 2. inductively define a set of constructor params and this set must contain all constructor
-  //    params in order for the data to be eq-decidable
-  //  base: constructor type and component types whose binding has non-0 usage (component usage is
-  //        calculated by product of declared usage in binding and data.inherentUsage).
-  //  inductive: bindings that are referenced (not through Collapse to root of the term) inductively
-  // val numParams = constructor.paramTys.size
-  // // all paramTys and usages are weakened to be in the same context with constructor.tArgs
-  // val allParams: Map[ /* dbIndex */ Nat, ( /* ty */ VTerm, /* usage */ VTerm)] =
-  //   constructor.paramTys.zipWithIndex.map { (binding, i) =>
-  //     (
-  //       numParams - i,
-  //       (
-  //         binding.ty.weaken(numParams - i, 0),
-  //         binding.usage.weaken(
-  //           numParams - i,
-  //           0,
-  //         ),
-  //       ),
-  //     )
-  //   }.toMap
+  // 2. check that each zero-usage component is referenced in the constructed data type. This is necessary because
+  //    zero usage components won't be available at runtime. Hence, checking components values of passed to a
+  //    constructor won't be sufficient. But if a component is referenced in the constructed data type, then the
+  //    equality follows from the equality of the types, which is checked in 1.
+  //    Note that this assumes the constructed data type must be collapse-free, because otherwise the constructed type
+  //    is not a free algebra, and hence the equality of the values at runtime does not imply equality of the values
+  //    at compile time.
+  def checkComponentUsage(constructor: Constructor) =
+    val allReferencedVarsInType =
+      constructor.tArgs.flatMap(IgnoreCollapseFreeVarsVisitor.visitVTerm(_)(using 0)).map(_.idx).toSet
+    val badComponents = constructor.paramTys.zipWithIndex
+      .filter:
+        case (binding, i) =>
+          val index = constructor.paramTys.size - i - 1
+          binding.usage match
+            case UsageLiteral(u) if u >= Usage.U1    => false
+            case _ if allReferencedVarsInType(index) => false
+            case _                                   => true
 
-  // val validatedParams = allParams.filter { case (_, (_, usage)) =>
-  //   usage match
-  //     case UsageLiteral(u) if u >= Usage.U1 => true
-  //     case _                                => false
-  // }
-
-  // def getReferencedConstructorArgs(tm: VTerm): Set[Nat] =
-  //   val (positive, negative) =
-  //     SkippingCollapseFreeVarsVisitor.visitVTerm(tm)(using 0)
-  //   (positive ++ negative).filter(_ < numParams)
-
-  // val startingValidatedParamIndices: Set[Int] =
-  //   validatedParams.map(numParams - _._1).to(Set) ++ constructor.tArgs
-  //     .flatMap(
-  //       getReferencedConstructorArgs,
-  //     )
-
-  // // Note that we do not add usage because the usage of a component is not present at runtime
-  // val allValidatedParamIndices = startingValidatedParamIndices
-  //   .bfs(dbIndex =>
-  //     getReferencedConstructorArgs(
-  //       allParams(dbIndex)._1,
-  //     ),
-  //   )
-  //   .iterator
-  //   .to(Set)
-  // if allValidatedParamIndices.size == constructor.paramTys.size then Right(())
-  // else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name))
+    if badComponents.isEmpty then Right(())
+    else Left(NotEqDecidableDueToConstructor(data.qn, constructor.name, badComponents.map(_._1)))
 
   if data.inherentEqDecidability == EqDecidabilityLiteral(EqUnknown)
     // short circuit since there is no need to do any check
@@ -1374,9 +1342,15 @@ private def checkInherentEqDecidable
   // Call 1, 2
   else
     for
-      _ <- checkComponentTypes(constructor.paramTys, data.inherentEqDecidability)
+      _ <- checkComponentTypes(
+        (data.tParamTys.map(_._1) ++ data.tIndexTys ++ constructor.paramTys).toList,
+        data.inherentEqDecidability,
+      )(using IndexedSeq())
       _ <- checkComponentUsage(constructor)
     yield ()
+
+private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
+  override def visitCollapse(collapse: Collapse)(using ctx: Nat)(using Σ: Signature): Seq[Var] = Seq.empty
 
 def inferEqDecidability
   (ty: VTerm)
