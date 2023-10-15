@@ -29,40 +29,32 @@ extension [T](a: mutable.ArrayBuffer[T])
 
 private case class ReplicationState
   (
-    currentHandler: Handler,
+    currentHandlerEntry: Handler,
     baseStackSize: Nat,
     continuationTerm1: CTerm,
     continuationTerm2: CTerm,
     continuationUsage: Usage,
   )
 
-private case class FinishSimpleOperation(handlerIndex: Nat, operationContinuationUsage: Usage)
+private case class FinishSimpleOperation
+  (handlerIndex: Nat, operationContinuationUsage: Usage, restoredHandlerEntry: Option[HandlerEntry])
+
+private case class HandlerEntry(index: Nat, handler: Handler, previous: Option[HandlerEntry])
 
 private final class StackMachine
-  (val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm] | ReplicationState | FinishSimpleOperation]):
+  (
+    val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm] | ReplicationState | FinishSimpleOperation | HandlerEntry],
+  ):
 
   /** Pre-constructed term before replicating continuation. This is used to avoid the need to represent partially
     * replicated continuation in the stack.
     */
   private var preConstructedTerm: Option[CTerm] = None
-  private val handlerIndex = mutable.WeakHashMap[Eff, mutable.Stack[Nat]]()
-  regenerateHandlerIndex()
-
-  private def updateHandlerIndex(eff: VTerm, index: Nat) = eff match
-    case Effects(effs, s) if s.isEmpty =>
-      for eff <- effs do handlerIndex.getOrElseUpdate(eff, mutable.Stack()).push(index)
-    case _ => throw IllegalStateException(s"bad effects $eff")
-
-  private def regenerateHandlerIndex(startIndex: Nat = 0): Unit =
-    trimHandlerIndex(startIndex)
-    stack.view.zipWithIndex.drop(startIndex).foreach {
-      case (handler: Handler, index) => updateHandlerIndex(handler.eff, index)
-      case _                         =>
-    }
-  private def trimHandlerIndex(size: Nat = stack.size): Unit =
-    handlerIndex.foreach { (_, idxStack) =>
-      while idxStack.nonEmpty && idxStack.top >= size do idxStack.pop()
-    }
+  private var currentHandlerEntry: Option[HandlerEntry] = None
+  private def getMatchingHandler(effAndArgs: Eff, start: Option[HandlerEntry] = currentHandlerEntry): HandlerEntry =
+    val current = currentHandlerEntry.getOrElse(throw IllegalStateException("type error: no more handlers"))
+    if current.handler.eff == effAndArgs then current
+    else getMatchingHandler(effAndArgs, current.previous)
 
   /** @param pc
     *   "program counter"
@@ -103,8 +95,7 @@ private final class StackMachine
                     continuationUsage,
                   )
                 case _ => throw IllegalStateException("type error")
-            case FinishSimpleOperation(handlerIndex, operationContinuationUsage) =>
-              regenerateHandlerIndex(handlerIndex)
+            case FinishSimpleOperation(handlerIndex, operationContinuationUsage, previousHandlerEntry) =>
               pc match
                 case Return(Con(name, param :: result :: Nil), _) if name == n"MkPair" =>
                   val handler = stack(handlerIndex).asInstanceOf[Handler]
@@ -114,17 +105,13 @@ private final class StackMachine
                   def getU0Term(result: VTerm): CTerm =
                     val capturedStack = stack.slice(handlerIndex, stack.size).toIndexedSeq
                     stack.dropRightInPlace(stack.size - handlerIndex)
-                    trimHandlerIndex()
                     // Construct a term that contains all invocations of parameter disposers in captured handlers. Then
                     // this result is passed to a let term which discards the unit result from the handlers and then
                     // invoke the corresponding operation handler implementation.
                     Let(
                       capturedStack.foldRight[CTerm](Return(Con(n"MkUnit", Nil), uAny)):
-                        case (entry: CTerm, term) =>
-                          processStackEntryForDisposerCall(term)(entry) match
-                            case Some(t) => t
-                            case _       => term
-                        case (_, term) => term
+                        case (HandlerEntry(_, handler, _), term) => processStackEntryForDisposerCall(term)(handler)
+                        case (_, term)                           => term
                       ,
                       DataType(Builtins.UnitQn, Nil),
                       handler.outputEffects,
@@ -151,7 +138,7 @@ private final class StackMachine
                         case Con(name, result :: Nil) if name == n"Right" => getU1Term(result)
                         case _                                            => throw IllegalStateException("type error")
                     case _ => throw IllegalStateException("type error")
-
+                  currentHandlerEntry = previousHandlerEntry
                   run(term)
                 case _ => throw IllegalStateException("type error")
             case _ =>
@@ -232,7 +219,7 @@ private final class StackMachine
                 stack.pushAll(elims)
                 run(t)
               case Left(e) => Left(e)
-      case OperationCall((effQn, effArgs), name, args) =>
+      case OperationCall(effAndArgs @ (effQn, effArgs), name, args) =>
         Σ.getEffectOption(effQn) match
           case None => Left(MissingDeclaration(effQn))
           case Some(eff) =>
@@ -240,18 +227,17 @@ private final class StackMachine
               effArgs <- effArgs.normalized
               args <- args.normalized
               r <-
-                val handlerIdx = handlerIndex((effQn, effArgs)).top
-                val handler = stack(handlerIdx).asInstanceOf[Handler]
+                val matchingHandler = getMatchingHandler(effAndArgs)
+                val matchingHandlerIdx = matchingHandler.index
+                val handler = matchingHandler.handler
                 val opHandler = handler.handlers(effQn / name)
                 val operation = Σ.getOperation(effQn, name)
+                val restoredHandlerEntry = this.currentHandlerEntry
+                this.currentHandlerEntry = matchingHandler.previous
                 operation.continuationUsage match
                   case ContinuationUsage(usage, ControlMode.Simple) =>
                     preConstructedTerm = Some(reconstructTermFromStack(pc))
-                    // TODO[P1]: redo the index with a HMAT instead so trimming is not needed.
-                    // Remove all index into handlers between the matching handler and the current tip so that the
-                    // corresponding operation handler implementation can run as if there are no inbetween handlers.
-                    trimHandlerIndex(handlerIdx)
-                    stack.push(FinishSimpleOperation(handlerIdx, usage))
+                    stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
                     Right(opHandler.substLowers(handler.parameter :: args: _*))
                   case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
                     val allOperationArgs = effArgs ++ args
@@ -263,15 +249,14 @@ private final class StackMachine
                       ),
                     )
                     val continuationTerm = stack
-                      .slice(handlerIdx, stack.size)
+                      .slice(matchingHandlerIdx, stack.size)
                       .foldRight(tip):
                         case (entry: Elimination[VTerm], term) => redex(term, entry)
                         case (entry: Let, term)                => entry.copy(t = term)(entry.boundName)
-                        case (entry: Handler, term) =>
+                        case (HandlerEntry(_, entry, _), term) =>
                           entry.copy(input = term)(entry.handlersBoundNames)
                         case _ => throw IllegalStateException("type error")
-                    stack.dropRightInPlace(stack.size - handlerIdx)
-                    trimHandlerIndex()
+                    stack.dropRightInPlace(stack.size - matchingHandlerIdx)
                     val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
                     Right(opHandler.substLowers(handler.parameter +: args :+ continuation: _*))
             yield r) match
@@ -294,20 +279,21 @@ private final class StackMachine
           case EProj(name) if name == n"dispose" =>
             val ETerm(param) = stack.pop(): @unchecked
             val handlerStack =
-              expandTermToStack(getContinuationTermWithNewParameter(param))(processStackEntryForDisposerCall(Hole))
+              expandTermToStack(getContinuationTermWithNewParameter(param))(processStackEntryForDisposerCall(Hole))()
             val stackHeight = stack.size
             stack.pushAll(handlerStack)
-            regenerateHandlerIndex(stackHeight)
             run(Return(Con(n"MkUnit", Nil), uAny))
           case proj @ EProj(name) if name == n"replicate" =>
             preConstructedTerm = Some(reconstructTermFromStack(redex(pc, proj)))
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
-            val stackToDuplicate = expandTermToStack(getContinuationTermWithNewParameter(param)):
-              case t: Redex   => Some(t.copy(t = Hole))
-              case t: Let     => Some(t.copy(t = Hole)(t.boundName))
-              case h: Handler => Some(h.copy(input = Hole)(h.handlersBoundNames))
-              case t          => Some(t)
+            val stackToDuplicate = expandTermToStack(getContinuationTermWithNewParameter(param)) { case h =>
+              h.copy(input = Hole)(h.handlersBoundNames)
+            } {
+              case t: Redex => t.copy(t = Hole)
+              case t: Let   => t.copy(t = Hole)(t.boundName)
+              case t        => t
+            }
             stack.pushAll(stackToDuplicate)
             val tip = stack.pop().asInstanceOf[CapturedContinuationTip]
             replicate(baseStackHeight, tip, tip, continuationUsage)
@@ -317,13 +303,19 @@ private final class StackMachine
           case Left(e) => Left(e)
           case Right(eff) =>
             if reduceDown then
-              updateHandlerIndex(eff, stack.length)
               h.input match
-                case Return(v, usage) => run(h.transform.substLowers(h.parameter, v))
-                case _                => throw IllegalArgumentException("type error")
+                case Return(v, usage) =>
+                  this.currentHandlerEntry = this.currentHandlerEntry.get.previous
+                  run(h.transform.substLowers(h.parameter, v))
+                case _ => throw IllegalArgumentException("type error")
             else
-              stack.push(h.copy(eff = eff, input = Hole)(h.handlersBoundNames))
-              updateHandlerIndex(eff, stack.length)
+              stack.push(
+                HandlerEntry(
+                  stack.size,
+                  h.copy(eff = eff, input = Hole)(h.handlersBoundNames),
+                  this.currentHandlerEntry,
+                ),
+              )
               run(h.input)
 
   /** @param baseStackSize
@@ -370,7 +362,8 @@ private final class StackMachine
             t.copy(t = continuationTerm2),
             continuationUsage,
           )
-        case h: Handler =>
+        case HandlerEntry(handlerIndex, h, previousEntry) =>
+          this.currentHandlerEntry = previousEntry
           h.parameterReplicator match
             case Some(parameterReplicator) =>
               stack.push(
@@ -412,12 +405,46 @@ private final class StackMachine
           if elims.nonEmpty then
             current = Redex(current, elims.toList)(using c.sourceInfo)
             elims.clear()
+        case HandlerEntry(_, handler, _) =>
+          current = substHole(handler, current)
+          if elims.nonEmpty then
+            current = Redex(current, elims.toList)(using handler.sourceInfo)
+            elims.clear()
         case _: ReplicationState | _: FinishSimpleOperation =>
           preConstructedTerm match
             case Some(t) => return t
             case _       => throw IllegalStateException("type error")
     }
     current
+
+  @tailrec
+  private def expandTermToStack
+    (
+      term: CTerm,
+      currentIndex: Nat = stack.size,
+      currentHandlerEntry: Option[HandlerEntry] = None,
+      acc: Iterable[CTerm | HandlerEntry] = Iterable(),
+    )
+    (handlerTransform: Handler => Handler)
+    (transform: (CTerm => CTerm) | Unit = ())
+    : Iterable[CTerm | HandlerEntry] =
+    term match
+      case term: (Redex | Let) =>
+        val subTerm = term match
+          case t: Redex => t.t
+          case t: Let   => t.t
+        transform match
+          case () => expandTermToStack(subTerm, currentIndex, currentHandlerEntry, acc)(handlerTransform)(transform)
+          case f: (CTerm => CTerm) =>
+            expandTermToStack(subTerm, currentIndex + 1, currentHandlerEntry, acc ++ Iterable(f(term)))(
+              handlerTransform,
+            )(f)
+      case term: Handler =>
+        val handlerEntry = HandlerEntry(currentIndex, handlerTransform(term).asInstanceOf[Handler], currentHandlerEntry)
+        expandTermToStack(term.input, currentIndex + 1, Some(handlerEntry), acc ++ Iterable(handlerEntry))(
+          handlerTransform,
+        )(transform)
+      case _ => acc ++ Iterable(term)
 
 extension (c: CTerm)
   def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, CTerm] =
@@ -476,7 +503,7 @@ extension (v: VTerm)
       def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq: _*)
 
       def varOrUsageToTerm(t: VTerm | Usage): VTerm = t match
-        case v: VTerm   => v
+        case v: VTerm => v
         case u: Usage => UsageLiteral(u)
 
       dfs(u).map(lubToTerm)
@@ -488,10 +515,12 @@ extension (v: VTerm)
                 operands.map((k, v) => k.normalized.flatMap(dfs(_, retainSimpleOnly || v))),
               )
             yield (
-              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal).filter((qn, _) =>
-                if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
-                else true,
-              ).toSet,
+              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
+                .filter((qn, _) =>
+                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
+                  else true,
+                )
+                .toSet,
               literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap,
             )
           case _: Collapse => Right((Set.empty, Map(tm -> false)))
@@ -654,32 +683,22 @@ private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
     (using Σ: Signature)
     : CTerm = Return(newTip, cct.ty.usage)
 
-private def expandTermToStack(term: CTerm)(transform: CTerm => Option[CTerm]): Iterable[CTerm] = term match
-  case term: Redex   => transform(term) ++ expandTermToStack(term.t)(transform)
-  case term: Let     => transform(term) ++ expandTermToStack(term.t)(transform)
-  case term: Handler => transform(term) ++ expandTermToStack(term.input)(transform)
-  case _             => Iterable(term)
-
-private def processStackEntryForDisposerCall(input: CTerm)(entry: CTerm)(using Signature): Option[CTerm] = entry match
+private def processStackEntryForDisposerCall(input: CTerm)(handler: Handler)(using Signature): Handler =
   // retain all handlers for two reasons
   // 1. if it contains a parameter disposer, the disposer needs to be invoked
   // 2. the handler may provide effects needed by upper disposers
-  case h: Handler =>
-    Some(
-      h.copy(
-        input = input,
-        outputUsage = UsageLiteral(Usage.UAny),
-        outputTy = DataType(Builtins.UnitQn, Nil),
-        // weakened because transform also takes a output value. But for disposer calls this
-        // value is always unit and ignored by the parameterDisposer.
-        transform = h.parameterDisposer match
-          case Some(parameterDisposer) => parameterDisposer.weakened
-          case None                    => Return(Con(n"MkUnit", Nil), uAny),
-      )(
-        h.handlersBoundNames,
-      ),
-    )
-  case _ => None
+  handler.copy(
+    input = input,
+    outputUsage = UsageLiteral(Usage.UAny),
+    outputTy = DataType(Builtins.UnitQn, Nil),
+    // weakened because transform also takes a output value. But for disposer calls this
+    // value is always unit and ignored by the parameterDisposer.
+    transform = handler.parameterDisposer match
+      case Some(parameterDisposer) => parameterDisposer.weakened
+      case None                    => Return(Con(n"MkUnit", Nil), uAny),
+  )(
+    handler.handlersBoundNames,
+  )
 
 private def joinContinuationUsages[K]
   (m1: IterableOnce[(K, ContinuationUsage)], m2: IterableOnce[(K, ContinuationUsage)])
