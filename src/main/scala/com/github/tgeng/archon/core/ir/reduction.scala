@@ -81,6 +81,9 @@ private final class StackMachine
         else
           stack.pop() match
             case c: CTerm => run(substHole(c, pc), true)
+            case h @ HandlerEntry(_, handler, _) =>
+              assert(h == this.currentHandlerEntry)
+              run(handler, reduceDown = true)
             case ReplicationState(handler, baseStackSize, continuationTerm1, continuationTerm2, continuationUsage) =>
               pc match
                 case Return(Con(name, param1 :: param2 :: Nil), _) if name == n"MkPair" =>
@@ -278,23 +281,26 @@ private final class StackMachine
             )
           case EProj(name) if name == n"dispose" =>
             val ETerm(param) = stack.pop(): @unchecked
-            val handlerStack =
+            val (handlerStack, handlerEntry) =
               expandTermToStack(getContinuationTermWithNewParameter(param))(processStackEntryForDisposerCall(Hole))()
             val stackHeight = stack.size
             stack.pushAll(handlerStack)
+            this.currentHandlerEntry = handlerEntry
             run(Return(Con(n"MkUnit", Nil), uAny))
           case proj @ EProj(name) if name == n"replicate" =>
             preConstructedTerm = Some(reconstructTermFromStack(redex(pc, proj)))
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
-            val stackToDuplicate = expandTermToStack(getContinuationTermWithNewParameter(param)) { case h =>
-              h.copy(input = Hole)(h.handlersBoundNames)
+            val (stackToDuplicate, handlerEntry) = expandTermToStack(getContinuationTermWithNewParameter(param)) {
+              case h =>
+                h.copy(input = Hole)(h.handlersBoundNames)
             } {
               case t: Redex => t.copy(t = Hole)
               case t: Let   => t.copy(t = Hole)(t.boundName)
               case t        => t
             }
             stack.pushAll(stackToDuplicate)
+            this.currentHandlerEntry = handlerEntry
             val tip = stack.pop().asInstanceOf[CapturedContinuationTip]
             replicate(baseStackHeight, tip, tip, continuationUsage)
           case _ => throw IllegalArgumentException("type error")
@@ -427,7 +433,7 @@ private final class StackMachine
     )
     (handlerTransform: Handler => Handler)
     (transform: (CTerm => CTerm) | Unit = ())
-    : Iterable[CTerm | HandlerEntry] =
+    : (Iterable[CTerm | HandlerEntry], Option[HandlerEntry]) =
     term match
       case term: (Redex | Let) =>
         val subTerm = term match
@@ -444,7 +450,7 @@ private final class StackMachine
         expandTermToStack(term.input, currentIndex + 1, Some(handlerEntry), acc ++ Iterable(handlerEntry))(
           handlerTransform,
         )(transform)
-      case _ => acc ++ Iterable(term)
+      case _ => (acc ++ Iterable(term), currentHandlerEntry)
 
 extension (c: CTerm)
   def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, CTerm] =
