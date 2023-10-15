@@ -144,7 +144,7 @@ private final class StackMachine
                   currentHandlerEntry = previousHandlerEntry
                   run(term)
                 case _ => throw IllegalStateException("type error")
-            case _ =>
+            case _: Elimination[?] =>
               throw IllegalStateException(
                 "type error: none of the terms above can take an argument or projection",
               )
