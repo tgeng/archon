@@ -59,7 +59,7 @@ trait NamePart[N]:
 
 enum MixfixAst[N, L]:
   case OperatorCall(operator: Operator, args: List[MixfixAst[N, L]], nameParts: List[List[N]])
-  case ApplyCall(args: List[MixfixAst[N, L]])
+  case ApplyCall(f: MixfixAst[N, L], args: List[MixfixAst[N, L]])
   case Identifier(name: N)
   case Literal(literal: L)
 
@@ -82,9 +82,9 @@ enum MixfixAst[N, L]:
             " ",
             "]",
           )
-    case ApplyCall(args)  => args.mkString("[@ ", " ", "]")
-    case Identifier(name) => "`" + name.toString + "`"
-    case Literal(literal) => literal.toString
+    case ApplyCall(f, args) => args.mkString("[" + f + "@ ", " ", "]")
+    case Identifier(name)   => "`" + name.toString + "`"
+    case Literal(literal)   => literal.toString
 
   private def interleave[T](s1: Seq[T], s2: Seq[T]): Seq[T] =
     s1.zip(s2).flatMap(_.toList)
@@ -195,7 +195,7 @@ def createMixfixParserImpl[N, M[
                 pLeft,
               )
             args <- closed.**
-          yield if args.isEmpty then ops else ApplyCall(ops +: args),
+          yield if args.isEmpty then ops else ApplyCall(ops, args),
         ),
         getNodeTargetName(node),
         lazily = true,
@@ -238,9 +238,10 @@ def createMixfixParserImpl[N, M[
 
   def closedPlus: ParserT[N, MixfixAst[N, L], M] =
     closed.++.map(args =>
+      assert(args.size > 0)
       if args.size == 1
       then args.head
-      else ApplyCall(args),
+      else ApplyCall(args.head, args.tail),
     )
 
   def closed: ParserT[N, MixfixAst[N, L], M] =
