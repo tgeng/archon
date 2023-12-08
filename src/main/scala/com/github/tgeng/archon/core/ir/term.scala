@@ -577,6 +577,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
       handlers: Map[
         QualifiedName,
+        // TODO[P0]: track operation simplicity here and make sure it's consistent with the effect declaration.
+        //  Then type checking and compile time reduction can just use this information instead of looking it up from
+        //  the effect declaration. This also aligns better with the lower IR.
         /* binding offset = 1 (for parameter) + paramTys + 1 (for continuation if control mode is complex) */ CTerm,
       ],
       input: CTerm,
