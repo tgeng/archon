@@ -237,6 +237,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   see ContinuationUsage for explanation
     * @param sourceInfo
     */
+  // TODO: simplify control mode to only allow linear simple operation. Exceptional simple operation is useless because
+  //  it's banned from disposer, replicator, and other simple operations now.
   case EffectsType
     (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: ControlMode = ControlMode.Complex)
     (using sourceInfo: SourceInfo)

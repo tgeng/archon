@@ -1617,6 +1617,8 @@ def checkHandler
     // parameter binding usage dictates how much resources the handler needs when consuming the parameter
     (parameterBindingUsage, _) <- checkType(h.parameterBinding.usage, UsageType())
     _ <-
+      // TODO[P0]: remove this check. Instead, require parameter disposer, replicator, and simple operations to have 
+      //  simple linear effects only. That is, ban exceptions from them.
       // If the handler implements some simple exceptional operation, then this operation may throw an exception, which
       // would trigger disposers of all handlers above the current handler, which, in turn, may call operations on this
       // handler again. But this is problematic if the parameter disallows multiple usages (aka, it's linear or affine)
