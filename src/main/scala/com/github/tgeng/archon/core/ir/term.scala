@@ -28,11 +28,11 @@ object Binding:
 type Arguments = List[VTerm]
 
 enum ControlMode extends Ordered[ControlMode]:
-  /** No continuation is captured, execution simply progresses.
+  /** No continuation is captured, execution simply progresses. The continuation usage can be U0, U1, or UAff.
     */
   case Simple
 
-  /** Continuation may be captured and complex control transfer may occur.
+  /** Continuation may be captured and complex control transfer may occur. The continuation usage can be any value.
     */
   case Complex
 
@@ -67,20 +67,22 @@ enum ControlMode extends Ordered[ControlMode]:
   *       - `U1`: the handling handler behaves just like a simple function call, with no continuation capturing at all.
   *         In some literature, this is called "linear". That is, the computation executes immediately and the results
   *         are returned to the caller intact.
-  *       - `UAff`: all operations are simple and some are U1, some are U0, or some are UAff (the operation may throw
-  * or return under the hood)
+  *       - `UAff`: all operations are simple and some are U1, some are U0, or some are UAff (the operation may throw or
+  *         return under the hood)
   *   - any other values: this is not
   *   - `false` means the effect may capture continuations and do something with them. For example, replicate it to
   *     invoke multiple times (multi-shot continuation) or delay the execution to a later time.
   *
-  * Also a handler implementation of a simple operation can only perform effects that are also simple. This is because
-  * otherwise continuation would be captured and violating the assumption that simple effect means no continuation
-  * capturing. Practically, this restriction is necessary to implement parameter disposers and parameter replicators,
-  * which can only perform simple effects.
+  * Also a handler implementation of a simple operation can only perform effects that are simple and linear. This is
+  * because otherwise continuation would be captured and violating the assumption that simple effect means no
+  * continuation capturing. Practically, this restriction is necessary to implement parameter disposers and parameter
+  * replicators, which can only perform linear and simple effects.
   *
-  * In addition, a simple linear operation cannot throw exceptions (a.k.a perform simple U0 effects) because that would
-  * violate resource usages at the callsite of this simple linear operation. In order to throw, the operation must be
-  * marked as "simple UAff" instead.
+  * In addition, a any simple operations (linear or exceptional) cannot throw another exceptions (a.k.a perform simple
+  * U0 effects) because that would violate resource usages at the callsite of this simple linear operation. In order to
+  * throw, the operation must be complex instead. See docs/trade_offs.md for more details.
+  * 
+  * Simple operations have an advantage at runtime because compiling it doesn't require CPS transformation.
   */
 case class ContinuationUsage(usage: Usage, controlMode: ControlMode) extends PartiallyOrdered[ContinuationUsage]:
   infix def |(that: ContinuationUsage): ContinuationUsage =
@@ -237,8 +239,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   see ContinuationUsage for explanation
     * @param sourceInfo
     */
-  // TODO: simplify control mode to only allow linear simple operation. Exceptional simple operation is useless because
-  //  it's banned from disposer, replicator, and other simple operations now.
   case EffectsType
     (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: ControlMode = ControlMode.Complex)
     (using sourceInfo: SourceInfo)
