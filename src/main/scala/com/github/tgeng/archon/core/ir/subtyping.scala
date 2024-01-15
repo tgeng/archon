@@ -51,9 +51,9 @@ def checkIsSubtype
     Set(Constraint.VSubType(Γ, sub, sup))
   case (Type(upperBound1), Type(upperBound2)) => checkIsSubtype(upperBound1, upperBound2)
   case (ty: VTerm, Top(level2, eqD2)) =>
-      val levelConstraints = checkLevelSubsumption(inferLevel(ty), level2)
-      val eqDecidabilityConstraints = checkEqDecidabilitySubsumption(inferEqDecidability(ty), eqD2)
-      levelConstraints ++ eqDecidabilityConstraints
+    val levelConstraints = checkLevelSubsumption(inferLevel(ty), level2)
+    val eqDecidabilityConstraints = checkEqDecidabilitySubsumption(inferEqDecidability(ty), eqD2)
+    levelConstraints ++ eqDecidabilityConstraints
   case (U(cty1), U(cty2)) => checkIsSubtype(cty1, cty2)
   case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
     Σ.getDataOption(qn1) match
@@ -61,31 +61,33 @@ def checkIsSubtype
       case Some(data) =>
         val args = ArrayBuffer[VTerm]()
         args1
-            .zip(args2)
-            .zip(data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
-            .map { case ((arg1, arg2), (binding, variance)) =>
-              variance match
-                case Variance.INVARIANT =>
-                  val r = checkIsConvertible(
-                    arg1,
-                    arg2,
-                    Some(binding.ty.substLowers(args.toSeq: _*)),
-                  )
-                  args += arg1
-                  r
-                case Variance.COVARIANT =>
-                    val (checkedArg1, _) = checkIsType(arg1)
-                    val (checkedArg2, _) = checkIsType(arg2)
-                    val r = checkIsSubtype(checkedArg1, checkedArg2)
-                    args += checkedArg1
-                    r
-                case Variance.CONTRAVARIANT =>
-                    val (checkedArg1, _) = checkIsType(arg1)
-                    val (checkedArg2, _) = checkIsType(arg2)
-                    val r = checkIsSubtype(checkedArg1, checkedArg2)
-                    args += checkedArg2
-                    r
-            }.flatten.toSet
+          .zip(args2)
+          .zip(data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
+          .map { case ((arg1, arg2), (binding, variance)) =>
+            variance match
+              case Variance.INVARIANT =>
+                val r = checkIsConvertible(
+                  arg1,
+                  arg2,
+                  Some(binding.ty.substLowers(args.toSeq: _*)),
+                )
+                args += arg1
+                r
+              case Variance.COVARIANT =>
+                val (checkedArg1, _) = checkIsType(arg1)
+                val (checkedArg2, _) = checkIsType(arg2)
+                val r = checkIsSubtype(checkedArg1, checkedArg2)
+                args += checkedArg1
+                r
+              case Variance.CONTRAVARIANT =>
+                val (checkedArg1, _) = checkIsType(arg1)
+                val (checkedArg2, _) = checkIsType(arg2)
+                val r = checkIsSubtype(checkedArg1, checkedArg2)
+                args += checkedArg2
+                r
+          }
+          .flatten
+          .toSet
   case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
     if (controlMode1 == ControlMode.Simple || controlMode1 == controlMode2) then
       // Note that subsumption checking is reversed because the effect of the computation
@@ -129,46 +131,46 @@ def checkIsSubtype
   case ((_: ResolvedMetaVariable, Nil), _) | (_, (_: ResolvedMetaVariable, Nil)) =>
     Set(Constraint.CSubType(Γ, sub, sup))
   case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
-      val effConstraint = checkEffSubsumption(eff1, eff2)
-      val upperBoundConstraint = checkIsSubtype(upperBound1, upperBound2)
-      effConstraint ++ upperBoundConstraint
+    val effConstraint = checkEffSubsumption(eff1, eff2)
+    val upperBoundConstraint = checkIsSubtype(upperBound1, upperBound2)
+    effConstraint ++ upperBoundConstraint
   case (ty: IType, CTop(level2, eff2)) =>
-      val levelConstraint = checkLevelSubsumption(inferLevel(sub), level2)
-      val effConstraint = checkEffSubsumption(ty.effects, eff2)
-      levelConstraint ++ effConstraint
+    val levelConstraint = checkLevelSubsumption(inferLevel(sub), level2)
+    val effConstraint = checkEffSubsumption(ty.effects, eff2)
+    levelConstraint ++ effConstraint
   case (F(vTy1, eff1, u1), F(vTy2, eff2, u2)) =>
-      val effConstraint = checkEffSubsumption(eff1, eff2)
-      val usageConstraint = checkUsageSubsumption(u1, u2)
-      val tyConstraint = checkIsSubtype(vTy1, vTy2)
-      effConstraint ++ usageConstraint ++ tyConstraint
+    val effConstraint = checkEffSubsumption(eff1, eff2)
+    val usageConstraint = checkUsageSubsumption(u1, u2)
+    val tyConstraint = checkIsSubtype(vTy1, vTy2)
+    effConstraint ++ usageConstraint ++ tyConstraint
   case (
       FunctionType(binding1, bodyTy1, eff1),
       FunctionType(binding2, bodyTy2, eff2),
     ) =>
-      val effConstraint = checkEffSubsumption(eff1, eff2)
-      val tyConstraint = ctx.solve(checkIsSubtype(binding2.ty, binding1.ty))
-      val bodyConstraint =
-        if tyConstraint.isEmpty
-        then checkIsSubtype(bodyTy1, bodyTy2)(using Γ :+ binding2)
-        else
-          given Context = Γ :+ binding2
-          checkIsSubtype(
-            bodyTy1,
-            bodyTy2.subst {
-              case 0 =>
-                Some(
-                  Collapse(
-                    ctx.addGuarded(
-                      F(binding1.ty.weakened, Total(), binding1.usage.weakened),
-                      Return(Var(0), u1),
-                      tyConstraint,
-                    ),
+    val effConstraint = checkEffSubsumption(eff1, eff2)
+    val tyConstraint = ctx.solve(checkIsSubtype(binding2.ty, binding1.ty))
+    val bodyConstraint =
+      if tyConstraint.isEmpty
+      then checkIsSubtype(bodyTy1, bodyTy2)(using Γ :+ binding2)
+      else
+        given Context = Γ :+ binding2
+        checkIsSubtype(
+          bodyTy1,
+          bodyTy2.subst {
+            case 0 =>
+              Some(
+                Collapse(
+                  ctx.addGuarded(
+                    F(binding1.ty.weakened, Total(), binding1.usage.weakened),
+                    Return(Var(0), u1),
+                    tyConstraint,
                   ),
-                )
-              case _ => None
-            },
-          )
-      effConstraint ++ tyConstraint ++ bodyConstraint
+                ),
+              )
+            case _ => None
+          },
+        )
+    effConstraint ++ tyConstraint ++ bodyConstraint
   case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
     Σ.getRecordOption(qn1) match
       case None => throw MissingDeclaration(qn1)
@@ -176,77 +178,74 @@ def checkIsSubtype
         val args = ArrayBuffer[VTerm]()
         val effConstraint = checkEffSubsumption(eff1, eff2)
         val argConstraint = args1
-            .zip(args2)
-            .zip(record.tParamTys)
-            .map { case ((arg1, arg2), (binding, variance)) =>
-              variance match
-                case Variance.INVARIANT =>
-                  val r = checkIsConvertible(
-                    arg1,
-                    arg2,
-                    Some(binding.ty.substLowers(args.toSeq: _*)),
-                  )
-                  args += arg1
-                  r
-                case Variance.COVARIANT =>
-                    val (checkedArg1, _) = checkIsType(arg1)
-                    val (checkedArg2, _) = checkIsType(arg2)
-                    val r =checkIsSubtype(checkedArg1, checkedArg2)
-                    args += checkedArg1
-                    r
-                case Variance.CONTRAVARIANT =>
-                    val (checkedArg1, _) = checkIsType(arg1)
-                    val (checkedArg2, _) = checkIsType(arg2)
-                    val r =checkIsSubtype(checkedArg1, checkedArg2)
-                    args += checkedArg2
-                    r
-            }.flatten.toSet
+          .zip(args2)
+          .zip(record.tParamTys)
+          .map { case ((arg1, arg2), (binding, variance)) =>
+            variance match
+              case Variance.INVARIANT =>
+                val r = checkIsConvertible(
+                  arg1,
+                  arg2,
+                  Some(binding.ty.substLowers(args.toSeq: _*)),
+                )
+                args += arg1
+                r
+              case Variance.COVARIANT =>
+                val (checkedArg1, _) = checkIsType(arg1)
+                val (checkedArg2, _) = checkIsType(arg2)
+                val r = checkIsSubtype(checkedArg1, checkedArg2)
+                args += checkedArg1
+                r
+              case Variance.CONTRAVARIANT =>
+                val (checkedArg1, _) = checkIsType(arg1)
+                val (checkedArg2, _) = checkIsType(arg2)
+                val r = checkIsSubtype(checkedArg1, checkedArg2)
+                args += checkedArg2
+                r
+          }
+          .flatten
+          .toSet
         effConstraint ++ argConstraint
   case _ => checkIsConvertible(sub, sup, None)
 
 private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler
 
 @throws(classOf[IrError])
-private def typeUnion
-  (a: CTerm, b: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : CTerm=
+private def typeUnion(a: CTerm, b: CTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm =
   if a == b then a
   else
     (a, b) match
       case (CType(upperBound1, effects1), CType(upperBound2, effects2)) =>
-          val upperBound = typeUnion(upperBound1, upperBound2)
-          val effects = EffectsUnion(effects1, effects2).normalized
-          CType(upperBound, effects)
+        val upperBound = typeUnion(upperBound1, upperBound2)
+        val effects = EffectsUnion(effects1, effects2).normalized
+        CType(upperBound, effects)
       case (CTop(level1, effects1), CTop(level2, effects2)) =>
-          val level = LevelMax(level1, level2).normalized
-          val effects = EffectsUnion(effects1, effects2).normalized
-          CTop(level, effects)
+        val level = LevelMax(level1, level2).normalized
+        val effects = EffectsUnion(effects1, effects2).normalized
+        CTop(level, effects)
       case (F(vty1, effects1, usage1), F(vty2, effects2, usage2)) =>
-          val vty = typeUnion(vty1, vty2)
-          val effects = EffectsUnion(effects1, effects2).normalized
-          val usage = UsageJoin(usage1, usage2).normalized
-          F(vty, effects, usage)
+        val vty = typeUnion(vty1, vty2)
+        val effects = EffectsUnion(effects1, effects2).normalized
+        val usage = UsageJoin(usage1, usage2).normalized
+        F(vty, effects, usage)
       // for simplicity we just treat types at contravariant position as invariant
       case (FunctionType(binding1, body1, effects1), FunctionType(binding2, body2, effects2)) if binding1 == binding2 =>
-          val effects = EffectsUnion(effects1, effects2).normalized
-          val body = typeUnion(body1, body2)(using Γ :+ binding1)
-          FunctionType(binding1, body, effects)
+        val effects = EffectsUnion(effects1, effects2).normalized
+        val body = typeUnion(body1, body2)(using Γ :+ binding1)
+        FunctionType(binding1, body, effects)
       case (r1 @ RecordType(qn1, args1, effects1), r2 @ RecordType(qn2, args2, effects2)) if qn1 == qn2 =>
         val record = Σ.getRecord(qn1)
         val effects = EffectsUnion(effects1, effects2).normalized
         val args = args1
-            .zip(args2)
-            .zip(record.tParamTys)
-            .map { case ((arg1, arg2), (binding, variance)) =>
-              variance match
-                case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
-                case Variance.INVARIANT | Variance.CONTRAVARIANT =>
-                  if arg1 == arg2 then Some(arg1)
-                  else None
-            }
+          .zip(args2)
+          .zip(record.tParamTys)
+          .map { case ((arg1, arg2), (binding, variance)) =>
+            variance match
+              case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
+              case Variance.INVARIANT | Variance.CONTRAVARIANT =>
+                if arg1 == arg2 then Some(arg1)
+                else None
+          }
         val actualArgs = args.collect { case Some(arg) => arg }
         if actualArgs.size == args.size then RecordType(qn1, actualArgs, effects)
         else getCTop(r1, r2)
@@ -262,22 +261,17 @@ private def getCTop
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : CTerm=
-  val  aLevel = inferLevel(a)
-  val  bLevel = inferLevel(b)
-  val  level = LevelMax(aLevel, bLevel).normalized
-  val  effects = EffectsUnion(a.effects, b.effects).normalized
+  : CTerm =
+  val aLevel = inferLevel(a)
+  val bLevel = inferLevel(b)
+  val level = LevelMax(aLevel, bLevel).normalized
+  val effects = EffectsUnion(a.effects, b.effects).normalized
   CTop(level, effects)
 
 private type StuckValueType = Var | Collapse
 
 @throws(classOf[IrError])
-private def typeUnion
-  (a: VTerm, b: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : VTerm =
+private def typeUnion(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): VTerm =
   if a == b then return a
   (a, b) match
     case (Type(upperBound1), Type(upperBound2)) =>
@@ -291,35 +285,30 @@ private def typeUnion
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
       val data = Σ.getData(qn1)
       val args = args1
-          .zip(args2)
-          .zip(data.tParamTys)
-          .map { case ((arg1, arg2), (binding, variance)) =>
-            variance match
-              case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
-              case Variance.INVARIANT | Variance.CONTRAVARIANT =>
-                if arg1 == arg2 then Some(arg1)
-                else None
-          }
+        .zip(args2)
+        .zip(data.tParamTys)
+        .map { case ((arg1, arg2), (binding, variance)) =>
+          variance match
+            case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
+            case Variance.INVARIANT | Variance.CONTRAVARIANT =>
+              if arg1 == arg2 then Some(arg1)
+              else None
+        }
       val actualArgs = args.collect { case Some(arg) => arg }
       if actualArgs.size == args.size then DataType(qn1, actualArgs)
       else getTop(a, b)
     case (UsageType(_), UsageType(_))                    => UsageType(None)
     case (_: StuckValueType, _) | (_, _: StuckValueType) => throw CannotFindVTypeUnion(a, b)
     case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
-        val continuationUsage = UsageJoin(continuationUsage1, continuationUsage2).normalized
-        val controlMode = controlMode1 | controlMode2
-        EffectsType(continuationUsage, controlMode)
+      val continuationUsage = UsageJoin(continuationUsage1, continuationUsage2).normalized
+      val controlMode = controlMode1 | controlMode2
+      EffectsType(continuationUsage, controlMode)
     case (LevelType(level1), LevelType(level2)) =>
       LevelType(LevelMax(level1, level2).normalized)
     case _ => throw IllegalStateException("type error")
 
 @throws(classOf[IrError])
-private def getTop
-  (a: VTerm, b: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : VTerm=
+private def getTop(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): VTerm =
   val aLevel = inferLevel(a)
   val aEqDecidability = inferEqDecidability(a)
   val bLevel = inferLevel(b)
@@ -361,14 +350,17 @@ private def checkUsagesSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] =
   assert(usages.size == Γ.size)
-  (0 until Γ.size).map { i =>
-    given Γ2: Context = Γ.take(i)
-    val binding = Γ(i)
-    val providedUsage = binding.usage
-    val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
-    if invert then checkUsageSubsumption(consumedUsage, providedUsage)
-    else checkUsageSubsumption(providedUsage, consumedUsage)
-  }.flatten.toSet
+  (0 until Γ.size)
+    .map { i =>
+      given Γ2: Context = Γ.take(i)
+      val binding = Γ(i)
+      val providedUsage = binding.usage
+      val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
+      if invert then checkUsageSubsumption(consumedUsage, providedUsage)
+      else checkUsageSubsumption(providedUsage, consumedUsage)
+    }
+    .flatten
+    .toSet
 
 @throws(classOf[IrError])
 def checkUsageSubsumption
@@ -391,7 +383,8 @@ def checkUsageSubsumption
     // computation ends up being assigned values that are part of sub
     // Also, if sub contains stuck computation, it's possible for sub to end up including arbitrary usage terms and
     // hence we can't decide subsumption yet.
-    else if spuriousOperands.forall(isMeta) || operands1.exists(isMeta) then Set(Constraint.UsageSubsumption(Γ, sub, sup))
+    else if spuriousOperands.forall(isMeta) || operands1.exists(isMeta) then
+      Set(Constraint.UsageSubsumption(Γ, sub, sup))
     else throw NotUsageSubsumption(sub, sup)
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
   case (UsageJoin(operands), RUnsolved(_, _, _, tm, _)) if operands.contains(Collapse(tm)) =>
@@ -407,17 +400,17 @@ def checkUsageSubsumption
     ctx.adaptForMetaVariable(u, sup) match
       case None => Set(Constraint.UsageSubsumption(Γ, sub, sup))
       case Some(value) =>
-          val newUpperBound = constraint match
-            case UmcNothing => value
-            case UmcUsageSubsumption(existingUpperBound) =>
-              UsageJoin(existingUpperBound, value).normalized
-            case _ => throw IllegalStateException("type error")
-          newUpperBound match
-            // If upper bound is already UAny, we know they must take that values.
-            case UsageLiteral(Usage.UAny) => ctx.assignUnsolved(u, Return(newUpperBound, u1))
-            case _ =>
-              ctx.updateConstraint(u, UmcUsageSubsumption(newUpperBound))
-              Set.empty
+        val newUpperBound = constraint match
+          case UmcNothing => value
+          case UmcUsageSubsumption(existingUpperBound) =>
+            UsageJoin(existingUpperBound, value).normalized
+          case _ => throw IllegalStateException("type error")
+        newUpperBound match
+          // If upper bound is already UAny, we know they must take that values.
+          case UsageLiteral(Usage.UAny) => ctx.assignUnsolved(u, Return(newUpperBound, u1))
+          case _ =>
+            ctx.updateConstraint(u, UmcUsageSubsumption(newUpperBound))
+            Set.empty
   case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingUpperBound                      => ctx.assignUnsolved(u, Return(value, u1))
@@ -448,9 +441,9 @@ private def checkEffSubsumption
     if operands.contains(Collapse(tm)) =>
     val otherOperands = operands - Collapse(tm)
     val newLowerBound = c match
-        case UmcNothing => Effects(literal, otherOperands)
-        case UmcEffSubsumption(existingLowerBound) =>
-          EffectsUnion(existingLowerBound, Effects(literal, otherOperands)).normalized
+      case UmcNothing => Effects(literal, otherOperands)
+      case UmcEffSubsumption(existingLowerBound) =>
+        EffectsUnion(existingLowerBound, Effects(literal, otherOperands)).normalized
     ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
     Set.empty
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
@@ -458,9 +451,9 @@ private def checkEffSubsumption
       case None => Set(Constraint.EffSubsumption(Γ, sub, sup))
       case Some(value) =>
         val newLowerBound = constraint match
-            case UmcNothing                            => value
-            case UmcEffSubsumption(existingLowerBound) => EffectsUnion(existingLowerBound, value).normalized
-            case _                                     => throw IllegalStateException("type error")
+          case UmcNothing                            => value
+          case UmcEffSubsumption(existingLowerBound) => EffectsUnion(existingLowerBound, value).normalized
+          case _                                     => throw IllegalStateException("type error")
         ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
         Set.empty
   // If upper bound is total, the meta variable can only take total as the value.
@@ -496,9 +489,9 @@ private def checkEffSubsumption
       ctx.withMetaResolved(metaOperands2.head):
         case u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _) =>
           val newLowerBound = c match
-              case UmcNothing => Effects(spuriousLiterals, spuriousOperands)
-              case UmcEffSubsumption(existingLowerBound) =>
-                EffectsUnion(existingLowerBound, Effects(spuriousLiterals, spuriousOperands)).normalized
+            case UmcNothing => Effects(spuriousLiterals, spuriousOperands)
+            case UmcEffSubsumption(existingLowerBound) =>
+              EffectsUnion(existingLowerBound, Effects(spuriousLiterals, spuriousOperands)).normalized
           ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
           Set.empty
         case _ => throw NotEffectSubsumption(sub, sup)
@@ -542,9 +535,9 @@ private def checkLevelSubsumption
       case None => Set(Constraint.LevelSubsumption(Γ, sub, sup))
       case Some(value) =>
         val newLowerBound = constraint match
-            case UmcNothing                              => value
-            case UmcLevelSubsumption(existingLowerBound) => LevelMax(existingLowerBound, value).normalized
-            case _                                       => throw IllegalStateException("type error")
+          case UmcNothing                              => value
+          case UmcLevelSubsumption(existingLowerBound) => LevelMax(existingLowerBound, value).normalized
+          case _                                       => throw IllegalStateException("type error")
         ctx.updateConstraint(u, UmcLevelSubsumption(newLowerBound))
         Set.empty
   // If upper bound is zero, the meta variable can only take zero as the value.

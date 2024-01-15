@@ -284,16 +284,12 @@ class TypingContext
     *   value must be in the context of the meta variable. That is, value must be from a call of `adaptForMetaVariable`
     */
   @throws(classOf[IrError])
-  def assignUnsolved
-    (m: RUnsolved, value: CTerm)
-    (using Γ: Context)
-    (using Σ: Signature)
-    : Set[Constraint] =
+  def assignUnsolved(m: RUnsolved, value: CTerm)(using Γ: Context)(using Σ: Signature): Set[Constraint] =
     assignValue(m.index, value)
     m.constraint match
-      case UmcNothing               => Set.empty
-      case UmcCSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, value)).flatten
-      case UmcVSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, Collapse(value))).flatten
+      case UmcNothing                    => Set.empty
+      case UmcCSubtype(lowerBounds)      => lowerBounds.map(checkIsSubtype(_, value)).flatten
+      case UmcVSubtype(lowerBounds)      => lowerBounds.map(checkIsSubtype(_, Collapse(value))).flatten
       case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(value))
       case UmcLevelSubsumption(lowerBound) =>
         checkLevelSubsumption(lowerBound, Collapse(value))
@@ -337,10 +333,7 @@ class TypingContext
     metaVars(index) = guarded
 
   @throws(classOf[IrError])
-  def checkSolved
-    (constraints: Set[Constraint], error: => IrError)
-    (using Σ: Signature)
-    : Unit=
+  def checkSolved(constraints: Set[Constraint], error: => IrError)(using Σ: Signature): Unit =
     if !solve(constraints).isEmpty then throw error
 
   @throws(classOf[IrError])
@@ -394,28 +387,28 @@ class TypingContext
 
   @throws(classOf[IrError])
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
-      val result = mutable.Set[Constraint]()
-      for constraint <- constraints do
-        constraint match
-          case Constraint.Conversions(context, lhs, rhs, tys) =>
-            result ++= checkAreConvertible(lhs, rhs, tys)(using context)
-          case Constraint.VConversion(context, lhs, rhs, ty) =>
-            result ++= checkIsConvertible(lhs, rhs, ty)(using context)
-          case Constraint.CConversion(context, lhs, rhs, ty) =>
-            result ++= checkIsConvertible(lhs, rhs, ty)(using context)
-          case Constraint.VSubType(context, sub, sup) =>
-            result ++= checkIsSubtype(sub, sup)(using context)
-          case Constraint.CSubType(context, sub, sup) =>
-            result ++= checkIsSubtype(sub, sup)(using context)
-          case Constraint.EffSubsumption(context, sub, sup) =>
-            result ++= checkEffSubsumption(sub, sup)(using context)
-          case Constraint.LevelSubsumption(context, sub, sup) =>
-            result ++= checkLevelSubsumption(sub, sup)(using context)
-          case Constraint.UsageSubsumption(context, sub, sup) =>
-            result ++= checkUsageSubsumption(sub, sup)(using context)
-          case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
-            result ++= checkEqDecidabilitySubsumption(sub, sup)(using context)
-      result.toSet
+    val result = mutable.Set[Constraint]()
+    for constraint <- constraints do
+      constraint match
+        case Constraint.Conversions(context, lhs, rhs, tys) =>
+          result ++= checkAreConvertible(lhs, rhs, tys)(using context)
+        case Constraint.VConversion(context, lhs, rhs, ty) =>
+          result ++= checkIsConvertible(lhs, rhs, ty)(using context)
+        case Constraint.CConversion(context, lhs, rhs, ty) =>
+          result ++= checkIsConvertible(lhs, rhs, ty)(using context)
+        case Constraint.VSubType(context, sub, sup) =>
+          result ++= checkIsSubtype(sub, sup)(using context)
+        case Constraint.CSubType(context, sub, sup) =>
+          result ++= checkIsSubtype(sub, sup)(using context)
+        case Constraint.EffSubsumption(context, sub, sup) =>
+          result ++= checkEffSubsumption(sub, sup)(using context)
+        case Constraint.LevelSubsumption(context, sub, sup) =>
+          result ++= checkLevelSubsumption(sub, sup)(using context)
+        case Constraint.UsageSubsumption(context, sub, sup) =>
+          result ++= checkUsageSubsumption(sub, sup)(using context)
+        case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
+          result ++= checkEqDecidabilitySubsumption(sub, sup)(using context)
+    result.toSet
 
   @throws(classOf[IrError])
   inline def trace[R]
@@ -451,9 +444,9 @@ class TypingContext
         val r = action
         traceLevel -= 1
         val message = "✅ " + (ANSI_GREEN + successMsg(r)).replaceAll(
-            "\n",
-            "\n" + indent + "     ",
-          )
+          "\n",
+          "\n" + indent + "     ",
+        )
         println(indent + "└─ " + message + ANSI_RESET)
         r
       catch
@@ -463,8 +456,7 @@ class TypingContext
           traceLevel -= 1
           println(indent + "└─ " + message + ANSI_RESET)
           throw l
-    else
-      action
+    else action
 
   inline def debug[T](inline t: T): T =
     if enableDebugging then
@@ -500,18 +492,18 @@ extension (us1: Usages)
     us1.map(u => UsageProd(u, UsageLiteral(scalar)))
 
 @throws(classOf[IrError])
-def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data=
+def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
   ctx.trace(s"checking data signature ${data.qn}") {
-      given Context = IndexedSeq()
+    given Context = IndexedSeq()
 
-      val tParamsTysTelescope = checkParameterTyDeclarations(data.tParamTys.map(_._1).toTelescope)
-      val tParamTys = Context.fromTelescope(tParamsTysTelescope)
-      val tIndexTys = checkParameterTyDeclarations(data.tIndexTys)(using tParamTys)
-      val tContext = tParamTys ++ tIndexTys
-      val (level, _) = checkLevel(data.level)(using tContext)
-      val (inherentEqDecidability, _) = checkType(data.inherentEqDecidability, EqDecidabilityType())(using tContext)
-      checkTParamsAreUnrestricted(tContext.toTelescope)
-      Data(data.qn)(
+    val tParamsTysTelescope = checkParameterTyDeclarations(data.tParamTys.map(_._1).toTelescope)
+    val tParamTys = Context.fromTelescope(tParamsTysTelescope)
+    val tIndexTys = checkParameterTyDeclarations(data.tIndexTys)(using tParamTys)
+    val tContext = tParamTys ++ tIndexTys
+    val (level, _) = checkLevel(data.level)(using tContext)
+    val (inherentEqDecidability, _) = checkType(data.inherentEqDecidability, EqDecidabilityType())(using tContext)
+    checkTParamsAreUnrestricted(tContext.toTelescope)
+    Data(data.qn)(
       tParamTys.zip(data.tParamTys.map(_._2)),
       tIndexTys,
       level,
@@ -524,14 +516,14 @@ def checkDataConstructor
   (qn: QualifiedName, con: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Constructor=
+  : Constructor =
   ctx.trace(s"checking data constructor $qn.${con.name}") {
     Σ.getDataOption(qn) match
       case None => throw MissingDeclaration(qn)
       case Some(data) =>
         given Γ: Context = data.tParamTys.map(_._1)
         val paramTys = checkParameterTyDeclarations(con.paramTys, Some(data.level))
-        val   (tArgs, _) = checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
+        val (tArgs, _) = checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
         checkInherentEqDecidable(Σ.getData(qn), con)
         val violatingVars = VarianceChecker.visitTelescope(con.paramTys)(using data.tParamTys, Variance.COVARIANT, 0)
         if !violatingVars.isEmpty then throw IllegalVarianceInData(data.qn, violatingVars)
@@ -539,7 +531,7 @@ def checkDataConstructor
   }
 
 @throws(classOf[IrError])
-def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): Record=
+def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): Record =
   ctx.trace(s"checking record signature ${record.qn}") {
     given Context = IndexedSeq()
 
@@ -558,11 +550,7 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
   }
 
 @throws(classOf[IrError])
-def checkRecordField
-  (qn: QualifiedName, field: Field)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Field=
+def checkRecordField(qn: QualifiedName, field: Field)(using Σ: Signature)(using ctx: TypingContext): Field =
   ctx.trace(s"checking record field $qn.${field.name}") {
     Σ.getRecordOption(qn) match
       case None => throw MissingDeclaration(qn)
@@ -667,7 +655,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
       .toSeq
 
 @throws(classOf[IrError])
-def checkDef(definition: Definition)(using Σ: Signature)(using ctx: TypingContext): Definition=
+def checkDef(definition: Definition)(using Σ: Signature)(using ctx: TypingContext): Definition =
   ctx.trace(s"checking def signature ${definition.qn}") {
     given Context = IndexedSeq()
     val (ty, _) = checkIsCType(definition.ty)
@@ -675,7 +663,7 @@ def checkDef(definition: Definition)(using Σ: Signature)(using ctx: TypingConte
   }
 
 @throws(classOf[IrError])
-def checkEffect(effect: Effect)(using Σ: Signature)(using ctx: TypingContext): Effect=
+def checkEffect(effect: Effect)(using Σ: Signature)(using ctx: TypingContext): Effect =
   ctx.trace(s"checking effect signature ${effect.qn}") {
     given Context = IndexedSeq()
 
@@ -686,11 +674,7 @@ def checkEffect(effect: Effect)(using Σ: Signature)(using ctx: TypingContext): 
   }
 
 @throws(classOf[IrError])
-def checkOperation
-  (qn: QualifiedName, operation: Operation)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Operation=
+def checkOperation(qn: QualifiedName, operation: Operation)(using Σ: Signature)(using ctx: TypingContext): Operation =
   ctx.trace(s"checking effect operation $qn.${operation.name}") {
     Σ.getEffectOption(qn) match
       case None => throw MissingDeclaration(qn)
@@ -709,12 +693,12 @@ private def checkTParamsAreUnrestricted
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Unit= tParamTys match
+  : Unit = tParamTys match
   case Nil => Right(())
   case binding :: rest =>
-      val constarints = ctx.solve(checkUsageSubsumption(binding.usage, UsageLiteral(UAny)))
-      if !constarints.isEmpty then throw ExpectUnrestrictedTypeParameterBinding(binding)
-      checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
+    val constarints = ctx.solve(checkUsageSubsumption(binding.usage, UsageLiteral(UAny)))
+    if !constarints.isEmpty then throw ExpectUnrestrictedTypeParameterBinding(binding)
+    checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
 
 @throws(classOf[IrError])
 private def checkParameterTyDeclarations
@@ -722,29 +706,20 @@ private def checkParameterTyDeclarations
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Telescope= tParamTys match
+  : Telescope = tParamTys match
   case Nil => Nil
   case binding :: rest =>
-      val (ty, _) = checkIsType(binding.ty, levelBound)
-      val (usage, _) = checkType(binding.usage, UsageType(None))
-      Binding(ty, usage)(binding.name) :: checkParameterTyDeclarations(rest)(using Γ :+ binding)
+    val (ty, _) = checkIsType(binding.ty, levelBound)
+    val (usage, _) = checkType(binding.usage, UsageType(None))
+    Binding(ty, usage)(binding.name) :: checkParameterTyDeclarations(rest)(using Γ :+ binding)
 
 @throws(classOf[IrError])
-private def checkLevel
-  (level: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : (VTerm, Usages)= checkType(level, LevelType(LevelUpperBound()))
+private def checkLevel(level: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): (VTerm, Usages) =
+  checkType(level, LevelType(LevelUpperBound()))
 
 // Precondition: tm is already type-checked and is normalized
 @throws(classOf[IrError])
-private def inferLevel
-  (tm: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm=
+private def inferLevel(tm: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
   ctx.withMetaResolved(tm):
     case u: ResolvedMetaVariable =>
       u.ty match
@@ -757,35 +732,31 @@ private def inferLevel
         case Type(upperBound) => inferLevel(upperBound)
         case _                => throw NotTypeError(tm)
     case t: Collapse =>
-        val (_, ty, _) = inferType(t)
-        ty match
-          case Type(upperBound) => inferLevel(upperBound)
-          case _                => throw NotTypeError(tm)
-    case U(cty)             => inferLevel(cty)
-    case DataType(qn, args) => Σ.getData(qn).level.substLowers(args: _*)
+      val (_, ty, _) = inferType(t)
+      ty match
+        case Type(upperBound) => inferLevel(upperBound)
+        case _                => throw NotTypeError(tm)
+    case U(cty)                                                => inferLevel(cty)
+    case DataType(qn, args)                                    => Σ.getData(qn).level.substLowers(args: _*)
     case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
-    case LevelType(upperBound) => LevelSuc(checkLevel(upperBound)._1)
+    case LevelType(upperBound)                                 => LevelSuc(checkLevel(upperBound)._1)
     case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
 @throws(classOf[IrError])
-def inferType
-  (tm: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : (VTerm, VTerm, Usages)= debugInfer(tm):
-  tm match
-    case Type(uncheckedUpperBound) =>
+def inferType(tm: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): (VTerm, VTerm, Usages) =
+  debugInfer(tm):
+    tm match
+      case Type(uncheckedUpperBound) =>
         val (upperBound, upperBoundUsages) = checkIsType(uncheckedUpperBound)
         val newTm = Type(upperBound.normalized)(using tm.sourceInfo)
         (newTm, Type(newTm), upperBoundUsages)
-    case Top(uncheckedLevel, uncheckedEqD) =>
+      case Top(uncheckedLevel, uncheckedEqD) =>
         val (level, ulUsage) = checkLevel(uncheckedLevel)
         val (eqD, eqDUsage) = checkType(uncheckedEqD, EqDecidabilityType())
         val newTm = Top(level, eqD.normalized)(using tm.sourceInfo)
         (newTm, Type(newTm), (ulUsage + eqDUsage))
-    case r: Var => (r, Γ.resolve(r).ty, Usages.single(r))
-    case Collapse(uncheckedCTm) =>
+      case r: Var => (r, Γ.resolve(r).ty, Usages.single(r))
+      case Collapse(uncheckedCTm) =>
         val (cTm, cTy, usage) = inferType(uncheckedCTm)
         val vTy = cTy match
           case F(vTy, eff, u) if isTotal(cTm, Some(cTy)) =>
@@ -794,7 +765,7 @@ def inferType
           case F(_, _, _) => throw CollapsingEffectfulTerm(cTm)
           case _          => throw NotCollapsable(cTm)
         (Collapse(cTm), vTy, usage)
-    case U(uncheckedCty) =>
+      case U(uncheckedCty) =>
         val (cty, ctyTy, usage) = inferType(uncheckedCty)
         val newTm = Collapse(cty)(using tm.sourceInfo).normalized
         val newTy = ctyTy match
@@ -802,52 +773,52 @@ def inferType
           // TODO[P0]: think about if this is desirable
           // Automatically promote SomeVType to F(SomeVType)
           case F(Type(_), eff, _) if isTotal(cty, Some(ctyTy)) => Type(newTm)
-          case CType(_, _) | F(Type(_), _, _) => throw EffectfulCTermAsType(cty)
-          case _ => throw NotTypeError(tm)
+          case CType(_, _) | F(Type(_), _, _)                  => throw EffectfulCTermAsType(cty)
+          case _                                               => throw NotTypeError(tm)
         (newTm, newTy, usage)
-    case Thunk(c) =>
-      val (newC, cty, usage) = inferType(c)
-      (Thunk(newC), U(cty), usage)
-    case DataType(qn, uncheckedArgs) =>
-      Σ.getDataOption(qn) match
-        case None => throw MissingDeclaration(qn)
-        case Some(data) =>
+      case Thunk(c) =>
+        val (newC, cty, usage) = inferType(c)
+        (Thunk(newC), U(cty), usage)
+      case DataType(qn, uncheckedArgs) =>
+        Σ.getDataOption(qn) match
+          case None => throw MissingDeclaration(qn)
+          case Some(data) =>
             val (args, usage) = checkTypes(uncheckedArgs, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
             val newTm = DataType(qn, args.map(_.normalized))(using tm.sourceInfo)
             (newTm, Type(newTm), usage)
-    case _: Con          => throw IllegalArgumentException("cannot infer type")
-    case u: UsageLiteral => (u, UsageType(Some(u)), Usages.zero)
-    case UsageProd(uncheckedOperands) =>
+      case _: Con          => throw IllegalArgumentException("cannot infer type")
+      case u: UsageLiteral => (u, UsageType(Some(u)), Usages.zero)
+      case UsageProd(uncheckedOperands) =>
         val (operands, usages) = transposeCheckTypeResults(
           uncheckedOperands.map(o => checkType(o, UsageType(None))),
         )
         val newTm = UsageProd(operands.toSet)(using tm.sourceInfo).normalized
         (newTm, UsageType(Some(newTm)), usages)
-    case UsageSum(uncheckedOperands) =>
+      case UsageSum(uncheckedOperands) =>
         val (operands, usages) = transposeCheckTypeResults(
           uncheckedOperands.multiToSeq.map(o => checkType(o, UsageType(None))),
         )
         val newTm = UsageSum(operands.toMultiset)(using tm.sourceInfo).normalized
         (newTm, UsageType(Some(newTm)), usages)
-    case UsageJoin(uncheckedOperands) =>
+      case UsageJoin(uncheckedOperands) =>
         val (operands, usages) = transposeCheckTypeResults(
           uncheckedOperands.map(o => checkType(o, UsageType(None))),
         )
         val newTm = UsageJoin(operands.toSet)(using tm.sourceInfo).normalized
         (newTm, UsageType(Some(newTm)), usages)
-    case u: UsageType =>
-      u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))) match
-        case Some(upperBound, usages) => (u, Type(UsageType(Some(upperBound))), usages)
-        case _                        => (u, Type(u), Usages.zero)
-    case eqD: EqDecidabilityType    => (eqD, Type(eqD), Usages.zero)
-    case eqD: EqDecidabilityLiteral => (eqD, EqDecidabilityType(), Usages.zero)
-    case e: EffectsType             => (e, Type(e), Usages.zero)
-    case Effects(uncheckedLiteral, checkedOperands) =>
+      case u: UsageType =>
+        u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))) match
+          case Some(upperBound, usages) => (u, Type(UsageType(Some(upperBound))), usages)
+          case _                        => (u, Type(u), Usages.zero)
+      case eqD: EqDecidabilityType    => (eqD, Type(eqD), Usages.zero)
+      case eqD: EqDecidabilityLiteral => (eqD, EqDecidabilityType(), Usages.zero)
+      case e: EffectsType             => (e, Type(e), Usages.zero)
+      case Effects(uncheckedLiteral, checkedOperands) =>
         val (literal, literalUsages) = transposeCheckTypeResults(
           uncheckedLiteral.map { (qn, args) =>
             Σ.getEffectOption(qn) match
-              case None         => throw MissingDeclaration(qn)
-              case Some(effect) => 
+              case None => throw MissingDeclaration(qn)
+              case Some(effect) =>
                 val (checkedArgs, usages) = checkTypes(args, effect.tParamTys.toList)
                 ((qn, checkedArgs), usages)
           },
@@ -865,12 +836,12 @@ def inferType
           EffectsType(usage),
           literalUsages + operandsUsages,
         )
-    case LevelType(order) => (LevelType(order), (Type(LevelType(order))), Usages.zero)
-    case Level(op, maxOperands) =>
+      case LevelType(order) => (LevelType(order), (Type(LevelType(order))), Usages.zero)
+      case Level(op, maxOperands) =>
         val (operands, usages) = transposeCheckTypeResults(maxOperands.map { (ref, _) => checkLevel(ref) })
         val newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
         (newTm, LevelType(newTm), usages)
-    case Auto() => throw IllegalArgumentException("cannot infer type")
+      case Auto() => throw IllegalArgumentException("cannot infer type")
 
 def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): ContinuationUsage =
   effs
@@ -878,98 +849,90 @@ def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): Con
     .foldLeft(ContinuationUsage.Cu1) { _ | _ }
 
 @throws(classOf[IrError])
-def checkType
-  (tm: VTerm, ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : (VTerm, Usages)= debugCheck(
-  tm,
-  ty,
-  tm match
-    case Collapse(c) => 
-      val (tm, usages) = checkType(c, F(ty))
-      (Collapse(tm), usages)
-    case Thunk(c) =>
-      ty match
-        case U(cty) => 
-          val (tm, usages) = checkType(c, cty)
-          (Thunk(tm), usages)
-        case _      => throw ExpectUType(ty)
-    case c @ Con(name, uncheckedArgs) =>
-      ty match
-        case dataType @ DataType(qn, tArgs) =>
-          Σ.getConstructorOption(qn, name) match
-            case None => throw MissingConstructor(name, qn)
-            case Some(con) =>
-              val data = Σ.getData(qn)
-              val tParamArgs = tArgs.take(data.tParamTys.size)
-              val tIndexArgs = tArgs.drop(data.tParamTys.size)
-              val  (args, usages) = checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs: _*))
-              val  constraints = ctx.solve(checkAreConvertible(
-                  con.tArgs.map(_.substLowers(tParamArgs ++ args: _*)),
-                  tIndexArgs,
-                  data.tIndexTys.substLowers(tParamArgs: _*),
-                ))
-              if !constraints.isEmpty then throw UnmatchedDataIndex(c, dataType)
-              (DataType(qn, args), usages)
-        case _ => throw ExpectDataType(ty)
-    case Auto() =>
+def checkType(tm: VTerm, ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): (VTerm, Usages) =
+  debugCheck(
+    tm,
+    ty,
+    tm match
+      case Collapse(c) =>
+        val (tm, usages) = checkType(c, F(ty))
+        (Collapse(tm), usages)
+      case Thunk(c) =>
+        ty match
+          case U(cty) =>
+            val (tm, usages) = checkType(c, cty)
+            (Thunk(tm), usages)
+          case _ => throw ExpectUType(ty)
+      case c @ Con(name, uncheckedArgs) =>
+        ty match
+          case dataType @ DataType(qn, tArgs) =>
+            Σ.getConstructorOption(qn, name) match
+              case None => throw MissingConstructor(name, qn)
+              case Some(con) =>
+                val data = Σ.getData(qn)
+                val tParamArgs = tArgs.take(data.tParamTys.size)
+                val tIndexArgs = tArgs.drop(data.tParamTys.size)
+                val (args, usages) = checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs: _*))
+                val constraints = ctx.solve(
+                  checkAreConvertible(
+                    con.tArgs.map(_.substLowers(tParamArgs ++ args: _*)),
+                    tIndexArgs,
+                    data.tIndexTys.substLowers(tParamArgs: _*),
+                  ),
+                )
+                if !constraints.isEmpty then throw UnmatchedDataIndex(c, dataType)
+                (DataType(qn, args), usages)
+          case _ => throw ExpectDataType(ty)
+      case Auto() =>
         (
           Collapse(ctx.addUnsolved(F(ty))),
           Usages.zero,
         )
-    case _ =>
+      case _ =>
         val (newTm, inferred, usages) = inferType(tm)
         val constraints = checkIsSubtype(inferred, ty)
         if !constraints.isEmpty then throw NotVSubtype(inferred, ty)
-        (newTm, usages)
-)
+        (newTm, usages),
+  )
 
 // Precondition: tm is already type-checked
 @throws(classOf[IrError])
-private def inferLevel
-  (uncheckedTm: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm=
-    val tm = Reducible.reduce(uncheckedTm)
-    tm match
-      case CType(upperBound, effects) => LevelSuc(inferLevel(upperBound))
-      case CTop(level, effects)       => level
-      case F(vTy, effects, usage)     => inferLevel(vTy)
-      case FunctionType(binding, bodyTy, effects) =>
-          val argLevel = inferLevel(binding.ty)
-          val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
-        // strengthen is always safe because the only case that bodyLevel would reference 0 is when
-        // arg is of type Level. But in that case the overall level would be ω.
-          LevelMax(argLevel.weakened, bodyLevel).strengthened
-      case RecordType(qn, args, effects) => Σ.getRecord(qn).level.substLowers(args: _*)
-      case tm => ctx.resolveMetaVariableType(tm) match
-          case Some(ty) =>
-            ty match
-              // TODO[P1]: consider refactor this to use some helper function for such common patterns where we create a
-              // stub term when expecting the meta variable to match certain structure.
-              case CType(upperBound, _) => inferLevel(upperBound)
-              case cty =>
-                val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
-                val usage = ctx.addUnsolved(F(UsageType()))
-                val constraints = ctx.solve(checkIsConvertible(
-                    cty,
-                    CType(CTop(Collapse(level)), Collapse(usage)),
-                    None,
-                  ))
-                if constraints.isEmpty then Collapse(level).normalized else throw NotCTypeError(tm)
-          case _ => throw NotCTypeError(tm)
+private def inferLevel(uncheckedTm: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
+  val tm = Reducible.reduce(uncheckedTm)
+  tm match
+    case CType(upperBound, effects) => LevelSuc(inferLevel(upperBound))
+    case CTop(level, effects)       => level
+    case F(vTy, effects, usage)     => inferLevel(vTy)
+    case FunctionType(binding, bodyTy, effects) =>
+      val argLevel = inferLevel(binding.ty)
+      val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
+      // strengthen is always safe because the only case that bodyLevel would reference 0 is when
+      // arg is of type Level. But in that case the overall level would be ω.
+      LevelMax(argLevel.weakened, bodyLevel).strengthened
+    case RecordType(qn, args, effects) => Σ.getRecord(qn).level.substLowers(args: _*)
+    case tm =>
+      ctx.resolveMetaVariableType(tm) match
+        case Some(ty) =>
+          ty match
+            // TODO[P1]: consider refactor this to use some helper function for such common patterns where we create a
+            // stub term when expecting the meta variable to match certain structure.
+            case CType(upperBound, _) => inferLevel(upperBound)
+            case cty =>
+              val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
+              val usage = ctx.addUnsolved(F(UsageType()))
+              val constraints = ctx.solve(
+                checkIsConvertible(
+                  cty,
+                  CType(CTop(Collapse(level)), Collapse(usage)),
+                  None,
+                ),
+              )
+              if constraints.isEmpty then Collapse(level).normalized else throw NotCTypeError(tm)
+        case _ => throw NotCTypeError(tm)
 
 @throws(classOf[IrError])
-def inferType
-  (tm: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : (CTerm, CTerm, Usages)= debugInfer(tm):
+def inferType(tm: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): (CTerm, CTerm, Usages) =
+  debugInfer(tm):
     tm.normalized match
       case Hole =>
         throw IllegalArgumentException(
@@ -977,84 +940,88 @@ def inferType
         )
       case cct @ CapturedContinuationTip(ty) => (cct, ty, Usages.zero)
       case CType(uncheckedUpperBound, uncheckedEffects) =>
-          val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
-          val (upperBound, upperBoundUsages) = checkIsCType(uncheckedUpperBound)
-          val newTm = CType(upperBound.normalized(None), effects.normalized)
-          (
-            newTm,
-            CType(newTm, Total()),
-            (effUsages + upperBoundUsages),
-          )
+        val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
+        val (upperBound, upperBoundUsages) = checkIsCType(uncheckedUpperBound)
+        val newTm = CType(upperBound.normalized(None), effects.normalized)
+        (
+          newTm,
+          CType(newTm, Total()),
+          (effUsages + upperBoundUsages),
+        )
       case CTop(uncheckedLevel, uncheckedEffects) =>
-          val (effects, uUsages) = checkType(uncheckedEffects, EffectsType())
-          val (level, ulUsages) = checkLevel(uncheckedLevel)
-          val newTm = CTop(level, effects.normalized)(using tm.sourceInfo)
-          (newTm, CType(newTm, Total()), (uUsages + ulUsages))
+        val (effects, uUsages) = checkType(uncheckedEffects, EffectsType())
+        val (level, ulUsages) = checkLevel(uncheckedLevel)
+        val newTm = CTop(level, effects.normalized)(using tm.sourceInfo)
+        (newTm, CType(newTm, Total()), (uUsages + ulUsages))
       case m: Meta => (m, ctx.resolveMeta(m).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
           case None             => throw MissingDeclaration(qn)
           case Some(definition) => (d, definition.ty, Usages.zero)
       case Force(uncheckedV) =>
-          val (v, vTy, vUsages) = inferType(uncheckedV)
-          val cTy = vTy match
-            // TODO: think about whether this is good enough.
-            // Annotating all force as maybe-divergent because the computations may be dynamically
-            // loaded from handlers and hence there is no way to statically detect cyclic references
-            // between computations (functions, etc) unless I make the type system even more
-            // complicated to somehow tracking possible call-hierarchy.
-            case U(cty) => augmentEffect(MaybeDiv(), cty)
-            case _      => throw ExpectUType(vTy)
-          (Force(v), cTy, vUsages)
+        val (v, vTy, vUsages) = inferType(uncheckedV)
+        val cTy = vTy match
+          // TODO: think about whether this is good enough.
+          // Annotating all force as maybe-divergent because the computations may be dynamically
+          // loaded from handlers and hence there is no way to statically detect cyclic references
+          // between computations (functions, etc) unless I make the type system even more
+          // complicated to somehow tracking possible call-hierarchy.
+          case U(cty) => augmentEffect(MaybeDiv(), cty)
+          case _      => throw ExpectUType(vTy)
+        (Force(v), cTy, vUsages)
       case F(uncheckedVTy, uncheckedEffects, uncheckedUsage) =>
-          val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
-          val (unnormalizedUsage, uUsages) = checkType(uncheckedUsage, UsageType(None))
-          val usage = unnormalizedUsage.normalized
-          // Prevent returning value of U0 usage, which does not make sense.
-          ctx.checkSolved(checkUsageSubsumption(usage, UsageLiteral(Usage.U1)), NotUsageSubsumption(usage, UsageLiteral(Usage.U1)))
-          val (unnormalizedVTy, vTyTy, vTyUsages) = inferType(uncheckedVTy)
-          val vTy = unnormalizedVTy.normalized
-          val newTm = F(vTy, effects, usage)(using tm.sourceInfo)
-          val cTyTy = vTyTy match
-            case Type(_) => CType(newTm, Total())
-            case _       => throw NotTypeError(vTy)
-          (newTm, cTyTy, (effUsages + uUsages + vTyUsages))
+        val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
+        val (unnormalizedUsage, uUsages) = checkType(uncheckedUsage, UsageType(None))
+        val usage = unnormalizedUsage.normalized
+        // Prevent returning value of U0 usage, which does not make sense.
+        ctx.checkSolved(
+          checkUsageSubsumption(usage, UsageLiteral(Usage.U1)),
+          NotUsageSubsumption(usage, UsageLiteral(Usage.U1)),
+        )
+        val (unnormalizedVTy, vTyTy, vTyUsages) = inferType(uncheckedVTy)
+        val vTy = unnormalizedVTy.normalized
+        val newTm = F(vTy, effects, usage)(using tm.sourceInfo)
+        val cTyTy = vTyTy match
+          case Type(_) => CType(newTm, Total())
+          case _       => throw NotTypeError(vTy)
+        (newTm, cTyTy, (effUsages + uUsages + vTyUsages))
       case Return(uncheckedV, usage) =>
         val (v, vTy, vUsages) = inferType(uncheckedV)
         (Return(v, usage), F(vTy, Total(), usage), vUsages * usage)
       case tm: Let => checkLet(tm, None)
       case FunctionType(binding, uncheckedBodyTy, uncheckedEffects) =>
-          val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
-          val (ty, tyTy, tyUsages) = inferType(binding.ty)
-          val (bindingUsage, bindingUsageUsages) = checkType(binding.usage, UsageType(None))
-          val (newTm, funTyTy, bodyTyUsages) = tyTy match
-            case Type(_) =>
-                val (bodyTy, bodyTyTy, bodyTyUsages) = inferType(uncheckedBodyTy)(using Γ :+ binding)
-                val newTm = FunctionType(Binding(ty, bindingUsage)(binding.name), bodyTy, effects.normalized)(using tm.sourceInfo)
-                bodyTyTy match
-                  case CType(_, eff) if isTotal(bodyTy, Some(bodyTyTy)) =>
-                    // Strengthen is safe here because if it references the binding, then the
-                    // binding must be at level ω and hence ULevelMax would return big type.
-                    // Also, there is no need to check the dropped usage because usages in types
-                    // is always multiplied by U0.
-                    (
-                      newTm,
-                      CType(newTm, Total()),
-                      bodyTyUsages.dropRight(1).map(_.strengthened),
-                    )
-                  // TODO[P3]: think about whether the following is actually desirable
-                  // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
-                  // inference.
-                  case F(Type(_), eff, _) if isTotal(bodyTy, Some(bodyTyTy)) =>
-                    (
-                      newTm,
-                      CType(newTm, Total()),
-                      bodyTyUsages.dropRight(1).map(_.strengthened),
-                    )
-                  case CType(_, _) | F(Type(_), _, _) => throw EffectfulCTermAsType(bodyTy)
-                  case _ => throw NotCTypeError(bodyTy)
-            case _ => throw NotTypeError(binding.ty)
-          (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
+        val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
+        val (ty, tyTy, tyUsages) = inferType(binding.ty)
+        val (bindingUsage, bindingUsageUsages) = checkType(binding.usage, UsageType(None))
+        val (newTm, funTyTy, bodyTyUsages) = tyTy match
+          case Type(_) =>
+            val (bodyTy, bodyTyTy, bodyTyUsages) = inferType(uncheckedBodyTy)(using Γ :+ binding)
+            val newTm =
+              FunctionType(Binding(ty, bindingUsage)(binding.name), bodyTy, effects.normalized)(using tm.sourceInfo)
+            bodyTyTy match
+              case CType(_, eff) if isTotal(bodyTy, Some(bodyTyTy)) =>
+                // Strengthen is safe here because if it references the binding, then the
+                // binding must be at level ω and hence ULevelMax would return big type.
+                // Also, there is no need to check the dropped usage because usages in types
+                // is always multiplied by U0.
+                (
+                  newTm,
+                  CType(newTm, Total()),
+                  bodyTyUsages.dropRight(1).map(_.strengthened),
+                )
+              // TODO[P3]: think about whether the following is actually desirable
+              // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
+              // inference.
+              case F(Type(_), eff, _) if isTotal(bodyTy, Some(bodyTyTy)) =>
+                (
+                  newTm,
+                  CType(newTm, Total()),
+                  bodyTyUsages.dropRight(1).map(_.strengthened),
+                )
+              case CType(_, _) | F(Type(_), _, _) => throw EffectfulCTermAsType(bodyTy)
+              case _                              => throw NotCTypeError(bodyTy)
+          case _ => throw NotTypeError(binding.ty)
+        (newTm, funTyTy, (effUsages + tyUsages + bodyTyUsages + bindingUsageUsages))
       case Redex(c, elims) =>
         @throws(classOf[IrError])
         def checkElims
@@ -1065,12 +1032,13 @@ def inferType
             case (e @ ETerm(uncheckedArg)) :: uncheckedRest =>
               cty match
                 case FunctionType(binding, uncheckedBodyTy, uncheckedEffects) =>
-                    val (arg, argUsages) = checkType(uncheckedArg, binding.ty)
-                    val (bodyTy, _) = checkIsCType(uncheckedBodyTy)(using Γ :+ binding)
-                    val (rest, cty, restUsages) = checkElims(e :: checkedElims, bodyTy.substLowers(arg).normalized(None), uncheckedRest)
-                    val (effects, _) = checkType(uncheckedEffects, EffectsType())
-                    val continuationUsage = getEffectsContinuationUsage(effects)
-                    (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages * continuationUsage))
+                  val (arg, argUsages) = checkType(uncheckedArg, binding.ty)
+                  val (bodyTy, _) = checkIsCType(uncheckedBodyTy)(using Γ :+ binding)
+                  val (rest, cty, restUsages) =
+                    checkElims(e :: checkedElims, bodyTy.substLowers(arg).normalized(None), uncheckedRest)
+                  val (effects, _) = checkType(uncheckedEffects, EffectsType())
+                  val continuationUsage = getEffectsContinuationUsage(effects)
+                  (ETerm(arg) :: rest, augmentEffect(effects, cty), (argUsages + restUsages * continuationUsage))
                 case _ => throw ExpectFunction(redex(c, checkedElims.reverse))
             case (e @ EProj(name)) :: uncheckedRest =>
               cty match
@@ -1083,7 +1051,11 @@ def inferType
                       // TODO[P2]: refactor this and track an accumulating usage so that checking record usage here
                       // won't be O(n^2)
                       val (recordTerm, recordUsages) = checkType(redex(c, checkedElims), cty)
-                      val (rest, checkedCty, restUsages) = checkElims(e :: checkedElims, f.ty.substLowers(args :+ Thunk(recordTerm): _*).normalized(None), uncheckedRest)
+                      val (rest, checkedCty, restUsages) = checkElims(
+                        e :: checkedElims,
+                        f.ty.substLowers(args :+ Thunk(recordTerm): _*).normalized(None),
+                        uncheckedRest,
+                      )
                       val (effects, _) = checkType(uncheckedEffects, EffectsType())
                       val continuationUsage = getEffectsContinuationUsage(effects)
                       (
@@ -1099,9 +1071,9 @@ def inferType
         Σ.getRecordOption(qn) match
           case None => throw MissingDeclaration(qn)
           case Some(record) =>
-              val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
-              val (args, argsUsages) = checkTypes(uncheckedArgs, record.tParamTys.map(_._1).toList)
-              (RecordType(qn, args, effects), CType(tm, Total()), (effUsages + argsUsages))
+            val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
+            val (args, argsUsages) = checkTypes(uncheckedArgs, record.tParamTys.map(_._1).toList)
+            (RecordType(qn, args, effects), CType(tm, Total()), (effUsages + argsUsages))
       case OperationCall((qn, uncheckedTArgs), name, uncheckedArgs) =>
         Σ.getEffectOption(qn) match
           case None => throw MissingDeclaration(qn)
@@ -1109,13 +1081,13 @@ def inferType
             Σ.getOperationOption(qn, name) match
               case None => throw MissingDefinition(qn)
               case Some(op) =>
-                  val (checkedTArgs, effUsages) = checkTypes(uncheckedTArgs, effect.tParamTys.toList)
-                  val tArgs = checkedTArgs.map(_.normalized)
-                  val (args, argsUsages) = checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs: _*))
-                  val newEff = (qn, tArgs)
-                  val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
-                  val ty = op.resultTy.substLowers(tArgs ++ args: _*).normalized
-                  (
+                val (checkedTArgs, effUsages) = checkTypes(uncheckedTArgs, effect.tParamTys.toList)
+                val tArgs = checkedTArgs.map(_.normalized)
+                val (args, argsUsages) = checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs: _*))
+                val newEff = (qn, tArgs)
+                val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
+                val ty = op.resultTy.substLowers(tArgs ++ args: _*).normalized
+                (
                   newTm,
                   F(
                     ty,
@@ -1135,14 +1107,15 @@ def inferType
           case r: Redex                   => findTip(r.t)
           case _                          => throw IllegalStateException("impossible term")
         val CapturedContinuationTip(F(resultTy, _, resultUsage)) = findTip(uncheckedHandler)
-          val (checkedHandler, outputTy, handlerUsages) = inferType(uncheckedHandler)
-          val handler = checkedHandler.asInstanceOf[Handler]
-          val paramLevel = inferLevel(handler.parameterBinding.ty)
-          val resultLevel = inferLevel(resultTy)
-          val outputLevel = inferLevel(outputTy)
-          val continuationLevel = LevelMax(paramLevel, resultLevel, outputLevel).normalized
+        val (checkedHandler, outputTy, handlerUsages) = inferType(uncheckedHandler)
+        val handler = checkedHandler.asInstanceOf[Handler]
+        val paramLevel = inferLevel(handler.parameterBinding.ty)
+        val resultLevel = inferLevel(resultTy)
+        val outputLevel = inferLevel(outputTy)
+        val continuationLevel = LevelMax(paramLevel, resultLevel, outputLevel).normalized
 
-          (Continuation(handler, continuationUsage),
+        (
+          Continuation(handler, continuationUsage),
           RecordType(
             Builtins.ContinuationQn,
             List(
@@ -1168,37 +1141,33 @@ private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signatur
       throw IllegalStateException("typing exception")
 
 @throws(classOf[IrError])
-def checkType
-  (tm: CTerm, ty: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : (CTerm, Usages)= debugCheck(
-  tm,
-  ty,
-  tm match
-    case Force(v) => 
-      val (checkedV, usages) = checkType(v, U(ty))
-      (Force(checkedV), usages)
-    case Return(v, usage) =>
-      ty match
-        case F(ty, _, expectedUsage) =>
+def checkType(tm: CTerm, ty: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): (CTerm, Usages) =
+  debugCheck(
+    tm,
+    ty,
+    tm match
+      case Force(v) =>
+        val (checkedV, usages) = checkType(v, U(ty))
+        (Force(checkedV), usages)
+      case Return(v, usage) =>
+        ty match
+          case F(ty, _, expectedUsage) =>
             val (checkedV, usages) = checkType(v, ty)
             ctx.checkSolved(checkUsageSubsumption(usage, expectedUsage), NotUsageSubsumption(usage, expectedUsage))
             (Return(checkedV, usage), usages * usage)
-        case _ => throw ExpectFType(ty)
-    case l: Let     => 
-      val (v, _, usages) = checkLet(l, Some(ty))
-      (v, usages)
-    case h: Handler => 
-      val (v, _, usages) = checkHandler(h, Some(ty))
-      (v, usages)
-    case _ =>
+          case _ => throw ExpectFType(ty)
+      case l: Let =>
+        val (v, _, usages) = checkLet(l, Some(ty))
+        (v, usages)
+      case h: Handler =>
+        val (v, _, usages) = checkHandler(h, Some(ty))
+        (v, usages)
+      case _ =>
         val (checkedTm, tmTy, usages) = inferType(tm)
         val normalizedTy = ty.normalized(None)
         ctx.checkSolved(checkIsSubtype(tmTy, normalizedTy), NotCSubtype(tmTy, normalizedTy))
-        (checkedTm, usages)
-)
+        (checkedTm, usages),
+  )
 private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
   override def combine(rs: Set[Int]*)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
     rs.flatten.to(Set)
@@ -1216,18 +1185,18 @@ private def checkInherentEqDecidable
   (data: Data, constructor: Constructor)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Unit=
+  : Unit =
   given Γ: Context = data.tParamTys.map(_._1) ++ data.tIndexTys
 
   // 1. check that a the component types are all eq-decidable if the data is eq-decidable
   @throws(classOf[IrError])
-  def checkComponentTypes(tys: Telescope, dataEqD: VTerm)(using Γ: Context): Unit=
+  def checkComponentTypes(tys: Telescope, dataEqD: VTerm)(using Γ: Context): Unit =
     tys match
       case Nil => Right(())
       case binding :: rest =>
-          val eqD = inferEqDecidability(binding.ty)
-          ctx.checkSolved(checkEqDecidabilitySubsumption(eqD, dataEqD), NotEqDecidableType(binding.ty))
-          checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
+        val eqD = inferEqDecidability(binding.ty)
+        ctx.checkSolved(checkEqDecidabilitySubsumption(eqD, dataEqD), NotEqDecidableType(binding.ty))
+        checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
 
   // 2. check that each zero-usage component is referenced in the constructed data type. This is necessary because
   //    zero usage components won't be available at runtime. Hence, checking components values of passed to a
@@ -1248,37 +1217,33 @@ private def checkInherentEqDecidable
             case _ if allReferencedVarsInType(index) => false
             case _                                   => true
 
-    if !badComponents.isEmpty then throw NotEqDecidableDueToConstructor(data.qn, constructor.name, badComponents.map(_._1))
+    if !badComponents.isEmpty then
+      throw NotEqDecidableDueToConstructor(data.qn, constructor.name, badComponents.map(_._1))
 
   if data.inherentEqDecidability == EqDecidabilityLiteral(EqUnknown)
     // short circuit since there is no need to do any check
   then ()
   // Call 1, 2
   else
-      checkComponentTypes(
-        (data.tParamTys.map(_._1) ++ data.tIndexTys ++ constructor.paramTys).toList,
-        data.inherentEqDecidability,
-      )(using IndexedSeq())
-      checkComponentUsage(constructor)
+    checkComponentTypes(
+      (data.tParamTys.map(_._1) ++ data.tIndexTys ++ constructor.paramTys).toList,
+      data.inherentEqDecidability,
+    )(using IndexedSeq())
+    checkComponentUsage(constructor)
 
 private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
   override def visitCollapse(collapse: Collapse)(using ctx: Nat)(using Σ: Signature): Seq[Var] = Seq.empty
 
 @throws(classOf[IrError])
-def inferEqDecidability
-  (ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm= ty match
+def inferEqDecidability(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm = ty match
   case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType | _: LevelType =>
     EqDecidabilityLiteral(EqDecidable)
   case Top(_, eqDecidability) => eqDecidability
   case _: Var | _: Collapse =>
-      val (_, tyTy, _) = inferType(ty)
-      tyTy match
-        case Type(upperBound) => inferEqDecidability(upperBound)
-        case _                => throw ExpectVType(ty)
+    val (_, tyTy, _) = inferType(ty)
+    tyTy match
+      case Type(upperBound) => inferEqDecidability(upperBound)
+      case _                => throw ExpectVType(ty)
   case _: U => EqDecidabilityLiteral(EqUnknown)
   case d: DataType =>
     Σ.getDataOption(d.qn) match
@@ -1288,18 +1253,18 @@ def inferEqDecidability
   case _ => throw ExpectVType(ty)
 
 @throws(classOf[IrError])
-private def checkIsEqDecidableTypes
-  (ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Unit=
-    val eqD = inferEqDecidability(ty)
-    if !ctx.solve(checkIsConvertible(
-      eqD,
-      EqDecidabilityLiteral(EqDecidable),
-      Some(EqDecidabilityType()),
-    )).isEmpty then throw NotEqDecidableType(ty)
+private def checkIsEqDecidableTypes(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): Unit =
+  val eqD = inferEqDecidability(ty)
+  if !ctx
+      .solve(
+        checkIsConvertible(
+          eqD,
+          EqDecidabilityLiteral(EqDecidable),
+          Some(EqDecidabilityType()),
+        ),
+      )
+      .isEmpty
+  then throw NotEqDecidableType(ty)
 
 @throws(classOf[IrError])
 private def checkAreEqDecidableTypes
@@ -1310,8 +1275,8 @@ private def checkAreEqDecidableTypes
   : Unit = telescope match
   case Nil => Right(Nil)
   case binding :: telescope =>
-      checkIsEqDecidableTypes(binding.ty)
-      checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
+    checkIsEqDecidableTypes(binding.ty)
+    checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
 
 /** @param input
   *   input usage terms should live in Γ ++ telescope
@@ -1326,11 +1291,12 @@ private def verifyUsages
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Usages=
+  : Usages =
   val Γ2 = Γ ++ telescope
   val count = telescope.size
   inputUsages.takeRight(count).reverse.zipWithIndex.foreach { (v, i) =>
-        if !ctx.solve(checkUsageSubsumption(v, Γ2.resolve(i).usage)).isEmpty then throw NotUsageSubsumption(v, Γ2.resolve(i).usage)
+    if !ctx.solve(checkUsageSubsumption(v, Γ2.resolve(i).usage)).isEmpty then
+      throw NotUsageSubsumption(v, Γ2.resolve(i).usage)
   }
   inputUsages.drop(count).map { v =>
     try v.strengthen(count, 0)
@@ -1356,10 +1322,11 @@ private def verifyUsages
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Usages=
+  : Usages =
   usages.takeRight(count).reverse.zipWithIndex.map { (v, i) =>
-        if !ctx.solve(checkUsageSubsumption(v, Γ.resolve(i).usage)).isEmpty then throw NotUsageSubsumption(v, Γ.resolve(i).usage)
-    }
+    if !ctx.solve(checkUsageSubsumption(v, Γ.resolve(i).usage)).isEmpty then
+      throw NotUsageSubsumption(v, Γ.resolve(i).usage)
+  }
   usages.drop(count).map { v =>
     try v.strengthen(count, 0)
     catch
@@ -1387,9 +1354,8 @@ def checkTypes
   }
 
 @throws(classOf[IrError])
-private def transposeCheckTypeResults[R]
-  (resultsAndUsages: Iterable[(R, Usages)])
-  : (List[R], Usages) = (resultsAndUsages.map(_._1).toList, resultsAndUsages.map(_._2).reduce(_ + _))
+private def transposeCheckTypeResults[R](resultsAndUsages: Iterable[(R, Usages)]): (List[R], Usages) =
+  (resultsAndUsages.map(_._1).toList, resultsAndUsages.map(_._2).reduce(_ + _))
 
 @throws(classOf[IrError])
 private def checkLet
@@ -1397,74 +1363,74 @@ private def checkLet
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (CTerm, CTerm, Usages)=
-  val  (ty, _) = checkIsType(tm.ty)
-    // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages in body can all
-    // be trivialized by multiple U0 since they won't execute. But inhabitability is not decidable. Even if we only
-    // do some converative checking, it's hard to check polymorphic type `A` for any `A` passed by the caller. An
-    // alternative is to designate a bottom type and just check that. But to make this ergonomic we need to tweak the
-    // type checker to make this designated type a subtype of everything else. But type inference becomes impossible
-    // with `force t` where `t` has type bottom. If we raise a type error for `force t`, this would violate substitution
-    // principle of subtypes.
-    // On the other hand, if we don't check inhabitability, the usages in body would simply be multipled with UAff
-    // instead of U0, which seems to be a reasonable approximation. The primary reason for such a check is just to flag
-    // phantom usages of terms, but I think it's not worth all these complexity.
+  : (CTerm, CTerm, Usages) =
+  val (ty, _) = checkIsType(tm.ty)
+  // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages in body can all
+  // be trivialized by multiple U0 since they won't execute. But inhabitability is not decidable. Even if we only
+  // do some converative checking, it's hard to check polymorphic type `A` for any `A` passed by the caller. An
+  // alternative is to designate a bottom type and just check that. But to make this ergonomic we need to tweak the
+  // type checker to make this designated type a subtype of everything else. But type inference becomes impossible
+  // with `force t` where `t` has type bottom. If we raise a type error for `force t`, this would violate substitution
+  // principle of subtypes.
+  // On the other hand, if we don't check inhabitability, the usages in body would simply be multipled with UAff
+  // instead of U0, which seems to be a reasonable approximation. The primary reason for such a check is just to flag
+  // phantom usages of terms, but I think it's not worth all these complexity.
   val (unnormalizedEffects, _) = checkType(tm.eff, EffectsType())
   val effects = unnormalizedEffects.normalized
   val (usage, _) = checkType(tm.usage, UsageType())
   val (t, unnormalizedTUsages) = checkType(tm.t, F(ty, effects, usage))
   val tUsages = unnormalizedTUsages.map(_.normalized)
   val (newTm, checkedBodyTy, usages) =
-      // If some usages are not zero or unres, inlining `t` would change usage checking
-      // result because
-      //
-      // * either some linear or relevant usages becomes zero because the computation
-      //   gets removed
-      //
-      // * or if the term is wrapped inside a `Collapse` and get multiplied
-      //
-      // Such changes would alter usage checking result, which can be confusing for
-      // users. Note that, it's still possible that with inlining causes usages to be
-      // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
-      // unrestricted usage. Hence, usage checking would still pass. On the other hand,
-      // it's not possible for inlining to create usage out of nowhere.
-      def areTUsagesZeroOrUnrestricted: Boolean =
-        // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
-        // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
-        tUsages.forall { usage => usage == uAny || usage == u0 }
-      val tTy = F(ty, effects, usage)
-      if isTotal(t, Some(tTy)) && areTUsagesZeroOrUnrestricted then
-        // Do the reduction onsite so that type checking in sub terms can leverage the
-        // more specific type. More importantly, this way we do not need to reference
-        // the result of a computation in the inferred type.
-          val uncheckedNewBody = t.normalized(Some(tTy)) match
-            case Return(v, _) => tm.ctx.substLowers(v)
-            case c            => tm.ctx.substLowers(Collapse(c))
-          bodyTy match
-            case Some(uncheckedBodyTy) =>
-                val (bodyTy, _) = checkIsCType(uncheckedBodyTy)
-                val (newBody, usages) = checkType(uncheckedNewBody, bodyTy)
-                (newBody, bodyTy, usages)
-            case None => inferType(uncheckedNewBody)
-      // Otherwise, just add the binding to the context and continue type checking.
-      else
-        val tBinding = Binding(ty, usage)(gn"v")
-        val (body, checkedBodyTy, usagesInBody) =
-            given Context = Γ :+ tBinding
-            bodyTy match
-              case None => inferType(tm.ctx)
-              case Some(uncheckedBodyTy) =>
-                  val (bodyTy, _) = checkIsCType(uncheckedBodyTy)(using Γ)
-                  val (body, usages) = checkType(tm.ctx, bodyTy.weakened)
-                  (body, bodyTy, usages)
-        val leakCheckedBodyTy = checkVar0Leak(checkedBodyTy, LeakedReferenceToEffectfulComputationResult(t))
-        val verifiedUsagesInBody = verifyUsages(usagesInBody, tBinding :: Nil)
-        val continuationUsage = getEffectsContinuationUsage(effects)
-        (
-          Let(t, ty, effects, usage, body)(tm.boundName)(using tm.sourceInfo),
-          leakCheckedBodyTy.strengthened,
-          verifiedUsagesInBody * continuationUsage,
-        )
+    // If some usages are not zero or unres, inlining `t` would change usage checking
+    // result because
+    //
+    // * either some linear or relevant usages becomes zero because the computation
+    //   gets removed
+    //
+    // * or if the term is wrapped inside a `Collapse` and get multiplied
+    //
+    // Such changes would alter usage checking result, which can be confusing for
+    // users. Note that, it's still possible that with inlining causes usages to be
+    // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
+    // unrestricted usage. Hence, usage checking would still pass. On the other hand,
+    // it's not possible for inlining to create usage out of nowhere.
+    def areTUsagesZeroOrUnrestricted: Boolean =
+      // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
+      // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
+      tUsages.forall { usage => usage == uAny || usage == u0 }
+    val tTy = F(ty, effects, usage)
+    if isTotal(t, Some(tTy)) && areTUsagesZeroOrUnrestricted then
+      // Do the reduction onsite so that type checking in sub terms can leverage the
+      // more specific type. More importantly, this way we do not need to reference
+      // the result of a computation in the inferred type.
+      val uncheckedNewBody = t.normalized(Some(tTy)) match
+        case Return(v, _) => tm.ctx.substLowers(v)
+        case c            => tm.ctx.substLowers(Collapse(c))
+      bodyTy match
+        case Some(uncheckedBodyTy) =>
+          val (bodyTy, _) = checkIsCType(uncheckedBodyTy)
+          val (newBody, usages) = checkType(uncheckedNewBody, bodyTy)
+          (newBody, bodyTy, usages)
+        case None => inferType(uncheckedNewBody)
+    // Otherwise, just add the binding to the context and continue type checking.
+    else
+      val tBinding = Binding(ty, usage)(gn"v")
+      val (body, checkedBodyTy, usagesInBody) =
+        given Context = Γ :+ tBinding
+        bodyTy match
+          case None => inferType(tm.ctx)
+          case Some(uncheckedBodyTy) =>
+            val (bodyTy, _) = checkIsCType(uncheckedBodyTy)(using Γ)
+            val (body, usages) = checkType(tm.ctx, bodyTy.weakened)
+            (body, bodyTy, usages)
+      val leakCheckedBodyTy = checkVar0Leak(checkedBodyTy, LeakedReferenceToEffectfulComputationResult(t))
+      val verifiedUsagesInBody = verifyUsages(usagesInBody, tBinding :: Nil)
+      val continuationUsage = getEffectsContinuationUsage(effects)
+      (
+        Let(t, ty, effects, usage, body)(tm.boundName)(using tm.sourceInfo),
+        leakCheckedBodyTy.strengthened,
+        verifiedUsagesInBody * continuationUsage,
+      )
   (newTm, augmentEffect(effects, checkedBodyTy), usages)
 
 @throws(classOf[IrError])
@@ -1473,222 +1439,226 @@ def checkHandler
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (CTerm, CTerm, Usages)=
-    val (eff, _) = checkType(h.eff, EffectsType())
-    val effs = eff.normalized match
-      case Effects(effs, s) if s.isEmpty => effs
-      case _                             => throw EffectTermTooComplex(eff)
-    val operations = effs.flatMap(e => Σ.getOperations(e._1).map(op => (e._1 / op.name, e._2, op)))
-    val expectedOperatonNames = operations.map(_._1)
-    val actualOperationNames = h.handlers.keySet
-    if expectedOperatonNames != actualOperationNames then throw HandlerOperationsMismatch(h, expectedOperatonNames, actualOperationNames)
-    val otherEffects = checkType(h.otherEffects, EffectsType())._1.normalized
-    val outputEffects = checkType(h.outputEffects, EffectsType())._1.normalized
-    val outputUsage = checkType(h.outputUsage, UsageType())._1.normalized
-    val (outputTy, _) = checkIsType(h.outputTy)
-    outputType match
-      case None => {}
-      case Some(outputType) =>
-        ctx.checkSolved(checkIsSubtype(F(outputTy, outputEffects, outputUsage), outputType), NotCSubtype(F(outputTy, outputEffects, outputUsage), outputType))
-    val (parameterTy, _) = checkIsType(h.parameterBinding.ty)
-    // parameter binding usage dictates how much resources the handler needs when consuming the parameter
-    val (parameterBindingUsage, _) = checkType(h.parameterBinding.usage, UsageType())
-    // TODO[P0]: remove this check. Instead, require parameter disposer, replicator, and simple operations to have 
-    //  simple linear effects only. That is, ban exceptions from them.
-    // If the handler implements some simple exceptional operation, then this operation may throw an exception, which
-    // would trigger disposers of all handlers above the current handler, which, in turn, may call operations on this
-    // handler again. But this is problematic if the parameter disallows multiple usages (aka, it's linear or affine)
-    // because the current operation is consuming the parameter already, which means another call to an operation of
-    // this handler should not be allowed.
-    // This issue is solved by requiring parameter to be URel or UAny if the handler implements any simple exceptional
-    // operation. Hopefully this limitation is not a big deal in practice.
-    val simpleExceptionalOperations = operations
-      .filter((_, _, operation) =>
-        operation.continuationUsage.controlMode == ControlMode.Simple && operation.continuationUsage.usage != Usage.U1,
-      )
-    if !simpleExceptionalOperations.isEmpty then 
+  : (CTerm, CTerm, Usages) =
+  val (eff, _) = checkType(h.eff, EffectsType())
+  val effs = eff.normalized match
+    case Effects(effs, s) if s.isEmpty => effs
+    case _                             => throw EffectTermTooComplex(eff)
+  val operations = effs.flatMap(e => Σ.getOperations(e._1).map(op => (e._1 / op.name, e._2, op)))
+  val expectedOperatonNames = operations.map(_._1)
+  val actualOperationNames = h.handlers.keySet
+  if expectedOperatonNames != actualOperationNames then
+    throw HandlerOperationsMismatch(h, expectedOperatonNames, actualOperationNames)
+  val otherEffects = checkType(h.otherEffects, EffectsType())._1.normalized
+  val outputEffects = checkType(h.outputEffects, EffectsType())._1.normalized
+  val outputUsage = checkType(h.outputUsage, UsageType())._1.normalized
+  val (outputTy, _) = checkIsType(h.outputTy)
+  outputType match
+    case None => {}
+    case Some(outputType) =>
       ctx.checkSolved(
-        checkUsageSubsumption(parameterBindingUsage, uRel),
-        HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(h),
+        checkIsSubtype(F(outputTy, outputEffects, outputUsage), outputType),
+        NotCSubtype(F(outputTy, outputEffects, outputUsage), outputType),
       )
-    val parameterBinding = Binding(parameterTy, parameterBindingUsage)(h.parameterBinding.name)
-    val (parameter, rawParameterUsages) = checkType(h.parameter, parameterTy)
-    val parameterUsages = rawParameterUsages * parameterBindingUsage
-    val (inputTy, _) = checkIsType(h.inputBinding.ty)
-    // Unlike parameter, input is a computation and hence only executed linearly. The input binding usage is simply a
-    // requirement on the final return type of the input computation.
-    val (inputBindingUsage, _) = checkType(h.inputBinding.usage, UsageType())
-    val inputBinding = Binding(inputTy, inputBindingUsage)(h.inputBinding.name)
-    val inputEffects = EffectsUnion(eff, otherEffects).normalized
-    val (input, inputUsages) = checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
-    val inputEffectsContinuaionUsage = getEffectsContinuationUsage(inputEffects)
-    val (parameterDisposer, parameterDisposerUsages) = h.parameterDisposer match
-      case Some(parameterDisposer) =>
-          val (checkedParameterDisposer, parameterDisposerUsages) = checkType(
-            parameterDisposer,
-            F(DataType(Builtins.UnitQn, Nil), outputEffects.weakened),
-          )(using Γ :+ parameterBinding)
-          val verifiedParameterDisposerUsages = verifyUsages(parameterDisposerUsages, parameterBinding :: Nil)
-          (Some(checkedParameterDisposer), verifiedParameterDisposerUsages)
-      case None =>
-        (inputEffectsContinuaionUsage, parameterBindingUsage) match
-          case (UsageLiteral(effUsage), UsageLiteral(paramUsage)) if effUsage <= Usage.URel || paramUsage >= Usage.U0 =>
-            (None, Usages.zero)
-          case _ => throw ExpectParameterDisposer(h)
-    val (parameterReplicator, parameterReplicatorUsages) = h.parameterReplicator match
-      case Some(parameterReplicator) =>
-          val (checkedParameterReplicator, parameterReplicatorUsages) = checkType(
-            parameterReplicator,
+  val (parameterTy, _) = checkIsType(h.parameterBinding.ty)
+  // parameter binding usage dictates how much resources the handler needs when consuming the parameter
+  val (parameterBindingUsage, _) = checkType(h.parameterBinding.usage, UsageType())
+  // TODO[P0]: remove this check. Instead, require parameter disposer, replicator, and simple operations to have
+  //  simple linear effects only. That is, ban exceptions from them.
+  // If the handler implements some simple exceptional operation, then this operation may throw an exception, which
+  // would trigger disposers of all handlers above the current handler, which, in turn, may call operations on this
+  // handler again. But this is problematic if the parameter disallows multiple usages (aka, it's linear or affine)
+  // because the current operation is consuming the parameter already, which means another call to an operation of
+  // this handler should not be allowed.
+  // This issue is solved by requiring parameter to be URel or UAny if the handler implements any simple exceptional
+  // operation. Hopefully this limitation is not a big deal in practice.
+  val simpleExceptionalOperations = operations
+    .filter((_, _, operation) =>
+      operation.continuationUsage.controlMode == ControlMode.Simple && operation.continuationUsage.usage != Usage.U1,
+    )
+  if !simpleExceptionalOperations.isEmpty then
+    ctx.checkSolved(
+      checkUsageSubsumption(parameterBindingUsage, uRel),
+      HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(h),
+    )
+  val parameterBinding = Binding(parameterTy, parameterBindingUsage)(h.parameterBinding.name)
+  val (parameter, rawParameterUsages) = checkType(h.parameter, parameterTy)
+  val parameterUsages = rawParameterUsages * parameterBindingUsage
+  val (inputTy, _) = checkIsType(h.inputBinding.ty)
+  // Unlike parameter, input is a computation and hence only executed linearly. The input binding usage is simply a
+  // requirement on the final return type of the input computation.
+  val (inputBindingUsage, _) = checkType(h.inputBinding.usage, UsageType())
+  val inputBinding = Binding(inputTy, inputBindingUsage)(h.inputBinding.name)
+  val inputEffects = EffectsUnion(eff, otherEffects).normalized
+  val (input, inputUsages) = checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
+  val inputEffectsContinuaionUsage = getEffectsContinuationUsage(inputEffects)
+  val (parameterDisposer, parameterDisposerUsages) = h.parameterDisposer match
+    case Some(parameterDisposer) =>
+      val (checkedParameterDisposer, parameterDisposerUsages) = checkType(
+        parameterDisposer,
+        F(DataType(Builtins.UnitQn, Nil), outputEffects.weakened),
+      )(using Γ :+ parameterBinding)
+      val verifiedParameterDisposerUsages = verifyUsages(parameterDisposerUsages, parameterBinding :: Nil)
+      (Some(checkedParameterDisposer), verifiedParameterDisposerUsages)
+    case None =>
+      (inputEffectsContinuaionUsage, parameterBindingUsage) match
+        case (UsageLiteral(effUsage), UsageLiteral(paramUsage)) if effUsage <= Usage.URel || paramUsage >= Usage.U0 =>
+          (None, Usages.zero)
+        case _ => throw ExpectParameterDisposer(h)
+  val (parameterReplicator, parameterReplicatorUsages) = h.parameterReplicator match
+    case Some(parameterReplicator) =>
+      val (checkedParameterReplicator, parameterReplicatorUsages) = checkType(
+        parameterReplicator,
+        F(
+          DataType(
+            Builtins.PairQn,
+            List(
+              LevelUpperBound(),
+              EqDecidabilityLiteral(EqDecidability.EqUnknown),
+              parameterBindingUsage,
+              parameterTy,
+              parameterBindingUsage,
+              parameterTy,
+            ),
+          ),
+          outputEffects,
+        ).weakened,
+      )(using Γ :+ parameterBinding)
+      val verifiedParameterReplicatorUsages = verifyUsages(parameterReplicatorUsages, parameterBinding :: Nil)
+      (Some(checkedParameterReplicator), verifiedParameterReplicatorUsages)
+    case None =>
+      (inputEffectsContinuaionUsage, parameterBindingUsage) match
+        case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
+          if effUsage <= Usage.UAff || paramUsage >= Usage.URel || paramUsage == Usage.U0 =>
+          (None, Usages.zero)
+        case _ => throw ExpectParameterReplicator(h)
+  val (transform, transformUsages) = checkType(
+    h.transform,
+    F(outputTy, outputEffects, outputUsage).weaken(2, 0),
+  )(using Γ :+ parameterBinding :+ inputBinding)
+  val handlerAndUsages = operations.map { (qn, effArgs, operation) =>
+    val handler = h.handlers(qn)
+    // The followings do not need to be weakened for handler parameter because after substituting the effect args,
+    // they do not contain any free variables beyond beginning of paramTys.
+    val paramTys = operation.paramTys.substLowers(effArgs: _*)
+    val resultTy = operation.resultTy.substLowers(effArgs: _*)
+    val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
+    val (impl, usages) = operation.continuationUsage match
+      case ContinuationUsage(usage, ControlMode.Simple) =>
+        given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
+        val implOffset = implΓ.size - Γ.size
+        val uncheckedImplTy = usage match
+          case U1 =>
             F(
               DataType(
                 Builtins.PairQn,
                 List(
-                  LevelUpperBound(),
-                  EqDecidabilityLiteral(EqDecidability.EqUnknown),
-                  parameterBindingUsage,
-                  parameterTy,
-                  parameterBindingUsage,
-                  parameterTy,
+                  Auto(),
+                  Auto(),
+                  parameterBindingUsage.weaken(implOffset, 0),
+                  parameterTy.weaken(implOffset, 0),
+                  resultUsage,
+                  resultTy,
                 ),
               ),
-              outputEffects,
-            ).weakened,
-          )(using Γ :+ parameterBinding)
-          val verifiedParameterReplicatorUsages = verifyUsages(parameterReplicatorUsages, parameterBinding :: Nil)
-          (Some(checkedParameterReplicator), verifiedParameterReplicatorUsages)
-      case None =>
-        (inputEffectsContinuaionUsage, parameterBindingUsage) match
-          case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
-            if effUsage <= Usage.UAff || paramUsage >= Usage.URel || paramUsage == Usage.U0 =>
-            (None, Usages.zero)
-          case _ => throw ExpectParameterReplicator(h)
-    val (transform, transformUsages) = checkType(
-      h.transform,
-      F(outputTy, outputEffects, outputUsage).weaken(2, 0),
-    )(using Γ :+ parameterBinding :+ inputBinding)
-    val handlerAndUsages = operations.map { (qn, effArgs, operation) =>
-      val handler = h.handlers(qn)
-      // The followings do not need to be weakened for handler parameter because after substituting the effect args,
-      // they do not contain any free variables beyond beginning of paramTys.
-      val paramTys = operation.paramTys.substLowers(effArgs: _*)
-      val resultTy = operation.resultTy.substLowers(effArgs: _*)
-      val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
-      val (impl, usages) = operation.continuationUsage match
-          case ContinuationUsage(usage, ControlMode.Simple) =>
-            given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
-            val implOffset = implΓ.size - Γ.size
-            val uncheckedImplTy = usage match
-              case U1 =>
-                F(
+              Auto(),
+              u1,
+            )
+          case U0 =>
+            F(
+              DataType(
+                Builtins.PairQn,
+                List(
+                  Auto(),
+                  Auto(),
+                  parameterBindingUsage.weaken(implOffset, 0),
+                  parameterTy.weaken(implOffset, 0),
+                  outputUsage.weaken(implOffset, 0),
+                  outputTy.weaken(implOffset, 0),
+                ),
+              ),
+              Auto(),
+              u1,
+            )
+          case UAff =>
+            F(
+              DataType(
+                Builtins.PairQn,
+                List(
+                  Auto(),
+                  Auto(),
+                  parameterBindingUsage.weaken(implOffset, 0),
+                  parameterTy.weaken(implOffset, 0),
+                  u1,
                   DataType(
-                    Builtins.PairQn,
+                    Builtins.EitherQn,
                     List(
                       Auto(),
                       Auto(),
-                      parameterBindingUsage.weaken(implOffset, 0),
-                      parameterTy.weaken(implOffset, 0),
+                      outputUsage.weaken(implOffset, 0),
+                      outputTy.weaken(implOffset, 0),
                       resultUsage,
                       resultTy,
                     ),
                   ),
-                  Auto(),
-                  u1,
-                )
-              case U0 =>
-                F(
-                  DataType(
-                    Builtins.PairQn,
-                    List(
-                      Auto(),
-                      Auto(),
-                      parameterBindingUsage.weaken(implOffset, 0),
-                      parameterTy.weaken(implOffset, 0),
-                      outputUsage.weaken(implOffset, 0),
-                      outputTy.weaken(implOffset, 0),
-                    ),
-                  ),
-                  Auto(),
-                  u1,
-                )
-              case UAff =>
-                F(
-                  DataType(
-                    Builtins.PairQn,
-                    List(
-                      Auto(),
-                      Auto(),
-                      parameterBindingUsage.weaken(implOffset, 0),
-                      parameterTy.weaken(implOffset, 0),
-                      u1,
-                      DataType(
-                        Builtins.EitherQn,
-                        List(
-                          Auto(),
-                          Auto(),
-                          outputUsage.weaken(implOffset, 0),
-                          outputTy.weaken(implOffset, 0),
-                          resultUsage,
-                          resultTy,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Auto(),
-                  u1,
-                )
-              case _ => throw IllegalStateException("bad continuation usage on operation")
-            val implOutputEffects = outputEffects.weaken(implOffset, 0)
-            val (implTy, _) = checkIsCType(uncheckedImplTy)
-            val (impl, usages) = checkType(handler, implTy)
-            val effects = checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
-            usage match
-              // Simple U1 operation can only perform U1 effects so that linear resources in the contination are
-              // managed correctly.
-              case U1 =>
-                  val continuationUsage = getEffectsContinuationUsage(effects)
-                  ctx.checkSolved(checkUsageSubsumption(continuationUsage, u1), ExpectU1Effect(qn))
-              case _ => {}
-            ctx.checkSolved(
-              checkEffSubsumption(effects, implOutputEffects),
-              NotEffectSubsumption(effects, implOutputEffects),
-            )
-            (impl, usages)
-          case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
-            given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
-            val continuationWeakenOffset = continuationΓ.size - Γ.size
-            val continuationParameterTy = parameterTy.weaken(continuationWeakenOffset, 0)
-            val continuationOutputTy = outputTy.weaken(continuationWeakenOffset, 0)
-            val continuationOutputEffects = outputEffects.weaken(continuationWeakenOffset, 0)
-            val continuationOutputUsage = outputUsage.weaken(continuationWeakenOffset, 0)
-            val continuationType = RecordType(
-              Builtins.ContinuationQn,
-              List(
-                Auto(),
-                UsageLiteral(continuationUsage),
-                parameterBindingUsage.weaken(continuationWeakenOffset, 0),
-                continuationParameterTy,
-                resultUsage.weaken(continuationWeakenOffset, 0),
-                resultTy,
-                continuationOutputEffects,
-                continuationOutputUsage,
-                continuationOutputTy,
+                ),
               ),
+              Auto(),
+              u1,
             )
-            val (checkedContinuationType, _) = checkIsCType(continuationType)
-            val implΓ: Context =
-              continuationΓ :+ Binding(U(checkedContinuationType), UsageLiteral(Usage.U1))(gn"continuation")
-            val implOffset = implΓ.size - Γ.size
-            checkType(
-              handler,
-              F(
-                outputTy.weaken(implOffset, 0),
-                outputEffects.weaken(implOffset, 0),
-                outputUsage.weaken(implOffset, 0),
-              ),
-            )(using implΓ)
-      (qn, impl, usages)
-    }
-    (
+          case _ => throw IllegalStateException("bad continuation usage on operation")
+        val implOutputEffects = outputEffects.weaken(implOffset, 0)
+        val (implTy, _) = checkIsCType(uncheckedImplTy)
+        val (impl, usages) = checkType(handler, implTy)
+        val effects = checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
+        usage match
+          // Simple U1 operation can only perform U1 effects so that linear resources in the contination are
+          // managed correctly.
+          case U1 =>
+            val continuationUsage = getEffectsContinuationUsage(effects)
+            ctx.checkSolved(checkUsageSubsumption(continuationUsage, u1), ExpectU1Effect(qn))
+          case _ => {}
+        ctx.checkSolved(
+          checkEffSubsumption(effects, implOutputEffects),
+          NotEffectSubsumption(effects, implOutputEffects),
+        )
+        (impl, usages)
+      case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
+        given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
+        val continuationWeakenOffset = continuationΓ.size - Γ.size
+        val continuationParameterTy = parameterTy.weaken(continuationWeakenOffset, 0)
+        val continuationOutputTy = outputTy.weaken(continuationWeakenOffset, 0)
+        val continuationOutputEffects = outputEffects.weaken(continuationWeakenOffset, 0)
+        val continuationOutputUsage = outputUsage.weaken(continuationWeakenOffset, 0)
+        val continuationType = RecordType(
+          Builtins.ContinuationQn,
+          List(
+            Auto(),
+            UsageLiteral(continuationUsage),
+            parameterBindingUsage.weaken(continuationWeakenOffset, 0),
+            continuationParameterTy,
+            resultUsage.weaken(continuationWeakenOffset, 0),
+            resultTy,
+            continuationOutputEffects,
+            continuationOutputUsage,
+            continuationOutputTy,
+          ),
+        )
+        val (checkedContinuationType, _) = checkIsCType(continuationType)
+        val implΓ: Context =
+          continuationΓ :+ Binding(U(checkedContinuationType), UsageLiteral(Usage.U1))(gn"continuation")
+        val implOffset = implΓ.size - Γ.size
+        checkType(
+          handler,
+          F(
+            outputTy.weaken(implOffset, 0),
+            outputEffects.weaken(implOffset, 0),
+            outputUsage.weaken(implOffset, 0),
+          ),
+        )(using implΓ)
+    (qn, impl, usages)
+  }
+  (
     Handler(
       eff,
       otherEffects,
@@ -1718,24 +1688,24 @@ private def getEffectsContinuationUsage
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : VTerm=
-    val usage = ctx.withMetaResolved(effects.normalized):
-      case Effects(literal, operands) =>
-        val literalUsages = literal.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
-          Σ.getEffect(qn).continuationUsage.usage | acc
-        }
-        val usages = operands.keySet.map(getEffectsContinuationUsage)
-        UsageJoin(usages + UsageLiteral(literalUsages))
-      case v: Var =>
-        Γ.resolve(v).ty match
-          case EffectsType(continuationUsage, _) => continuationUsage
-          case _                                 => throw IllegalStateException("type error")
-      case r: ResolvedMetaVariable =>
-        r.ty match
-          case F(EffectsType(continuationUsage, _), _, _) => continuationUsage
-          case _                                          => throw IllegalStateException("type error")
-      case _ => UsageLiteral(UAny)
-    usage.normalized
+  : VTerm =
+  val usage = ctx.withMetaResolved(effects.normalized):
+    case Effects(literal, operands) =>
+      val literalUsages = literal.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
+        Σ.getEffect(qn).continuationUsage.usage | acc
+      }
+      val usages = operands.keySet.map(getEffectsContinuationUsage)
+      UsageJoin(usages + UsageLiteral(literalUsages))
+    case v: Var =>
+      Γ.resolve(v).ty match
+        case EffectsType(continuationUsage, _) => continuationUsage
+        case _                                 => throw IllegalStateException("type error")
+    case r: ResolvedMetaVariable =>
+      r.ty match
+        case F(EffectsType(continuationUsage, _), _, _) => continuationUsage
+        case _                                          => throw IllegalStateException("type error")
+    case _ => UsageLiteral(UAny)
+  usage.normalized
 
 @throws(classOf[IrError])
 private def checkEffectsAreSimple
@@ -1743,27 +1713,27 @@ private def checkEffectsAreSimple
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : VTerm=
-    val effects = rawEffects.normalized
-    ctx.withMetaResolved(effects):
-      case Effects(literal, operands) =>
-        if literal.exists { case (qn, _) =>
-            Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Complex
-          }
-        then throw ExepctSimpleEffects(effects)
-        else operands.keySet.map(getEffectsContinuationUsage)
-      case v: Var =>
-        Γ.resolve(v).ty match
-          case EffectsType(_, ControlMode.Simple)  => {}
-          case EffectsType(_, ControlMode.Complex) => throw ExepctSimpleEffects(effects)
-          case _                                   => throw IllegalStateException("type error")
-      case r: ResolvedMetaVariable =>
-        r.ty match
-          case F(EffectsType(_, ControlMode.Simple), _, _)  => {}
-          case F(EffectsType(_, ControlMode.Complex), _, _) => throw ExepctSimpleEffects(effects)
-          case _                                            => throw IllegalStateException("type error")
-      case _ => {}
-    effects
+  : VTerm =
+  val effects = rawEffects.normalized
+  ctx.withMetaResolved(effects):
+    case Effects(literal, operands) =>
+      if literal.exists { case (qn, _) =>
+          Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Complex
+        }
+      then throw ExepctSimpleEffects(effects)
+      else operands.keySet.map(getEffectsContinuationUsage)
+    case v: Var =>
+      Γ.resolve(v).ty match
+        case EffectsType(_, ControlMode.Simple)  => {}
+        case EffectsType(_, ControlMode.Complex) => throw ExepctSimpleEffects(effects)
+        case _                                   => throw IllegalStateException("type error")
+    case r: ResolvedMetaVariable =>
+      r.ty match
+        case F(EffectsType(_, ControlMode.Simple), _, _)  => {}
+        case F(EffectsType(_, ControlMode.Complex), _, _) => throw ExepctSimpleEffects(effects)
+        case _                                            => throw IllegalStateException("type error")
+    case _ => {}
+  effects
 
 @throws(classOf[IrError])
 def checkIsType
@@ -1771,16 +1741,16 @@ def checkIsType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (VTerm, Usages)=
+  : (VTerm, Usages) =
   ctx.trace("checking is type") {
-      val (vTy, vTyTy, usages) = inferType(uncheckedVTy) // inferType also checks term is correctly constructed
-      vTyTy match
-        case Type(_) =>
-          levelBound match
-            case Some(bound) => checkLevelSubsumption(inferLevel(vTy), bound)
-            case _ => {}
-        case _ => throw NotTypeError(vTy)
-      (vTy, usages)
+    val (vTy, vTyTy, usages) = inferType(uncheckedVTy) // inferType also checks term is correctly constructed
+    vTyTy match
+      case Type(_) =>
+        levelBound match
+          case Some(bound) => checkLevelSubsumption(inferLevel(vTy), bound)
+          case _           => {}
+      case _ => throw NotTypeError(vTy)
+    (vTy, usages)
   }
 
 @throws(classOf[IrError])
@@ -1789,46 +1759,46 @@ def checkIsCType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (CTerm, Usages)=
+  : (CTerm, Usages) =
   ctx.trace("checking is C type") {
-      val (cty, cTyTy, usages) = inferType(uncheckedCTy)
-      cTyTy match
-        case CType(_, eff) if isTotal(cty, Some(cTyTy)) =>
-          levelBound match
-            case Some(bound) => checkLevelSubsumption(inferLevel(uncheckedCTy), bound)
-            case _ => {}
-        case _: CType => throw EffectfulCTermAsType(uncheckedCTy)
-        case _        => throw NotCTypeError(uncheckedCTy)
-      (cty.normalized(None), usages)
+    val (cty, cTyTy, usages) = inferType(uncheckedCTy)
+    cTyTy match
+      case CType(_, eff) if isTotal(cty, Some(cTyTy)) =>
+        levelBound match
+          case Some(bound) => checkLevelSubsumption(inferLevel(uncheckedCTy), bound)
+          case _           => {}
+      case _: CType => throw EffectfulCTermAsType(uncheckedCTy)
+      case _        => throw NotCTypeError(uncheckedCTy)
+    (cty.normalized(None), usages)
   }
 
 @throws(classOf[IrError])
-def reduceUsage(usage: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm=
+def reduceUsage(usage: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
   ctx.trace("reduce usage", Block(yellow(usage.sourceInfo), pprint(usage))) {
-      checkType(usage, F(UsageType()))
-      val reduced = reduce(usage)
-      reduced match
-        case Return(u, _) => u
-        case _ =>
-          throw IllegalStateException(
-            "type checking has bugs: reduced value of type `F(UsageType())` must be `Return(u)`.",
-          )
+    checkType(usage, F(UsageType()))
+    val reduced = reduce(usage)
+    reduced match
+      case Return(u, _) => u
+      case _ =>
+        throw IllegalStateException(
+          "type checking has bugs: reduced value of type `F(UsageType())` must be `Return(u)`.",
+        )
   }
 
 @throws(classOf[IrError])
-def reduceVType(uncheckedVTy: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm=
+def reduceVType(uncheckedVTy: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
   ctx.trace("reduce V type", Block(yellow(uncheckedVTy.sourceInfo), pprint(uncheckedVTy))) {
-      val (vTy, tyTy, _) = inferType(uncheckedVTy)
-      tyTy match
-        case F(Type(_), effect, _) if isTotal(vTy, Some(tyTy)) =>
-            reduce(vTy) match
-              case Return(vTy, _) => vTy
-              case _ =>
-                throw IllegalStateException(
-                  "type checking has bugs: reduced value of type `F ...` must be `Return ...`.",
-                )
-        case F(_, _, _) => throw EffectfulCTermAsType(vTy)
-        case _          => throw ExpectFType(vTy)
+    val (vTy, tyTy, _) = inferType(uncheckedVTy)
+    tyTy match
+      case F(Type(_), effect, _) if isTotal(vTy, Some(tyTy)) =>
+        reduce(vTy) match
+          case Return(vTy, _) => vTy
+          case _ =>
+            throw IllegalStateException(
+              "type checking has bugs: reduced value of type `F ...` must be `Return ...`.",
+            )
+      case F(_, _, _) => throw EffectfulCTermAsType(vTy)
+      case _          => throw ExpectFType(vTy)
   }
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
@@ -1852,12 +1822,13 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
 // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
 //  the bound variable
 @throws(classOf[IrError])
-private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ: Signature): T=
+private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ: Signature): T =
   val freeVars = ty match
     case ty: CTerm => FreeVarsVisitor.visitCTerm(ty)(using 0)
     case ty: VTerm => FreeVarsVisitor.visitVTerm(ty)(using 0)
   if freeVars.exists(_.idx == 0) then throw error
-  else ty match
+  else
+    ty match
       case ty: CTerm => ty.strengthened.asInstanceOf[T]
       case ty: VTerm => ty.strengthened.asInstanceOf[T]
 

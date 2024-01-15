@@ -60,77 +60,73 @@ import CTerm.*
   * Comparing with [0], this function is finding the unifier from `Γ(e: u ≡_ty v)` to `Δ`.
   */
 @throws(classOf[IrError])
-def unify
-  (u: VTerm, v: VTerm, ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : UnificationResult = (u.normalized, v.normalized, ty.normalized) match
-      // delete
-      case (u, v, _) if u == v => unifyAll(Nil, Nil, Nil)
+def unify(u: VTerm, v: VTerm, ty: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): UnificationResult =
+  (u.normalized, v.normalized, ty.normalized) match
+    // delete
+    case (u, v, _) if u == v => unifyAll(Nil, Nil, Nil)
 
-      // solution and cycle
-      case (Var(x), Var(y), ty) => solution(Var(min(x, y)), Var(max(x, y)))
-      case (x: Var, t, ty)      => solutionOrCycle(x, t, ty)
-      case (t, x: Var, ty)      => solutionOrCycle(x, t, ty)
+    // solution and cycle
+    case (Var(x), Var(y), ty) => solution(Var(min(x, y)), Var(max(x, y)))
+    case (x: Var, t, ty)      => solutionOrCycle(x, t, ty)
+    case (t, x: Var, ty)      => solutionOrCycle(x, t, ty)
 
-      // injectivity
-      case (ty @ Type(upperBound1), Type(upperBound2), _) => unify(upperBound1, upperBound2, ty)
-      case (
-          Top(l1, eqDecidability1),
-          Top(l2, eqDecidability2),
-          _,
-        ) =>
-        unifyAll(
-          List(l1, eqDecidability1),
-          List(l2, eqDecidability2),
-          telescope(LevelType(LevelUpperBound()), EqDecidabilityType()),
-        )
-      // We do not unify any computation types since it does not seem to be very
-      // useful. If someday we would add such support, we will need to extend
-      // matching logic and case tree to support dispatching on computation types.
-      // Anyway, below are some notes on how to unify function types.
-      //
-      // If we follow what's done with inductive types (for example sigma type is
-      // defined by inductive type), we would need to introduce a lower-level
-      // function type constructor that takes an explicit lambda as the body type.
-      // That is, in `FunctionType(binding: Binding[VTerm], bodyTy: CTerm, ...)`,
-      // instead of having a `bodyTy` is one DeBruijn level deeper, we would have a
-      // bodyTy that is a lambda, which is at the same DeBruijn level as `binding`.
-      // Then the surface language would need some syntax sugar for function type
-      // declarations like `x: A -> B` becomes `FunctionType(A, (\x B x))`. If we
-      // go down this path, then unification can not happen for function types
-      // created by such desugaring because the body type is never a `Var`, which
-      // allows apply "solution" rune. Note that this is indeed the case with sigma
-      // type simulated with inductive types: to allow unification to happen, the
-      // second arg of the sigma type must be a `Var` instead of a lambda that
-      // returns a `Var`.
-      //
-      // Alternatively, it seems we can do special handling for pi types (this
-      // special handling can can also be done with sigma type, or even generalize
-      // to any inductive types, essentially allow unification to happen inside
-      // lambda). This special handling is basically carve out a "forbidden zone"
-      // of (lower) DeBruijn indices. Any DeBruijn indices in this "forbidden zone"
-      // cannot be unified with the "solution" rule. For example, consider
-      // unifying `(x: Nat) -> Vec String x` and `(x: Nat) -> Vec y 3`, where `y` is
-      // bound earlier in the current context. For the body type, the forbidden zone
-      // is `{x}` (or `{0}` with DeBruijn index). Hence, `x` in the former type is in
-      // the forbidden zone and cannot be unified to `3`. On the other hand, `y` can
-      // be unified to `String` because it's outside of the forbidden zone.
-      //
-      // None of the above is currently implemented in archon because it's unclear
-      // what the benefits are, as injective type constructor is not a highly
-      // sought-after feature anyway.
-      case (U(_), U(_), _) => UUndecided(u, v, ty)
-      case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
-        unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
-      case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
-        unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
-      // stuck
-      case (_: Collapse | _: Thunk, _, _) => UUndecided(u, v, ty)
-      case (_, _: Collapse | _: Thunk, _) => UUndecided(u, v, ty)
+    // injectivity
+    case (ty @ Type(upperBound1), Type(upperBound2), _) => unify(upperBound1, upperBound2, ty)
+    case (
+        Top(l1, eqDecidability1),
+        Top(l2, eqDecidability2),
+        _,
+      ) =>
+      unifyAll(
+        List(l1, eqDecidability1),
+        List(l2, eqDecidability2),
+        telescope(LevelType(LevelUpperBound()), EqDecidabilityType()),
+      )
+    // We do not unify any computation types since it does not seem to be very
+    // useful. If someday we would add such support, we will need to extend
+    // matching logic and case tree to support dispatching on computation types.
+    // Anyway, below are some notes on how to unify function types.
+    //
+    // If we follow what's done with inductive types (for example sigma type is
+    // defined by inductive type), we would need to introduce a lower-level
+    // function type constructor that takes an explicit lambda as the body type.
+    // That is, in `FunctionType(binding: Binding[VTerm], bodyTy: CTerm, ...)`,
+    // instead of having a `bodyTy` is one DeBruijn level deeper, we would have a
+    // bodyTy that is a lambda, which is at the same DeBruijn level as `binding`.
+    // Then the surface language would need some syntax sugar for function type
+    // declarations like `x: A -> B` becomes `FunctionType(A, (\x B x))`. If we
+    // go down this path, then unification can not happen for function types
+    // created by such desugaring because the body type is never a `Var`, which
+    // allows apply "solution" rune. Note that this is indeed the case with sigma
+    // type simulated with inductive types: to allow unification to happen, the
+    // second arg of the sigma type must be a `Var` instead of a lambda that
+    // returns a `Var`.
+    //
+    // Alternatively, it seems we can do special handling for pi types (this
+    // special handling can can also be done with sigma type, or even generalize
+    // to any inductive types, essentially allow unification to happen inside
+    // lambda). This special handling is basically carve out a "forbidden zone"
+    // of (lower) DeBruijn indices. Any DeBruijn indices in this "forbidden zone"
+    // cannot be unified with the "solution" rule. For example, consider
+    // unifying `(x: Nat) -> Vec String x` and `(x: Nat) -> Vec y 3`, where `y` is
+    // bound earlier in the current context. For the body type, the forbidden zone
+    // is `{x}` (or `{0}` with DeBruijn index). Hence, `x` in the former type is in
+    // the forbidden zone and cannot be unified to `3`. On the other hand, `y` can
+    // be unified to `String` because it's outside of the forbidden zone.
+    //
+    // None of the above is currently implemented in archon because it's unclear
+    // what the benefits are, as injective type constructor is not a highly
+    // sought-after feature anyway.
+    case (U(_), U(_), _) => UUndecided(u, v, ty)
+    case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
+      unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
+    case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
+      unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
+    // stuck
+    case (_: Collapse | _: Thunk, _, _) => UUndecided(u, v, ty)
+    case (_, _: Collapse | _: Thunk, _) => UUndecided(u, v, ty)
 
-      case _ => UNo(u, v, ty, UnificationFailureType.UfConflict)
+    case _ => UNo(u, v, ty, UnificationFailureType.UfConflict)
 
 @throws(classOf[IrError])
 private def solutionOrCycle
@@ -138,7 +134,7 @@ private def solutionOrCycle
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : UnificationResult=
+  : UnificationResult =
   if isCyclic(x, t) then UNo(x, t, ty, UfCycle)
   else solution(x, t)
 
@@ -198,12 +194,7 @@ private def isCyclic(x: Var, t: VTerm)(using Σ: Signature): Boolean =
   CycleVisitor.visitVTerm(t)(using (x.idx, false))
 
 @throws(classOf[IrError])
-private def solution
-  (x: Var, t: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : UnificationResult=
+private def solution(x: Var, t: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): UnificationResult =
   val (_Γ1, _, _Γ2) = Γ.split(x)
   val Δ = _Γ1 ++ _Γ2.substLowers(t)
   // _Γ1 and _Γ2 part are just identity vars for σ and τ.
@@ -226,7 +217,7 @@ def unifyAll
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : UnificationResult=
+  : UnificationResult =
   infix def compose(u1: UnificationResult, u2: UnificationResult)(using Signature): UnificationResult = (u1, u2) match
     case (UYes(_, σ1, τ1), UYes(_Δ, σ2, τ2)) => UYes(_Δ, σ1 ∘ σ2, τ2 ∘ τ1)
     case (uRes: UNo, _)                      => uRes
@@ -237,17 +228,17 @@ def unifyAll
   (u̅, v̅, telescope) match
     case (Nil, Nil, Nil) => UYes(Γ, Substitutor.id(Γ.size), Substitutor.id(Γ.size))
     case (u :: u̅, v :: v̅, binding :: telescope) =>
-        val uRes = unify(u, v, binding.ty)
-        uRes match
-          case UYes(_Δ, σ, τ) =>
-            val σt = σ.toTermSubstitutor
-            val uRes2 = unifyAll(
-                u̅.map(_.subst(σt)),
-                v̅.map(_.subst(σt)),
-                telescope.substLowers(u).subst(σt),
-              )(using _Δ)
-            compose(uRes, uRes2)
-          case u => u
+      val uRes = unify(u, v, binding.ty)
+      uRes match
+        case UYes(_Δ, σ, τ) =>
+          val σt = σ.toTermSubstitutor
+          val uRes2 = unifyAll(
+            u̅.map(_.subst(σt)),
+            v̅.map(_.subst(σt)),
+            telescope.substLowers(u).subst(σt),
+          )(using _Δ)
+          compose(uRes, uRes2)
+        case u => u
     case _ => throw IllegalArgumentException()
 
 // [0] Jesper Cockx, Dominique Devriese, and Frank Piessens. 2016. Unifiers as equivalences:

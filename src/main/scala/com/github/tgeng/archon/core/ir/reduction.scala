@@ -67,12 +67,7 @@ private final class StackMachine
     */
   @tailrec
   @throws(classOf[IrError])
-  def run
-    (pc: CTerm, reduceDown: Boolean = false)
-    (using Context)
-    (using Σ: Signature)
-    (using ctx: TypingContext)
-    : CTerm=
+  def run(pc: CTerm, reduceDown: Boolean = false)(using Context)(using Σ: Signature)(using ctx: TypingContext): CTerm =
     pc match
       case Hole | CapturedContinuationTip(_) => throw IllegalStateException()
       // Take a shortcut when returning a collapsable computation
@@ -153,12 +148,12 @@ private final class StackMachine
       case m: Meta =>
         val t = ctx.resolveMeta(m) match
           case Solved(context, ty, value) =>
-              val args = stack.takeRight(context.size).map {
-                case ETerm(arg) => arg.normalized
-                case _          => throw IllegalStateException("bad meta variable application")
-              }
-              stack.dropRightInPlace(context.size)
-              Some(value.substLowers(args.toSeq: _*)) // stuck for unresolved meta variables
+            val args = stack.takeRight(context.size).map {
+              case ETerm(arg) => arg.normalized
+              case _          => throw IllegalStateException("bad meta variable application")
+            }
+            stack.dropRightInPlace(context.size)
+            Some(value.substLowers(args.toSeq: _*)) // stuck for unresolved meta variables
           case _ => None
         t match
           case Some(t) => run(t)
@@ -196,9 +191,9 @@ private final class StackMachine
               case None => reconstructTermFromStack(pc)
       case Force(v) =>
         v.normalized match
-          case Thunk(c) => run(c)
+          case Thunk(c)             => run(c)
           case _: Var | _: Collapse => reconstructTermFromStack(pc)
-          case _ => throw IllegalArgumentException("type error")
+          case _                    => throw IllegalArgumentException("type error")
       case Let(t, _, _, _, ctx) =>
         t match
           case Return(v, usage) => run(ctx.substLowers(v))
@@ -254,7 +249,7 @@ private final class StackMachine
                     case _ => throw IllegalStateException("type error")
                 stack.dropRightInPlace(stack.size - matchingHandlerIdx)
                 val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
-                opHandler.substLowers(handler.parameter +: args :+ continuation: _*)
+                opHandler.substLowers(handler.parameter +: args :+ continuation: _*),
             )
       case Continuation(continuationTerm, continuationUsage) =>
         def getContinuationTermWithNewParameter(param: VTerm) = continuationTerm.copy(parameter = param)(
@@ -326,7 +321,7 @@ private final class StackMachine
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
-    : CTerm=
+    : CTerm =
     if stack.size == baseStackSize then
       run(
         Return(
@@ -444,7 +439,7 @@ private final class StackMachine
 
 extension (c: CTerm)
   @throws(classOf[IrError])
-  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm=
+  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm =
     // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
@@ -465,21 +460,21 @@ extension (c: CTerm)
 
     transformer.transformCTerm(c) match
       case Redex(t, elims) => redex(t, elims.map(_.map(_.normalized)))
-      case t => t
+      case t               => t
 
   @throws(classOf[IrError])
-  def normalized(ty: Option[CTerm])(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm=
+  def normalized(ty: Option[CTerm])(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm =
     if isTotal(c, ty) then Reducible.reduce(c)
     else c.normalized
 
 extension (v: VTerm)
   @throws(classOf[IrError])
-  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm= v match
+  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm = v match
     case Collapse(cTm) =>
-        val reduced = Reducible.reduce(cTm)
-        reduced match
-          case Return(v, _) => v
-          case stuckC       => Collapse(stuckC)(using v.sourceInfo)
+      val reduced = Reducible.reduce(cTm)
+      reduced match
+        case Return(v, _) => v
+        case stuckC       => Collapse(stuckC)(using v.sourceInfo)
     case u: UsageCompound =>
       @throws(classOf[IrError])
       def dfs(tm: VTerm): ULub[VTerm] = ctx.withMetaResolved(tm):
@@ -508,14 +503,17 @@ extension (v: VTerm)
       def dfs(tm: VTerm, retainSimpleOnly: Boolean): (Set[Eff], Map[VTerm, Boolean]) =
         ctx.withMetaResolved(tm):
           case Effects(literal, operands) =>
-            val literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] = operands.map((k, v) => dfs(k.normalized, retainSimpleOnly || v)).toSeq
-            ((literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
-              .filter((qn, _) =>
-                if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
-                else true,
-              )
-              .toSet,
-            literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap)
+            val literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] =
+              operands.map((k, v) => dfs(k.normalized, retainSimpleOnly || v)).toSeq
+            (
+              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
+                .filter((qn, _) =>
+                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
+                  else true,
+                )
+                .toSet,
+              literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap,
+            )
           case _: Collapse => (Set.empty, Map(tm -> false))
           case v: Var =>
             Γ.resolve(v).ty match
@@ -536,15 +534,17 @@ extension (v: VTerm)
       def dfs(tm: VTerm): (LevelOrder, Map[VTerm, Nat]) = ctx.withMetaResolved(tm):
         case Level(literal, operands) =>
           val literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] =
-              operands.map { (tm, offset) =>
-                  val (l, m) = dfs(tm.normalized)
-                  (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
-              }.toList
-          ((literalsAndOperands.map(_._1) ++ Seq(literal)).max,
-           literalsAndOperands
+            operands.map { (tm, offset) =>
+              val (l, m) = dfs(tm.normalized)
+              (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
+            }.toList
+          (
+            (literalsAndOperands.map(_._1) ++ Seq(literal)).max,
+            literalsAndOperands
               .flatMap[(VTerm, Nat)](_._2)
               .groupMap(_._1)(_._2)
-              .map { (tm, offsets) => (tm, offsets.max) })
+              .map { (tm, offsets) => (tm, offsets.max) },
+          )
         case _: ResolvedMetaVariable | _: Var | _: Collapse => (LevelOrder.zero, Map((tm, 0)))
         case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
@@ -564,16 +564,12 @@ given Reducible[CTerm] with
   /** It's assumed that `t` is effect-free.
     */
   @throws(classOf[IrError])
-  override def reduce
-    (t: CTerm)
-    (using ctx: Context)
-    (using signature: Signature)
-    (using TypingContext)
-    : CTerm= StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
+  override def reduce(t: CTerm)(using ctx: Context)(using signature: Signature)(using TypingContext): CTerm =
+    StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
 
 object Reducible:
   @throws(classOf[IrError])
-  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): CTerm=
+  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): CTerm =
     ctx.trace[CTerm](
       s"reducing",
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),

@@ -81,7 +81,7 @@ enum ControlMode extends Ordered[ControlMode]:
   * In addition, a any simple operations (linear or exceptional) cannot throw another exceptions (a.k.a perform simple
   * U0 effects) because that would violate resource usages at the callsite of this simple linear operation. In order to
   * throw, the operation must be complex instead. See docs/trade_offs.md for more details.
-  * 
+  *
   * Simple operations have an advantage at runtime because compiling it doesn't require CPS transformation.
   */
 case class ContinuationUsage(usage: Usage, controlMode: ControlMode) extends PartiallyOrdered[ContinuationUsage]:
