@@ -59,17 +59,13 @@ import CTerm.*
   *
   * Comparing with [0], this function is finding the unifier from `Γ(e: u ≡_ty v)` to `Δ`.
   */
+@throws(classOf[IrError])
 def unify
   (u: VTerm, v: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : Either[IrError, UnificationResult] =
-  for
-    u <- u.normalized
-    v <- v.normalized
-    ty <- ty.normalized
-    r <- (u, v, ty) match
+  : UnificationResult = (u.normalized, v.normalized, ty.normalized) match
       // delete
       case (u, v, _) if u == v => unifyAll(Nil, Nil, Nil)
 
@@ -125,25 +121,25 @@ def unify
       // None of the above is currently implemented in archon because it's unclear
       // what the benefits are, as injective type constructor is not a highly
       // sought-after feature anyway.
-      case (U(_), U(_), _) => Right(UUndecided(u, v, ty))
+      case (U(_), U(_), _) => UUndecided(u, v, ty)
       case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
         unifyAll(args1, args2, Σ.getData(qn1).tParamTys.map(_._1).toList)
       case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
         unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
       // stuck
-      case (_: Collapse | _: Thunk, _, _) => Right(UUndecided(u, v, ty))
-      case (_, _: Collapse | _: Thunk, _) => Right(UUndecided(u, v, ty))
+      case (_: Collapse | _: Thunk, _, _) => UUndecided(u, v, ty)
+      case (_, _: Collapse | _: Thunk, _) => UUndecided(u, v, ty)
 
-      case _ => Right(UNo(u, v, ty, UnificationFailureType.UfConflict))
-  yield r
+      case _ => UNo(u, v, ty, UnificationFailureType.UfConflict)
 
+@throws(classOf[IrError])
 private def solutionOrCycle
   (x: Var, t: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : Either[IrError, UnificationResult] =
-  if isCyclic(x, t) then Right(UNo(x, t, ty, UfCycle))
+  : UnificationResult=
+  if isCyclic(x, t) then UNo(x, t, ty, UfCycle)
   else solution(x, t)
 
 private object CycleVisitor
@@ -201,18 +197,19 @@ private object CycleVisitor
 private def isCyclic(x: Var, t: VTerm)(using Σ: Signature): Boolean =
   CycleVisitor.visitVTerm(t)(using (x.idx, false))
 
+@throws(classOf[IrError])
 private def solution
   (x: Var, t: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : Either[IrError, UnificationResult] =
+  : UnificationResult=
   val (_Γ1, _, _Γ2) = Γ.split(x)
   val Δ = _Γ1 ++ _Γ2.substLowers(t)
   // _Γ1 and _Γ2 part are just identity vars for σ and τ.
   val σ = Substitutor.id[Pattern](Δ.size).add(x.idx, Pattern.PForced(t))
   val τ = Substitutor.id[Pattern](Γ.size).remove(x.idx)
-  Right(UYes(Δ, σ, τ))
+  UYes(Δ, σ, τ)
 
 private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.size).map { i =>
   Binding(tys(i).weaken(i, 0), Usage.UAny)(gn"var$i")
@@ -223,12 +220,13 @@ private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.si
   * substituting left elements of telescope with first value of u̅ (after unification succeeds between first element of
   * u̅ and v̅).
   */
+@throws(classOf[IrError])
 def unifyAll
   (u̅ : List[VTerm], v̅ : List[VTerm], telescope: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : Either[IrError, UnificationResult] =
+  : UnificationResult=
   infix def compose(u1: UnificationResult, u2: UnificationResult)(using Signature): UnificationResult = (u1, u2) match
     case (UYes(_, σ1, τ1), UYes(_Δ, σ2, τ2)) => UYes(_Δ, σ1 ∘ σ2, τ2 ∘ τ1)
     case (uRes: UNo, _)                      => uRes
@@ -237,23 +235,19 @@ def unifyAll
     case (_, uRes: UUndecided)               => uRes
 
   (u̅, v̅, telescope) match
-    case (Nil, Nil, Nil) => Right(UYes(Γ, Substitutor.id(Γ.size), Substitutor.id(Γ.size)))
+    case (Nil, Nil, Nil) => UYes(Γ, Substitutor.id(Γ.size), Substitutor.id(Γ.size))
     case (u :: u̅, v :: v̅, binding :: telescope) =>
-      for
-        uRes <- unify(u, v, binding.ty)
-        r <- uRes match
+        val uRes = unify(u, v, binding.ty)
+        uRes match
           case UYes(_Δ, σ, τ) =>
             val σt = σ.toTermSubstitutor
-            for uRes2 <- unifyAll(
+            val uRes2 = unifyAll(
                 u̅.map(_.subst(σt)),
                 v̅.map(_.subst(σt)),
                 telescope.substLowers(u).subst(σt),
-              )(using
-                _Δ,
-              )
-            yield compose(uRes, uRes2)
-          case u => Right(u)
-      yield r
+              )(using _Δ)
+            compose(uRes, uRes2)
+          case u => u
     case _ => throw IllegalArgumentException()
 
 // [0] Jesper Cockx, Dominique Devriese, and Frank Piessens. 2016. Unifiers as equivalences:

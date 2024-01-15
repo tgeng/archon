@@ -20,7 +20,8 @@ import MetaVariable.*
 import Elimination.*
 
 trait Reducible[T]:
-  def reduce(t: T)(using ctx: Context)(using signature: Signature)(using TypingContext): Either[IrError, T]
+  @throws(classOf[IrError])
+  def reduce(t: T)(using ctx: Context)(using signature: Signature)(using TypingContext): T
 
 extension [T](a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
@@ -65,19 +66,20 @@ private final class StackMachine
     * @return
     */
   @tailrec
+  @throws(classOf[IrError])
   def run
     (pc: CTerm, reduceDown: Boolean = false)
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
-    : Either[IrError, CTerm] =
+    : CTerm=
     pc match
       case Hole | CapturedContinuationTip(_) => throw IllegalStateException()
       // Take a shortcut when returning a collapsable computation
       case Return(Collapse(c), _) => run(c)
       // terminal cases
       case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
-        if stack.isEmpty then Right(pc)
+        if stack.isEmpty then pc
         else
           stack.pop() match
             case c: CTerm => run(substHole(c, pc), true)
@@ -151,22 +153,20 @@ private final class StackMachine
       case m: Meta =>
         val t = ctx.resolveMeta(m) match
           case Solved(context, ty, value) =>
-            for
-              args <- transpose(stack.takeRight(context.size).map {
+              val args = stack.takeRight(context.size).map {
                 case ETerm(arg) => arg.normalized
                 case _          => throw IllegalStateException("bad meta variable application")
-              })
-              _ = stack.dropRightInPlace(context.size)
-            yield Some(value.substLowers(args.toSeq: _*)) // stuck for unresolved meta variables
-          case _ => Right(None)
+              }
+              stack.dropRightInPlace(context.size)
+              Some(value.substLowers(args.toSeq: _*)) // stuck for unresolved meta variables
+          case _ => None
         t match
-          case Right(Some(t)) => run(t)
-          case Right(None)    => Right(reconstructTermFromStack(pc))
-          case Left(e)        => Left(e)
+          case Some(t) => run(t)
+          case None    => reconstructTermFromStack(pc)
       case Def(qn) =>
         Σ.getClausesOption(qn) match
           // This is allowed because it could be that the body is not defined yet.
-          case None => Right(reconstructTermFromStack(pc))
+          case None => reconstructTermFromStack(pc)
           case Some(clauses) =>
             clauses.first { case Clause(bindings, lhs, rhs, ty) =>
               val mapping = mutable.Map[Nat, VTerm]()
@@ -184,22 +184,20 @@ private final class StackMachine
               ) match
                 case MatchingStatus.Matched =>
                   stack.dropRightInPlace(lhs.length)
-                  Some(Right((rhs.subst(mapping.get), /* stuck */ false)))
+                  Some((rhs.subst(mapping.get), /* stuck */ false))
                 case MatchingStatus.Stuck =>
-                  Some(Right((reconstructTermFromStack(pc), /* stuck */ true)))
+                  Some((reconstructTermFromStack(pc), /* stuck */ true))
                 case MatchingStatus.Mismatch => None
             } match
-              case Some(Right((t, false))) => run(t)
-              case Some(Right((t, true)))  => Right(t)
+              case Some((t, false)) => run(t)
+              case Some((t, true))  => t
               // This is possible when checking the clauses of a definition in some mutually recursive
               // definitions
-              case None => Right(reconstructTermFromStack(pc))
+              case None => reconstructTermFromStack(pc)
       case Force(v) =>
         v.normalized match
-          case Left(e)         => Left(e)
-          case Right(Thunk(c)) => run(c)
-          case Right(_: Var | _: Collapse) =>
-            Right(reconstructTermFromStack(pc))
+          case Thunk(c) => run(c)
+          case _: Var | _: Collapse => reconstructTermFromStack(pc)
           case _ => throw IllegalArgumentException("type error")
       case Let(t, _, _, _, ctx) =>
         t match
@@ -213,58 +211,51 @@ private final class StackMachine
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case Nil             => run(t)
           case _ =>
-            val normalizedElims = transpose(elims.reverse.map[Either[IrError, Elimination[VTerm]]] {
-              case ETerm(t) => t.normalized.map(ETerm.apply)
-              case EProj(n) => Right(EProj(n))
-            })
-            normalizedElims match
-              case Right(elims) =>
-                stack.pushAll(elims)
-                run(t)
-              case Left(e) => Left(e)
-      case OperationCall(effAndArgs @ (effQn, effArgs), name, args) =>
+            val normalizedElims = elims.reverse.map[Elimination[VTerm]] {
+              case ETerm(t) => ETerm.apply(t.normalized)
+              case EProj(n) => EProj(n)
+            }
+            stack.pushAll(normalizedElims)
+            run(t)
+      case OperationCall(effAndArgs @ (effQn, rawEffArgs), name, rawArgs) =>
         Σ.getEffectOption(effQn) match
-          case None => Left(MissingDeclaration(effQn))
+          case None => throw MissingDeclaration(effQn)
           case Some(eff) =>
-            (for
-              effArgs <- effArgs.normalized
-              args <- args.normalized
-              r <-
-                val matchingHandler = getMatchingHandler(effAndArgs)
-                val matchingHandlerIdx = matchingHandler.index
-                val handler = matchingHandler.handler
-                val opHandler = handler.handlers(effQn / name)
-                val operation = Σ.getOperation(effQn, name)
-                val restoredHandlerEntry = this.currentHandlerEntry
-                this.currentHandlerEntry = matchingHandler.previous
-                operation.continuationUsage match
-                  case ContinuationUsage(usage, ControlMode.Simple) =>
-                    preConstructedTerm = Some(reconstructTermFromStack(pc))
-                    stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
-                    Right(opHandler.substLowers(handler.parameter :: args: _*))
-                  case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
-                    val allOperationArgs = effArgs ++ args
-                    val tip = CapturedContinuationTip(
-                      F(
-                        operation.resultTy.substLowers(allOperationArgs: _*),
-                        Total(),
-                        operation.resultUsage.substLowers(allOperationArgs: _*),
-                      ),
-                    )
-                    val continuationTerm = stack
-                      .slice(matchingHandlerIdx, stack.size)
-                      .foldRight(tip):
-                        case (entry: Elimination[VTerm], term) => redex(term, entry)
-                        case (entry: Let, term)                => entry.copy(t = term)(entry.boundName)
-                        case (HandlerEntry(_, entry, _), term) =>
-                          entry.copy(input = term)(entry.handlersBoundNames)
-                        case _ => throw IllegalStateException("type error")
-                    stack.dropRightInPlace(stack.size - matchingHandlerIdx)
-                    val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
-                    Right(opHandler.substLowers(handler.parameter +: args :+ continuation: _*))
-            yield r) match
-              case Right(pc) => run(pc)
-              case Left(e)   => Left(e)
+            val effArgs = rawEffArgs.normalized
+            val args = rawArgs.normalized
+            val matchingHandler = getMatchingHandler(effAndArgs)
+            val matchingHandlerIdx = matchingHandler.index
+            val handler = matchingHandler.handler
+            val opHandler = handler.handlers(effQn / name)
+            val operation = Σ.getOperation(effQn, name)
+            val restoredHandlerEntry = this.currentHandlerEntry
+            this.currentHandlerEntry = matchingHandler.previous
+            run(operation.continuationUsage match
+              case ContinuationUsage(usage, ControlMode.Simple) =>
+                preConstructedTerm = Some(reconstructTermFromStack(pc))
+                stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
+                opHandler.substLowers(handler.parameter :: args: _*)
+              case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
+                val allOperationArgs = effArgs ++ args
+                val tip = CapturedContinuationTip(
+                  F(
+                    operation.resultTy.substLowers(allOperationArgs: _*),
+                    Total(),
+                    operation.resultUsage.substLowers(allOperationArgs: _*),
+                  ),
+                )
+                val continuationTerm = stack
+                  .slice(matchingHandlerIdx, stack.size)
+                  .foldRight(tip):
+                    case (entry: Elimination[VTerm], term) => redex(term, entry)
+                    case (entry: Let, term)                => entry.copy(t = term)(entry.boundName)
+                    case (HandlerEntry(_, entry, _), term) =>
+                      entry.copy(input = term)(entry.handlersBoundNames)
+                    case _ => throw IllegalStateException("type error")
+                stack.dropRightInPlace(stack.size - matchingHandlerIdx)
+                val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
+                opHandler.substLowers(handler.parameter +: args :+ continuation: _*)
+            )
       case Continuation(continuationTerm, continuationUsage) =>
         def getContinuationTermWithNewParameter(param: VTerm) = continuationTerm.copy(parameter = param)(
           continuationTerm.handlersBoundNames,
@@ -305,24 +296,22 @@ private final class StackMachine
             replicate(baseStackHeight, tip, tip, continuationUsage)
           case _ => throw IllegalArgumentException("type error")
       case h: Handler =>
-        h.eff.normalized match
-          case Left(e) => Left(e)
-          case Right(eff) =>
-            if reduceDown then
-              h.input match
-                case Return(v, usage) =>
-                  this.currentHandlerEntry = this.currentHandlerEntry.get.previous
-                  run(h.transform.substLowers(h.parameter, v))
-                case _ => throw IllegalArgumentException("type error")
-            else
-              stack.push(
-                HandlerEntry(
-                  stack.size,
-                  h.copy(eff = eff, input = Hole)(h.handlersBoundNames),
-                  this.currentHandlerEntry,
-                ),
-              )
-              run(h.input)
+        val eff = h.eff.normalized
+        if reduceDown then
+          h.input match
+            case Return(v, usage) =>
+              this.currentHandlerEntry = this.currentHandlerEntry.get.previous
+              run(h.transform.substLowers(h.parameter, v))
+            case _ => throw IllegalArgumentException("type error")
+        else
+          stack.push(
+            HandlerEntry(
+              stack.size,
+              h.copy(eff = eff, input = Hole)(h.handlersBoundNames),
+              this.currentHandlerEntry,
+            ),
+          )
+          run(h.input)
 
   /** @param baseStackSize
     *   size of the base stack, excludng the part that needs to be replicated
@@ -331,12 +320,13 @@ private final class StackMachine
     * @return
     */
   @tailrec
+  @throws(classOf[IrError])
   private def replicate
     (baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm, continuationUsage: Usage)
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
-    : Either[IrError, CTerm] =
+    : CTerm=
     if stack.size == baseStackSize then
       run(
         Return(
@@ -453,7 +443,8 @@ private final class StackMachine
       case _ => (acc ++ Iterable(term), currentHandlerEntry)
 
 extension (c: CTerm)
-  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, CTerm] =
+  @throws(classOf[IrError])
+  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm=
     // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
@@ -473,32 +464,31 @@ extension (c: CTerm)
         case _            => c
 
     transformer.transformCTerm(c) match
-      case Redex(t, elims) =>
-        for elims <- transpose(elims.map(_.mapEither(_.normalized)))
-        yield redex(t, elims)
-      case t => Right(t)
+      case Redex(t, elims) => redex(t, elims.map(_.map(_.normalized)))
+      case t => t
 
-  def normalized(ty: Option[CTerm])(using Γ: Context)(using Σ: Signature)(using TypingContext): Either[IrError, CTerm] =
+  @throws(classOf[IrError])
+  def normalized(ty: Option[CTerm])(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm=
     if isTotal(c, ty) then Reducible.reduce(c)
     else c.normalized
 
 extension (v: VTerm)
-  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): Either[IrError, VTerm] = v match
+  @throws(classOf[IrError])
+  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm= v match
     case Collapse(cTm) =>
-      for
-        reduced <- Reducible.reduce(cTm)
-        r <- reduced match
-          case Return(v, _) => Right(v)
-          case stuckC       => Right(Collapse(stuckC)(using v.sourceInfo))
-      yield r
+        val reduced = Reducible.reduce(cTm)
+        reduced match
+          case Return(v, _) => v
+          case stuckC       => Collapse(stuckC)(using v.sourceInfo)
     case u: UsageCompound =>
-      def dfs(tm: VTerm): Either[IrError, ULub[VTerm]] = ctx.withMetaResolved(tm):
-        case UsageLiteral(u)                  => Right(uLubFromLiteral(u))
-        case UsageSum(operands)               => transpose(operands.multiToSeq.map(dfs)).map(uLubProd)
-        case UsageProd(operands)              => transpose(operands.map(dfs)).map(uLubProd)
-        case UsageJoin(operands)              => transpose(operands.map(dfs)).map(uLubJoin)
-        case c: Collapse                      => c.normalized.flatMap(dfs)
-        case _: ResolvedMetaVariable | _: Var => Right(uLubFromT(tm))
+      @throws(classOf[IrError])
+      def dfs(tm: VTerm): ULub[VTerm] = ctx.withMetaResolved(tm):
+        case UsageLiteral(u)                  => uLubFromLiteral(u)
+        case UsageSum(operands)               => uLubSum(operands.multiToSeq.map(dfs))
+        case UsageProd(operands)              => uLubProd(operands.map(dfs))
+        case UsageJoin(operands)              => uLubJoin(operands.map(dfs))
+        case c: Collapse                      => dfs(c.normalized)
+        case _: ResolvedMetaVariable | _: Var => uLubFromT(tm)
         case _ =>
           throw IllegalStateException(s"expect to be of Usage type: $tm")
 
@@ -512,87 +502,79 @@ extension (v: VTerm)
         case v: VTerm => v
         case u: Usage => UsageLiteral(u)
 
-      dfs(u).map(lubToTerm)
+      lubToTerm(dfs(u))
     case e: Effects =>
-      def dfs(tm: VTerm, retainSimpleOnly: Boolean): Either[IrError, (Set[Eff], Map[VTerm, Boolean])] =
+      @throws(classOf[IrError])
+      def dfs(tm: VTerm, retainSimpleOnly: Boolean): (Set[Eff], Map[VTerm, Boolean]) =
         ctx.withMetaResolved(tm):
           case Effects(literal, operands) =>
-            for literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] <- transpose(
-                operands.map((k, v) => k.normalized.flatMap(dfs(_, retainSimpleOnly || v))),
+            val literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] = operands.map((k, v) => dfs(k.normalized, retainSimpleOnly || v)).toSeq
+            ((literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
+              .filter((qn, _) =>
+                if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
+                else true,
               )
-            yield (
-              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
-                .filter((qn, _) =>
-                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
-                  else true,
-                )
-                .toSet,
-              literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap,
-            )
-          case _: Collapse => Right((Set.empty, Map(tm -> false)))
+              .toSet,
+            literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap)
+          case _: Collapse => (Set.empty, Map(tm -> false))
           case v: Var =>
             Γ.resolve(v).ty match
-              case EffectsType(_, ControlMode.Simple) => Right((Set.empty, Map(tm -> true)))
-              case _                                  => Right((Set.empty, Map(tm -> false)))
+              case EffectsType(_, ControlMode.Simple) => (Set.empty, Map(tm -> true))
+              case _                                  => (Set.empty, Map(tm -> false))
           case r: ResolvedMetaVariable =>
             r.ty match
-              case F(EffectsType(_, ControlMode.Simple), _, _) => Right((Set.empty, Map(tm -> true)))
-              case _                                           => Right((Set.empty, Map(tm -> false)))
+              case F(EffectsType(_, ControlMode.Simple), _, _) => (Set.empty, Map(tm -> true))
+              case _                                           => (Set.empty, Map(tm -> false))
           case _ =>
             throw IllegalStateException(s"expect to be of Effects type: $tm")
 
-      dfs(e, false).map { case (eff, operands) =>
-        if eff.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
-        else Effects(eff, operands)
-      }
+      val (eff, operands) = dfs(e, false)
+      if eff.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
+      else Effects(eff, operands)
     case l: Level =>
-      def dfs(tm: VTerm): Either[IrError, (LevelOrder, Map[VTerm, Nat])] = ctx.withMetaResolved(tm):
+      @throws(classOf[IrError])
+      def dfs(tm: VTerm): (LevelOrder, Map[VTerm, Nat]) = ctx.withMetaResolved(tm):
         case Level(literal, operands) =>
-          for literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] <- transpose(
+          val literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] =
               operands.map { (tm, offset) =>
-                for
-                  tm <- tm.normalized
-                  (l, m) <- dfs(tm)
-                yield (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
-              }.toList,
-            )
-          yield (
-            (literalsAndOperands.map(_._1) ++ Seq(literal)).max,
-            literalsAndOperands
+                  val (l, m) = dfs(tm.normalized)
+                  (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
+              }.toList
+          ((literalsAndOperands.map(_._1) ++ Seq(literal)).max,
+           literalsAndOperands
               .flatMap[(VTerm, Nat)](_._2)
               .groupMap(_._1)(_._2)
-              .map { (tm, offsets) => (tm, offsets.max) },
-          )
-        case _: ResolvedMetaVariable | _: Var | _: Collapse => Right(LevelOrder.zero, Map((tm, 0)))
+              .map { (tm, offsets) => (tm, offsets.max) })
+        case _: ResolvedMetaVariable | _: Var | _: Collapse => (LevelOrder.zero, Map((tm, 0)))
         case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
-      dfs(l).map { case (l, m) =>
-        if l == LevelOrder.zero && m.size == 1 && m.head._2 == 0
-        then m.head._1
-        else Level(l, m)
-      }
-    case _ => Right(v)
+      val (literal, m) = dfs(l)
+      if literal == LevelOrder.zero && m.size == 1 && m.head._2 == 0
+      then m.head._1
+      else Level(literal, m)
+    case _ => v
 
 extension (vs: List[VTerm])
-  def normalized(using ctx: Context)(using Σ: Signature)(using TypingContext): Either[IrError, List[VTerm]] =
-    transpose(vs.map(_.normalized))
+  @throws(classOf[IrError])
+  def normalized(using ctx: Context)(using Σ: Signature)(using TypingContext): List[VTerm] =
+    vs.map(_.normalized)
 
 given Reducible[CTerm] with
 
   /** It's assumed that `t` is effect-free.
     */
+  @throws(classOf[IrError])
   override def reduce
     (t: CTerm)
     (using ctx: Context)
     (using signature: Signature)
     (using TypingContext)
-    : Either[IrError, CTerm] = StackMachine(mutable.ArrayBuffer())
-    .run(t)
-    .map(_.withSourceInfo(t.sourceInfo))
+    : CTerm= StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
 
 object Reducible:
-  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): Either[IrError, CTerm] =
-    ctx.trace[IrError, CTerm](
+  @throws(classOf[IrError])
+  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): CTerm=
+    ctx.trace[CTerm](
       s"reducing",
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
       tm => Block(ChopDown, Aligned, yellow(tm.sourceInfo), green(pprint(tm))),

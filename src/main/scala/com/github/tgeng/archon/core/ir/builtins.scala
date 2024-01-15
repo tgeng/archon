@@ -114,10 +114,7 @@ object Builtins:
   val IsReplicableQn = UsagePredicateQn / "IsReplicable"
   val IsResumableQn = UsagePredicateQn / "IsResumable"
 
-  def Σ(using ctx: TypingContext): Signature =
-    elaborateAll(builtins)(using SimpleSignature()) match
-      case Right(_Σ) => _Σ
-      case Left(e)   => throw IllegalStateException(e.toString())
+  def Σ(using ctx: TypingContext): Signature = elaborateAll(builtins)(using SimpleSignature())
 
   import PreDeclaration.*
   import CTerm.*

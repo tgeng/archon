@@ -6,7 +6,7 @@ import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence
 import com.github.tgeng.archon.core.ir.UnificationResult
 
-enum IrError extends HasException:
+enum IrError extends Exception:
   case CannotFindCTypeUnion(a: CTerm, b: CTerm)
   case CannotFindVTypeUnion(a: VTerm, b: VTerm)
   case CollapsingEffectfulTerm(ctm: CTerm)
