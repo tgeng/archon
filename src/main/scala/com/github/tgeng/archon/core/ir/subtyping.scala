@@ -89,7 +89,7 @@ def checkIsSubtype
           .flatten
           .toSet
   case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
-    if (controlMode1 == ControlMode.Simple || controlMode1 == controlMode2) then
+    if (controlMode1 == HandlerType.Simple || controlMode1 == controlMode2) then
       // Note that subsumption checking is reversed because the effect of the computation
       // marks how the continuation can be invoked. Normally, checking usage is checking
       // how a resource is *consumed*. But here, checking usage is checking how the

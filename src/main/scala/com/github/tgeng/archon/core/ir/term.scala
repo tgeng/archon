@@ -46,7 +46,7 @@ enum EqDecidability:
     case (EqDecidable, _) | (_, EqDecidable) => EqDecidable
     case _                                   => EqUnknown
 
-enum ControlMode extends Ordered[ControlMode]:
+enum HandlerType extends Ordered[HandlerType]:
   /** No continuation is captured, execution simply progresses. The continuation usage can be U0, U1, or UAff.
     */
   case Simple
@@ -55,12 +55,12 @@ enum ControlMode extends Ordered[ControlMode]:
     */
   case Complex
 
-  override def compare(that: ControlMode): Int = this.ordinal - that.ordinal
-  infix def |(that: ControlMode): ControlMode = (this, that) match
+  override def compare(that: HandlerType): Int = this.ordinal - that.ordinal
+  infix def |(that: HandlerType): HandlerType = (this, that) match
     case (Simple, Simple) => Simple
     case _                => Complex
 
-  infix def &(that: ControlMode): ControlMode = (this, that) match
+  infix def &(that: HandlerType): HandlerType = (this, that) match
     case (Complex, Complex) => Complex
     case _                  => Simple
 
@@ -103,7 +103,7 @@ enum ControlMode extends Ordered[ControlMode]:
   *
   * Simple operations have an advantage at runtime because compiling it doesn't require CPS transformation.
   */
-case class ContinuationUsage(usage: Usage, controlMode: ControlMode) extends PartiallyOrdered[ContinuationUsage]:
+case class ContinuationUsage(usage: Usage, controlMode: HandlerType) extends PartiallyOrdered[ContinuationUsage]:
   infix def |(that: ContinuationUsage): ContinuationUsage =
     ContinuationUsage(usage | that.usage, controlMode | that.controlMode)
 
@@ -129,7 +129,7 @@ given PartialOrdering[ContinuationUsage] with
   override def equiv(x: ContinuationUsage, y: ContinuationUsage): Boolean = x == y
 
 object ContinuationUsage:
-  import ControlMode.*
+  import HandlerType.*
   val CuAny = ContinuationUsage(Usage.UAny, Complex)
   val CuRel = ContinuationUsage(Usage.URel, Complex)
   val CuAff = ContinuationUsage(Usage.UAff, Complex)
@@ -259,7 +259,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     * @param sourceInfo
     */
   case EffectsType
-    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: ControlMode = ControlMode.Complex)
+    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: HandlerType = HandlerType.Complex)
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(

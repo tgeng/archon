@@ -1474,7 +1474,7 @@ def checkHandler
   // operation. Hopefully this limitation is not a big deal in practice.
   val simpleExceptionalOperations = operations
     .filter((_, _, operation) =>
-      operation.continuationUsage.controlMode == ControlMode.Simple && operation.continuationUsage.usage != Usage.U1,
+      operation.continuationUsage.controlMode == HandlerType.Simple && operation.continuationUsage.usage != Usage.U1,
     )
   if !simpleExceptionalOperations.isEmpty then
     ctx.checkSolved(
@@ -1544,7 +1544,7 @@ def checkHandler
     val resultTy = operation.resultTy.substLowers(effArgs: _*)
     val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
     val (impl, usages) = operation.continuationUsage match
-      case ContinuationUsage(usage, ControlMode.Simple) =>
+      case ContinuationUsage(usage, HandlerType.Simple) =>
         given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val implOffset = implΓ.size - Γ.size
         val uncheckedImplTy = usage match
@@ -1623,7 +1623,7 @@ def checkHandler
           NotEffectSubsumption(effects, implOutputEffects),
         )
         (impl, usages)
-      case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
+      case ContinuationUsage(continuationUsage, HandlerType.Complex) =>
         given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val continuationWeakenOffset = continuationΓ.size - Γ.size
         val continuationParameterTy = parameterTy.weaken(continuationWeakenOffset, 0)
@@ -1718,19 +1718,19 @@ private def checkEffectsAreSimple
   ctx.withMetaResolved(effects):
     case Effects(literal, operands) =>
       if literal.exists { case (qn, _) =>
-          Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Complex
+          Σ.getEffect(qn).continuationUsage.controlMode == HandlerType.Complex
         }
       then throw ExepctSimpleEffects(effects)
       else operands.keySet.map(getEffectsContinuationUsage)
     case v: Var =>
       Γ.resolve(v).ty match
-        case EffectsType(_, ControlMode.Simple)  => {}
-        case EffectsType(_, ControlMode.Complex) => throw ExepctSimpleEffects(effects)
+        case EffectsType(_, HandlerType.Simple)  => {}
+        case EffectsType(_, HandlerType.Complex) => throw ExepctSimpleEffects(effects)
         case _                                   => throw IllegalStateException("type error")
     case r: ResolvedMetaVariable =>
       r.ty match
-        case F(EffectsType(_, ControlMode.Simple), _, _)  => {}
-        case F(EffectsType(_, ControlMode.Complex), _, _) => throw ExepctSimpleEffects(effects)
+        case F(EffectsType(_, HandlerType.Simple), _, _)  => {}
+        case F(EffectsType(_, HandlerType.Complex), _, _) => throw ExepctSimpleEffects(effects)
         case _                                            => throw IllegalStateException("type error")
     case _ => {}
   effects

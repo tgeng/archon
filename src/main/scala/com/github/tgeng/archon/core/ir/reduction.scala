@@ -226,11 +226,11 @@ private final class StackMachine
             val restoredHandlerEntry = this.currentHandlerEntry
             this.currentHandlerEntry = matchingHandler.previous
             run(operation.continuationUsage match
-              case ContinuationUsage(usage, ControlMode.Simple) =>
+              case ContinuationUsage(usage, HandlerType.Simple) =>
                 preConstructedTerm = Some(reconstructTermFromStack(pc))
                 stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
                 opHandler.substLowers(handler.parameter :: args: _*)
-              case ContinuationUsage(continuationUsage, ControlMode.Complex) =>
+              case ContinuationUsage(continuationUsage, HandlerType.Complex) =>
                 val allOperationArgs = effArgs ++ args
                 val tip = CapturedContinuationTip(
                   F(
@@ -508,7 +508,7 @@ extension (v: VTerm)
             (
               (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
                 .filter((qn, _) =>
-                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == ControlMode.Simple
+                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == HandlerType.Simple
                   else true,
                 )
                 .toSet,
@@ -517,11 +517,11 @@ extension (v: VTerm)
           case _: Collapse => (Set.empty, Map(tm -> false))
           case v: Var =>
             Γ.resolve(v).ty match
-              case EffectsType(_, ControlMode.Simple) => (Set.empty, Map(tm -> true))
+              case EffectsType(_, HandlerType.Simple) => (Set.empty, Map(tm -> true))
               case _                                  => (Set.empty, Map(tm -> false))
           case r: ResolvedMetaVariable =>
             r.ty match
-              case F(EffectsType(_, ControlMode.Simple), _, _) => (Set.empty, Map(tm -> true))
+              case F(EffectsType(_, HandlerType.Simple), _, _) => (Set.empty, Map(tm -> true))
               case _                                           => (Set.empty, Map(tm -> false))
           case _ =>
             throw IllegalStateException(s"expect to be of Effects type: $tm")
