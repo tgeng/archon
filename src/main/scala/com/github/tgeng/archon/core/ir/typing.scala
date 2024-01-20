@@ -1474,7 +1474,7 @@ def checkHandler
   // operation. Hopefully this limitation is not a big deal in practice.
   val simpleExceptionalOperations = operations
     .filter((_, _, operation) =>
-      operation.continuationUsage.controlMode == HandlerType.Simple && operation.continuationUsage.usage != Usage.U1,
+      operation.continuationUsage.handlerType == HandlerType.Simple && operation.continuationUsage.usage != Usage.U1,
     )
   if !simpleExceptionalOperations.isEmpty then
     ctx.checkSolved(
@@ -1718,7 +1718,7 @@ private def checkEffectsAreSimple
   ctx.withMetaResolved(effects):
     case Effects(literal, operands) =>
       if literal.exists { case (qn, _) =>
-          Σ.getEffect(qn).continuationUsage.controlMode == HandlerType.Complex
+          Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Complex
         }
       then throw ExepctSimpleEffects(effects)
       else operands.keySet.map(getEffectsContinuationUsage)

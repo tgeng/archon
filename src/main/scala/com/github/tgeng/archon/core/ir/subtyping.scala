@@ -88,8 +88,8 @@ def checkIsSubtype
           }
           .flatten
           .toSet
-  case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
-    if (controlMode1 == HandlerType.Simple || controlMode1 == controlMode2) then
+  case (EffectsType(continuationUsage1, handlerType1), EffectsType(continuationUsage2, handlerType2)) =>
+    if (handlerType1 == HandlerType.Simple || handlerType1 == handlerType2) then
       // Note that subsumption checking is reversed because the effect of the computation
       // marks how the continuation can be invoked. Normally, checking usage is checking
       // how a resource is *consumed*. But here, checking usage is checking how the
@@ -299,10 +299,10 @@ private def typeUnion(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature
       else getTop(a, b)
     case (UsageType(_), UsageType(_))                    => UsageType(None)
     case (_: StuckValueType, _) | (_, _: StuckValueType) => throw CannotFindVTypeUnion(a, b)
-    case (EffectsType(continuationUsage1, controlMode1), EffectsType(continuationUsage2, controlMode2)) =>
+    case (EffectsType(continuationUsage1, handlerType1), EffectsType(continuationUsage2, handlerType2)) =>
       val continuationUsage = UsageJoin(continuationUsage1, continuationUsage2).normalized
-      val controlMode = controlMode1 | controlMode2
-      EffectsType(continuationUsage, controlMode)
+      val handlerType = handlerType1 | handlerType2
+      EffectsType(continuationUsage, handlerType)
     case (LevelType(level1), LevelType(level2)) =>
       LevelType(LevelMax(level1, level2).normalized)
     case _ => throw IllegalStateException("type error")

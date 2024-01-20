@@ -103,19 +103,19 @@ enum HandlerType extends Ordered[HandlerType]:
   *
   * Simple operations have an advantage at runtime because compiling it doesn't require CPS transformation.
   */
-case class ContinuationUsage(usage: Usage, controlMode: HandlerType) extends PartiallyOrdered[ContinuationUsage]:
+case class ContinuationUsage(usage: Usage, handlerType: HandlerType) extends PartiallyOrdered[ContinuationUsage]:
   infix def |(that: ContinuationUsage): ContinuationUsage =
-    ContinuationUsage(usage | that.usage, controlMode | that.controlMode)
+    ContinuationUsage(usage | that.usage, handlerType | that.handlerType)
 
   infix def &(that: ContinuationUsage): Option[ContinuationUsage] =
     usage & that.usage match
-      case Some(u) => Some(ContinuationUsage(u, controlMode & that.controlMode))
+      case Some(u) => Some(ContinuationUsage(u, handlerType & that.handlerType))
       case _       => None
 
   override def tryCompareTo[B >: ContinuationUsage: AsPartiallyOrdered](that: B): Option[Int] =
     that match
       case that: ContinuationUsage =>
-        this.controlMode.compare(that.controlMode) match
+        this.handlerType.compare(that.handlerType) match
           case 0 => this.usage.tryCompareTo(that.usage)
           case i => Some(i)
       case _ => None
@@ -254,12 +254,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   see ContinuationUsage for explanation. The reason that we need this part to be a term instead of a literal usage
     *   is because this part needs to participate in usage tracking of following computations (aka continuation). Having
     *   a first-class value here makes definitions parametric in continuation usage.
-    * @param controlMode
+    * @param handlerType
     *   see ContinuationUsage for explanation
     * @param sourceInfo
     */
   case EffectsType
-    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: HandlerType = HandlerType.Complex)
+    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), handlerType: HandlerType = HandlerType.Complex)
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
@@ -318,7 +318,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case UsageJoin(operands)                         => UsageJoin(operands)
       case EqDecidabilityType()                        => EqDecidabilityType()
       case EqDecidabilityLiteral(eqD)                  => EqDecidabilityLiteral(eqD)
-      case EffectsType(continuationUsage, controlMode) => EffectsType(continuationUsage, controlMode)
+      case EffectsType(continuationUsage, handlerType) => EffectsType(continuationUsage, handlerType)
       case Effects(literal, unionOperands)             => Effects(literal, unionOperands)
       case LevelType(upperBound)                       => LevelType(upperBound)
       case Level(literal, maxOperands)                 => Level(literal, maxOperands)

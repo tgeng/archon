@@ -508,7 +508,7 @@ extension (v: VTerm)
             (
               (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
                 .filter((qn, _) =>
-                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.controlMode == HandlerType.Simple
+                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Simple
                   else true,
                 )
                 .toSet,
