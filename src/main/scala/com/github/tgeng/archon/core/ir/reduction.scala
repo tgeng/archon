@@ -221,15 +221,15 @@ private final class StackMachine
             val matchingHandler = getMatchingHandler(effAndArgs)
             val matchingHandlerIdx = matchingHandler.index
             val handler = matchingHandler.handler
-            val opHandler = handler.handlers(effQn / name)
+            val handlerImpl = handler.handlers(effQn / name)
             val operation = Σ.getOperation(effQn, name)
             val restoredHandlerEntry = this.currentHandlerEntry
             this.currentHandlerEntry = matchingHandler.previous
-            run(operation.continuationUsage match
+            run(handlerImpl.continuationUsage match
               case ContinuationUsage(usage, HandlerType.Simple) =>
                 preConstructedTerm = Some(reconstructTermFromStack(pc))
                 stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
-                opHandler.substLowers(handler.parameter :: args: _*)
+                handlerImpl.body.substLowers(handler.parameter :: args: _*)
               case ContinuationUsage(continuationUsage, HandlerType.Complex) =>
                 val allOperationArgs = effArgs ++ args
                 val tip = CapturedContinuationTip(
@@ -249,7 +249,7 @@ private final class StackMachine
                     case _ => throw IllegalStateException("type error")
                 stack.dropRightInPlace(stack.size - matchingHandlerIdx)
                 val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
-                opHandler.substLowers(handler.parameter +: args :+ continuation: _*),
+                handlerImpl.body.substLowers(handler.parameter +: args :+ continuation: _*),
             )
       case Continuation(continuationTerm, continuationUsage) =>
         def getContinuationTermWithNewParameter(param: VTerm) = continuationTerm.copy(parameter = param)(

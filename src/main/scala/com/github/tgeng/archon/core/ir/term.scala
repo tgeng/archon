@@ -189,6 +189,19 @@ extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.
 
 sealed trait UsageCompound(val distinctOperands: Set[VTerm])
 
+/**
+ * @param usage the usage of the continuation after this handler is invoked
+ * @param handlerType the type of the handler
+ * @param impl the handler implementation. The type depends on the continuation usage
+ *   - simple
+ *     - U0: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, handler output)
+ *     - U1: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, op output)
+ *     - UAff: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, Either[handler output, op output])
+ *   - complex
+ *     - handler param -> op param1 -> op param2 -> ... -> op paramN -> continuation -> (handler param, handler output)
+ */
+case class HandlerImpl(continuationUsage: ContinuationUsage, body: CTerm)
+
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
 
@@ -254,12 +267,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   see ContinuationUsage for explanation. The reason that we need this part to be a term instead of a literal usage
     *   is because this part needs to participate in usage tracking of following computations (aka continuation). Having
     *   a first-class value here makes definitions parametric in continuation usage.
-    * @param handlerType
+    * @param controlMode
     *   see ContinuationUsage for explanation
     * @param sourceInfo
     */
   case EffectsType
-    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), handlerType: HandlerType = HandlerType.Complex)
+    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: HandlerType = HandlerType.Complex)
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
@@ -318,7 +331,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case UsageJoin(operands)                         => UsageJoin(operands)
       case EqDecidabilityType()                        => EqDecidabilityType()
       case EqDecidabilityLiteral(eqD)                  => EqDecidabilityLiteral(eqD)
-      case EffectsType(continuationUsage, handlerType) => EffectsType(continuationUsage, handlerType)
+      case EffectsType(continuationUsage, controlMode) => EffectsType(continuationUsage, controlMode)
       case Effects(literal, unionOperands)             => Effects(literal, unionOperands)
       case LevelType(upperBound)                       => LevelType(upperBound)
       case Level(literal, maxOperands)                 => Level(literal, maxOperands)
@@ -596,13 +609,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
-      handlers: Map[
-        QualifiedName,
-        // TODO[P0]: track operation simplicity here and make sure it's consistent with the effect declaration.
-        //  Then type checking and compile time reduction can just use this information instead of looking it up from
-        //  the effect declaration. This also aligns better with the lower IR.
-        /* binding offset = 1 (for parameter) + paramTys + 1 (for continuation if control mode is complex) */ CTerm,
-      ],
+      handlers: Map[/* name identifying an effect operation */ QualifiedName, HandlerImpl],
       input: CTerm,
       inputBinding: Binding[VTerm],
     )

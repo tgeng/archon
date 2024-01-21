@@ -544,7 +544,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                   )
                   .toSeq ++ handlers.keys.toSeq.map { name =>
                   val (paramNames, resumeNameOption) = h.handlersBoundNames(name)
-                  val body = handlers(name)
+                  val handlerImpl = handlers(name)
                   val allParamNames = paramNames ++ resumeNameOption
                   val paramBlock = Block(
                     Whitespace,
@@ -560,7 +560,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                     FixedIncrement(2),
                     paramBlock,
                     withBindings(allParamNames) {
-                      body
+                      handlerImpl.body
                     },
                   )
                 }),
