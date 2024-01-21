@@ -13,25 +13,26 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.Variance.*
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 private class RenamerContext:
-  val nameStack = mutable.ArrayBuffer[Ref[Name]]()
+  val nameStack: mutable.ArrayBuffer[Ref[Name]] = mutable.ArrayBuffer[Ref[Name]]()
 
-  val allNames = mutable.LinkedHashSet[Ref[Name]]()
-  val allReferencedNames = mutable.Set[Ref[Name]]()
+  val allNames: mutable.LinkedHashSet[Ref[Name]] = mutable.LinkedHashSet[Ref[Name]]()
+  val allReferencedNames: mutable.Set[Ref[Name]] = mutable.Set[Ref[Name]]()
 
-  val potentiallyConflictingNames =
+  val potentiallyConflictingNames: mutable.Map[Ref[Name], ArrayBuffer[Ref[Name]]] =
     mutable.Map[Ref[Name], mutable.ArrayBuffer[Ref[Name]]]()
 
 object Renamer extends Visitor[RenamerContext, Unit]:
 
-  def rename(tm: VTerm)(using Γ: Context)(using Σ: Signature): Unit =
+  def rename(tm: VTerm)(using Γ: Context)(using Signature): Unit =
     doRename(visitVTerm(tm))
 
-  def rename(tm: CTerm)(using Γ: Context)(using Σ: Signature): Unit =
+  def rename(tm: CTerm)(using Γ: Context)(using Signature): Unit =
     doRename(visitCTerm(tm))
 
-  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Unit =
+  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Signature): Unit =
     doRename(visitTelescope(t))
 
   private def createRenamerContext(using Γ: Context) =
@@ -62,7 +63,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
           )
     }
 
-  override def combine(rs: Unit*)(using ctx: RenamerContext)(using Σ: Signature) = ()
+  override def combine(rs: Unit*)(using ctx: RenamerContext)(using Σ: Signature): Unit = ()
 
   override def withBindings
     (bindingNames: => Seq[Ref[Name]])
@@ -225,7 +226,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (telescope: List[T], nameExtractor: T => Ref[Name])
     (toBlock: PPrintContext ?=> T => Block)
     (using ctx: PPrintContext)
-    (using Σ: Signature)
+    (using Signature)
     : List[Block] = telescope match
     case Nil => Nil
     case t :: rest =>
@@ -330,10 +331,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     else
       ctx.withPrecedence(PPEffOp) {
         (effects.literal.map(visitEff) ++ effects.unionOperands.map((k, v) =>
-          (v match
-            case false => ""
-            case true  => "$"
-          ) + visitVTerm(k),
+          (if v then "$" else "") + visitVTerm(k),
         )) sepBy "|"
       }
 
@@ -367,7 +365,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature,
     )
     : Block = cType match
-    case CType(CTop(Level(l, operands), _), eff) if operands.isEmpty =>
+    case CType(CTop(Level(l, operands), _), _) if operands.isEmpty =>
       Block("CType" + l.sub)
     case CType(CTop(l, tEff), eff) if tEff == Total() =>
       ctype(eff, "CType", l)
@@ -403,7 +401,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     : Block = app(".force", force.v)
 
-  override def visitF(f: F)(using ctx: PPrintContext)(using Σ: Signature) =
+  override def visitF(f: F)(using ctx: PPrintContext)(using Σ: Signature): Block =
     ctype(f.effects, "[", f.usage, "]", f.vTy)
 
   override def visitReturn
@@ -517,7 +515,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       handler: Handler | Let,
     )
     (using ctx: PPrintContext)
-    (using Σ: Signature)
+    (using Signature)
     : Block =
     val (statements, input) = unroll[Block, CTerm](handler) {
       // TODO[P2]: print the extra effect and output type annotations
@@ -710,7 +708,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         FixedIncrement(2) +:
         Wrap +:
         blocks.map[
-          (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block]),
+          WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block],
         ](
           _(using summon[PPrintContext]),
         ): _*,

@@ -57,6 +57,7 @@ enum HandlerType extends Ordered[HandlerType]:
   case Complex
 
   override def compare(that: HandlerType): Int = this.ordinal - that.ordinal
+  @targetName("handlerTypeUnion")
   infix def |(that: HandlerType): HandlerType = (this, that) match
     case (Simple, Simple) => Simple
     case _                => Complex
@@ -703,8 +704,8 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     transformer.transformCTerm(this)
 
 object CTerm:
-  def CTop(t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo) =
-    new CTop(t, effects)
+  def CTop(t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo): CTop =
+    CTop(t, effects)
 
   @targetName("redexFromElims")
   def redex(c: CTerm, elims: Seq[Elimination[VTerm]])(using SourceInfo): Redex =

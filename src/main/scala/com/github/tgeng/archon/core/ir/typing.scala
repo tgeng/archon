@@ -1852,17 +1852,17 @@ private def checkEffectsAreSimple
       if literal.exists { case (qn, _) =>
           Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Complex
         }
-      then throw ExepctSimpleEffects(effects)
+      then throw ExpectSimpleEffects(effects)
       else operands.keySet.map(getEffectsContinuationUsage)
     case v: Var =>
       Γ.resolve(v).ty match
         case EffectsType(_, HandlerType.Simple)  =>
-        case EffectsType(_, HandlerType.Complex) => throw ExepctSimpleEffects(effects)
+        case EffectsType(_, HandlerType.Complex) => throw ExpectSimpleEffects(effects)
         case _                                   => throw IllegalStateException("type error")
     case r: ResolvedMetaVariable =>
       r.ty match
         case F(EffectsType(_, HandlerType.Simple), _, _)  =>
-        case F(EffectsType(_, HandlerType.Complex), _, _) => throw ExepctSimpleEffects(effects)
+        case F(EffectsType(_, HandlerType.Complex), _, _) => throw ExpectSimpleEffects(effects)
         case _ => throw IllegalStateException("type error")
     case _ =>
   effects

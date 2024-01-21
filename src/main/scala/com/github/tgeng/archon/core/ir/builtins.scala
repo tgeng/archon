@@ -3,10 +3,6 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.VTerm.*
-
-import java.util.prefs.PreferenceChangeListener
-import scala.annotation.meta.param
 
 private case class SimpleSignature
   (
@@ -116,10 +112,7 @@ object Builtins:
   def Σ(using ctx: TypingContext): Signature = elaborateAll(builtins)(using SimpleSignature())
 
   import CTerm.*
-  import CaseTree.*
-  import CoPattern.*
   import EqDecidability.*
-  import Pattern.*
   import PreDeclaration.*
   import Usage.*
   import VTerm.*

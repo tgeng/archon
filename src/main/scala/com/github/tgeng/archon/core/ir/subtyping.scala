@@ -515,7 +515,7 @@ private def checkEffSubsumption
     else if metaOperands2.size == 1 then
       // The case where the right hand side contains a single meta variable and some other stuff.
       // In such a case, the meta variable should be assigned the difference between the left hand side and the literal
-      // effects on the right. This is to accomodate the common use case when type checking handlers, where otherEffects
+      // effects on the right. This is to accommodate the common use case when type checking handlers, where otherEffects
       // is left out as a meta variable.
       ctx.withMetaResolved(metaOperands2.head):
         case u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _) =>

@@ -58,8 +58,7 @@ private final class StackMachine
   private def getMatchingHandler
     (effAndArgs: Eff, start: Option[HandlerEntry] = currentHandlerEntry)
     : HandlerEntry =
-    val current =
-      currentHandlerEntry.getOrElse(throw IllegalStateException("type error: no more handlers"))
+    val current = start.getOrElse(throw IllegalStateException("type error: no more handlers"))
     if current.handler.eff == effAndArgs then current
     else getMatchingHandler(effAndArgs, current.previous)
 
@@ -170,7 +169,7 @@ private final class StackMachine
               )
       case m: Meta =>
         val t = ctx.resolveMeta(m) match
-          case Solved(context, ty, value) =>
+          case Solved(context, _, value) =>
             val args = stack.takeRight(context.size).map {
               case ETerm(arg) => arg.normalized
               case _          => throw IllegalStateException("bad meta variable application")
@@ -219,8 +218,8 @@ private final class StackMachine
           case _                    => throw IllegalArgumentException("type error")
       case Let(t, _, _, _, ctx) =>
         t match
-          case Return(v, _) => run(ctx.substLowers(v))
-          case _ if reduceDown  => throw IllegalArgumentException("type error")
+          case Return(v, _)    => run(ctx.substLowers(v))
+          case _ if reduceDown => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
             run(t)
@@ -296,7 +295,6 @@ private final class StackMachine
               expandTermToStack(getContinuationTermWithNewParameter(param))(
                 processStackEntryForDisposerCall(Hole),
               )()
-            val stackHeight = stack.size
             stack.pushAll(handlerStack)
             this.currentHandlerEntry = handlerEntry
             run(Return(Con(n"MkUnit", Nil), uAny))
@@ -305,9 +303,9 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(getContinuationTermWithNewParameter(param)) { case h =>
-                h.copy(input = Hole)(h.handlersBoundNames)
-              } {
+              expandTermToStack(getContinuationTermWithNewParameter(param))(h =>
+                h.copy(input = Hole)(h.handlersBoundNames),
+              ) {
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)
                 case t        => t
@@ -321,7 +319,7 @@ private final class StackMachine
         val eff = h.eff.normalized
         if reduceDown then
           h.input match
-            case Return(v, usage) =>
+            case Return(v, _) =>
               this.currentHandlerEntry = this.currentHandlerEntry.get.previous
               run(h.transform.substLowers(h.parameter, v))
             case _ => throw IllegalArgumentException("type error")
@@ -337,9 +335,6 @@ private final class StackMachine
 
   /** @param baseStackSize
     *   size of the base stack, excludng the part that needs to be replicated
-    * @param continuationTerm1
-    * @param continuationTerm2
-    * @return
     */
   @tailrec
   @throws(classOf[IrError])
@@ -352,7 +347,7 @@ private final class StackMachine
     )
     (using Context)
     (using Σ: Signature)
-    (using ctx: TypingContext)
+    (using TypingContext)
     : CTerm =
     if stack.size == baseStackSize then
       run(
@@ -385,7 +380,7 @@ private final class StackMachine
             t.copy(t = continuationTerm2),
             continuationUsage,
           )
-        case HandlerEntry(handlerIndex, h, previousEntry) =>
+        case HandlerEntry(_, h, previousEntry) =>
           this.currentHandlerEntry = previousEntry
           h.parameterReplicator match
             case Some(parameterReplicator) =>
@@ -473,7 +468,7 @@ private final class StackMachine
       case term: Handler =>
         val handlerEntry = HandlerEntry(
           currentIndex,
-          handlerTransform(term).asInstanceOf[Handler],
+          handlerTransform(term),
           currentHandlerEntry,
         )
         expandTermToStack(
@@ -488,7 +483,7 @@ private final class StackMachine
 
 extension (c: CTerm)
   @throws(classOf[IrError])
-  def normalized(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm =
+  def normalized(using Γ: Context)(using Signature)(using TypingContext): CTerm =
     // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
       override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
@@ -516,12 +511,7 @@ extension (c: CTerm)
       case t               => t
 
   @throws(classOf[IrError])
-  def normalized
-    (ty: Option[CTerm])
-    (using Γ: Context)
-    (using Σ: Signature)
-    (using TypingContext)
-    : CTerm =
+  def normalized(ty: Option[CTerm])(using Context)(using Signature)(using TypingContext): CTerm =
     if isTotal(c, ty) then Reducible.reduce(c)
     else c.normalized
 
@@ -547,7 +537,7 @@ extension (v: VTerm)
 
       def lubToTerm(lub: ULub[VTerm]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq: _*)
 
-      def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm).toSeq: _*)
+      def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm): _*)
 
       def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq: _*)
 
@@ -573,8 +563,7 @@ extension (v: VTerm)
                 .toSet,
               literalsAndOperands
                 .flatMap { case (_, o) => o }
-                .groupMapReduce(_._1)(_._2)(_ && _)
-                .toMap,
+                .groupMapReduce(_._1)(_._2)(_ && _),
             )
           case _: Collapse => (Set.empty, Map(tm -> false))
           case v: Var =>
@@ -618,7 +607,7 @@ extension (v: VTerm)
 
 extension (vs: List[VTerm])
   @throws(classOf[IrError])
-  def normalized(using ctx: Context)(using Σ: Signature)(using TypingContext): List[VTerm] =
+  def normalized(using ctx: Context)(using Signature)(using TypingContext): List[VTerm] =
     vs.map(_.normalized)
 
 given Reducible[CTerm] with
@@ -684,13 +673,13 @@ def matchPattern
         // TODO[P4]: matching usage does not seem very useful. But it can be added if needed.
         case (PDataType(pQn, pArgs), DataType(qn, args)) if pQn == qn =>
           constraints = pArgs.zip(args) ++ constraints
-        case (PForcedDataType(_, pArgs), DataType(qn2, args)) =>
+        case (PForcedDataType(_, pArgs), DataType(_, args)) =>
           constraints = pArgs.zip(args) ++ constraints
         case (PConstructor(pName, pArgs), Con(name, args)) if pName == name =>
           constraints = pArgs.zip(args) ++ constraints
         case (
-            PForcedDataType(pName, pArgs),
-            Con(name, args),
+            PForcedDataType(_, pArgs),
+            Con(_, args),
           ) =>
           constraints = pArgs.zip(args) ++ constraints
         case (PAbsurd(), _) =>
@@ -714,15 +703,13 @@ def matchCoPattern
   elims match
     case Nil => matchingStatus
     case elim :: rest =>
-      var status: MatchingStatus = matchingStatus
-      var elims = rest
       elim match
         case (CPattern(p), ETerm(w)) => matchPattern(List((p, w)), mapping, matchingStatus)
         case (CProjection(n1), EProj(n2)) if n1 == n2 =>
         case (CProjection(_), ETerm(_)) | (_, EProj(_)) =>
           throw IllegalArgumentException("type error")
         case _ => return MatchingStatus.Mismatch
-      matchCoPattern(elims, mapping, status)
+      matchCoPattern(rest, mapping, matchingStatus)
 
 private def replaceTip(continuationTerm: CTerm, newTip: VTerm)(using Σ: Signature): CTerm =
   CapturedContinuationTipReplacer.transformCTerm(continuationTerm)(using newTip)

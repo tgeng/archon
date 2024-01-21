@@ -31,7 +31,7 @@ def elaborateAll
 def elaborate
   (part: DeclarationPart, decl: PreDeclaration)
   (using Σ: Signature)
-  (using ctx: TypingContext)
+  (using TypingContext)
   : Signature =
   (part, decl) match
     case (DeclarationPart.HEAD, d: PreData)       => elaborateHead(d)
@@ -52,7 +52,7 @@ import com.github.tgeng.archon.core.ir.unifyAll
 @throws(classOf[IrError])
 def sortPreDeclarations
   (declarations: Seq[PreDeclaration])
-  (using Σ: Signature)
+  (using Signature)
   : Seq[(DeclarationPart, PreDeclaration)] =
   given Unit = ()
 
@@ -167,7 +167,7 @@ private def elaborateHead
       (ty: CTerm)
       (using Γ: Context)
       (using Signature)
-      (using ctx: TypingContext)
+      (using TypingContext)
       : (Telescope, VTerm, VTerm) =
       checkIsCType(ty)._1.normalized(None) match
         // Here and below we do not care about the declared effect types because data type
@@ -185,7 +185,7 @@ private def elaborateHead
       Γ0 ++ tParamTys.map(_._1),
     )
     val data = checkData(
-      new Data(preData.qn)(
+      Data(preData.qn)(
         tParamTys,
         tIndices,
         level,
@@ -209,7 +209,7 @@ private def elaborateBody
       (ty: CTerm)
       (using Γ: Context)
       (using Signature)
-      (using ctx: TypingContext)
+      (using TypingContext)
       : (Telescope, /* constructor tArgs */ List[VTerm]) =
       checkIsCType(ty)._1.normalized(None) match
         // Here and below we do not care the declared effect types because data type constructors
@@ -237,7 +237,7 @@ private def elaborateBody
         val ty = constructor.ty
         val (paramTys, tArgs) = elaborateTy(ty)
         val con =
-          checkDataConstructor(preData.qn, new Constructor(constructor.name, paramTys, tArgs))
+          checkDataConstructor(preData.qn, Constructor(constructor.name, paramTys, tArgs))
         _Σ.addConstructor(preData.qn, con)
       }
     }
@@ -253,9 +253,9 @@ private def elaborateHead
     val tParamTys = elaborateTContext(record.tParamTys)(using Γ0)
     given Context = tParamTys.map(_._1).toIndexedSeq
     val selfUsage = Collapse(checkType(record.selfUsage, F(UsageType(), Total()))._1).normalized
-    val r = checkIsCType(record.ty)._1.normalized(None) match
+    val r: Record = checkIsCType(record.ty)._1.normalized(None) match
       case CType(CTop(level, _), _) =>
-        new Record(record.qn)(
+        Record(record.qn)(
           tParamTys,
           level,
           Binding(Thunk(RecordType(record.qn, vars(tParamTys.size - 1))), selfUsage)(
@@ -285,7 +285,7 @@ private def elaborateBody
     preRecord.fields.foldLeft[Signature](Σ) { case (_Σ, field) =>
       ctx.trace(s"elaborating field ${field.name}") {
         val ty = checkIsCType(field.ty)._1.normalized(None)
-        val f = checkRecordField(preRecord.qn, new Field(field.name, ty))
+        val f = checkRecordField(preRecord.qn, Field(field.name, ty))
         _Σ.addField(preRecord.qn, f)
       }
     }
@@ -303,7 +303,7 @@ private def elaborateHead
     val paramTys = elaborateContext(definition.paramTys)
     val ty = checkIsCType(definition.ty)(using paramTys.toIndexedSeq)._1
       .normalized(None)(using paramTys.toIndexedSeq)
-    val d = new Definition(definition.qn)(
+    val d: Definition = Definition(definition.qn)(
       paramTys.foldRight(ty) { (binding, bodyTy) =>
         FunctionType(binding, bodyTy)
       },
@@ -341,7 +341,7 @@ private def elaborateBody
   def solve
     (constraints: List[Constraint])
     (using Γ: Context)
-    (using Σ: Signature)
+    (using Signature)
     : Option[PartialSubstitution[VTerm]] =
     val σ = mutable.Map[Nat, VTerm]()
     matchPattern(constraints.map { case (w, p, _) => (p, w) }, σ) match
@@ -364,8 +364,8 @@ private def elaborateBody
     case Nil => Nil
     case ElabClause(_E, CPattern(p) :: q̅, rhs, source) :: problem =>
       ElabClause((Var(0), p, _A.weakened) :: _E.map(weaken), q̅, rhs, source) :: shift(problem, _A)
-    case ElabClause(_, q :: _, _, _) :: _   => throw UnexpectedCProjection(q)
-    case ElabClause(_, _, rhs, source) :: _ => throw MissingUserCoPattern(source)
+    case ElabClause(_, q :: _, _, _) :: _ => throw UnexpectedCProjection(q)
+    case ElabClause(_, _, _, source) :: _ => throw MissingUserCoPattern(source)
 
   @throws(classOf[IrError])
   def filter(problem: Problem, π: Name): Problem = problem match
@@ -373,8 +373,8 @@ private def elaborateBody
     case ElabClause(_E, CProjection(π2) :: q̅, rhs, source) :: problem =>
       if π == π2 then ElabClause(_E, q̅, rhs, source) :: filter(problem, π)
       else problem
-    case ElabClause(_, q :: _, _, _) :: _       => throw UnexpectedCPattern(q)
-    case c @ ElabClause(_, _, rhs, source) :: _ => throw MissingUserCoPattern(source)
+    case ElabClause(_, q :: _, _, _) :: _ => throw UnexpectedCPattern(q)
+    case ElabClause(_, _, _, source) :: _ => throw MissingUserCoPattern(source)
 
   @throws(classOf[IrError])
   def subst(problem: Problem, σ: PartialSubstitution[VTerm])(using Σ: Signature): Problem =
@@ -462,7 +462,7 @@ private def elaborateBody
     (problem, checkIsCType(_C)._1.normalized(None)) match
       // [cosplit]
       case (
-          ElabClause(_E1, (p @ CProjection(_)) :: q̅1, rhs1, source) :: _,
+          ElabClause(_, CProjection(_) :: _, _, _) :: _,
           RecordType(qn, args, _),
         ) =>
         val (_Σ, fields) = Σ
@@ -479,14 +479,14 @@ private def elaborateBody
       // [cosplit empty]
       // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
       // user (projection) pattern. This seems more natural.
-      case (ElabClause(_E1, Nil, None, source) :: _, RecordType(qn, _, _)) =>
+      case (ElabClause(_, Nil, None, source) :: _, RecordType(qn, _, _)) =>
         Σ.getFields(qn).size match
           // There is no need to modify Σ because empty record does not have any clause
           case 0 => (Σ, CtRecord(Map()))
           case _ => throw MissingFieldsInCoPattern(source)
       // [intro]
       case (
-          ElabClause(_E1, (q @ CPattern(p)) :: q̅1, rhs1, source) :: _,
+          ElabClause(_, (CPattern(_)) :: _, _, _) :: _,
           FunctionType(binding, bodyTy, _),
         ) =>
         val _A = shift(problem, binding.ty)
@@ -500,7 +500,7 @@ private def elaborateBody
       case (ElabClause(_, q :: _, _, source) :: _, _) =>
         throw UnexpectedUserCoPattern(source, q)
       // All copatterns are introduced. Now start doing split
-      case (ElabClause(_E1, Nil, _, _) :: _, _) =>
+      case (ElabClause(_, Nil, _, _) :: _, _) =>
         def split
           (q̅ : List[CoPattern], _C: CTerm, problem: Problem)
           (using Γ: Context)
@@ -526,7 +526,7 @@ private def elaborateBody
             case (Right(r), _) => Right(r)
 
             // split data type
-            case (_, (x: Var, PDataType(qn, args), _A)) =>
+            case (_, (x: Var, PDataType(_, _), _A)) =>
               if !providedAtLeastU1Usage(x) then Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
               else
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -556,7 +556,7 @@ private def elaborateBody
                     Right(Σ, Map(), None),
                   ) {
                     // Normal type case
-                    case (Right(_Σ, branches, defaultCase), Some(qn)) =>
+                    case (Right(_, branches, defaultCase), Some(qn)) =>
                       val data = Σ.getData(qn)
                       // in context _Γ1
                       val Δ = data.tParamTys.map(_._1)
@@ -585,7 +585,7 @@ private def elaborateBody
                         )
                       yield (_Σ, branches + (qn -> branch), defaultCase)
                     // Default `x` catch-all case
-                    case (Right(_Σ, branches, _), None) =>
+                    case (Right(_, branches, _), None) =>
                       if subst(problem, Substitutor.id(Γ.size)).isEmpty then
                         throw MissingDefaultTypeCase()
                       for case (_Σ, branch) <- split(q̅, _C, problem)
@@ -604,7 +604,7 @@ private def elaborateBody
                   }
 
             // split constructor
-            case (_, (x: Var, PConstructor(name, args), _A @ DataType(qn, tArgs))) =>
+            case (_, (x: Var, PConstructor(_, _), _A @ DataType(qn, _))) =>
               if !providedAtLeastU1Usage(x) then Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
               else
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -714,7 +714,7 @@ private def elaborateBody
                 _ <-
                   val constraints = checkUsagesSubsumption(usages)
                   if constraints.isEmpty then Right(())
-                  else Left(UnsatifisfiedUsageRequirements(constraints))
+                  else Left(UnsatisfiedUsageRequirements(constraints))
               yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
         split(q̅, _C, problem) match
           case Right(r) => r
@@ -741,7 +741,7 @@ private def elaborateHead
   : Signature =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     val tParamTys = elaborateContext(effect.tParamTys)
-    val e = new Effect(effect.qn)(
+    val e: Effect = Effect(effect.qn)(
       tParamTys,
       effect.operations.map(_.continuationUsage).foldLeft(ContinuationUsage.CuLinear)(_ | _),
     )
@@ -763,15 +763,15 @@ private def elaborateBody
       (ty: CTerm)
       (using Γ: Context)
       (using Signature)
-      (using ctx: TypingContext)
+      (using TypingContext)
       : (Telescope, /* operation return type */ VTerm, /* operation return usage */ VTerm) =
       checkIsCType(ty)._1.normalized(None) match
         // Here and below we do not care the declared effect types because data type constructors
         // are always total. Declaring non-total signature is not necessary (nor desirable) but
         // acceptable.
-        case F(ty, effects, usage) =>
+        case F(ty, _, usage) =>
           (Nil, ty, usage)
-        case FunctionType(binding, bodyTy, effects) =>
+        case FunctionType(binding, bodyTy, _) =>
           val (telescope, level, usage) = elaborateTy(bodyTy)(using Γ :+ binding)
           (binding :: telescope, level, usage)
         case _ => throw ExpectFType(ty)
@@ -789,9 +789,9 @@ private def elaborateBody
 @throws(classOf[IrError])
 private def elaborateTContext
   (tTelescope: PreTContext)
-  (using Γ: Context)
+  (using Context)
   (using Signature)
-  (using ctx: TypingContext)
+  (using TypingContext)
   : TContext =
   elaborateContext(tTelescope.map(_._1)).zip(tTelescope.map(_._2))
 

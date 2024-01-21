@@ -10,9 +10,9 @@ enum IrError extends Exception:
   case CollapsingU0Term(ctm: CTerm)
   case CyclicDeclarations(cycle: Seq[(DeclarationPart, PreDeclaration)])
   case EffectTermTooComplex(term: VTerm)
-  case EffectfulCTermAsType
-    (ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
-  case ExepctSimpleEffects(effects: VTerm)
+  // type of `ty` is some `CType` such that `cty.effects != Total`
+  case EffectfulCTermAsType(ty: CTerm)
+  case ExpectSimpleEffects(effects: VTerm)
   case ExpectCType(cTy: CTerm)
   case ExpectDataType(ty: VTerm, qn: Option[QualifiedName] = None)
   case ExpectFType(cTy: CTerm)
@@ -26,7 +26,7 @@ enum IrError extends Exception:
   case ExpectVType(vTy: VTerm)
   case HandlerOperationsMismatch
     (handler: CTerm.Handler, expected: Set[QualifiedName], actual: Set[QualifiedName])
-  case HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(hanlder: CTerm.Handler)
+  case HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(handler: CTerm.Handler)
   case IllegalVarianceInData(qn: QualifiedName, violatingVars: collection.Seq[VTerm.Var])
   case IllegalVarianceInRecord(qn: QualifiedName, violatingVars: collection.Seq[VTerm.Var])
   case IncompleteClauses(qn: QualifiedName)
@@ -75,5 +75,5 @@ enum IrError extends Exception:
   case UnificationFailure(uRes: UnificationResult)
   case UnmatchedDataIndex(con: VTerm.Con, dataType: VTerm.DataType)
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])
-  case UnsatifisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
+  case UnsatisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnsolvedElaboration(clause: PreClause)
