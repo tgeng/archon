@@ -141,14 +141,14 @@ given PartialOrdering[ContinuationUsage] with
 
 object ContinuationUsage:
   import HandlerType.*
-  val CuAny = ContinuationUsage(Usage.UAny, Complex)
-  val CuRel = ContinuationUsage(Usage.URel, Complex)
-  val CuAff = ContinuationUsage(Usage.UAff, Complex)
-  val Cu1 = ContinuationUsage(Usage.U1, Complex)
-  val Cu0 = ContinuationUsage(Usage.U1, Complex)
-  val CuSimple = ContinuationUsage(Usage.UAff, Simple)
-  val CuException = ContinuationUsage(Usage.U0, Simple)
-  val CuLinear = ContinuationUsage(Usage.U0, Simple)
+  val CuAny: ContinuationUsage = ContinuationUsage(Usage.UAny, Complex)
+  val CuRel: ContinuationUsage = ContinuationUsage(Usage.URel, Complex)
+  val CuAff: ContinuationUsage = ContinuationUsage(Usage.UAff, Complex)
+  val Cu1: ContinuationUsage = ContinuationUsage(Usage.U1, Complex)
+  val Cu0: ContinuationUsage = ContinuationUsage(Usage.U1, Complex)
+  val CuSimple: ContinuationUsage = ContinuationUsage(Usage.UAff, Simple)
+  val CuException: ContinuationUsage = ContinuationUsage(Usage.U0, Simple)
+  val CuLinear: ContinuationUsage = ContinuationUsage(Usage.U0, Simple)
 
 import com.github.tgeng.archon.core.ir.ContinuationUsage.*
 
@@ -191,20 +191,16 @@ object LevelOrder:
   def orderMax(a: LevelOrder, b: LevelOrder): LevelOrder =
     if a.m > b.m then a else if a.m < b.m then b else LevelOrder(a.m, a.n max b.n)
 
-  val ω = LevelOrder(1, 0)
-  val zero = LevelOrder(0, 0)
+  val ω: LevelOrder = LevelOrder(1, 0)
+  val zero: LevelOrder = LevelOrder(0, 0)
   // 256 is arbitrary but it should be enough for any practical purpose
-  val upperBound = LevelOrder(256, 0)
+  val upperBound: LevelOrder = LevelOrder(256, 0)
 
 extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
 
 sealed trait UsageCompound(val distinctOperands: Set[VTerm])
 
-/** @param usage
-  *   the usage of the continuation after this handler is invoked
-  * @param handlerType
-  *   the type of the handler
-  * @param impl
+/** @param body
   *   the handler implementation. The type depends on the continuation usage
   *   - simple
   *     - U0: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, handler
@@ -290,6 +286,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo)
 
+  case HandlerTypeType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case HandlerTypeLiteral(handlerType: HandlerType)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
+
   /** @param continuationUsage
     *   see ContinuationUsage for explanation. The reason that we need this part to be a term
     *   instead of a literal usage is because this part needs to participate in usage tracking of
@@ -297,7 +297,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   parametric in continuation usage.
     * @param controlMode
     *   see ContinuationUsage for explanation
-    * @param sourceInfo
     */
   case EffectsType
     (
@@ -354,21 +353,23 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Type(upperBound)           => Type(upperBound)
-      case Top(l, eqD)                => Top(l, eqD)
-      case Var(index)                 => Var(index)
-      case Collapse(cTm)              => Collapse(cTm)
-      case U(cTy)                     => U(cTy)
-      case Thunk(c)                   => Thunk(c)
-      case DataType(qn, args)         => DataType(qn, args)
-      case Con(name, args)            => Con(name, args)
-      case UsageType(u)               => UsageType(u)
-      case UsageLiteral(u)            => UsageLiteral(u)
-      case UsageProd(operands)        => UsageProd(operands)
-      case UsageSum(operands)         => UsageSum(operands)
-      case UsageJoin(operands)        => UsageJoin(operands)
-      case EqDecidabilityType()       => EqDecidabilityType()
-      case EqDecidabilityLiteral(eqD) => EqDecidabilityLiteral(eqD)
+      case Type(upperBound)                => Type(upperBound)
+      case Top(l, eqD)                     => Top(l, eqD)
+      case Var(index)                      => Var(index)
+      case Collapse(cTm)                   => Collapse(cTm)
+      case U(cTy)                          => U(cTy)
+      case Thunk(c)                        => Thunk(c)
+      case DataType(qn, args)              => DataType(qn, args)
+      case Con(name, args)                 => Con(name, args)
+      case UsageType(u)                    => UsageType(u)
+      case UsageLiteral(u)                 => UsageLiteral(u)
+      case UsageProd(operands)             => UsageProd(operands)
+      case UsageSum(operands)              => UsageSum(operands)
+      case UsageJoin(operands)             => UsageJoin(operands)
+      case EqDecidabilityType()            => EqDecidabilityType()
+      case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
+      case HandlerTypeType()               => HandlerTypeType()
+      case HandlerTypeLiteral(handlerType) => HandlerTypeLiteral(handlerType)
       case EffectsType(continuationUsage, controlMode) =>
         EffectsType(continuationUsage, controlMode)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
@@ -384,8 +385,11 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
 object VTerm:
 
-  def Top(t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))(using SourceInfo) =
-    new Top(t, eqDecidability)
+  def Top
+    (t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))
+    (using SourceInfo)
+    : Top =
+    Top(t, eqDecidability)
 
   def UsageProd(operands: VTerm*)(using SourceInfo): VTerm =
     val (usages, terms) = collectUsage(operands)
@@ -432,11 +436,11 @@ object VTerm:
   def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, Map(ts.map(_ -> 0): _*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
-  val u0 = VTerm.UsageLiteral(Usage.U0)
-  val u1 = VTerm.UsageLiteral(Usage.U1)
-  val uAff = VTerm.UsageLiteral(Usage.UAff)
-  val uRel = VTerm.UsageLiteral(Usage.URel)
-  val uAny = VTerm.UsageLiteral(Usage.UAny)
+  val u0: VTerm = VTerm.UsageLiteral(Usage.U0)
+  val u1: VTerm = VTerm.UsageLiteral(Usage.U1)
+  val uAff: VTerm = VTerm.UsageLiteral(Usage.UAff)
+  val uRel: VTerm = VTerm.UsageLiteral(Usage.URel)
+  val uAny: VTerm = VTerm.UsageLiteral(Usage.UAny)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
     * executed by the type checker.
@@ -602,8 +606,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   the type of the output of the handler. This is also the type of the resume call on
     *   continuations captured inside handler implementations. This is also the type of the final
     *   returned value in each operation handler.
-    * @param parameter
-    * @param parameterBinding
     * @param parameterDisposer
     *   This is invoked by Continuation.dispose on continuations created by parent handlers or this
     *   handler. In other words, it's to clean up the parameter when computation under this handler
@@ -643,10 +645,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *         `outputType`
     *     - returns
     *       - output type matching the handler output
-    * @param input
-    * @param inputBinding
-    * @param handlersBoundNames
-    * @param sourceInfo
     */
   case Handler
     (
@@ -704,11 +702,14 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     transformer.transformCTerm(this)
 
 object CTerm:
-  def CTop(t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo): CTop =
+  def CTop
+    (t: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))
+    (using sourceInfo: SourceInfo)
+    : CTop =
     CTop(t, effects)
 
   @targetName("redexFromElims")
-  def redex(c: CTerm, elims: Seq[Elimination[VTerm]])(using SourceInfo): Redex =
+  def redex(c: CTerm, elims: Iterable[Elimination[VTerm]])(using SourceInfo): Redex =
     Redex(c, elims.toList)
 
   @targetName("redexFromElimsStar")
@@ -732,8 +733,7 @@ object CTerm:
       case t               => Redex(t, List(Elimination.EProj(name)))
 
   extension (binding: Binding[VTerm])
-    infix def ->:(body: CTerm): FunctionType =
-      new FunctionType(binding, body)
+    infix def ->:(body: CTerm): FunctionType = FunctionType(binding, body)
 
 /* References:
  [0]  Pierre-Marie Pédrot and Nicolas Tabareau. 2019. The fire triangle: how to mix substitution,

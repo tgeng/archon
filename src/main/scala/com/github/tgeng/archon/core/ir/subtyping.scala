@@ -345,6 +345,8 @@ private def eqDecidabilityJoin(t1: VTerm, t2: VTerm): VTerm =
     case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
     case _ => EqDecidabilityLiteral(EqDecidability.EqUnknown)
 
+// TODO[P0]: add checkHandlerTypeSubsumption
+
 @throws(classOf[IrError])
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)

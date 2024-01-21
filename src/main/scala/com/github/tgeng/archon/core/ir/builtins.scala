@@ -65,6 +65,10 @@ object Builtins:
   val EqDecidableQn: QualifiedName = EqDecidabilityQn / "Decidable"
   val EqUnknownQn: QualifiedName = EqDecidabilityQn / "Unknown"
 
+  val HandlerTypeQn: QualifiedName = BuiltinType / "HandlerType"
+  val HtSimpleQn: QualifiedName = HandlerTypeQn / "Simple"
+  val HtComplexQn: QualifiedName = HandlerTypeQn / "Complex"
+
   val EqualityQn: QualifiedName = BuiltinType / "Equality"
   val CellQn: QualifiedName = BuiltinType / "Cell"
   val UCellQn: QualifiedName = BuiltinType / "UCell"

@@ -877,9 +877,11 @@ def inferType
         u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))) match
           case Some(upperBound, usages) => (u, Type(UsageType(Some(upperBound))), usages)
           case _                        => (u, Type(u), Usages.zero)
-      case eqD: EqDecidabilityType    => (eqD, Type(eqD), Usages.zero)
-      case eqD: EqDecidabilityLiteral => (eqD, EqDecidabilityType(), Usages.zero)
-      case e: EffectsType             => (e, Type(e), Usages.zero)
+      case eqD: EqDecidabilityType          => (eqD, Type(eqD), Usages.zero)
+      case eqD: EqDecidabilityLiteral       => (eqD, EqDecidabilityType(), Usages.zero)
+      case handlerTypeType: HandlerTypeType => (handlerTypeType, Type(handlerTypeType), Usages.zero)
+      case handlerType: HandlerTypeLiteral  => (handlerType, HandlerTypeType(), Usages.zero)
+      case e: EffectsType                   => (e, Type(e), Usages.zero)
       case Effects(uncheckedLiteral, checkedOperands) =>
         val (literal, literalUsages) = transposeCheckTypeResults(
           uncheckedLiteral.map { (qn, args) =>
