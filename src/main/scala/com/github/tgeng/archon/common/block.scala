@@ -38,7 +38,8 @@ import DelimitPolicy.*
 object Block:
   def apply
     (
-      objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[String | Block])*,
+      objects: (WrapPolicy | IndentPolicy | DelimitPolicy | Block | String |
+        Iterable[String | Block])*,
     )
     : Block =
     var wrapPolicy: WrapPolicy = Wrap
@@ -160,7 +161,10 @@ case class Block
       case s: String => s.headOption.getOrElse(' ')
     }
 
-    private def width(widthLeft: Int, onlyMeasureFirstLine: Boolean = false)(using ctx: PrintContext): Option[Int] =
+    private def width
+      (widthLeft: Int, onlyMeasureFirstLine: Boolean = false)
+      (using ctx: PrintContext)
+      : Option[Int] =
       boundary:
         b match {
           case s: String => if (s.size <= widthLeft) Some(s.size) else None

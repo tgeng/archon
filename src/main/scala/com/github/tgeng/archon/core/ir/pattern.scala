@@ -2,26 +2,31 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-
-import SourceInfo.*
+import com.github.tgeng.archon.core.ir.SourceInfo.*
 
 enum Pattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[Pattern]:
   case PVar(idx: Nat)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
-  /** Note that matching computation type is prohibited. This should simplify compilation. In addition, it's unclear how
-    * type checking of effects can work if we allow matching computation because the matched effect types become unbound
-    * at type level. TODO[P2]: type matching as for now is not very useful. Specifically, if the matched type has some
-    * upperbound specified, currently elaboration does not honor the constraint. Also, it seems to be useful to allow
-    * multiple upperbounds in a `Type` so that a limited form of union type can be supported. (General union type is
-    * much more difficult because it would complicates type equality and subtyping). I will keep this as it is for now.
-    * But unless we want to expand it with limited union type, we should remove it.
+  /** Note that matching computation type is prohibited. This should simplify compilation. In
+    * addition, it's unclear how type checking of effects can work if we allow matching computation
+    * because the matched effect types become unbound at type level. TODO[P2]: type matching as for
+    * now is not very useful. Specifically, if the matched type has some upperbound specified,
+    * currently elaboration does not honor the constraint. Also, it seems to be useful to allow
+    * multiple upperbounds in a `Type` so that a limited form of union type can be supported.
+    * (General union type is much more difficult because it would complicates type equality and
+    * subtyping). I will keep this as it is for now. But unless we want to expand it with limited
+    * union type, we should remove it.
     */
-  case PDataType(qn: QualifiedName, args: List[Pattern])(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
-  case PForcedDataType(qn: QualifiedName, args: List[Pattern])(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+  case PDataType(qn: QualifiedName, args: List[Pattern])(using sourceInfo: SourceInfo)
+    extends Pattern(sourceInfo)
+  case PForcedDataType(qn: QualifiedName, args: List[Pattern])(using sourceInfo: SourceInfo)
+    extends Pattern(sourceInfo)
   // Note that we do not allow matching specific values of level, effect, and heap because there are no corresponding
   // eliminators. All these can only be matched with a pattern variable.
-  case PConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
-  case PForcedConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
+  case PConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo)
+    extends Pattern(sourceInfo)
+  case PForcedConstructor(name: Name, args: List[Pattern])(using sourceInfo: SourceInfo)
+    extends Pattern(sourceInfo)
   case PForced(term: VTerm)(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
   case PAbsurd()(using sourceInfo: SourceInfo) extends Pattern(sourceInfo)
 
@@ -48,8 +53,8 @@ object Pattern:
     .map(i => Pattern.PVar(i)(using SiEmpty))
     .toList
 
-import Pattern.*
-import VTerm.*
+import com.github.tgeng.archon.core.ir.Pattern.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
 extension (p: Pattern)
   def toTerm: Option[VTerm] =
@@ -86,8 +91,8 @@ object CoPattern:
   def qVars(firstIndex: Nat, lastIndex: Nat = 0): List[CoPattern] =
     pVars(firstIndex, lastIndex).map(CPattern(_))
 
-import CoPattern.*
-import Elimination.*
+import com.github.tgeng.archon.core.ir.CoPattern.*
+import com.github.tgeng.archon.core.ir.Elimination.*
 
 extension (q: CoPattern)
   def toElimination: Option[Elimination[VTerm]] = q match

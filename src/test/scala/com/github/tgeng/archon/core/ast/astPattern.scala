@@ -6,7 +6,8 @@ import com.github.tgeng.archon.core.ir.SourceInfoOwner
 
 enum AstPattern(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstPattern]:
   case AstPVar(name: Name)(using sourceInfo: SourceInfo) extends AstPattern(sourceInfo)
-  case AstPConstructor(name: Name, args: List[AstPattern])(using sourceInfo: SourceInfo) extends AstPattern(sourceInfo)
+  case AstPConstructor(name: Name, args: List[AstPattern])(using sourceInfo: SourceInfo)
+    extends AstPattern(sourceInfo)
   case AstPForcedConstructor(name: Name, args: List[AstPattern])(using sourceInfo: SourceInfo)
     extends AstPattern(sourceInfo)
   case AstPForced(term: AstTerm)(using sourceInfo: SourceInfo) extends AstPattern(sourceInfo)

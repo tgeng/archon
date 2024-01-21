@@ -1,23 +1,23 @@
 package com.github.tgeng.archon.core.ir
 
-import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.DelimitPolicy.*
+import com.github.tgeng.archon.common.IndentPolicy.*
+import com.github.tgeng.archon.common.WrapPolicy.*
+import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.CoPattern.*
+import com.github.tgeng.archon.core.ir.Elimination.*
+import com.github.tgeng.archon.core.ir.IrError.*
+import com.github.tgeng.archon.core.ir.MetaVariable.*
+import com.github.tgeng.archon.core.ir.Pattern.*
+import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
+import com.github.tgeng.archon.core.ir.Usage.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-import CTerm.*
-import VTerm.*
-import Pattern.*
-import CoPattern.*
-import PrettyPrinter.pprint
-import WrapPolicy.*
-import IndentPolicy.*
-import DelimitPolicy.*
-import Usage.*
-import IrError.*
-import MetaVariable.*
-import Elimination.*
 
 trait Reducible[T]:
   @throws(classOf[IrError])
@@ -25,8 +25,8 @@ trait Reducible[T]:
 
 extension [T](a: mutable.ArrayBuffer[T])
   def pop(): T = a.remove(a.length - 1)
-  def push(t: T) = a.addOne(t)
-  def pushAll(ts: Iterable[T]) = a.addAll(ts)
+  def push(t: T): a.type = a.addOne(t)
+  def pushAll(ts: Iterable[T]): a.type = a.addAll(ts)
 
 private case class ReplicationState
   (
@@ -44,30 +44,42 @@ private case class HandlerEntry(index: Nat, handler: Handler, previous: Option[H
 
 private final class StackMachine
   (
-    val stack: mutable.ArrayBuffer[CTerm | Elimination[VTerm] | ReplicationState | FinishSimpleOperation | HandlerEntry],
+    val stack: mutable.ArrayBuffer[
+      CTerm | Elimination[VTerm] | ReplicationState | FinishSimpleOperation | HandlerEntry,
+    ],
   ):
 
-  /** Pre-constructed term before replicating continuation. This is used to avoid the need to represent partially
-    * replicated continuation in the stack.
+  /** Pre-constructed term before replicating continuation. This is used to avoid the need to
+    * represent partially replicated continuation in the stack.
     */
   private var preConstructedTerm: Option[CTerm] = None
   private var currentHandlerEntry: Option[HandlerEntry] = None
-  private def getMatchingHandler(effAndArgs: Eff, start: Option[HandlerEntry] = currentHandlerEntry): HandlerEntry =
-    val current = currentHandlerEntry.getOrElse(throw IllegalStateException("type error: no more handlers"))
+  @tailrec
+  private def getMatchingHandler
+    (effAndArgs: Eff, start: Option[HandlerEntry] = currentHandlerEntry)
+    : HandlerEntry =
+    val current =
+      currentHandlerEntry.getOrElse(throw IllegalStateException("type error: no more handlers"))
     if current.handler.eff == effAndArgs then current
     else getMatchingHandler(effAndArgs, current.previous)
 
   /** @param pc
     *   "program counter"
     * @param reduceDown
-    *   if true, logic should not try to decompose the [[pc]] and push it's components on to the stack. This is useful
-    *   so that the run logic does not spin into infinite loop if the given term has type errors. (Ideally, input should
-    *   be type-checked so this should never happen, unless there are bugs in type checking code.)
+    *   if true, logic should not try to decompose the [[pc]] and push it's components on to the
+    *   stack. This is useful so that the run logic does not spin into infinite loop if the given
+    *   term has type errors. (Ideally, input should be type-checked so this should never happen,
+    *   unless there are bugs in type checking code.)
     * @return
     */
   @tailrec
   @throws(classOf[IrError])
-  def run(pc: CTerm, reduceDown: Boolean = false)(using Context)(using Σ: Signature)(using ctx: TypingContext): CTerm =
+  def run
+    (pc: CTerm, reduceDown: Boolean = false)
+    (using Context)
+    (using Σ: Signature)
+    (using ctx: TypingContext)
+    : CTerm =
     pc match
       case Hole | CapturedContinuationTip(_) => throw IllegalStateException()
       // Take a shortcut when returning a collapsable computation
@@ -81,7 +93,13 @@ private final class StackMachine
             case h @ HandlerEntry(_, handler, _) =>
               assert(h == this.currentHandlerEntry)
               run(handler, reduceDown = true)
-            case ReplicationState(handler, baseStackSize, continuationTerm1, continuationTerm2, continuationUsage) =>
+            case ReplicationState(
+                handler,
+                baseStackSize,
+                continuationTerm1,
+                continuationTerm2,
+                continuationUsage,
+              ) =>
               pc match
                 case Return(Con(name, param1 :: param2 :: Nil), _) if name == n"MkPair" =>
                   replicate(
@@ -89,13 +107,17 @@ private final class StackMachine
                     handler.copy(parameter = param1, input = continuationTerm1)(
                       handler.handlersBoundNames,
                     ),
-                    handler.copy(parameter = param1, input = continuationTerm2)(
+                    handler.copy(parameter = param2, input = continuationTerm2)(
                       handler.handlersBoundNames,
                     ),
                     continuationUsage,
                   )
                 case _ => throw IllegalStateException("type error")
-            case FinishSimpleOperation(handlerIndex, operationContinuationUsage, previousHandlerEntry) =>
+            case FinishSimpleOperation(
+                handlerIndex,
+                operationContinuationUsage,
+                previousHandlerEntry,
+              ) =>
               pc match
                 case Return(Con(name, param :: result :: Nil), _) if name == n"MkPair" =>
                   val handler = stack(handlerIndex).asInstanceOf[Handler]
@@ -110,8 +132,9 @@ private final class StackMachine
                     // invoke the corresponding operation handler implementation.
                     Let(
                       capturedStack.foldRight[CTerm](Return(Con(n"MkUnit", Nil), uAny)):
-                        case (HandlerEntry(_, handler, _), term) => processStackEntryForDisposerCall(term)(handler)
-                        case (_, term)                           => term
+                        case (HandlerEntry(_, handler, _), term) =>
+                          processStackEntryForDisposerCall(term)(handler)
+                        case (_, term) => term
                       ,
                       DataType(Builtins.UnitQn, Nil),
                       handler.outputEffects,
@@ -136,7 +159,7 @@ private final class StackMachine
                       result match
                         case Con(name, result :: Nil) if name == n"Left"  => getU0Term(result)
                         case Con(name, result :: Nil) if name == n"Right" => getU1Term(result)
-                        case _                                            => throw IllegalStateException("type error")
+                        case _ => throw IllegalStateException("type error")
                     case _ => throw IllegalStateException("type error")
                   currentHandlerEntry = previousHandlerEntry
                   run(term)
@@ -163,7 +186,7 @@ private final class StackMachine
           // This is allowed because it could be that the body is not defined yet.
           case None => reconstructTermFromStack(pc)
           case Some(clauses) =>
-            clauses.first { case Clause(bindings, lhs, rhs, ty) =>
+            clauses.first { case Clause(_, lhs, rhs, _) =>
               val mapping = mutable.Map[Nat, VTerm]()
               matchCoPattern(
                 lhs.zip(
@@ -196,7 +219,7 @@ private final class StackMachine
           case _                    => throw IllegalArgumentException("type error")
       case Let(t, _, _, _, ctx) =>
         t match
-          case Return(v, usage) => run(ctx.substLowers(v))
+          case Return(v, _) => run(ctx.substLowers(v))
           case _ if reduceDown  => throw IllegalArgumentException("type error")
           case _ =>
             stack.push(pc)
@@ -248,13 +271,15 @@ private final class StackMachine
                       entry.copy(input = term)(entry.handlersBoundNames)
                     case _ => throw IllegalStateException("type error")
                 stack.dropRightInPlace(stack.size - matchingHandlerIdx)
-                val continuation = Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
+                val continuation =
+                  Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
                 handlerImpl.body.substLowers(handler.parameter +: args :+ continuation: _*),
             )
       case Continuation(continuationTerm, continuationUsage) =>
-        def getContinuationTermWithNewParameter(param: VTerm) = continuationTerm.copy(parameter = param)(
-          continuationTerm.handlersBoundNames,
-        )
+        def getContinuationTermWithNewParameter(param: VTerm) =
+          continuationTerm.copy(parameter = param)(
+            continuationTerm.handlersBoundNames,
+          )
         stack.pop() match
           case EProj(name) if name == n"resume" =>
             val ETerm(param) = stack.pop(): @unchecked
@@ -268,7 +293,9 @@ private final class StackMachine
           case EProj(name) if name == n"dispose" =>
             val ETerm(param) = stack.pop(): @unchecked
             val (handlerStack, handlerEntry) =
-              expandTermToStack(getContinuationTermWithNewParameter(param))(processStackEntryForDisposerCall(Hole))()
+              expandTermToStack(getContinuationTermWithNewParameter(param))(
+                processStackEntryForDisposerCall(Hole),
+              )()
             val stackHeight = stack.size
             stack.pushAll(handlerStack)
             this.currentHandlerEntry = handlerEntry
@@ -277,14 +304,14 @@ private final class StackMachine
             preConstructedTerm = Some(reconstructTermFromStack(redex(pc, proj)))
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
-            val (stackToDuplicate, handlerEntry) = expandTermToStack(getContinuationTermWithNewParameter(param)) {
-              case h =>
+            val (stackToDuplicate, handlerEntry) =
+              expandTermToStack(getContinuationTermWithNewParameter(param)) { case h =>
                 h.copy(input = Hole)(h.handlersBoundNames)
-            } {
-              case t: Redex => t.copy(t = Hole)
-              case t: Let   => t.copy(t = Hole)(t.boundName)
-              case t        => t
-            }
+              } {
+                case t: Redex => t.copy(t = Hole)
+                case t: Let   => t.copy(t = Hole)(t.boundName)
+                case t        => t
+              }
             stack.pushAll(stackToDuplicate)
             this.currentHandlerEntry = handlerEntry
             val tip = stack.pop().asInstanceOf[CapturedContinuationTip]
@@ -317,7 +344,12 @@ private final class StackMachine
   @tailrec
   @throws(classOf[IrError])
   private def replicate
-    (baseStackSize: Nat, continuationTerm1: CTerm, continuationTerm2: CTerm, continuationUsage: Usage)
+    (
+      baseStackSize: Nat,
+      continuationTerm1: CTerm,
+      continuationTerm2: CTerm,
+      continuationUsage: Usage,
+    )
     (using Context)
     (using Σ: Signature)
     (using ctx: TypingContext)
@@ -425,14 +457,31 @@ private final class StackMachine
           case t: Redex => t.t
           case t: Let   => t.t
         transform match
-          case () => expandTermToStack(subTerm, currentIndex, currentHandlerEntry, acc)(handlerTransform)(transform)
+          case () =>
+            expandTermToStack(subTerm, currentIndex, currentHandlerEntry, acc)(handlerTransform)(
+              transform,
+            )
           case f: (CTerm => CTerm) =>
-            expandTermToStack(subTerm, currentIndex + 1, currentHandlerEntry, acc ++ Iterable(f(term)))(
+            expandTermToStack(
+              subTerm,
+              currentIndex + 1,
+              currentHandlerEntry,
+              acc ++ Iterable(f(term)),
+            )(
               handlerTransform,
             )(f)
       case term: Handler =>
-        val handlerEntry = HandlerEntry(currentIndex, handlerTransform(term).asInstanceOf[Handler], currentHandlerEntry)
-        expandTermToStack(term.input, currentIndex + 1, Some(handlerEntry), acc ++ Iterable(handlerEntry))(
+        val handlerEntry = HandlerEntry(
+          currentIndex,
+          handlerTransform(term).asInstanceOf[Handler],
+          currentHandlerEntry,
+        )
+        expandTermToStack(
+          term.input,
+          currentIndex + 1,
+          Some(handlerEntry),
+          acc ++ Iterable(handlerEntry),
+        )(
           handlerTransform,
         )(transform)
       case _ => (acc ++ Iterable(term), currentHandlerEntry)
@@ -452,7 +501,11 @@ extension (c: CTerm)
           r.elims.map(transformElim),
         )(using r.sourceInfo)
 
-      override def transformCollapse(c: Collapse)(using ctx: TypingContext)(using Σ: Signature): VTerm = transformCTerm(
+      override def transformCollapse
+        (c: Collapse)
+        (using ctx: TypingContext)
+        (using Σ: Signature)
+        : VTerm = transformCTerm(
         c.cTm,
       ) match
         case Return(v, _) => transformVTerm(v)
@@ -463,7 +516,12 @@ extension (c: CTerm)
       case t               => t
 
   @throws(classOf[IrError])
-  def normalized(ty: Option[CTerm])(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm =
+  def normalized
+    (ty: Option[CTerm])
+    (using Γ: Context)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CTerm =
     if isTotal(c, ty) then Reducible.reduce(c)
     else c.normalized
 
@@ -508,11 +566,15 @@ extension (v: VTerm)
             (
               (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
                 .filter((qn, _) =>
-                  if retainSimpleOnly then Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Simple
+                  if retainSimpleOnly then
+                    Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Simple
                   else true,
                 )
                 .toSet,
-              literalsAndOperands.flatMap { case (_, o) => o }.groupMapReduce(_._1)(_._2)(_ && _).toMap,
+              literalsAndOperands
+                .flatMap { case (_, o) => o }
+                .groupMapReduce(_._1)(_._2)(_ && _)
+                .toMap,
             )
           case _: Collapse => (Set.empty, Map(tm -> false))
           case v: Var =>
@@ -564,7 +626,12 @@ given Reducible[CTerm] with
   /** It's assumed that `t` is effect-free.
     */
   @throws(classOf[IrError])
-  override def reduce(t: CTerm)(using ctx: Context)(using signature: Signature)(using TypingContext): CTerm =
+  override def reduce
+    (t: CTerm)
+    (using ctx: Context)
+    (using signature: Signature)
+    (using TypingContext)
+    : CTerm =
     StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
 
 object Reducible:
@@ -642,15 +709,15 @@ def matchCoPattern
     matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
-  import Elimination.*
   import Builtins.*
+  import Elimination.*
   elims match
     case Nil => matchingStatus
     case elim :: rest =>
       var status: MatchingStatus = matchingStatus
       var elims = rest
       elim match
-        case (CPattern(p), ETerm(w))                  => matchPattern(List((p, w)), mapping, matchingStatus)
+        case (CPattern(p), ETerm(w)) => matchPattern(List((p, w)), mapping, matchingStatus)
         case (CProjection(n1), EProj(n2)) if n1 == n2 =>
         case (CProjection(_), ETerm(_)) | (_, EProj(_)) =>
           throw IllegalArgumentException("type error")
@@ -667,7 +734,11 @@ private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
     (using Σ: Signature)
     : CTerm = Return(newTip, cct.ty.usage)
 
-private def processStackEntryForDisposerCall(input: CTerm)(handler: Handler)(using Signature): Handler =
+private def processStackEntryForDisposerCall
+  (input: CTerm)
+  (handler: Handler)
+  (using Signature)
+  : Handler =
   // retain all handlers for two reasons
   // 1. if it contains a parameter disposer, the disposer needs to be invoked
   // 2. the handler may provide effects needed by upper disposers

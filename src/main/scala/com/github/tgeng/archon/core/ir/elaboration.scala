@@ -1,35 +1,38 @@
 package com.github.tgeng.archon.core.ir
 
-import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.CaseTree.*
+import com.github.tgeng.archon.core.ir.CoPattern.*
+import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.IrError.*
+import com.github.tgeng.archon.core.ir.Pattern.*
+import com.github.tgeng.archon.core.ir.PreDeclaration.*
+import com.github.tgeng.archon.core.ir.SourceInfo.*
+import com.github.tgeng.archon.core.ir.UnificationResult.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
-import SourceInfo.*
-import Declaration.*
-import CTerm.*
-import VTerm.*
-import Pattern.*
-import IrError.*
-import Variance.*
-import PreDeclaration.*
-import CoPattern.*
-import UnificationResult.*
-import CaseTree.*
-import java.security.Signer
-import com.github.tgeng.archon.parser.combinators.P
-import scala.NonEmptyTuple
-import scala.Conversion
+import scala.collection.mutable
 
 @throws(classOf[IrError])
-def elaborateAll(declarations: Seq[PreDeclaration])(using Σ: Signature)(using ctx: TypingContext): Signature =
+def elaborateAll
+  (declarations: Seq[PreDeclaration])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   val decls = sortPreDeclarations(declarations)
   decls.foldLeft[Signature](Σ) { case (_Σ, (part, decl)) =>
     elaborate(part, decl)(using _Σ)
   }
 
 @throws(classOf[IrError])
-def elaborate(part: DeclarationPart, decl: PreDeclaration)(using Σ: Signature)(using ctx: TypingContext): Signature =
+def elaborate
+  (part: DeclarationPart, decl: PreDeclaration)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   (part, decl) match
     case (DeclarationPart.HEAD, d: PreData)       => elaborateHead(d)
     case (DeclarationPart.HEAD, d: PreRecord)     => elaborateHead(d)
@@ -43,11 +46,14 @@ def elaborate(part: DeclarationPart, decl: PreDeclaration)(using Σ: Signature)(
 enum DeclarationPart:
   case HEAD, BODY
 
-import DeclarationPart.*
-import com.github.tgeng.archon.core.ir.{UnificationResult, unifyAll}
+import com.github.tgeng.archon.core.ir.DeclarationPart.*
+import com.github.tgeng.archon.core.ir.unifyAll
 
 @throws(classOf[IrError])
-def sortPreDeclarations(declarations: Seq[PreDeclaration])(using Σ: Signature): Seq[(DeclarationPart, PreDeclaration)] =
+def sortPreDeclarations
+  (declarations: Seq[PreDeclaration])
+  (using Σ: Signature)
+  : Seq[(DeclarationPart, PreDeclaration)] =
   given Unit = ()
 
   val declByQn = declarations.associatedBy(_.qn)
@@ -94,7 +100,7 @@ def sortPreDeclarations(declarations: Seq[PreDeclaration])(using Σ: Signature):
         case definition: PreDefinition =>
           QualifiedNameVisitor.combine(
             definition.clauses.flatMap { clause =>
-              clause.lhs.map(QualifiedNameVisitor.visitCoPattern(_)) ++
+              clause.lhs.map(QualifiedNameVisitor.visitCoPattern) ++
                 clause.rhs.map(QualifiedNameVisitor.visitCTerm(_))
             }: _*,
           ) + definition.qn
@@ -140,16 +146,29 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
     )
     : Set[QualifiedName] = rs.flatten.toSet
 
-  override def visitQualifiedName(qn: QualifiedName)(using ctx: Unit)(using Σ: Signature): Set[QualifiedName] = Set(qn)
+  override def visitQualifiedName
+    (qn: QualifiedName)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    : Set[QualifiedName] = Set(qn)
 
 end QualifiedNameVisitor
 
 private given Γ0: Context = IndexedSeq()
 @throws(classOf[IrError])
-private def elaborateHead(preData: PreData)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateHead
+  (preData: PreData)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   ctx.trace(s"elaborating data signature ${preData.qn}") {
     @throws(classOf[IrError])
-    def elaborateTy(ty: CTerm)(using Γ: Context)(using Signature)(using ctx: TypingContext): (Telescope, VTerm, VTerm) =
+    def elaborateTy
+      (ty: CTerm)
+      (using Γ: Context)
+      (using Signature)
+      (using ctx: TypingContext)
+      : (Telescope, VTerm, VTerm) =
       checkIsCType(ty)._1.normalized(None) match
         // Here and below we do not care about the declared effect types because data type
         // constructors are always total. Declaring non-total signature is not necessary (nor
@@ -177,7 +196,11 @@ private def elaborateHead(preData: PreData)(using Σ: Signature)(using ctx: Typi
   }
 
 @throws(classOf[IrError])
-private def elaborateBody(preData: PreData)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateBody
+  (preData: PreData)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   ctx.trace(s"elaborating data body ${preData.qn}") {
     val data = Σ.getData(preData.qn)
 
@@ -194,7 +217,8 @@ private def elaborateBody(preData: PreData)(using Σ: Signature)(using ctx: Typi
         // acceptable.
         // TODO: report better error if `qn`, arg count, or param args (not refs to those bound at
         //  data declaration) are unexpected.
-        case F(DataType(qn, args), _, _) if qn == data.qn && args.size == data.tParamTys.size + data.tIndexTys.size =>
+        case F(DataType(qn, args), _, _)
+          if qn == data.qn && args.size == data.tParamTys.size + data.tIndexTys.size =>
           // Drop parameter args because Constructor.tArgs only track index args
           // TODO: check and report invalid args
           (Nil, args.drop(data.tParamTys.size))
@@ -212,14 +236,19 @@ private def elaborateBody(preData: PreData)(using Σ: Signature)(using ctx: Typi
       ctx.trace(s"elaborating constructor ${constructor.name}") {
         val ty = constructor.ty
         val (paramTys, tArgs) = elaborateTy(ty)
-        val con = checkDataConstructor(preData.qn, new Constructor(constructor.name, paramTys, tArgs))
+        val con =
+          checkDataConstructor(preData.qn, new Constructor(constructor.name, paramTys, tArgs))
         _Σ.addConstructor(preData.qn, con)
       }
     }
   }
 
 @throws(classOf[IrError])
-private def elaborateHead(record: PreRecord)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateHead
+  (record: PreRecord)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   ctx.trace(s"elaborating record signature ${record.qn}") {
     val tParamTys = elaborateTContext(record.tParamTys)(using Γ0)
     given Context = tParamTys.map(_._1).toIndexedSeq
@@ -229,14 +258,20 @@ private def elaborateHead(record: PreRecord)(using Σ: Signature)(using ctx: Typ
         new Record(record.qn)(
           tParamTys,
           level,
-          Binding(Thunk(RecordType(record.qn, vars(tParamTys.size - 1))), selfUsage)(record.selfName),
+          Binding(Thunk(RecordType(record.qn, vars(tParamTys.size - 1))), selfUsage)(
+            record.selfName,
+          ),
         )
       case t => throw ExpectCType(t)
     Σ.addDeclaration(checkRecord(r))
   }
 
 @throws(classOf[IrError])
-private def elaborateBody(preRecord: PreRecord)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateBody
+  (preRecord: PreRecord)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   ctx.trace(s"elaborating record body ${preRecord.qn}") {
     val record = Σ.getRecord(preRecord.qn)
 
@@ -257,12 +292,17 @@ private def elaborateBody(preRecord: PreRecord)(using Σ: Signature)(using ctx: 
   }
 
 @throws(classOf[IrError])
-private def elaborateHead(definition: PreDefinition)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateHead
+  (definition: PreDefinition)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   given SourceInfo = SiEmpty
 
   ctx.trace(s"elaborating def signature ${definition.qn}") {
     val paramTys = elaborateContext(definition.paramTys)
-    val ty = checkIsCType(definition.ty)(using paramTys.toIndexedSeq)._1.normalized(None)(using paramTys.toIndexedSeq)
+    val ty = checkIsCType(definition.ty)(using paramTys.toIndexedSeq)._1
+      .normalized(None)(using paramTys.toIndexedSeq)
     val d = new Definition(definition.qn)(
       paramTys.foldRight(ty) { (binding, bodyTy) =>
         FunctionType(binding, bodyTy)
@@ -272,7 +312,11 @@ private def elaborateHead(definition: PreDefinition)(using Σ: Signature)(using 
   }
 
 @throws(classOf[IrError])
-private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateBody
+  (preDefinition: PreDefinition)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
 
   // See [1] for how this part works.
   type Constraint =
@@ -283,7 +327,7 @@ private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(usi
       constraints: List[Constraint],
       userPatterns: List[CoPattern],
       rhs: Option[CTerm],
-      val source: PreClause,
+      source: PreClause,
     )
 
   type Problem = List[ElabClause]
@@ -294,14 +338,19 @@ private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(usi
     case (w, p, _A) => (w.weakened, p, _A.weakened)
 
   @throws(classOf[IrError])
-  def solve(constraints: List[Constraint])(using Γ: Context)(using Σ: Signature): Option[PartialSubstitution[VTerm]] =
+  def solve
+    (constraints: List[Constraint])
+    (using Γ: Context)
+    (using Σ: Signature)
+    : Option[PartialSubstitution[VTerm]] =
     val σ = mutable.Map[Nat, VTerm]()
     matchPattern(constraints.map { case (w, p, _) => (p, w) }, σ) match
       case MatchingStatus.Matched =>
         constraints.foreach { case (w, pattern, _A) =>
           pattern.toTerm match
             case Some(p) =>
-              val constraint = checkIsConvertible(checkType(p, _A)._1.subst(σ.get), checkType(w, _A)._1, Some(_A))
+              val constraint =
+                checkIsConvertible(checkType(p, _A)._1.subst(σ.get), checkType(w, _A)._1, Some(_A))
               if !constraint.isEmpty then throw UnmatchedPattern(pattern, w, constraint)
             case None => throw UnexpectedAbsurdPattern(pattern)
         }
@@ -457,7 +506,7 @@ private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(usi
           (using Γ: Context)
           (using Σ: Signature)
           : Either[IrError, (Signature, CaseTree)] =
-          val ElabClause(_E1, _, rhs1, source1) = problem(0)
+          val ElabClause(_E1, _, rhs1, source1) = problem.head
 
           // We cannot use `checkUsageSubsumption` here because that implies the usage must subsume U1, which
           // may not be true because here we are only *attempting* to find a place to split.
@@ -537,7 +586,8 @@ private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(usi
                       yield (_Σ, branches + (qn -> branch), defaultCase)
                     // Default `x` catch-all case
                     case (Right(_Σ, branches, _), None) =>
-                      if subst(problem, Substitutor.id(Γ.size)).isEmpty then throw MissingDefaultTypeCase()
+                      if subst(problem, Substitutor.id(Γ.size)).isEmpty then
+                        throw MissingDefaultTypeCase()
                       for case (_Σ, branch) <- split(q̅, _C, problem)
                       yield (_Σ, branches, Some(branch))
                     case (Left(e), _) => Left(e)
@@ -599,7 +649,8 @@ private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(usi
                           given Context =
                             _Γ1 ++ Δ.subst(ρ.toTermSubstitutor) ++ _Γ2.subst(ρ1t)
 
-                          if subst(problem, ρ2t).isEmpty then throw MissingConstructorCase(qn, constructor.name)
+                          if subst(problem, ρ2t).isEmpty then
+                            throw MissingConstructorCase(qn, constructor.name)
                           for case (_Σ, branch) <- split(
                               q̅.map(_.subst(ρ2)),
                               _C.subst(ρ2t),
@@ -683,7 +734,11 @@ private def elaborateBody(preDefinition: PreDefinition)(using Σ: Signature)(usi
   }
 
 @throws(classOf[IrError])
-private def elaborateHead(effect: PreEffect)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateHead
+  (effect: PreEffect)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     val tParamTys = elaborateContext(effect.tParamTys)
     val e = new Effect(effect.qn)(
@@ -694,7 +749,11 @@ private def elaborateHead(effect: PreEffect)(using Σ: Signature)(using ctx: Typ
   }
 
 @throws(classOf[IrError])
-private def elaborateBody(preEffect: PreEffect)(using Σ: Signature)(using ctx: TypingContext): Signature =
+private def elaborateBody
+  (preEffect: PreEffect)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Signature =
   val effect = Σ.getEffect(preEffect.qn)
 
   given Context = effect.tParamTys.toIndexedSeq

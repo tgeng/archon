@@ -1,12 +1,11 @@
 package com.github.tgeng.archon.core.ir
 
-import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import QualifiedName.*
-import SourceInfo.*
-import EqDecidability.*
-import Usage.*
+import com.github.tgeng.archon.core.ir.EqDecidability.*
+import com.github.tgeng.archon.core.ir.SourceInfo.*
+import com.github.tgeng.archon.core.ir.Usage.*
+
 import scala.annotation.targetName
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
@@ -27,17 +26,17 @@ object Binding:
   */
 type Arguments = List[VTerm]
 
-/** A type is eqDecidable if the equality of its inhabitants can be efficiently determined at runtime. That is, a type
-  * is not eqDecidable if its inhabitants
+/** A type is eqDecidable if the equality of its inhabitants can be efficiently determined at
+  * runtime. That is, a type is not eqDecidable if its inhabitants
   *   - contain thunks because in general there is no way to decide equality of computations
-  *   - contain erased parts whose equality can not be derived from non-erased parts and hence there is no way to decide
-  *     equality at runtime
+  *   - contain erased parts whose equality can not be derived from non-erased parts and hence there
+  *     is no way to decide equality at runtime
   *
-  * The primary purpose of this type is to limit what types are allowed as args to effects. Efficient methods of
-  * deciding equality is needed for runtime handler resolution.
+  * The primary purpose of this type is to limit what types are allowed as args to effects.
+  * Efficient methods of deciding equality is needed for runtime handler resolution.
   *
-  * In future, it's also likely that we can introduce some built-in hashing data structure that can leverage this as a
-  * bound for the key type.
+  * In future, it's also likely that we can introduce some built-in hashing data structure that can
+  * leverage this as a bound for the key type.
   */
 enum EqDecidability:
   case EqDecidable, EqUnknown
@@ -47,11 +46,13 @@ enum EqDecidability:
     case _                                   => EqUnknown
 
 enum HandlerType extends Ordered[HandlerType]:
-  /** No continuation is captured, execution simply progresses. The continuation usage can be U0, U1, or UAff.
+  /** No continuation is captured, execution simply progresses. The continuation usage can be U0,
+    * U1, or UAff.
     */
   case Simple
 
-  /** Continuation may be captured and complex control transfer may occur. The continuation usage can be any value.
+  /** Continuation may be captured and complex control transfer may occur. The continuation usage
+    * can be any value.
     */
   case Complex
 
@@ -68,42 +69,50 @@ enum HandlerType extends Ordered[HandlerType]:
   *
   *   - Usage: operations can manipulate continuations in ways according to `usage`. Specifically,
   *     - U0: continuation can only be disposed
-  *     - U1: continuation can only be resumed. Difference from `None` is that output of continuation can be inspected
-  *       and more computation can be done after the continuation is resumed.
+  *     - U1: continuation can only be resumed. Difference from `None` is that output of
+  *       continuation can be inspected and more computation can be done after the continuation is
+  *       resumed.
   *     - UAff: continuation can be resumed or disposed
   *     - URel: continuation can be resumed or replicated
-  *     - UAny: continuation an be resumed, disposed, or replicated. Note that continuation is always captured linearly
-  *       in `U`. It's difficult to sugarize the record type `U U1 Continuation` as a function type with various usages
-  *       and automatically insert dispose and replicate wherever needed. This is because dispose and replicate can be
-  *       effectful. The effect is captured by the `Continuation` record type, though such effects can only have `None`
-  *       continuation usage so that the operation semantic is simple.
+  *     - UAny: continuation an be resumed, disposed, or replicated. Note that continuation is
+  *       always captured linearly in `U`. It's difficult to sugarize the record type `U U1
+  *       Continuation` as a function type with various usages and automatically insert dispose and
+  *       replicate wherever needed. This is because dispose and replicate can be effectful. The
+  *       effect is captured by the `Continuation` record type, though such effects can only have
+  *       `None` continuation usage so that the operation semantic is simple.
   *
   *   - simplicity:
-  *     - `true` means the effect is a simple effect. That is, continuation won't be captured in any operation handlers.
-  *       This is only possible if `continuationUsage` is `U0` or `U1`, in which case
-  *       - `U0`: any handlers between the handling handler and the tip of the stack are disposed before the handling
-  *         handler starts execution.
-  *       - `U1`: the handling handler behaves just like a simple function call, with no continuation capturing at all.
-  *         In some literature, this is called "linear". That is, the computation executes immediately and the results
-  *         are returned to the caller intact.
-  *       - `UAff`: all operations are simple and some are U1, some are U0, or some are UAff (the operation may throw or
-  *         return under the hood)
+  *     - `true` means the effect is a simple effect. That is, continuation won't be captured in any
+  *       operation handlers. This is only possible if `continuationUsage` is `U0` or `U1`, in which
+  *       case
+  *       - `U0`: any handlers between the handling handler and the tip of the stack are disposed
+  *         before the handling handler starts execution.
+  *       - `U1`: the handling handler behaves just like a simple function call, with no
+  *         continuation capturing at all. In some literature, this is called "linear". That is, the
+  *         computation executes immediately and the results are returned to the caller intact.
+  *       - `UAff`: all operations are simple and some are U1, some are U0, or some are UAff (the
+  *         operation may throw or return under the hood)
   *   - any other values: this is not
-  *   - `false` means the effect may capture continuations and do something with them. For example, replicate it to
-  *     invoke multiple times (multi-shot continuation) or delay the execution to a later time.
+  *   - `false` means the effect may capture continuations and do something with them. For example,
+  *     replicate it to invoke multiple times (multi-shot continuation) or delay the execution to a
+  *     later time.
   *
-  * Also a handler implementation of a simple operation can only perform effects that are simple and linear. This is
-  * because otherwise continuation would be captured and violating the assumption that simple effect means no
-  * continuation capturing. Practically, this restriction is necessary to implement parameter disposers and parameter
-  * replicators, which can only perform linear and simple effects.
+  * Also a handler implementation of a simple operation can only perform effects that are simple and
+  * linear. This is because otherwise continuation would be captured and violating the assumption
+  * that simple effect means no continuation capturing. Practically, this restriction is necessary
+  * to implement parameter disposers and parameter replicators, which can only perform linear and
+  * simple effects.
   *
-  * In addition, a any simple operations (linear or exceptional) cannot throw another exceptions (a.k.a perform simple
-  * U0 effects) because that would violate resource usages at the callsite of this simple linear operation. In order to
-  * throw, the operation must be complex instead. See docs/trade_offs.md for more details.
+  * In addition, a any simple operations (linear or exceptional) cannot throw another exceptions
+  * (a.k.a perform simple U0 effects) because that would violate resource usages at the callsite of
+  * this simple linear operation. In order to throw, the operation must be complex instead. See
+  * docs/trade_offs.md for more details.
   *
-  * Simple operations have an advantage at runtime because compiling it doesn't require CPS transformation.
+  * Simple operations have an advantage at runtime because compiling it doesn't require CPS
+  * transformation.
   */
-case class ContinuationUsage(usage: Usage, handlerType: HandlerType) extends PartiallyOrdered[ContinuationUsage]:
+case class ContinuationUsage(usage: Usage, handlerType: HandlerType)
+  extends PartiallyOrdered[ContinuationUsage]:
   infix def |(that: ContinuationUsage): ContinuationUsage =
     ContinuationUsage(usage | that.usage, handlerType | that.handlerType)
 
@@ -121,7 +130,8 @@ case class ContinuationUsage(usage: Usage, handlerType: HandlerType) extends Par
       case _ => None
 
 given PartialOrdering[ContinuationUsage] with
-  override def tryCompare(x: ContinuationUsage, y: ContinuationUsage): Option[Int] = x.tryCompareTo(y)
+  override def tryCompare(x: ContinuationUsage, y: ContinuationUsage): Option[Int] =
+    x.tryCompareTo(y)
   override def lteq(x: ContinuationUsage, y: ContinuationUsage): Boolean = x <= y
   override def lt(x: ContinuationUsage, y: ContinuationUsage): Boolean = x < y
   override def gteq(x: ContinuationUsage, y: ContinuationUsage): Boolean = x >= y
@@ -139,7 +149,7 @@ object ContinuationUsage:
   val CuException = ContinuationUsage(Usage.U0, Simple)
   val CuLinear = ContinuationUsage(Usage.U0, Simple)
 
-import ContinuationUsage.*
+import com.github.tgeng.archon.core.ir.ContinuationUsage.*
 
 enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
   case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
@@ -161,7 +171,7 @@ enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Eliminat
 
 type Eff = (QualifiedName, Arguments)
 
-import Builtins.*
+import com.github.tgeng.archon.core.ir.Builtins.*
 
 sealed trait QualifiedNameOwner(_qualifiedName: QualifiedName):
   def qualifiedName: QualifiedName = _qualifiedName
@@ -189,21 +199,29 @@ extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.
 
 sealed trait UsageCompound(val distinctOperands: Set[VTerm])
 
-/**
- * @param usage the usage of the continuation after this handler is invoked
- * @param handlerType the type of the handler
- * @param impl the handler implementation. The type depends on the continuation usage
- *   - simple
- *     - U0: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, handler output)
- *     - U1: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, op output)
- *     - UAff: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, Either[handler output, op output])
- *   - complex
- *     - handler param -> op param1 -> op param2 -> ... -> op paramN -> continuation -> (handler param, handler output)
- */
+/** @param usage
+  *   the usage of the continuation after this handler is invoked
+  * @param handlerType
+  *   the type of the handler
+  * @param impl
+  *   the handler implementation. The type depends on the continuation usage
+  *   - simple
+  *     - U0: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, handler
+  *       output)
+  *     - U1: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param, op
+  *       output)
+  *     - UAff: handler param -> op param1 -> op param2 -> ... -> op paramN -> (handler param,
+  *       Either[handler output, op output])
+  *   - complex
+  *     - handler param -> op param1 -> op param2 -> ... -> op paramN -> continuation -> (handler
+  *       param, handler output)
+  */
 case class HandlerImpl(continuationUsage: ContinuationUsage, body: CTerm)
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
-  case Type(upperBound: VTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TypeQn)
+  case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    QualifiedNameOwner(TypeQn)
 
   // The idea is that by default all usage declarations in bindings and `F` are 1 (linear) and types
   // determines how they can be used: strict linear types (for example thunks or user declared
@@ -223,9 +241,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
   case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  /** Execute a effect free computation and get the returned value. That is, `cTm` must be of type `F(V, Total()` for
-    * some value type `V`. This VTerm construct is used to embed effect free computations into values so that the type
-    * theory is as expressive as typical dependent type theory.
+  /** Execute a effect free computation and get the returned value. That is, `cTm` must be of type
+    * `F(V, Total()` for some value type `V`. This VTerm construct is used to embed effect free
+    * computations into values so that the type theory is as expressive as typical dependent type
+    * theory.
     */
   case Collapse(cTm: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -243,36 +262,47 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case DataType(qn: QualifiedName, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(qn)
-  case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case Con(name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
 
   // Note, `upper` here is in the sense of typing subsumption, not the usage lattice. This is the
   // lower bound in the usage lattice. Hence Option.None is used to represent unbounded case, as the
   // lattice is not bounded below. Note that the semantic of this `upperBound` is different from
   // `continuationUsage`.
-  case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case UsageType(upperBound: Option[VTerm] = None)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
   case UsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-  case UsageProd(operands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands)
+  case UsageProd(operands: Set[VTerm])(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    UsageCompound(operands)
   case UsageSum(operands: Multiset[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     UsageCompound(operands.keySet)
-  case UsageJoin(operands: Set[VTerm])(using sourceInfo: SourceInfo) extends VTerm(sourceInfo), UsageCompound(operands)
+  case UsageJoin(operands: Set[VTerm])(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    UsageCompound(operands)
   case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
   // It's possible to introduce `EqDecidabilityJoin` that signifies the decidability of some compound data consisting of
   // multiple pieces of data, each of which has some parameterized decidability. However, such a construct does not seem
   // to increase expressiveness because eqDecidability can only take two values and user can always just declare a
   // single eqDecidability parameter and use this single parameter to constrain other parameters.
-  case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
+  case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
 
   /** @param continuationUsage
-    *   see ContinuationUsage for explanation. The reason that we need this part to be a term instead of a literal usage
-    *   is because this part needs to participate in usage tracking of following computations (aka continuation). Having
-    *   a first-class value here makes definitions parametric in continuation usage.
+    *   see ContinuationUsage for explanation. The reason that we need this part to be a term
+    *   instead of a literal usage is because this part needs to participate in usage tracking of
+    *   following computations (aka continuation). Having a first-class value here makes definitions
+    *   parametric in continuation usage.
     * @param controlMode
     *   see ContinuationUsage for explanation
     * @param sourceInfo
     */
   case EffectsType
-    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny), controlMode: HandlerType = HandlerType.Complex)
+    (
+      continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny),
+      controlMode: HandlerType = HandlerType.Complex,
+    )
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
@@ -280,30 +310,37 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     )
 
   case Effects
-    (literal: Set[Eff], unionOperands: Map[VTerm, /* whether to filter out complex effects */ Boolean])
+    (
+      literal: Set[Eff],
+      unionOperands: Map[VTerm, /* whether to filter out complex effects */ Boolean],
+    )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   case LevelType(upperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(LevelQn)
 
-  case Level(literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
+  case Level
+    (literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is replaced with
-    * `Collapse(Application...(Meta(...)))` and solved through meta-variable unification.
+  /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
+    * replaced with `Collapse(Application...(Meta(...)))` and solved through meta-variable
+    * unification.
     */
   case Auto()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  // Note: during development, I once had devoted constructs for heap handler, alloc, set, and get operations. But they
-  // are entirely redundant because one can just use a linear piece of data as the storage and do the same with the
-  // general handler. In addition, the heap key concept is arbitrary and it can actually be substitued with a simple
-  // nat instead. The previous heap handler basically does two things under the hood: heap allocation and using it.
-  // Since the old implementation actually allocates stuff on the heap, the allocation part is non-deterministic. So
-  // one either has to make the type checker to do some hard work to prevent the heap variable from being leaked or
-  // just add a non-deterministc effect to all heap handler creations. By simulating heap hander with general handler,
-  // the heap allocation (aka, heap key generation) can be a separate step. It can even be deterministically created so
-  // that a total computation can rely on mutable states under the hood.
+  // Note: during development, I once had devoted constructs for heap handler, alloc, set, and get
+  // operations. But they are entirely redundant because one can just use a linear piece of data as
+  // the storage and do the same with the general handler. In addition, the heap key concept is
+  // arbitrary and it can actually be substitued with a simple nat instead. The previous heap
+  // handler basically does two things under the hood: heap allocation and using it. Since the old
+  // implementation actually allocates stuff on the heap, the allocation part is non-deterministic.
+  // So one either has to make the type checker to do some hard work to prevent the heap variable
+  // from being leaked or just add a non-deterministc effect to all heap handler creations. By
+  // simulating heap hander with general handler, the heap allocation (aka, heap key generation) can
+  // be a separate step. It can even be deterministically created so that a total computation can
+  // rely on mutable states under the hood.
 
   this match
     case UsageJoin(operands) if operands.isEmpty =>
@@ -316,26 +353,27 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     given SourceInfo = sourceInfo
 
     this match
-      case Type(upperBound)                            => Type(upperBound)
-      case Top(l, eqD)                                 => Top(l, eqD)
-      case Var(index)                                  => Var(index)
-      case Collapse(cTm)                               => Collapse(cTm)
-      case U(cTy)                                      => U(cTy)
-      case Thunk(c)                                    => Thunk(c)
-      case DataType(qn, args)                          => DataType(qn, args)
-      case Con(name, args)                             => Con(name, args)
-      case UsageType(u)                                => UsageType(u)
-      case UsageLiteral(u)                             => UsageLiteral(u)
-      case UsageProd(operands)                         => UsageProd(operands)
-      case UsageSum(operands)                          => UsageSum(operands)
-      case UsageJoin(operands)                         => UsageJoin(operands)
-      case EqDecidabilityType()                        => EqDecidabilityType()
-      case EqDecidabilityLiteral(eqD)                  => EqDecidabilityLiteral(eqD)
-      case EffectsType(continuationUsage, controlMode) => EffectsType(continuationUsage, controlMode)
-      case Effects(literal, unionOperands)             => Effects(literal, unionOperands)
-      case LevelType(upperBound)                       => LevelType(upperBound)
-      case Level(literal, maxOperands)                 => Level(literal, maxOperands)
-      case Auto()                                      => Auto()
+      case Type(upperBound)           => Type(upperBound)
+      case Top(l, eqD)                => Top(l, eqD)
+      case Var(index)                 => Var(index)
+      case Collapse(cTm)              => Collapse(cTm)
+      case U(cTy)                     => U(cTy)
+      case Thunk(c)                   => Thunk(c)
+      case DataType(qn, args)         => DataType(qn, args)
+      case Con(name, args)            => Con(name, args)
+      case UsageType(u)               => UsageType(u)
+      case UsageLiteral(u)            => UsageLiteral(u)
+      case UsageProd(operands)        => UsageProd(operands)
+      case UsageSum(operands)         => UsageSum(operands)
+      case UsageJoin(operands)        => UsageJoin(operands)
+      case EqDecidabilityType()       => EqDecidabilityType()
+      case EqDecidabilityLiteral(eqD) => EqDecidabilityLiteral(eqD)
+      case EffectsType(continuationUsage, controlMode) =>
+        EffectsType(continuationUsage, controlMode)
+      case Effects(literal, unionOperands) => Effects(literal, unionOperands)
+      case LevelType(upperBound)           => LevelType(upperBound)
+      case Level(literal, maxOperands)     => Level(literal, maxOperands)
+      case Auto()                          => Auto()
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
     visitor.visitVTerm(this)
@@ -399,16 +437,16 @@ object VTerm:
   val uRel = VTerm.UsageLiteral(Usage.URel)
   val uAny = VTerm.UsageLiteral(Usage.UAny)
 
-  /** Marker of a computation that surely diverges. Computation with this effect will not be executed by the type
-    * checker.
+  /** Marker of a computation that surely diverges. Computation with this effect will not be
+    * executed by the type checker.
     */
   def Div()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.DivQn, Nil), (Builtins.MaybeDivQn, Nil)),
   )
 
-  /** Marker of a computation that may or may not diverge. Computation with this effect will be further checked by
-    * statically at callsite (with additional information available) to ensure it's total before executed by the type
-    * checker.
+  /** Marker of a computation that may or may not diverge. Computation with this effect will be
+    * further checked by statically at callsite (with additional information available) to ensure
+    * it's total before executed by the type checker.
     */
   def MaybeDiv()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
     Set((Builtins.MaybeDivQn, Nil)),
@@ -437,15 +475,16 @@ sealed trait IType:
   def effects: VTerm
 
 enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
-  /** Used in stack machine to represent the computations above the computation term containing this. For example, `f a
-    * b` converted to the stack machine becomes
+  /** Used in stack machine to represent the computations above the computation term containing
+    * this. For example, `f a b` converted to the stack machine becomes
     *   - f
     *   - Application(Hole, a)
     *   - Application(Hole, b)
     */
   case Hole extends CTerm(SiEmpty)
 
-  /** Internal only, created by reduction. This is used to signify the tip of a captured continuation term.
+  /** Internal only, created by reduction. This is used to signify the tip of a captured
+    * continuation term.
     */
   case CapturedContinuationTip(ty: F) extends CTerm(SiEmpty)
 
@@ -457,12 +496,13 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case CTop(level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo),
-    IType
+  case CTop
+    (level: VTerm, effects: VTerm = VTerm.Total()(using SiEmpty))
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  /** Represents either a metavariable or a guarded constant in [2]. This is always created during type checking and
-    * user-term won't include this. Rather, user terms should contain `Auto` where needed.
+  /** Represents either a metavariable or a guarded constant in [2]. This is always created during
+    * type checking and user-term won't include this. Rather, user terms should contain `Auto` where
+    * needed.
     */
   case Meta(index: Nat)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
   case Def(qn: QualifiedName)(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
@@ -502,15 +542,16 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   //     return. Since computations are always linear, this means clet has little flexibility in
   //     terms of resource counting. For example, `plus_1` can only be linear.
 
-  case Redex(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
+  case Redex(t: CTerm, elims: List[Elimination[VTerm]])(using sourceInfo: SourceInfo)
+    extends CTerm(sourceInfo)
 
   /** archon.builtin.Function */
   case FunctionType
     (
       binding: Binding[VTerm],
       bodyTy: CTerm, /* binding offset = 1 */
-      /** effects that needed for getting the function of this type. The effects caused by function application is
-        * tracked by the `bodyTy`.
+      /** effects that needed for getting the function of this type. The effects caused by function
+        * application is tracked by the `bodyTy`.
         */
       effects: VTerm = VTerm.Total()(using SiEmpty),
     )
@@ -530,52 +571,60 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   /** Internal only. This is only created by reduction.
     *
     * @param continuationTerm
-    *   a term with a hole at the top. This is equivalent to the captured stack between the matching handler (inclusive)
-    *   and the computation right after the corresopnding handler operation (the tip of the stack, which must be a term
-    *   of type `ContinuationHole`.)
+    *   a term with a hole at the top. This is equivalent to the captured stack between the matching
+    *   handler (inclusive) and the computation right after the corresopnding handler operation (the
+    *   tip of the stack, which must be a term of type `ContinuationHole`.)
     */
   case Continuation(continuationTerm: Handler, continuationUsage: Usage) extends CTerm(SiEmpty)
 
   /** @param eff
-    *   Handle general term here instead of a single effect. During type checking it will fail if this term is not
-    *   convertible to a effect literal. The ability to handle multiple effects is useful when one needs to use a linear
-    *   resource (as parameter to the handler) with multiple effects.
+    *   Handle general term here instead of a single effect. During type checking it will fail if
+    *   this term is not convertible to a effect literal. The ability to handle multiple effects is
+    *   useful when one needs to use a linear resource (as parameter to the handler) with multiple
+    *   effects.
     * @param otherEffects
     *   the effect of the input term without effects being handled by this handler
     * @param outputEffects
-    *   otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and operation handler
-    *   implementations. This is the effect of each operation handler implementation. This is also the effect of the
-    *   resume, dispose, and replicate (strictly speaking the latter two would never perform any complex effects but
-    *   capturing this in the type system would require adding another filtering operation on effects based on control
-    *   mode and that seems to have little benefits as far as I can see) calls on continuations captured inside handlers
-    *   implementations. This is also the effect in the type of the curret handler being defined.
+    *   otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and
+    *   operation handler implementations. This is the effect of each operation handler
+    *   implementation. This is also the effect of the resume, dispose, and replicate (strictly
+    *   speaking the latter two would never perform any complex effects but capturing this in the
+    *   type system would require adding another filtering operation on effects based on control
+    *   mode and that seems to have little benefits as far as I can see) calls on continuations
+    *   captured inside handlers implementations. This is also the effect in the type of the curret
+    *   handler being defined.
     * @param outputUsage
-    *   the usage of the output of the handler. This is also the usage of the resume call on continuations captured
-    *   inside handler implementations. This is also the usage of the final returned value in each operation handler
-    *   implementation.
+    *   the usage of the output of the handler. This is also the usage of the resume call on
+    *   continuations captured inside handler implementations. This is also the usage of the final
+    *   returned value in each operation handler implementation.
     * @param outputTy
-    *   the type of the output of the handler. This is also the type of the resume call on continuations captured inside
-    *   handler implementations. This is also the type of the final returned value in each operation handler.
+    *   the type of the output of the handler. This is also the type of the resume call on
+    *   continuations captured inside handler implementations. This is also the type of the final
+    *   returned value in each operation handler.
     * @param parameter
     * @param parameterBinding
     * @param parameterDisposer
-    *   This is invoked by Continuation.dispose on continuations created by parent handlers or this handler. In other
-    *   words, it's to clean up the parameter when computation under this handler decides to abort (by calling some
-    *   aborting operation). Therefore, it's not needed if the inputEffects have continuation usage URel or U1 (which
-    *   means the handler will never need to be aborted) or if the parameter usage is U0, UAff, or UAny (which means the
-    *   parameter does not need to be explicitly cleaned up).
+    *   This is invoked by Continuation.dispose on continuations created by parent handlers or this
+    *   handler. In other words, it's to clean up the parameter when computation under this handler
+    *   decides to abort (by calling some aborting operation). Therefore, it's not needed if the
+    *   inputEffects have continuation usage URel or U1 (which means the handler will never need to
+    *   be aborted) or if the parameter usage is U0, UAff, or UAny (which means the parameter does
+    *   not need to be explicitly cleaned up).
     * @param parameterReplicator
-    *   This is invoked by Continuation.replicate on continuations created by parent handlers or this handler. In other
-    *   words, it's to replicate the parameter when computation under this handler features non-deterministic behavior
-    *   (by calling some non-deterministic operation). Therefore, it's not needed if the inputEffects have continuation
-    *   usage UAff or U1 (which means the handler is never non-deterministic) or if the parameter usage is U0, URel or
-    *   UAny (which means the parameter does not need to be explicitly replicated).
+    *   This is invoked by Continuation.replicate on continuations created by parent handlers or
+    *   this handler. In other words, it's to replicate the parameter when computation under this
+    *   handler features non-deterministic behavior (by calling some non-deterministic operation).
+    *   Therefore, it's not needed if the inputEffects have continuation usage UAff or U1 (which
+    *   means the handler is never non-deterministic) or if the parameter usage is U0, URel or UAny
+    *   (which means the parameter does not need to be explicitly replicated).
     * @param transform
-    *   The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to `outputType`. for cases
-    *   where `outputType` equals `F(someEffects, inputBinding.ty)`, a sensible default value is simply `return (var 0)`
+    *   The transformer that transforms a var at DeBruijn index 0 of type `inputBinding.ty` to
+    *   `outputType`. for cases where `outputType` equals `F(someEffects, inputBinding.ty)`, a
+    *   sensible default value is simply `return (var 0)`
     * @param handlers
-    *   All handler implementations declared by the effect. Each handler is essentially a function body that takes some
-    *   parameters and return a value, depending on the continuation usage of the operation.
+    *   All handler implementations declared by the effect. Each handler is essentially a function
+    *   body that takes some parameters and return a value, depending on the continuation usage of
+    *   the operation.
     *   - simple
     *     - parameters
     *       - handler parameter
@@ -583,13 +632,14 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *     - returns
     *       - (if u1) pair of handler parameter and the output type declared in the operation
     *       - (if u0) pair of handler parameter and the output of the handler
-    *       - (if uAff) pair of handler parameter and either the output of the handler (aka abort) or the type declared
-    *         in the operation (aka resume)
+    *       - (if uAff) pair of handler parameter and either the output of the handler (aka abort)
+    *         or the type declared in the operation (aka resume)
     *   - complex
     *     - parameters
     *       - handler parameter
     *       - all parameters declared in the operation
-    *       - a continuation taking in a `declared operation output type -> outputType` and outputs `outputType`
+    *       - a continuation taking in a `declared operation output type -> outputType` and outputs
+    *         `outputType`
     *     - returns
     *       - output type matching the handler output
     * @param input
@@ -609,7 +659,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
-      handlers: Map[/* name identifying an effect operation */ QualifiedName, HandlerImpl],
+      handlers: Map[ /* name identifying an effect operation */ QualifiedName, HandlerImpl],
       input: CTerm,
       inputBinding: Binding[VTerm],
     )

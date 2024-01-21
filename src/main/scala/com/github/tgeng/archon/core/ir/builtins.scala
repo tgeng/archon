@@ -1,13 +1,12 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.common.QualifiedName.*
+import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
-import QualifiedName.*
-import VTerm.*
-import Essentiality.*
-import Declaration.*
-import scala.annotation.meta.param
 import java.util.prefs.PreferenceChangeListener
+import scala.annotation.meta.param
 
 private case class SimpleSignature
   (
@@ -56,74 +55,74 @@ private case class SimpleSignature
 
 object Builtins:
 
-  val BuiltinType = Builtin / "type"
+  val BuiltinType: QualifiedName = Builtin / "type"
 
-  val TypeQn = BuiltinType / "Type"
-  val SubtypeOfQn = BuiltinType / "SubtypeOf"
-  val TopQn = BuiltinType / "Top"
+  val TypeQn: QualifiedName = BuiltinType / "Type"
+  val SubtypeOfQn: QualifiedName = BuiltinType / "SubtypeOf"
+  val TopQn: QualifiedName = BuiltinType / "Top"
 
-  val CTypeQn = BuiltinType / "CType"
-  val CSubtypeOfQn = BuiltinType / "CSubtypeOf"
-  val CTopQn = BuiltinType / "CTop"
+  val CTypeQn: QualifiedName = BuiltinType / "CType"
+  val CSubtypeOfQn: QualifiedName = BuiltinType / "CSubtypeOf"
+  val CTopQn: QualifiedName = BuiltinType / "CTop"
 
-  val EqDecidabilityQn = BuiltinType / "EqDecidability"
-  val EqDecidableQn = EqDecidabilityQn / "Decidable"
-  val EqUnknownQn = EqDecidabilityQn / "Unknown"
+  val EqDecidabilityQn: QualifiedName = BuiltinType / "EqDecidability"
+  val EqDecidableQn: QualifiedName = EqDecidabilityQn / "Decidable"
+  val EqUnknownQn: QualifiedName = EqDecidabilityQn / "Unknown"
 
-  val EqualityQn = BuiltinType / "Equality"
-  val CellQn = BuiltinType / "Cell"
-  val UCellQn = BuiltinType / "UCell"
-  val EffectsQn = BuiltinType / "Effects"
-  val LevelQn = BuiltinType / "Level"
+  val EqualityQn: QualifiedName = BuiltinType / "Equality"
+  val CellQn: QualifiedName = BuiltinType / "Cell"
+  val UCellQn: QualifiedName = BuiltinType / "UCell"
+  val EffectsQn: QualifiedName = BuiltinType / "Effects"
+  val LevelQn: QualifiedName = BuiltinType / "Level"
 
-  val UsageQn = BuiltinType / "Usage"
+  val UsageQn: QualifiedName = BuiltinType / "Usage"
 
-  val UnitQn = BuiltinType / "Unit"
-  val MkUnitQn = UnitQn / "MkUnit"
+  val UnitQn: QualifiedName = BuiltinType / "Unit"
+  val MkUnitQn: QualifiedName = UnitQn / "MkUnit"
 
-  val PairQn = BuiltinType / "Pair"
-  val MkPairQn = PairQn / "MkPair"
+  val PairQn: QualifiedName = BuiltinType / "Pair"
+  val MkPairQn: QualifiedName = PairQn / "MkPair"
 
-  val EitherQn = BuiltinType / "Either"
-  val LeftQn = EitherQn / "Left"
-  val RightQn = EitherQn / "Right"
+  val EitherQn: QualifiedName = BuiltinType / "Either"
+  val LeftQn: QualifiedName = EitherQn / "Left"
+  val RightQn: QualifiedName = EitherQn / "Right"
 
-  val ContinuationQn = BuiltinType / "Continuation"
-  val ResumeQn = ContinuationQn / "resume"
-  val DisposeQn = ContinuationQn / "dispose"
-  val ReplicateQn = ContinuationQn / "replicate"
+  val ContinuationQn: QualifiedName = BuiltinType / "Continuation"
+  val ResumeQn: QualifiedName = ContinuationQn / "resume"
+  val DisposeQn: QualifiedName = ContinuationQn / "dispose"
+  val ReplicateQn: QualifiedName = ContinuationQn / "replicate"
 
-  val BuiltinEffects = Builtin / "effects"
-  val HeapEffQn = BuiltinEffects / "heap"
-  val AllocOpQn = HeapEffQn / "alloc"
-  val GetOpQn = HeapEffQn / "get"
-  val SetOpQn = HeapEffQn / "set"
-  val GlobalHeapKeyQn = HeapEffQn / "global"
-  val EffectsUnionQn = BuiltinEffects / "union"
-  val TotalQn = BuiltinEffects / "total"
-  val DivQn = BuiltinEffects / "div"
-  val MaybeDivQn = BuiltinEffects / "mdiv"
+  val BuiltinEffects: QualifiedName = Builtin / "effects"
+  val HeapEffQn: QualifiedName = BuiltinEffects / "heap"
+  val AllocOpQn: QualifiedName = HeapEffQn / "alloc"
+  val GetOpQn: QualifiedName = HeapEffQn / "get"
+  val SetOpQn: QualifiedName = HeapEffQn / "set"
+  val GlobalHeapKeyQn: QualifiedName = HeapEffQn / "global"
+  val EffectsUnionQn: QualifiedName = BuiltinEffects / "union"
+  val TotalQn: QualifiedName = BuiltinEffects / "total"
+  val DivQn: QualifiedName = BuiltinEffects / "div"
+  val MaybeDivQn: QualifiedName = BuiltinEffects / "mdiv"
 
-  val BuiltinLevel = Builtin / "level"
-  val LevelSucQn = BuiltinLevel / "suc"
-  val LevelMaxQn = BuiltinLevel / "max"
+  val BuiltinLevel: QualifiedName = Builtin / "level"
+  val LevelSucQn: QualifiedName = BuiltinLevel / "suc"
+  val LevelMaxQn: QualifiedName = BuiltinLevel / "max"
 
   private val PredicateQn = BuiltinType / "predicate"
   private val UsagePredicateQn = PredicateQn / "usage"
-  val IsDisposableQn = UsagePredicateQn / "IsDisposable"
-  val IsReplicableQn = UsagePredicateQn / "IsReplicable"
-  val IsResumableQn = UsagePredicateQn / "IsResumable"
+  val IsDisposableQn: QualifiedName = UsagePredicateQn / "IsDisposable"
+  val IsReplicableQn: QualifiedName = UsagePredicateQn / "IsReplicable"
+  val IsResumableQn: QualifiedName = UsagePredicateQn / "IsResumable"
 
   def Σ(using ctx: TypingContext): Signature = elaborateAll(builtins)(using SimpleSignature())
 
-  import PreDeclaration.*
   import CTerm.*
-  import VTerm.*
-  import CoPattern.*
-  import Pattern.*
-  import Usage.*
-  import EqDecidability.*
   import CaseTree.*
+  import CoPattern.*
+  import EqDecidability.*
+  import Pattern.*
+  import PreDeclaration.*
+  import Usage.*
+  import VTerm.*
 
   private def binding(name: Name, ty: VTerm, usage: VTerm = UsageLiteral(U1)): Binding[CTerm] =
     Binding(Return(ty, uAny), Return(usage, uAny))(name)
@@ -180,8 +179,14 @@ object Builtins:
       ),
       ty = F(Type(Top(Var(5), Var(4)))),
       constructors = List(
-        PreConstructor(n"Left", FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(4, 2))))),
-        PreConstructor(n"Right", FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(4, 2))))),
+        PreConstructor(
+          n"Left",
+          FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(4, 2)))),
+        ),
+        PreConstructor(
+          n"Right",
+          FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(4, 2)))),
+        ),
       ),
     ),
     PreData(IsDisposableQn)(
@@ -392,8 +397,8 @@ object Builtins:
       ),
     ),
 
-    /** CSubtypeOf (level : LevelType) (effects: EffectsType) (upperBound : U(CType(CTop(level, effects)))) :
-      * CType(CType(.force upperBound, effects))
+    /** CSubtypeOf (level : LevelType) (effects: EffectsType) (upperBound : U(CType(CTop(level,
+      * effects)))) : CType(CType(.force upperBound, effects))
       *
       * {} |- := CType(.force upperBound, effects)
       */

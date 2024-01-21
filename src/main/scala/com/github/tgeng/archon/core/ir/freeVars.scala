@@ -1,23 +1,14 @@
 package com.github.tgeng.archon.core.ir
 
-import collection.mutable
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import QualifiedName.*
-import SourceInfo.*
-import EqDecidability.*
-import Usage.*
-import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
-import VTerm.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
 trait FreeVarsVisitorTrait extends Visitor[Nat, Seq[Var]]:
 
-  import VTerm.*
-  import CTerm.*
-
   override def withBindings
     (bindingNames: => List[Name])
-    (action: Nat ?=> (Seq[Var]))
+    (action: Nat ?=> Seq[Var])
     (using bar: Nat)
     (using Σ: Signature)
     : Seq[Var] =

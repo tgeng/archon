@@ -2,8 +2,7 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-
-import SourceInfo.*
+import com.github.tgeng.archon.core.ir.SourceInfo.*
 
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
@@ -12,16 +11,13 @@ enum Variance:
     case COVARIANT     => CONTRAVARIANT
     case CONTRAVARIANT => COVARIANT
 
-enum Essentiality:
-  case ESSENTIAL, AUXILIARY
-
 type TContext = collection.IndexedSeq[(Binding[VTerm], Variance)]
 
 given SourceInfo = SiEmpty
 
 enum Declaration:
   case Data
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val tParamTys: TContext,
       /* binding + tParamTys */
@@ -32,43 +28,44 @@ enum Declaration:
       val inherentEqDecidability: VTerm,
     )
   case Record
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val tParamTys: TContext = IndexedSeq(),
       val level: VTerm, // binding + tParamTys
       val selfBinding: Binding[VTerm],
     )
-  case Definition(val qn: QualifiedName)(val ty: CTerm)
+  case Definition(qn: QualifiedName)(val ty: CTerm)
 
-  /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest `U` are not allowed.
-    * This is necessary because type-based handler matching needs a "simple" way to efficiently locate the corresponding
-    * handler. Arbitrary logic that can happen during conversion would make it very difficult to implement dynamic
-    * handlers efficiently. Also note that this means we also need to conservatively reject `tParamTys` like `[A: Type,
-    * a: A]` because there is no way to statically know if `A` could be `U`. In addition, this also rules out any data
-    * type that wraps non-eqDecidable computation inside.
+  /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest
+    * `U` are not allowed. This is necessary because type-based handler matching needs a "simple"
+    * way to efficiently locate the corresponding handler. Arbitrary logic that can happen during
+    * conversion would make it very difficult to implement dynamic handlers efficiently. Also note
+    * that this means we also need to conservatively reject `tParamTys` like `[A: Type, a: A]`
+    * because there is no way to statically know if `A` could be `U`. In addition, this also rules
+    * out any data type that wraps non-eqDecidable computation inside.
     */
   case Effect
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val tParamTys: Context = IndexedSeq(),
-      /** This value must be the join of the continuation usages of all operations. If control mode is simple, this
-        * effect is a simple effect. Otherwise it's a complex effect.
+      /** This value must be the join of the continuation usages of all operations. If control mode
+        * is simple, this effect is a simple effect. Otherwise it's a complex effect.
         */
       val continuationUsage: ContinuationUsage,
     )
 
   def qn: QualifiedName
 
-import Declaration.*
+import com.github.tgeng.archon.core.ir.Declaration.*
 
 case class Constructor
   (
     name: Name,
     paramTys: Telescope = Nil, /* + tParamTys */
-    /** Arguments passed to the data type constructor. The length should be identical with `tIndexTys`. Hence, for
-      * non-indexed type this should just be `Nil`. For indexed families, the argument here can be any expressions. For
-      * example, for `Vec (A: Type) : (n: Nat) -> Type`, this would be [0] for constructor `Nil` and `[n + 1]` for
-      * constructor `Cons`.
+    /** Arguments passed to the data type constructor. The length should be identical with
+      * `tIndexTys`. Hence, for non-indexed type this should just be `Nil`. For indexed families,
+      * the argument here can be any expressions. For example, for `Vec (A: Type) : (n: Nat) ->
+      * Type`, this would be [0] for constructor `Nil` and `[n + 1]` for constructor `Cons`.
       */
     tArgs: Arguments = Nil, /* + tParamTys + paramTys */
   )

@@ -47,7 +47,8 @@ trait ExpirableCache[K, V, F] {
   def load(key: K, fingerprint: F): V
 }
 
-class SingleLoadingExpirableCache[K, V, F](loadingFn: (key: K) => (V, F)) extends ExpirableCache[K, V, F] {
+class SingleLoadingExpirableCache[K, V, F](loadingFn: (key: K) => (V, F))
+  extends ExpirableCache[K, V, F] {
   private val cache = SingleLoadingCache[K, (V, F)] { k => Some(loadingFn(k)) }
   override def load(key: K, fingerprint: F) = {
     cache.load(key) match {

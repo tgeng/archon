@@ -114,7 +114,8 @@ private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
     .map {
       _.partitionMap { prod =>
         if prod.isEmpty then Right(Usage.U1)
-        else if prod.size == 1 && prod.head.isInstanceOf[Usage] then Right(prod.head.asInstanceOf[Usage])
+        else if prod.size == 1 && prod.head.isInstanceOf[Usage] then
+          Right(prod.head.asInstanceOf[Usage])
         else Left(prod)
       }
     }
@@ -146,9 +147,8 @@ private def uSumNormalize[T](sum: Iterable[UProd[T]]): USum[T] =
   val r = sum
     .map {
       _.partitionMap {
-        _ match
-          case u: Usage => Right(u)
-          case t        => Left(t.asInstanceOf[T | Usage])
+        case u: Usage => Right(u)
+        case t        => Left(t.asInstanceOf[T | Usage])
       }
     }
     .groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U1)(_ * _))(_ + _)

@@ -1,19 +1,18 @@
 package com.github.tgeng.archon.core.ir
 
-import collection.mutable
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.DelimitPolicy.*
+import com.github.tgeng.archon.common.IndentPolicy.*
+import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
-import collection.immutable.{Map, Set}
+import com.github.tgeng.archon.core.common.Name.*
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.CoPattern.*
+import com.github.tgeng.archon.core.ir.Pattern.*
+import com.github.tgeng.archon.core.ir.VTerm.*
+import com.github.tgeng.archon.core.ir.Variance.*
 
-import WrapPolicy.*
-import IndentPolicy.*
-import DelimitPolicy.*
-import Name.*
-import Variance.*
-import CoPattern.*
-import Pattern.*
-import VTerm.*
-import CTerm.*
+import scala.collection.mutable
 
 private class RenamerContext:
   val nameStack = mutable.ArrayBuffer[Ref[Name]]()
@@ -93,7 +92,7 @@ enum PPrintPrecedence extends Ordered[PPrintPrecedence]:
   override def compare(that: PPrintPrecedence): Int =
     this.ordinal.compareTo(that.ordinal)
 
-import PPrintPrecedence.*
+import com.github.tgeng.archon.core.ir.PPrintPrecedence.*
 
 class PPrintContext
   (
@@ -128,7 +127,11 @@ object PPrintContext:
   )
 
 object PrettyPrinter extends Visitor[PPrintContext, Block]:
-  def pprint(tm: VTerm | CTerm | List[Binding[VTerm]])(using Γ: Context)(using Σ: Signature): Block = tm match
+  def pprint
+    (tm: VTerm | CTerm | List[Binding[VTerm]])
+    (using Γ: Context)
+    (using Σ: Signature)
+    : Block = tm match
     case tm: VTerm =>
       Renamer.rename(tm)
       visitVTerm(tm)(using PPrintContext(Γ))
@@ -200,12 +203,20 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     },
   )
 
-  override def visitPreContext(telescope: List[Binding[CTerm]])(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitPreContext
+    (telescope: List[Binding[CTerm]])
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     bracketAndComma(
       telescopeToBlock(telescope, _.name)(visitPreBinding),
     )
 
-  override def visitTelescope(telescope: List[Binding[VTerm]])(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitTelescope
+    (telescope: List[Binding[VTerm]])
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     bracketAndComma(
       telescopeToBlock(telescope, _.name)(visitBinding),
     )
@@ -222,7 +233,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         telescopeToBlock(rest, nameExtractor)(toBlock)
       }
 
-  override def visitPreBinding(binding: Binding[CTerm])(using PPrintContext)(using Signature): Block =
+  override def visitPreBinding
+    (binding: Binding[CTerm])
+    (using PPrintContext)
+    (using Signature)
+    : Block =
     binding.name.value match
       case Unreferenced => Block(binding.ty)
       case n            => Block(n, ":", binding.ty)
@@ -236,13 +251,21 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     ctx.resolve(pVar.idx).value.toString,
   )
 
-  override def visitPDataType(pDataType: PDataType)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitPDataType
+    (pDataType: PDataType)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     bracketAndSpace(
       pDataType.qn,
       pDataType.args.map(visitPattern),
     )
 
-  override def visitPForcedDataType(pDataType: PForcedDataType)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitPForcedDataType
+    (pDataType: PForcedDataType)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     bracketAndSpace(
       Block("." + pDataType.qn.shortName),
       pDataType.args.map(visitPattern),
@@ -254,7 +277,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block("()")
 
-  override def visitCProjection(p: CProjection)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitCProjection
+    (p: CProjection)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     Block(Concat, "#", p.name)
 
   override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
@@ -276,7 +303,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitVar(v: Var)(using ctx: PPrintContext)(using Σ: Signature): Block =
     Block(ctx.resolve(v.idx).value.toString)
 
-  override def visitCollapse(collapse: Collapse)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitCollapse
+    (collapse: Collapse)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     app(".collapse", collapse.cTm)
 
   override def visitU(u: U)(using ctx: PPrintContext)(using Σ: Signature): Block = app("U", u.cTy)
@@ -284,7 +315,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitThunk(thunk: Thunk)(using ctx: PPrintContext)(using Σ: Signature): Block =
     app(".thunk", thunk.c)
 
-  override def visitDataType(dataType: DataType)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitDataType
+    (dataType: DataType)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     bracketAndSpace(dataType.qn, dataType.args.map(visitVTerm))
 
   override def visitCon(con: Con)(using ctx: PPrintContext)(using Σ: Signature): Block =

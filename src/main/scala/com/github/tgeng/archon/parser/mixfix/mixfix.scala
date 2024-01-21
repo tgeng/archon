@@ -14,8 +14,9 @@ enum Fixity:
   case Infix(val associativity: Associativity)
   case Postfix
 
-  /** Note that an operator of this fixity should have at least one hole inside, for example `[_]`. In other words,
-    * atoms like `myVariable` should not be represented as an operator but simply an [[MixfixAst.Identifier]] instead.
+  /** Note that an operator of this fixity should have at least one hole inside, for example `[_]`.
+    * In other words, atoms like `myVariable` should not be represented as an operator but simply an
+    * [[MixfixAst.Identifier]] instead.
     */
   case Closed
 
@@ -42,8 +43,8 @@ object Operator:
     nameParts.foreach(namePart => assert(namePart.nonEmpty))
     new Operator(qualifiedName, fixity, nameParts)
 
-/** Operators in neighbor nodes binds tighter than operators in this node. Note that there must not be cycles.
-  * Implementation should be immutable.
+/** Operators in neighbor nodes binds tighter than operators in this node. Note that there must not
+  * be cycles. Implementation should be immutable.
   */
 trait PrecedenceNode:
   def operators: Map[Fixity, Seq[Operator]]
@@ -133,7 +134,8 @@ def trimGraph(g: PrecedenceGraph, nameParts: Set[String]): PrecedenceGraph =
 
       override def toString: String = operators.head.toString + "->" + operators
 
-  for (oldNode, newNode) <- nodeMap do newPrecedenceMap(newNode) = oldNode.neighbors.filter(isNodeRelevant).map(nodeMap)
+  for (oldNode, newNode) <- nodeMap do
+    newPrecedenceMap(newNode) = oldNode.neighbors.filter(isNodeRelevant).map(nodeMap)
   g.flatMap(nodeMap.lift).toSeq
 
 def createMixfixParserImpl[N, M[
@@ -272,7 +274,9 @@ def createMixfixParserImpl[N, M[
         ).map(Identifier.apply),
     )
 
-  def between[T](p: => ParserT[N, T, M], nameParts: Seq[Seq[String]]): ParserT[N, (List[T], List[List[N]]), M] =
+  def between[T]
+    (p: => ParserT[N, T, M], nameParts: Seq[Seq[String]])
+    : ParserT[N, (List[T], List[List[N]]), M] =
     nameParts match
       case Nil => throw IllegalArgumentException()
       case firstName :: names =>

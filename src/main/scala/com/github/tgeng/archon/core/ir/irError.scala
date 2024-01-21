@@ -1,10 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
-import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
-import com.github.tgeng.archon.parser.mixfix.PrecedenceGraphBuilder.Precedence
-import com.github.tgeng.archon.core.ir.UnificationResult
 
 enum IrError extends Exception:
   case CannotFindCTypeUnion(a: CTerm, b: CTerm)
@@ -13,7 +10,8 @@ enum IrError extends Exception:
   case CollapsingU0Term(ctm: CTerm)
   case CyclicDeclarations(cycle: Seq[(DeclarationPart, PreDeclaration)])
   case EffectTermTooComplex(term: VTerm)
-  case EffectfulCTermAsType(ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
+  case EffectfulCTermAsType
+    (ty: CTerm) // type of `ty` is some `CType` such that `cty.effects != Total`
   case ExepctSimpleEffects(effects: VTerm)
   case ExpectCType(cTy: CTerm)
   case ExpectDataType(ty: VTerm, qn: Option[QualifiedName] = None)
@@ -26,7 +24,8 @@ enum IrError extends Exception:
   case ExpectUType(vTy: VTerm)
   case ExpectUnrestrictedTypeParameterBinding(binding: Binding[VTerm])
   case ExpectVType(vTy: VTerm)
-  case HandlerOperationsMismatch(handler: CTerm.Handler, expected: Set[QualifiedName], actual: Set[QualifiedName])
+  case HandlerOperationsMismatch
+    (handler: CTerm.Handler, expected: Set[QualifiedName], actual: Set[QualifiedName])
   case HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(hanlder: CTerm.Handler)
   case IllegalVarianceInData(qn: QualifiedName, violatingVars: collection.Seq[VTerm.Var])
   case IllegalVarianceInRecord(qn: QualifiedName, violatingVars: collection.Seq[VTerm.Var])
@@ -56,7 +55,8 @@ enum IrError extends Exception:
   case NotEffectConvertible(sub: VTerm, sup: VTerm)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm)
   case NotEqDecidabilitySubsumption(sub: VTerm, sup: VTerm)
-  case NotEqDecidableDueToConstructor(qn: QualifiedName, conName: Name, badBindings: Seq[Binding[VTerm]])
+  case NotEqDecidableDueToConstructor
+    (qn: QualifiedName, conName: Name, badBindings: Seq[Binding[VTerm]])
   case NotEqDecidableType(ty: VTerm)
   case NotLevelConvertible(sub: VTerm, sup: VTerm)
   case NotLevelSubsumption(sub: VTerm, sup: VTerm)

@@ -11,29 +11,33 @@ trait DeBruijn[T]:
 
 given DeBruijnVTerm: DeBruijn[VTerm] with
   override def fromIndex(index: Nat): VTerm = VTerm.Var(index)
-  override def weaken(v: VTerm, amount: Nat, bar: Nat)(using Signature) = v.weaken(amount, bar)
+  override def weaken(v: VTerm, amount: Nat, bar: Nat)(using Signature): VTerm =
+    v.weaken(amount, bar)
 
-  override def subst(v: VTerm, s: Substitutor[VTerm])(using Signature) = v.subst(s)
+  override def subst(v: VTerm, s: Substitutor[VTerm])(using Signature): VTerm = v.subst(s)
 
 given DeBruijnPattern: DeBruijn[Pattern] with
   override def fromIndex(index: Nat): Pattern = Pattern.PVar(index)
-  override def weaken(p: Pattern, amount: Nat, bar: Nat)(using Signature) = p.weaken(amount, bar)
+  override def weaken(p: Pattern, amount: Nat, bar: Nat)(using Signature): Pattern =
+    p.weaken(amount, bar)
 
-  override def subst(p: Pattern, s: Substitutor[Pattern])(using Signature) = p.subst(s)
+  override def subst(p: Pattern, s: Substitutor[Pattern])(using Signature): Pattern = p.subst(s)
 
-/** Local references are represented as DeBruijn indices so `var 0` points to the right most entry in the context. In
-  * this setting, a "trivial" mapping should map `var (sourceContextSize - 1)` to the first var in target context
-  * (DeBruijn index targetContextSize - 1). [[nonTrivialMapping]] contains the mapping of the last variables in the
-  * target context. If target context is longer than source context, then [[nonTrivialMapping]] must account for this
-  * gap. In addition, it may go beyond this gap to account for more mapping. To an extreme, [[nonTrivialMapping]] can
-  * have size [[targetContextSize]], in which case all the mappings are explicitly specified.
+/** Local references are represented as DeBruijn indices so `var 0` points to the right most entry
+  * in the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)` to
+  * the first var in target context (DeBruijn index targetContextSize - 1). [[nonTrivialMapping]]
+  * contains the mapping of the last variables in the target context. If target context is longer
+  * than source context, then [[nonTrivialMapping]] must account for this gap. In addition, it may
+  * go beyond this gap to account for more mapping. To an extreme, [[nonTrivialMapping]] can have
+  * size [[targetContextSize]], in which case all the mappings are explicitly specified.
   */
 class Substitutor[T: DeBruijn]
   (
     val sourceContextSize: Nat,
     val targetContextSize: Nat,
-    /** nonTrivialMapping[0] corresponds to Var(0) in target context. That is, for example, if sourceContextSize == 5,
-      * targetContextSize == 7 and nonTrivialMapping = [a, b, c], then the fully spelled out substitutor is
+    /** nonTrivialMapping[0] corresponds to Var(0) in target context. That is, for example, if
+      * sourceContextSize == 5, targetContextSize == 7 and nonTrivialMapping = [a, b, c], then the
+      * fully spelled out substitutor is
       *
       * ```
       * indices: 6       5       4       3       2  1  0
@@ -53,8 +57,8 @@ class Substitutor[T: DeBruijn]
     summon[DeBruijn[T]].fromIndex(index)
 
   /** @param boundIndex
-    *   up to how many DeBruijn indices in the target context that materialization should happen. Default value makes
-    *   materialization happens fully
+    *   up to how many DeBruijn indices in the target context that materialization should happen.
+    *   Default value makes materialization happens fully
     */
   private def materialize(boundIndex: Nat = targetContextSize): Unit =
     if nonTrivialMapping.length == boundIndex then return
@@ -87,7 +91,8 @@ class Substitutor[T: DeBruijn]
 
   infix def remove(index: Nat): Substitutor[T] =
     materialize(index)
-    if nonTrivialMapping.length == index then Substitutor(sourceContextSize, targetContextSize - 1, nonTrivialMapping)
+    if nonTrivialMapping.length == index then
+      Substitutor(sourceContextSize, targetContextSize - 1, nonTrivialMapping)
     else
       Substitutor(
         sourceContextSize,
@@ -95,7 +100,7 @@ class Substitutor[T: DeBruijn]
         nonTrivialMapping.patch(index, IndexedSeq.empty, 1),
       )
 
-  infix def add(index: Nat, t: T) =
+  infix def add(index: Nat, t: T): Substitutor[T] =
     materialize(index)
     Substitutor(
       sourceContextSize,

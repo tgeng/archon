@@ -1,26 +1,18 @@
 package com.github.tgeng.archon.core.ir
 
-import scala.util.boundary, boundary.break;
-import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.IndentPolicy.*
+import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.Reducible.reduce
-
-import VTerm.*
-import CTerm.*
-import IrError.*
-import Declaration.*
-import Elimination.*
-import SourceInfo.*
-import Usage.*
-import EqDecidability.*
-import MetaVariable.*
-import PrettyPrinter.pprint
-import WrapPolicy.*
-import IndentPolicy.*
-import DelimitPolicy.*
-import ResolvedMetaVariable.*
-import com.github.tgeng.archon.core.ir.FreeVarsVisitor
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.Elimination.*
+import com.github.tgeng.archon.core.ir.IrError.*
+import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
+import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
+import com.github.tgeng.archon.core.ir.SourceInfo.*
+import com.github.tgeng.archon.core.ir.Usage.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
 // def expectConvertible(target: CTerm, )
 
@@ -33,18 +25,18 @@ def checkIsConvertible
   (left: VTerm, right: VTerm, ty: Option[VTerm])
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext)
+  (using TypingContext)
   : Set[Constraint] = debugConversion(left, right, ty):
   if left == right then Set.empty
   else
     (left.normalized, right.normalized, ty) match
-      case (_, _, _) if left == right                                                   => Set.empty
-      case (Level(literal1, operands1), Level(literal2, operands2), Some(LevelType(_))) =>
+      case (_, _, _) if left == right                                     => Set.empty
+      case (Level(_, operands1), Level(_, operands2), Some(LevelType(_))) =>
         // If meta some component is not reduced yet, we can't check subsumption
-        if operands1.exists((v, _) => isMeta(v)) || operands2.exists(((v, _) => isMeta(v)))
+        if operands1.exists((v, _) => isMeta(v)) || operands2.exists((v, _) => isMeta(v))
         then Set(Constraint.VConversion(Γ, left, right, ty))
         else throw NotVConvertible(left, right, ty)
-      case (Effects(literal1, operands1), Effects(literal2, operands2), Some(EffectsType(_, _))) =>
+      case (Effects(_, operands1), Effects(_, operands2), Some(EffectsType(_, _))) =>
         // If meta some component is not reduced yet, we can't check subsumption
         if operands1.keys.exists(isMeta) || operands2.keys.exists(isMeta)
         then Set(Constraint.VConversion(Γ, left, right, ty))
@@ -90,7 +82,7 @@ def checkIsConvertible
               .zip(args2)
               .zip(data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
               .zipWithIndex
-              .map { case (((arg1, arg2), (binding, variance)), i) =>
+              .map { case (((arg1, arg2), (binding, _)), i) =>
                 checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i): _*)))
               }
               .flatten
@@ -99,7 +91,6 @@ def checkIsConvertible
         Σ.getConstructorOption(qn, name1) match
           case None => throw MissingConstructor(name1, qn)
           case Some(con) =>
-            var args = IndexedSeq[VTerm]()
             args1
               .zip(args2)
               .zip(con.paramTys)
@@ -115,7 +106,7 @@ def checkIsConvertible
       case _                                => throw NotVConvertible(left, right, ty)
 
 /** Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.
-  * @param rawTy
+  * @param ty
   *   optional if left and right are types
   */
 @throws(classOf[IrError])
@@ -155,7 +146,7 @@ def checkIsConvertible
           // If heads are some unsolved meta variable, we can't know for sure that the elims should be the same because
           // the solved meta variables may simply drop whatever eliminations afterwards and hence normalizes to
           // convertible terms.
-          case ((m1, elims1), (m2, elims2)) if m1 == m2 =>
+          case ((m1, _), (m2, _)) if m1 == m2 =>
             Set(Constraint.CConversion(Γ, left, right, ty))
           // However, elim checks on var is approprieate.
           case (Redex(t1 @ Force(v1: Var), elims1), Redex(Force(v2: Var), elims2)) if v1 == v2 =>
@@ -164,11 +155,11 @@ def checkIsConvertible
               case _         => throw IllegalStateException("type error")
           case ((_: RGuarded, _), _) | (_, (_: RGuarded, _)) =>
             Set(Constraint.CConversion(Γ, left, right, ty))
-          case ((u: RUnsolved, elims), t: CTerm)                  => checkRedexIsConvertible(u, elims, t, ty)
-          case (t: CTerm, (u: RUnsolved, elims))                  => checkRedexIsConvertible(u, elims, t, ty)
+          case ((u: RUnsolved, elims), t: CTerm) => checkRedexIsConvertible(u, elims, t, ty)
+          case (t: CTerm, (u: RUnsolved, elims)) => checkRedexIsConvertible(u, elims, t, ty)
           case ((u1: RUnsolved, elims1), (u2: RUnsolved, elims2)) =>
             // This step is to make meta variable delegation deterministic
-            val (uSmall, elimsSmall, uBig, elimsBig) =
+            val (uSmall, _, uBig, _) =
               if u1.index < u2.index
               then (u1, elims1, u2, elims2)
               else (u2, elims2, u1, elims1)
@@ -178,11 +169,16 @@ def checkIsConvertible
                 ctx.adaptForMetaVariable(uBig, uSmall.tm) match
                   case Some(smallTm) => ctx.assignUnsolved(uBig, smallTm)
                   case None          => Set(Constraint.CConversion(Γ, left, right, ty))
-          case (CapturedContinuationTip(ty1), CapturedContinuationTip(ty2)) => checkIsConvertible(ty1, ty2, None)
+          case (CapturedContinuationTip(ty1), CapturedContinuationTip(ty2)) =>
+            checkIsConvertible(ty1, ty2, None)
           case (Return(v1, usage1), Return(v2, usage2)) =>
             ty match
               case Some(F(ty, _, _)) =>
-                checkIsConvertible(usage1, usage2, Some(UsageType())) ++ checkIsConvertible(v1, v2, Some(ty))
+                checkIsConvertible(usage1, usage2, Some(UsageType())) ++ checkIsConvertible(
+                  v1,
+                  v2,
+                  Some(ty),
+                )
               case _ => throw IllegalStateException("should have been checked to be a F type")
           case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
             checkIsConvertible(eff1, eff2, Some(EffectsType())) ++ checkIsConvertible(
@@ -388,8 +384,10 @@ private def checkElimIsConvertible
       headTy match
         case FunctionType(binding, bodyTy, _) =>
           val headConstraints = ctx.solve(checkIsConvertible(left, right, Some(binding.ty)))
-          if headConstraints.isEmpty then checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)
-          else if FreeVarsVisitor.visitCTerm(bodyTy)(using 0).exists(_.idx == 0) then resultConstraint
+          if headConstraints.isEmpty then
+            checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)
+          else if FreeVarsVisitor.visitCTerm(bodyTy)(using 0).exists(_.idx == 0) then
+            resultConstraint
           else
             headConstraints ++ checkElimIsConvertible(
               Application(head, left),

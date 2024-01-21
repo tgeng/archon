@@ -1,27 +1,27 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.DelimitPolicy.*
+import com.github.tgeng.archon.common.IndentPolicy.*
+import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.Elimination.*
+import com.github.tgeng.archon.core.ir.EqDecidability.*
+import com.github.tgeng.archon.core.ir.IrError.*
+import com.github.tgeng.archon.core.ir.MetaVariable.*
+import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.Reducible.reduce
+import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
+import com.github.tgeng.archon.core.ir.SourceInfo.*
+import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
+import com.github.tgeng.archon.core.ir.Usage.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
-import VTerm.*
-import CTerm.*
-import IrError.*
-import Declaration.*
-import Elimination.*
-import SourceInfo.*
-import Usage.*
-import EqDecidability.*
-import MetaVariable.*
-import PrettyPrinter.pprint
-import WrapPolicy.*
-import IndentPolicy.*
-import DelimitPolicy.*
-import UnsolvedMetaVariableConstraint.*
-import ResolvedMetaVariable.*
 import scala.collection.mutable.ArrayBuffer
-import math.Ordering.ordered
+import scala.math.Ordering.ordered
 
 /** Preconditions: sub and sup are both checked to be types
   */
@@ -88,8 +88,11 @@ def checkIsSubtype
           }
           .flatten
           .toSet
-  case (EffectsType(continuationUsage1, handlerType1), EffectsType(continuationUsage2, handlerType2)) =>
-    if (handlerType1 == HandlerType.Simple || handlerType1 == handlerType2) then
+  case (
+      EffectsType(continuationUsage1, handlerType1),
+      EffectsType(continuationUsage2, handlerType2),
+    ) =>
+    if handlerType1 == HandlerType.Simple || handlerType1 == handlerType2 then
       // Note that subsumption checking is reversed because the effect of the computation
       // marks how the continuation can be invoked. Normally, checking usage is checking
       // how a resource is *consumed*. But here, checking usage is checking how the
@@ -211,7 +214,12 @@ def checkIsSubtype
 private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler
 
 @throws(classOf[IrError])
-private def typeUnion(a: CTerm, b: CTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): CTerm =
+private def typeUnion
+  (a: CTerm, b: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : CTerm =
   if a == b then a
   else
     (a, b) match
@@ -229,11 +237,13 @@ private def typeUnion(a: CTerm, b: CTerm)(using Γ: Context)(using Σ: Signature
         val usage = UsageJoin(usage1, usage2).normalized
         F(vty, effects, usage)
       // for simplicity we just treat types at contravariant position as invariant
-      case (FunctionType(binding1, body1, effects1), FunctionType(binding2, body2, effects2)) if binding1 == binding2 =>
+      case (FunctionType(binding1, body1, effects1), FunctionType(binding2, body2, effects2))
+        if binding1 == binding2 =>
         val effects = EffectsUnion(effects1, effects2).normalized
         val body = typeUnion(body1, body2)(using Γ :+ binding1)
         FunctionType(binding1, body, effects)
-      case (r1 @ RecordType(qn1, args1, effects1), r2 @ RecordType(qn2, args2, effects2)) if qn1 == qn2 =>
+      case (r1 @ RecordType(qn1, args1, effects1), r2 @ RecordType(qn2, args2, effects2))
+        if qn1 == qn2 =>
         val record = Σ.getRecord(qn1)
         val effects = EffectsUnion(effects1, effects2).normalized
         val args = args1
@@ -252,8 +262,9 @@ private def typeUnion(a: CTerm, b: CTerm)(using Γ: Context)(using Σ: Signature
       case (a: IType, b: IType) => getCTop(a, b)
       // One may want to treat `Force(Var(...))` to be the upperbound stored in the context corresponding to this
       // variable. But it doesn't seem to matter that much so let's not do that to keep things simple for now.
-      case (_: StuckComputationType, _) | (_, _: StuckComputationType) => throw CannotFindCTypeUnion(a, b)
-      case _                                                           => throw IllegalStateException("type error")
+      case (_: StuckComputationType, _) | (_, _: StuckComputationType) =>
+        throw CannotFindCTypeUnion(a, b)
+      case _ => throw IllegalStateException("type error")
 
 @throws(classOf[IrError])
 private def getCTop
@@ -271,7 +282,12 @@ private def getCTop
 private type StuckValueType = Var | Collapse
 
 @throws(classOf[IrError])
-private def typeUnion(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): VTerm =
+private def typeUnion
+  (a: VTerm, b: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : VTerm =
   if a == b then return a
   (a, b) match
     case (Type(upperBound1), Type(upperBound2)) =>
@@ -299,7 +315,10 @@ private def typeUnion(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature
       else getTop(a, b)
     case (UsageType(_), UsageType(_))                    => UsageType(None)
     case (_: StuckValueType, _) | (_, _: StuckValueType) => throw CannotFindVTypeUnion(a, b)
-    case (EffectsType(continuationUsage1, handlerType1), EffectsType(continuationUsage2, handlerType2)) =>
+    case (
+        EffectsType(continuationUsage1, handlerType1),
+        EffectsType(continuationUsage2, handlerType2),
+      ) =>
       val continuationUsage = UsageJoin(continuationUsage1, continuationUsage2).normalized
       val handlerType = handlerType1 | handlerType2
       EffectsType(continuationUsage, handlerType)
@@ -308,7 +327,12 @@ private def typeUnion(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature
     case _ => throw IllegalStateException("type error")
 
 @throws(classOf[IrError])
-private def getTop(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): VTerm =
+private def getTop
+  (a: VTerm, b: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : VTerm =
   val aLevel = inferLevel(a)
   val aEqDecidability = inferEqDecidability(a)
   val bLevel = inferLevel(b)
@@ -319,7 +343,7 @@ private def getTop(a: VTerm, b: VTerm)(using Γ: Context)(using Σ: Signature)(u
 private def eqDecidabilityJoin(t1: VTerm, t2: VTerm): VTerm =
   (t1, t2) match
     case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
-    case _                                                      => EqDecidabilityLiteral(EqDecidability.EqUnknown)
+    case _ => EqDecidabilityLiteral(EqDecidability.EqUnknown)
 
 @throws(classOf[IrError])
 private def checkEqDecidabilitySubsumption
@@ -328,7 +352,8 @@ private def checkEqDecidabilitySubsumption
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Set[Constraint] = check2(eqD1, eqD2):
-  case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) | (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
+  case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) |
+    (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
     Set.empty
   case (u: RUnsolved, EqDecidabilityLiteral(EqDecidability.EqDecidable)) =>
     ctx.assignUnsolved(u, Return(eqD2, u1))
@@ -339,8 +364,8 @@ private def checkEqDecidabilitySubsumption
   case _ => throw NotEqDecidabilitySubsumption(eqD1, eqD2)
 
 /** @param invert
-  *   useful when checking patterns where the consumed usages are actually provided usages because lhs patterns are
-  *   multiplied by declared usages in function
+  *   useful when checking patterns where the consumed usages are actually provided usages because
+  *   lhs patterns are multiplied by declared usages in function
   */
 @throws(classOf[IrError])
 private def checkUsagesSubsumption
@@ -350,7 +375,7 @@ private def checkUsagesSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] =
   assert(usages.size == Γ.size)
-  (0 until Γ.size)
+  Γ.indices
     .map { i =>
       given Γ2: Context = Γ.take(i)
       val binding = Γ(i)
@@ -413,8 +438,9 @@ def checkUsageSubsumption
             Set.empty
   case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
-      case Some(value) if value == existingUpperBound                      => ctx.assignUnsolved(u, Return(value, u1))
-      case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) => ctx.assignUnsolved(u, Return(value, u1))
+      case Some(value) if value == existingUpperBound => ctx.assignUnsolved(u, Return(value, u1))
+      case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) =>
+        ctx.assignUnsolved(u, Return(value, u1))
       case _ => Set(Constraint.UsageSubsumption(Γ, sub, sup))
   case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
     Set(Constraint.UsageSubsumption(Γ, sub, sup))
@@ -432,13 +458,16 @@ private def checkEffSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = check2(sub, sup):
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
-  case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) => Set.empty
+  case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) =>
+    Set.empty
   // The case where the left hand side contains a meta variable which is the right hand side. In this case, all the
   // other parts on the left should be added as lower bound to the meta variable. This case is useful in solving effects
   // in operation implementations in handlers, where the continuation carries the same type as the final return type of
   // the handler.
-  case (Effects(literal, operands), u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _))
-    if operands.contains(Collapse(tm)) =>
+  case (
+      Effects(literal, operands),
+      u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _),
+    ) if operands.contains(Collapse(tm)) =>
     val otherOperands = operands - Collapse(tm)
     val newLowerBound = c match
       case UmcNothing => Effects(literal, otherOperands)
@@ -451,9 +480,10 @@ private def checkEffSubsumption
       case None => Set(Constraint.EffSubsumption(Γ, sub, sup))
       case Some(value) =>
         val newLowerBound = constraint match
-          case UmcNothing                            => value
-          case UmcEffSubsumption(existingLowerBound) => EffectsUnion(existingLowerBound, value).normalized
-          case _                                     => throw IllegalStateException("type error")
+          case UmcNothing => value
+          case UmcEffSubsumption(existingLowerBound) =>
+            EffectsUnion(existingLowerBound, value).normalized
+          case _ => throw IllegalStateException("type error")
         ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
         Set.empty
   // If upper bound is total, the meta variable can only take total as the value.
@@ -466,8 +496,9 @@ private def checkEffSubsumption
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _                                          => Set(Constraint.EffSubsumption(Γ, sub, sup))
-  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Set(Constraint.EffSubsumption(Γ, sub, sup))
-  case (_, Effects(literals2, unionOperands2))            =>
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
+    Set(Constraint.EffSubsumption(Γ, sub, sup))
+  case (_, Effects(literals2, unionOperands2)) =>
     // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
     val (literals1, unionOperands1) = sub match
       case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
@@ -491,7 +522,10 @@ private def checkEffSubsumption
           val newLowerBound = c match
             case UmcNothing => Effects(spuriousLiterals, spuriousOperands)
             case UmcEffSubsumption(existingLowerBound) =>
-              EffectsUnion(existingLowerBound, Effects(spuriousLiterals, spuriousOperands)).normalized
+              EffectsUnion(
+                existingLowerBound,
+                Effects(spuriousLiterals, spuriousOperands),
+              ).normalized
           ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
           Set.empty
         case _ => throw NotEffectSubsumption(sub, sup)
@@ -529,15 +563,17 @@ private def checkLevelSubsumption
       Set(Constraint.LevelSubsumption(Γ, sub, sup))
     else throw NotLevelSubsumption(sub, sup)
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
-  case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) => Set.empty
+  case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) =>
+    Set.empty
   case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Set(Constraint.LevelSubsumption(Γ, sub, sup))
       case Some(value) =>
         val newLowerBound = constraint match
-          case UmcNothing                              => value
-          case UmcLevelSubsumption(existingLowerBound) => LevelMax(existingLowerBound, value).normalized
-          case _                                       => throw IllegalStateException("type error")
+          case UmcNothing => value
+          case UmcLevelSubsumption(existingLowerBound) =>
+            LevelMax(existingLowerBound, value).normalized
+          case _ => throw IllegalStateException("type error")
         ctx.updateConstraint(u, UmcLevelSubsumption(newLowerBound))
         Set.empty
   // If upper bound is zero, the meta variable can only take zero as the value.
@@ -549,9 +585,10 @@ private def checkLevelSubsumption
   case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
-      case _                                          => Set(Constraint.LevelSubsumption(Γ, sub, sup))
-  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) => Set(Constraint.LevelSubsumption(Γ, sub, sup))
-  case _                                                  => throw NotLevelSubsumption(sub, sup)
+      case _ => Set(Constraint.LevelSubsumption(Γ, sub, sup))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
+    Set(Constraint.LevelSubsumption(Γ, sub, sup))
+  case _ => throw NotLevelSubsumption(sub, sup)
 
 private def getSpurious[T, E: PartialOrdering](sub: Map[T, E], sup: Map[T, E]): Map[T, E] =
   sub.filter { case (operand1, e1) =>

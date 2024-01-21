@@ -101,7 +101,9 @@ class PrecedenceGraphBuilder
             ),
       ),
     )
-    precedenceMap.foreach((k, v) => nodePrecedenceMap(operatorToNodeMap(k)) = v.map(operatorToNodeMap))
+    precedenceMap.foreach((k, v) =>
+      nodePrecedenceMap(operatorToNodeMap(k)) = v.map(operatorToNodeMap),
+    )
     // TODO[P4]: topologically sort this so that lower nodes are visited first. This makes it faster to
     // yield the correct AST with the mixfix parser.
     nodes.keys.toSeq.sortBy(maxIncomingPathLengths).map(operatorToNodeMap)

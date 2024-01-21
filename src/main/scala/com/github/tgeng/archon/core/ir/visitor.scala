@@ -2,20 +2,29 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import CTerm.*
-import VTerm.*
-import Pattern.*
-import CoPattern.*
-import CaseTree.*
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.CaseTree.*
+import com.github.tgeng.archon.core.ir.CoPattern.*
+import com.github.tgeng.archon.core.ir.Pattern.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
 trait Visitor[C, R]:
 
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def withBindings(bindingNames: => Seq[Ref[Name]])(action: C ?=> R)(using ctx: C)(using Σ: Signature): R =
+  def withBindings
+    (bindingNames: => Seq[Ref[Name]])
+    (action: C ?=> R)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     action(using ctx)
 
-  def visitPreTContext(tTelescope: List[(Binding[CTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+  def visitPreTContext
+    (tTelescope: List[(Binding[CTerm], Variance)])
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     tTelescope match
       case Nil => combine()
       case (binding, _) :: rest =>
@@ -26,7 +35,11 @@ trait Visitor[C, R]:
           },
         )
 
-  def visitTContext(tTelescope: List[(Binding[VTerm], Variance)])(using ctx: C)(using Σ: Signature): R =
+  def visitTContext
+    (tTelescope: List[(Binding[VTerm], Variance)])
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     tTelescope match
       case Nil => combine()
       case (binding, _) :: rest =>
@@ -97,7 +110,11 @@ trait Visitor[C, R]:
         pConstructor.args.map(visitPattern): _*,
     )
 
-  def visitPForcedConstructor(pForcedConstructor: PForcedConstructor)(using ctx: C)(using Σ: Signature): R =
+  def visitPForcedConstructor
+    (pForcedConstructor: PForcedConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     combine(
       visitName(pForcedConstructor.name) +:
         pForcedConstructor.args.map(visitPattern): _*,
@@ -243,10 +260,18 @@ trait Visitor[C, R]:
   def visitUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): R =
     combine(usageJoin.operands.toSeq.map(visitVTerm): _*)
 
-  def visitEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)(using ctx: C)(using Σ: Signature): R =
+  def visitEqDecidabilityType
+    (eqDecidabilityType: EqDecidabilityType)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     visitQualifiedName(Builtins.EqDecidabilityQn)
 
-  def visitEqDecidabilityLiteral(eqDecidabilityLiteral: EqDecidabilityLiteral)(using ctx: C)(using Σ: Signature): R =
+  def visitEqDecidabilityLiteral
+    (eqDecidabilityLiteral: EqDecidabilityLiteral)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     eqDecidabilityLiteral.eqDecidability match
       case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
       case EqDecidability.EqUnknown   => visitQualifiedName(Builtins.EqUnknownQn)
@@ -275,7 +300,11 @@ trait Visitor[C, R]:
 
   def visitHole(using ctx: C)(using Σ: Signature): R = combine()
 
-  def visitCapturedContinuationTip(cct: CapturedContinuationTip)(using ctx: C)(using Σ: Signature): R =
+  def visitCapturedContinuationTip
+    (cct: CapturedContinuationTip)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
     visitF(cct.ty)
 
   def visitCType(cType: CType)(using ctx: C)(using Σ: Signature): R =
@@ -416,7 +445,12 @@ trait Visitor[C, R]:
 
 trait Transformer[C]:
 
-  def withBindings[T](bindingNames: => Seq[Ref[Name]])(action: C ?=> T)(using ctx: C)(using Σ: Signature): T =
+  def withBindings[T]
+    (bindingNames: => Seq[Ref[Name]])
+    (action: C ?=> T)
+    (using ctx: C)
+    (using Σ: Signature)
+    : T =
     action(using ctx)
 
   def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
@@ -504,7 +538,11 @@ trait Transformer[C]:
   def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
     PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
 
-  def transformPForcedConstructor(d: PForcedConstructor)(using ctx: C)(using Σ: Signature): Pattern =
+  def transformPForcedConstructor
+    (d: PForcedConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    : Pattern =
     PForcedConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
 
   def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature): Pattern =
@@ -587,7 +625,11 @@ trait Transformer[C]:
     usageJoin.operands.map(transformVTerm),
   )
 
-  def transformEqDecidabilityType(eqDecidabilityType: EqDecidabilityType)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformEqDecidabilityType
+    (eqDecidabilityType: EqDecidabilityType)
+    (using ctx: C)
+    (using Σ: Signature)
+    : VTerm =
     eqDecidabilityType
 
   def transformEqDecidabilityLiteral
@@ -617,7 +659,11 @@ trait Transformer[C]:
 
   def transformHole(using ctx: C)(using Σ: Signature): CTerm = Hole
 
-  def transformCapturedContinuationTip(cct: CapturedContinuationTip)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformCapturedContinuationTip
+    (cct: CapturedContinuationTip)
+    (using ctx: C)
+    (using Σ: Signature)
+    : CTerm =
     CapturedContinuationTip(transformF(cct.ty))
 
   def transformCType(cType: CType)(using ctx: C)(using Σ: Signature): CTerm =
@@ -666,7 +712,11 @@ trait Transformer[C]:
       redex.elims.map(transformElim),
     )(using redex.sourceInfo)
 
-  def transformElim(elim: Elimination[VTerm])(using ctx: C)(using Σ: Signature): Elimination[VTerm] = elim match
+  def transformElim
+    (elim: Elimination[VTerm])
+    (using ctx: C)
+    (using Σ: Signature)
+    : Elimination[VTerm] = elim match
     case Elimination.EProj(n) => Elimination.EProj(transformName(n))(using elim.sourceInfo)
     case Elimination.ETerm(v) => Elimination.ETerm(transformVTerm(v))(using elim.sourceInfo)
 
@@ -689,7 +739,11 @@ trait Transformer[C]:
       transformVTerm(recordType.effects),
     )(using recordType.sourceInfo)
 
-  def transformOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformOperationCall
+    (operationCall: OperationCall)
+    (using ctx: C)
+    (using Σ: Signature)
+    : CTerm =
     OperationCall(
       transformEff(operationCall.eff),
       transformName(operationCall.name),
@@ -736,7 +790,11 @@ trait Transformer[C]:
       handler.handlersBoundNames,
     )(using handler.sourceInfo)
 
-  def transformHandlerImpl(handlerImpl: HandlerImpl)(using ctx: C)(using Σ: Signature): HandlerImpl =
+  def transformHandlerImpl
+    (handlerImpl: HandlerImpl)
+    (using ctx: C)
+    (using Σ: Signature)
+    : HandlerImpl =
     handlerImpl.copy(body = transformCTerm(handlerImpl.body))
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =

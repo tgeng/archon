@@ -1,33 +1,33 @@
-/** This file contains unification used during elboration (aka pattern matching clause elaboration). Meta-variable
-  * unification is done separately in `typing.scala`. The major difference is that unificaiton here creates substitutors
-  * that unifies a `Var` with a concrete terms, while meta-variable unification solves meta-variables in the typing
-  * context.
+/** This file contains unification used during elboration (aka pattern matching clause elaboration).
+  * Meta-variable unification is done separately in `typing.scala`. The major difference is that
+  * unificaiton here creates substitutors that unifies a `Var` with a concrete terms, while
+  * meta-variable unification solves meta-variables in the typing context.
   */
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import scala.math.{min, max}
-import scala.annotation.targetName
-import scala.annotation.compileTimeOnly
-import com.github.tgeng.archon.core.common.Name
+
 import java.awt.PageAttributes.ColorType
+import scala.annotation.{compileTimeOnly, tailrec, targetName}
+import scala.math.{max, min}
 
 enum UnificationFailureType:
   case UfCycle, UfConflict
 
-import UnificationFailureType.*
+import com.github.tgeng.archon.core.ir.UnificationFailureType.*
 
 enum UnificationResult:
   case UYes
     (
-      /** Solution context. This context should be no longer than the source context Γ, which is used during
-        * unification, because some variables should have been unified to terms and hence no longer need to be a
-        * standalone variable.
+      /** Solution context. This context should be no longer than the source context Γ, which is
+        * used during unification, because some variables should have been unified to terms and
+        * hence no longer need to be a standalone variable.
         *
-        * Note that, comparing with [0], our source context Γ does not contain any equality types. Hence, the recovering
-        * substitution τ does not contain any trailing `Refl` terms. This simplifies implementation and usage, but could
-        * be difficult to extend in order to support more sophisticated unification outlined in section 6 of [0].
+        * Note that, comparing with [0], our source context Γ does not contain any equality types.
+        * Hence, the recovering substitution τ does not contain any trailing `Refl` terms. This
+        * simplifies implementation and usage, but could be difficult to extend in order to support
+        * more sophisticated unification outlined in section 6 of [0].
         */
       Δ: Context,
       /** * The solution substitution σ: Δ -> Γ.
@@ -40,27 +40,34 @@ enum UnificationResult:
   case UNo(u: VTerm, v: VTerm, ty: VTerm, failureType: UnificationFailureType)
   case UUndecided(u: VTerm, v: VTerm, ty: VTerm)
 
-import UnificationResult.*
-import VTerm.*
-import CTerm.*
+import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.UnificationResult.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
-/** A syntax-based normalization is used here and hence the type parameter `ty` is only used to determine term types.
-  * Syntax-based normalization is sufficient for our use case because we assume UIP and injective type constructors,
-  * both of which admit straightforward operational semantics. The downsides are
+/** A syntax-based normalization is used here and hence the type parameter `ty` is only used to
+  * determine term types. Syntax-based normalization is sufficient for our use case because we
+  * assume UIP and injective type constructors, both of which admit straightforward operational
+  * semantics. The downsides are
   *
   *   - incompatible with univalence
   *   - incompatible with law of excluded middle and impredictivity
   *
-  * But none of these downsides are important for our propose of making a practical language with efficient operational
-  * semantic.
+  * But none of these downsides are important for our propose of making a practical language with
+  * efficient operational semantic.
   *
-  * In future, it's possible to apply type-driven unification for erased terms and hence the type parameter is retained
-  * here for future extension.
+  * In future, it's possible to apply type-driven unification for erased terms and hence the type
+  * parameter is retained here for future extension.
   *
   * Comparing with [0], this function is finding the unifier from `Γ(e: u ≡_ty v)` to `Δ`.
   */
+@tailrec
 @throws(classOf[IrError])
-def unify(u: VTerm, v: VTerm, ty: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): UnificationResult =
+def unify
+  (u: VTerm, v: VTerm, ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : UnificationResult =
   (u.normalized, v.normalized, ty.normalized) match
     // delete
     case (u, v, _) if u == v => unifyAll(Nil, Nil, Nil)
@@ -169,13 +176,21 @@ private object CycleVisitor
   override def visitU(u: U)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
     super.visitU(u)(using (ctx._1, true))
 
-  override def visitDataType(dataType: DataType)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitDataType
+    (dataType: DataType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
     super.visitDataType(dataType)(using (ctx._1, true))
 
   override def visitCon(con: Con)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
     super.visitCon(con)(using (ctx._1, true))
 
-  override def visitUsageType(usageType: UsageType)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitUsageType
+    (usageType: UsageType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
     super.visitUsageType(usageType)(using (ctx._1, true))
 
   override def visitEqDecidabilityType
@@ -185,7 +200,11 @@ private object CycleVisitor
     : Boolean =
     super.visitEqDecidabilityType(eqDecidabilityType)(using (ctx._1, true))
 
-  override def visitEffectsType(effectsType: EffectsType)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitEffectsType
+    (effectsType: EffectsType)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    : Boolean =
     super.visitEffectsType(effectsType)(using (ctx._1, true))
 
   // visitLevelType and visitHeapType are not needed since Refl does not contain any nested terms.
@@ -194,7 +213,12 @@ private def isCyclic(x: Var, t: VTerm)(using Σ: Signature): Boolean =
   CycleVisitor.visitVTerm(t)(using (x.idx, false))
 
 @throws(classOf[IrError])
-private def solution(x: Var, t: VTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): UnificationResult =
+private def solution
+  (x: Var, t: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using TypingContext)
+  : UnificationResult =
   val (_Γ1, _, _Γ2) = Γ.split(x)
   val Δ = _Γ1 ++ _Γ2.substLowers(t)
   // _Γ1 and _Γ2 part are just identity vars for σ and τ.
@@ -206,10 +230,10 @@ private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.si
   Binding(tys(i).weaken(i, 0), Usage.UAny)(gn"var$i")
 }.toList
 
-/** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`. Note,u̅ and v̅ are at the
-  * same level as the leftmost element of telescope. That is, processing further elements of telescope requires first
-  * substituting left elements of telescope with first value of u̅ (after unification succeeds between first element of
-  * u̅ and v̅).
+/** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`.
+  * Note,u̅ and v̅ are at the same level as the leftmost element of telescope. That is, processing
+  * further elements of telescope requires first substituting left elements of telescope with first
+  * value of u̅ (after unification succeeds between first element of u̅ and v̅).
   */
 @throws(classOf[IrError])
 def unifyAll
@@ -218,7 +242,10 @@ def unifyAll
   (using Σ: Signature)
   (using TypingContext)
   : UnificationResult =
-  infix def compose(u1: UnificationResult, u2: UnificationResult)(using Signature): UnificationResult = (u1, u2) match
+  infix def compose
+    (u1: UnificationResult, u2: UnificationResult)
+    (using Signature)
+    : UnificationResult = (u1, u2) match
     case (UYes(_, σ1, τ1), UYes(_Δ, σ2, τ2)) => UYes(_Δ, σ1 ∘ σ2, τ2 ∘ τ1)
     case (uRes: UNo, _)                      => uRes
     case (_, uRes: UNo)                      => uRes

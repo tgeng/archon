@@ -3,15 +3,13 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
-import Reducible.reduce
-import SourceInfo.*
 
 type PreTContext = List[(Binding[CTerm], Variance)]
 type PreContext = List[Binding[CTerm]]
 
 enum PreDeclaration:
   case PreData
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val tParamTys: PreTContext,
       // This could be a function type that ends with `F Type` for indexed families. In this
@@ -22,7 +20,7 @@ enum PreDeclaration:
       val constructors: List[PreConstructor],
     )
   case PreRecord
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val tParamTys: PreTContext,
       // Unlike data, for record, this `ty` is expected to be a simple computation type.
@@ -33,14 +31,14 @@ enum PreDeclaration:
       val selfName: Name = n"self",
     )
   case PreDefinition
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val paramTys: PreContext,
       val ty: CTerm,
       val clauses: List[PreClause],
     )
   case PreEffect
-    (val qn: QualifiedName)
+    (qn: QualifiedName)
     (
       val tParamTys: PreContext,
       val operations: List[PreOperation],
@@ -48,7 +46,7 @@ enum PreDeclaration:
 
   def qn: QualifiedName
 
-import PreDeclaration.*
+import com.github.tgeng.archon.core.ir.PreDeclaration.*
 
 case class PreConstructor(name: Name, ty: CTerm)
 
