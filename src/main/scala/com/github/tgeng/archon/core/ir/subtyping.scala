@@ -1,21 +1,15 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
-import com.github.tgeng.archon.common.DelimitPolicy.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
-import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.Elimination.*
 import com.github.tgeng.archon.core.ir.EqDecidability.*
 import com.github.tgeng.archon.core.ir.IrError.*
-import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
-import com.github.tgeng.archon.core.ir.Reducible.reduce
 import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
-import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
@@ -33,7 +27,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = check2(sub, sup):
   case (_, _) if sub == sup => Set.empty
-  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Set(Constraint.VSubType(Γ, sub, sup))
       case Some(value) =>
@@ -43,7 +37,7 @@ def checkIsSubtype
           case _                               => throw IllegalStateException("type error")
         ctx.updateConstraint(u, newConstraint)
         Set.empty
-  case (u @ RUnsolved(_, _, UmcVSubtype(existingLowerBound), tm, ty), sup: VTerm) =>
+  case (u @ RUnsolved(_, _, UmcVSubtype(existingLowerBound), _, _), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _                                          => Set(Constraint.VSubType(Γ, sub, sup))
@@ -117,7 +111,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = check2(sub, sup):
   case (_, _) if sub == sup => Set.empty[Constraint]
-  case (sub: CTerm, (u @ RUnsolved(_, _, constraint, tm, ty), Nil)) =>
+  case (sub: CTerm, (u @ RUnsolved(_, _, constraint, _, _), Nil)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Set(Constraint.CSubType(Γ, sub, sup))
       case Some(value) =>
@@ -127,7 +121,7 @@ def checkIsSubtype
           case _                               => throw IllegalStateException("type error")
         ctx.updateConstraint(u, newConstraint)
         Set.empty
-  case ((u @ RUnsolved(_, _, UmcCSubtype(existingLowerBound), tm, ty), Nil), sup: CTerm) =>
+  case ((u @ RUnsolved(_, _, UmcCSubtype(existingLowerBound), _, _), Nil), sup: CTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, value)
       case _                                          => Set(Constraint.CSubType(Γ, sub, sup))
@@ -249,7 +243,7 @@ private def typeUnion
         val args = args1
           .zip(args2)
           .zip(record.tParamTys)
-          .map { case ((arg1, arg2), (binding, variance)) =>
+          .map { case ((arg1, arg2), (_, variance)) =>
             variance match
               case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
               case Variance.INVARIANT | Variance.CONTRAVARIANT =>
@@ -270,7 +264,7 @@ private def typeUnion
 private def getCTop
   (a: CTerm & IType, b: CTerm & IType)
   (using Γ: Context)
-  (using Σ: Signature)
+  (using Signature)
   (using TypingContext)
   : CTerm =
   val aLevel = inferLevel(a)
@@ -303,7 +297,7 @@ private def typeUnion
       val args = args1
         .zip(args2)
         .zip(data.tParamTys)
-        .map { case ((arg1, arg2), (binding, variance)) =>
+        .map { case ((arg1, arg2), (_, variance)) =>
           variance match
             case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
             case Variance.INVARIANT | Variance.CONTRAVARIANT =>
@@ -330,7 +324,7 @@ private def typeUnion
 private def getTop
   (a: VTerm, b: VTerm)
   (using Γ: Context)
-  (using Σ: Signature)
+  (using Signature)
   (using TypingContext)
   : VTerm =
   val aLevel = inferLevel(a)
@@ -351,7 +345,7 @@ private def eqDecidabilityJoin(t1: VTerm, t2: VTerm): VTerm =
 private def checkEqDecidabilitySubsumption
   (eqD1: VTerm, eqD2: VTerm)
   (using Γ: Context)
-  (using Σ: Signature)
+  (using Signature)
   (using ctx: TypingContext)
   : Set[Constraint] = check2(eqD1, eqD2):
   case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) |
@@ -374,7 +368,7 @@ private def checkUsagesSubsumption
   (usages: Usages, invert: Boolean = false)
   (using Γ: Context)
   (using Σ: Signature)
-  (using ctx: TypingContext)
+  (using TypingContext)
   : Set[Constraint] =
   assert(usages.size == Γ.size)
   Γ.indices
@@ -423,7 +417,7 @@ def checkUsageSubsumption
       case UsageType(Some(u1Bound)) =>
         checkUsageSubsumption(u1Bound, UsageLiteral(u2))
       case _ => throw NotUsageSubsumption(sub, sup)
-  case (u @ RUnsolved(_, _, constraint, tm, ty), sup: VTerm) =>
+  case (u @ RUnsolved(_, _, constraint, _, _), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sup) match
       case None => Set(Constraint.UsageSubsumption(Γ, sub, sup))
       case Some(value) =>
@@ -438,7 +432,7 @@ def checkUsageSubsumption
           case _ =>
             ctx.updateConstraint(u, UmcUsageSubsumption(newUpperBound))
             Set.empty
-  case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), tm, ty)) =>
+  case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), _, _)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingUpperBound => ctx.assignUnsolved(u, Return(value, u1))
       case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) =>
@@ -477,7 +471,7 @@ private def checkEffSubsumption
         EffectsUnion(existingLowerBound, Effects(literal, otherOperands)).normalized
     ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
     Set.empty
-  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Set(Constraint.EffSubsumption(Γ, sub, sup))
       case Some(value) =>
@@ -490,11 +484,11 @@ private def checkEffSubsumption
         Set.empty
   // If upper bound is total, the meta variable can only take total as the value.
   case (
-      u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), tm, ty),
+      u @ RUnsolved(_, _, UmcEffSubsumption(_), _, _),
       Effects(literals, operands),
     ) if literals.isEmpty && operands.isEmpty =>
     ctx.assignUnsolved(u, Return(Total(), u1))
-  case (u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
+  case (u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), _, _), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _                                          => Set(Constraint.EffSubsumption(Γ, sub, sup))
@@ -520,7 +514,7 @@ private def checkEffSubsumption
       // effects on the right. This is to accommodate the common use case when type checking handlers, where otherEffects
       // is left out as a meta variable.
       ctx.withMetaResolved(metaOperands2.head):
-        case u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), tm, _) =>
+        case u @ RUnsolved(_, _, c: (UmcEffSubsumption | UmcNothing.type), _, _) =>
           val newLowerBound = c match
             case UmcNothing => Effects(spuriousLiterals, spuriousOperands)
             case UmcEffSubsumption(existingLowerBound) =>
@@ -567,7 +561,7 @@ private def checkLevelSubsumption
   // Handle the special case that the right hand side simply contains the left hand side as an operand.
   case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) =>
     Set.empty
-  case (sub: VTerm, u @ RUnsolved(_, _, constraint, tm, ty)) =>
+  case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
     ctx.adaptForMetaVariable(u, sub) match
       case None => Set(Constraint.LevelSubsumption(Γ, sub, sup))
       case Some(value) =>
@@ -580,11 +574,11 @@ private def checkLevelSubsumption
         Set.empty
   // If upper bound is zero, the meta variable can only take zero as the value.
   case (
-      u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty),
+      u @ RUnsolved(_, _, UmcLevelSubsumption(_), _, _),
       Level(LevelOrder.zero, operands),
     ) if operands.isEmpty =>
     ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, Map()), u1))
-  case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), tm, ty), sup: VTerm) =>
+  case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), _, _), sup: VTerm) =>
     ctx.adaptForMetaVariable(u, sub) match
       case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
       case _ => Set(Constraint.LevelSubsumption(Γ, sub, sup))
@@ -604,7 +598,7 @@ private def check2
   (a: VTerm, b: VTerm)
   (action: (ResolvedMetaVariable | VTerm, ResolvedMetaVariable | VTerm) => Set[Constraint])
   (using Γ: Context)
-  (using Σ: Signature)
+  (using Signature)
   (using ctx: TypingContext)
   : Set[Constraint] =
   if a == b then Set.empty
@@ -622,7 +616,7 @@ private def check2
     ) => Set[Constraint],
   )
   (using Γ: Context)
-  (using Σ: Signature)
+  (using Signature)
   (using ctx: TypingContext)
   : Set[Constraint] =
   if a == b then Set.empty
