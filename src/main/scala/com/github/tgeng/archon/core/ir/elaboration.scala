@@ -743,7 +743,7 @@ private def elaborateHead
     val tParamTys = elaborateContext(effect.tParamTys)
     val e: Effect = Effect(effect.qn)(
       tParamTys,
-      effect.operations.map(_.continuationUsage).foldLeft(ContinuationUsage.CuLinear)(_ | _),
+      effect.operations.map(_.handlerConstraint).foldLeft(HandlerConstraint.CuLinear)(_ | _),
     )
     Σ.addDeclaration(checkEffect(e))
   }
@@ -780,7 +780,7 @@ private def elaborateBody
       given Signature = _Σ
       ctx.trace(s"elaborating operation ${operation.name}") {
         val (paramTys, resultTy, usage) = elaborateTy(operation.ty)
-        val o = Operation(operation.name, operation.continuationUsage, paramTys, resultTy, usage)
+        val o = Operation(operation.name, operation.handlerConstraint, paramTys, resultTy, usage)
         _Σ.addOperation(effect.qn, checkOperation(effect.qn, o))
       }
     }

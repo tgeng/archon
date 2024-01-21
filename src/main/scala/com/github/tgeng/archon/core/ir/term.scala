@@ -112,45 +112,45 @@ enum HandlerType extends Ordered[HandlerType]:
   * Simple operations have an advantage at runtime because compiling it doesn't require CPS
   * transformation.
   */
-case class ContinuationUsage(usage: Usage, handlerType: HandlerType)
-  extends PartiallyOrdered[ContinuationUsage]:
-  infix def |(that: ContinuationUsage): ContinuationUsage =
-    ContinuationUsage(usage | that.usage, handlerType | that.handlerType)
+case class HandlerConstraint(continuationUsage: Usage, handlerType: HandlerType)
+  extends PartiallyOrdered[HandlerConstraint]:
+  infix def |(that: HandlerConstraint): HandlerConstraint =
+    HandlerConstraint(continuationUsage | that.continuationUsage, handlerType | that.handlerType)
 
-  infix def &(that: ContinuationUsage): Option[ContinuationUsage] =
-    usage & that.usage match
-      case Some(u) => Some(ContinuationUsage(u, handlerType & that.handlerType))
+  infix def &(that: HandlerConstraint): Option[HandlerConstraint] =
+    continuationUsage & that.continuationUsage match
+      case Some(u) => Some(HandlerConstraint(u, handlerType & that.handlerType))
       case _       => None
 
-  override def tryCompareTo[B >: ContinuationUsage: AsPartiallyOrdered](that: B): Option[Int] =
+  override def tryCompareTo[B >: HandlerConstraint: AsPartiallyOrdered](that: B): Option[Int] =
     that match
-      case that: ContinuationUsage =>
+      case that: HandlerConstraint =>
         this.handlerType.compare(that.handlerType) match
-          case 0 => this.usage.tryCompareTo(that.usage)
+          case 0 => this.continuationUsage.tryCompareTo(that.continuationUsage)
           case i => Some(i)
       case _ => None
 
-given PartialOrdering[ContinuationUsage] with
-  override def tryCompare(x: ContinuationUsage, y: ContinuationUsage): Option[Int] =
+given PartialOrdering[HandlerConstraint] with
+  override def tryCompare(x: HandlerConstraint, y: HandlerConstraint): Option[Int] =
     x.tryCompareTo(y)
-  override def lteq(x: ContinuationUsage, y: ContinuationUsage): Boolean = x <= y
-  override def lt(x: ContinuationUsage, y: ContinuationUsage): Boolean = x < y
-  override def gteq(x: ContinuationUsage, y: ContinuationUsage): Boolean = x >= y
-  override def gt(x: ContinuationUsage, y: ContinuationUsage): Boolean = x > y
-  override def equiv(x: ContinuationUsage, y: ContinuationUsage): Boolean = x == y
+  override def lteq(x: HandlerConstraint, y: HandlerConstraint): Boolean = x <= y
+  override def lt(x: HandlerConstraint, y: HandlerConstraint): Boolean = x < y
+  override def gteq(x: HandlerConstraint, y: HandlerConstraint): Boolean = x >= y
+  override def gt(x: HandlerConstraint, y: HandlerConstraint): Boolean = x > y
+  override def equiv(x: HandlerConstraint, y: HandlerConstraint): Boolean = x == y
 
-object ContinuationUsage:
+object HandlerConstraint:
   import HandlerType.*
-  val CuAny: ContinuationUsage = ContinuationUsage(Usage.UAny, Complex)
-  val CuRel: ContinuationUsage = ContinuationUsage(Usage.URel, Complex)
-  val CuAff: ContinuationUsage = ContinuationUsage(Usage.UAff, Complex)
-  val Cu1: ContinuationUsage = ContinuationUsage(Usage.U1, Complex)
-  val Cu0: ContinuationUsage = ContinuationUsage(Usage.U1, Complex)
-  val CuSimple: ContinuationUsage = ContinuationUsage(Usage.UAff, Simple)
-  val CuException: ContinuationUsage = ContinuationUsage(Usage.U0, Simple)
-  val CuLinear: ContinuationUsage = ContinuationUsage(Usage.U0, Simple)
+  val CuAny: HandlerConstraint = HandlerConstraint(Usage.UAny, Complex)
+  val CuRel: HandlerConstraint = HandlerConstraint(Usage.URel, Complex)
+  val CuAff: HandlerConstraint = HandlerConstraint(Usage.UAff, Complex)
+  val Cu1: HandlerConstraint = HandlerConstraint(Usage.U1, Complex)
+  val Cu0: HandlerConstraint = HandlerConstraint(Usage.U1, Complex)
+  val CuSimple: HandlerConstraint = HandlerConstraint(Usage.UAff, Simple)
+  val CuException: HandlerConstraint = HandlerConstraint(Usage.U0, Simple)
+  val CuLinear: HandlerConstraint = HandlerConstraint(Usage.U0, Simple)
 
-import com.github.tgeng.archon.core.ir.ContinuationUsage.*
+import com.github.tgeng.archon.core.ir.HandlerConstraint.*
 
 enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
   case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
@@ -213,7 +213,7 @@ sealed trait UsageCompound(val distinctOperands: Set[VTerm])
   *     - handler param -> op param1 -> op param2 -> ... -> op paramN -> continuation -> (handler
   *       param, handler output)
   */
-case class HandlerImpl(continuationUsage: ContinuationUsage, body: CTerm)
+case class HandlerImpl(handlerConstraint: HandlerConstraint, body: CTerm)
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
@@ -295,13 +295,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   instead of a literal usage is because this part needs to participate in usage tracking of
     *   following computations (aka continuation). Having a first-class value here makes definitions
     *   parametric in continuation usage.
-    * @param controlMode
+    * @param handlerType
     *   see ContinuationUsage for explanation
     */
   case EffectsType
     (
       continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny),
-      controlMode: HandlerType = HandlerType.Complex,
+      handlerType: HandlerType = HandlerType.Complex,
     )
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
@@ -370,8 +370,8 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
       case HandlerTypeType()               => HandlerTypeType()
       case HandlerTypeLiteral(handlerType) => HandlerTypeLiteral(handlerType)
-      case EffectsType(continuationUsage, controlMode) =>
-        EffectsType(continuationUsage, controlMode)
+      case EffectsType(continuationUsage, handlerType) =>
+        EffectsType(continuationUsage, handlerType)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
       case LevelType(upperBound)           => LevelType(upperBound)
       case Level(literal, maxOperands)     => Level(literal, maxOperands)

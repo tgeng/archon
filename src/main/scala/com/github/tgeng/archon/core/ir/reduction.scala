@@ -247,12 +247,12 @@ private final class StackMachine
             val operation = Σ.getOperation(effQn, name)
             val restoredHandlerEntry = this.currentHandlerEntry
             this.currentHandlerEntry = matchingHandler.previous
-            run(handlerImpl.continuationUsage match
-              case ContinuationUsage(usage, HandlerType.Simple) =>
+            run(handlerImpl.handlerConstraint match
+              case HandlerConstraint(usage, HandlerType.Simple) =>
                 preConstructedTerm = Some(reconstructTermFromStack(pc))
                 stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
                 handlerImpl.body.substLowers(handler.parameter :: args: _*)
-              case ContinuationUsage(continuationUsage, HandlerType.Complex) =>
+              case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
                 val allOperationArgs = effArgs ++ args
                 val tip = CapturedContinuationTip(
                   F(
@@ -743,6 +743,6 @@ private def processStackEntryForDisposerCall
   )
 
 private def joinContinuationUsages[K]
-  (m1: IterableOnce[(K, ContinuationUsage)], m2: IterableOnce[(K, ContinuationUsage)])
-  : Map[K, ContinuationUsage] =
+  (m1: IterableOnce[(K, HandlerConstraint)], m2: IterableOnce[(K, HandlerConstraint)])
+  : Map[K, HandlerConstraint] =
   (m1.iterator.to(Seq) ++ m2).groupMapReduce(_._1)(_._2)(_ | _)

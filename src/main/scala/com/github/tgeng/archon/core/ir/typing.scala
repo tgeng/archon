@@ -914,10 +914,10 @@ def inferType
         (newTm, LevelType(newTm), usages)
       case Auto() => throw IllegalArgumentException("cannot infer type")
 
-def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): ContinuationUsage =
+def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): HandlerConstraint =
   effs
     .map { (qn, _) => Σ.getEffect(qn).continuationUsage }
-    .foldLeft(ContinuationUsage.Cu1) { _ | _ }
+    .foldLeft(HandlerConstraint.Cu1) { _ | _ }
 
 @throws(classOf[IrError])
 def checkType
@@ -1602,7 +1602,7 @@ def checkHandler
   // operation. Hopefully this limitation is not a big deal in practice.
   val simpleExceptionalOperations = operations
     .filter((_, _, operation) =>
-      operation.continuationUsage.handlerType == HandlerType.Simple && operation.continuationUsage.usage != Usage.U1,
+      operation.continuationUsage.handlerType == HandlerType.Simple && operation.continuationUsage.continuationUsage != Usage.U1,
     )
   if simpleExceptionalOperations.nonEmpty then
     ctx.checkSolved(
@@ -1675,7 +1675,7 @@ def checkHandler
     val resultTy = operation.resultTy.substLowers(effArgs: _*)
     val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
     val (newHandlerImpl, usages) = operation.continuationUsage match
-      case ContinuationUsage(usage, HandlerType.Simple) =>
+      case HandlerConstraint(usage, HandlerType.Simple) =>
         given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val implOffset = implΓ.size - Γ.size
         val uncheckedImplTy = usage match
@@ -1754,7 +1754,7 @@ def checkHandler
           NotEffectSubsumption(effects, implOutputEffects),
         )
         (handlerImpl.copy(body = body), usages)
-      case ContinuationUsage(continuationUsage, HandlerType.Complex) =>
+      case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
         given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val continuationWeakenOffset = continuationΓ.size - Γ.size
         val continuationParameterTy = parameterTy.weaken(continuationWeakenOffset, 0)
@@ -1826,7 +1826,7 @@ private def getEffectsContinuationUsage
   val usage = ctx.withMetaResolved(effects.normalized):
     case Effects(literal, operands) =>
       val literalUsages = literal.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
-        Σ.getEffect(qn).continuationUsage.usage | acc
+        Σ.getEffect(qn).continuationUsage.continuationUsage | acc
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)
       UsageJoin(usages + UsageLiteral(literalUsages))
