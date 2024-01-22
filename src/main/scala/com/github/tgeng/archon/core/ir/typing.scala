@@ -8,6 +8,7 @@ import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
 import com.github.tgeng.archon.core.ir.Elimination.*
 import com.github.tgeng.archon.core.ir.EqDecidability.*
+import com.github.tgeng.archon.core.ir.HandlerType.Simple
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
@@ -47,6 +48,7 @@ enum Constraint:
   case LevelSubsumption(context: Context, sub: VTerm, sup: VTerm)
   case UsageSubsumption(context: Context, sub: VTerm, sup: VTerm)
   case EqDecidabilitySubsumption(context: Context, sub: VTerm, sup: VTerm)
+  case HandlerTypeSubsumption(context: Context, sub: VTerm, sup: VTerm)
 
 enum UnsolvedMetaVariableConstraint:
   case UmcNothing
@@ -392,6 +394,7 @@ class TypingContext
         case Constraint.LevelSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
         case Constraint.UsageSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
         case Constraint.EqDecidabilitySubsumption(_, sub, sup) => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.HandlerTypeSubsumption(_, sub, sup)    => visitVTerm(sub) ++ visitVTerm(sup)
       }
 
   @throws(classOf[IrError])
@@ -417,6 +420,8 @@ class TypingContext
           result ++= checkUsageSubsumption(sub, sup)(using context)
         case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
           result ++= checkEqDecidabilitySubsumption(sub, sup)(using context)
+        case Constraint.HandlerTypeSubsumption(context, sub, sup) =>
+          result ++= checkHandlerTypeSubsumption(sub, sup)(using context)
     result.toSet
 
   @throws(classOf[IrError])
@@ -716,7 +721,10 @@ def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effe
     val telescope = checkParameterTyDeclarations(effect.tParamTys.toTelescope)
     checkTParamsAreUnrestricted(telescope)
     checkAreEqDecidableTypes(telescope)
-    Effect(effect.qn)(telescope.reverse.toIndexedSeq, effect.continuationUsage)
+    val Γ = telescope.reverse.toIndexedSeq
+    val (continuationUsage, _) = checkType(effect.continuationUsage, UsageType())(using Γ)
+    val (handlerType, _) = checkType(effect.handlerType, HandlerTypeType())(using Γ)
+    Effect(effect.qn)(Γ, continuationUsage, handlerType)
   }
 
 @throws(classOf[IrError])
@@ -745,7 +753,7 @@ private def checkTParamsAreUnrestricted
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Unit = tParamTys match
-  case Nil => Right(())
+  case Nil =>
   case binding :: rest =>
     val constarints = ctx.solve(checkUsageSubsumption(binding.usage, UsageLiteral(UAny)))
     if constarints.nonEmpty then throw ExpectUnrestrictedTypeParameterBinding(binding)
@@ -881,7 +889,11 @@ def inferType
       case eqD: EqDecidabilityLiteral       => (eqD, EqDecidabilityType(), Usages.zero)
       case handlerTypeType: HandlerTypeType => (handlerTypeType, Type(handlerTypeType), Usages.zero)
       case handlerType: HandlerTypeLiteral  => (handlerType, HandlerTypeType(), Usages.zero)
-      case e: EffectsType                   => (e, Type(e), Usages.zero)
+      case EffectsType(continuationUsage, handlerType) =>
+        val (checkedContinuationUsage, u1) = checkType(continuationUsage, UsageType())
+        val (checkedHandlerType, u2) = checkType(handlerType, HandlerTypeType())
+        val e = EffectsType(checkedContinuationUsage, checkedHandlerType)
+        (e, Type(e), u1 + u2)
       case Effects(uncheckedLiteral, checkedOperands) =>
         val (literal, literalUsages) = transposeCheckTypeResults(
           uncheckedLiteral.map { (qn, args) =>
@@ -913,11 +925,6 @@ def inferType
         val newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
         (newTm, LevelType(newTm), usages)
       case Auto() => throw IllegalArgumentException("cannot infer type")
-
-def getLiteralEffectsContinuationUsage(effs: Set[Eff])(using Σ: Signature): HandlerConstraint =
-  effs
-    .map { (qn, _) => Σ.getEffect(qn).continuationUsage }
-    .foldLeft(HandlerConstraint.Cu1) { _ | _ }
 
 @throws(classOf[IrError])
 def checkType
@@ -1573,10 +1580,10 @@ def checkHandler
     case Effects(effs, s) if s.isEmpty => effs
     case _                             => throw EffectTermTooComplex(eff)
   val operations = effs.flatMap(e => Σ.getOperations(e._1).map(op => (e._1 / op.name, e._2, op)))
-  val expectedOperatonNames = operations.map(_._1)
+  val expectedOperationNames = operations.map(_._1)
   val actualOperationNames = h.handlers.keySet
-  if expectedOperatonNames != actualOperationNames then
-    throw HandlerOperationsMismatch(h, expectedOperatonNames, actualOperationNames)
+  if expectedOperationNames != actualOperationNames then
+    throw HandlerOperationsMismatch(h, expectedOperationNames, actualOperationNames)
   val otherEffects = checkType(h.otherEffects, EffectsType())._1.normalized
   val outputEffects = checkType(h.outputEffects, EffectsType())._1.normalized
   val outputUsage = checkType(h.outputUsage, UsageType())._1.normalized
@@ -1591,24 +1598,6 @@ def checkHandler
   val (parameterTy, _) = checkIsType(h.parameterBinding.ty)
   // parameter binding usage dictates how much resources the handler needs when consuming the parameter
   val (parameterBindingUsage, _) = checkType(h.parameterBinding.usage, UsageType())
-  // TODO[P0]: remove this check. Instead, require parameter disposer, replicator, and simple operations to have
-  //  simple linear effects only. That is, ban exceptions from them.
-  // If the handler implements some simple exceptional operation, then this operation may throw an exception, which
-  // would trigger disposers of all handlers above the current handler, which, in turn, may call operations on this
-  // handler again. But this is problematic if the parameter disallows multiple usages (aka, it's linear or affine)
-  // because the current operation is consuming the parameter already, which means another call to an operation of
-  // this handler should not be allowed.
-  // This issue is solved by requiring parameter to be URel or UAny if the handler implements any simple exceptional
-  // operation. Hopefully this limitation is not a big deal in practice.
-  val simpleExceptionalOperations = operations
-    .filter((_, _, operation) =>
-      operation.continuationUsage.handlerType == HandlerType.Simple && operation.continuationUsage.continuationUsage != Usage.U1,
-    )
-  if simpleExceptionalOperations.nonEmpty then
-    ctx.checkSolved(
-      checkUsageSubsumption(parameterBindingUsage, uRel),
-      HandlerParameterMustBeURelOrUAnyIfHandlerImplementsSimpleExceptions(h),
-    )
   val parameterBinding = Binding(parameterTy, parameterBindingUsage)(h.parameterBinding.name)
   val (parameter, rawParameterUsages) = checkType(h.parameter, parameterTy)
   val parameterUsages = rawParameterUsages * parameterBindingUsage
@@ -1619,18 +1608,18 @@ def checkHandler
   val inputBinding = Binding(inputTy, inputBindingUsage)(h.inputBinding.name)
   val inputEffects = EffectsUnion(eff, otherEffects).normalized
   val (input, inputUsages) = checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
-  val inputEffectsContinuaionUsage = getEffectsContinuationUsage(inputEffects)
+  val inputEffectsContinuationUsage = getEffectsContinuationUsage(inputEffects)
   val (parameterDisposer, parameterDisposerUsages) = h.parameterDisposer match
     case Some(parameterDisposer) =>
       val (checkedParameterDisposer, parameterDisposerUsages) = checkType(
         parameterDisposer,
-        F(DataType(Builtins.UnitQn, Nil), outputEffects.weakened),
+        F(DataType(Builtins.UnitQn, Nil), EffectsRetainSimpleLinear(outputEffects).weakened),
       )(using Γ :+ parameterBinding)
       val verifiedParameterDisposerUsages =
         verifyUsages(parameterDisposerUsages, parameterBinding :: Nil)
       (Some(checkedParameterDisposer), verifiedParameterDisposerUsages)
     case None =>
-      (inputEffectsContinuaionUsage, parameterBindingUsage) match
+      (inputEffectsContinuationUsage, parameterBindingUsage) match
         case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
           if effUsage <= Usage.URel || paramUsage >= Usage.U0 =>
           (None, Usages.zero)
@@ -1651,14 +1640,14 @@ def checkHandler
               parameterTy,
             ),
           ),
-          outputEffects,
+          EffectsRetainSimpleLinear(outputEffects),
         ).weakened,
       )(using Γ :+ parameterBinding)
       val verifiedParameterReplicatorUsages =
         verifyUsages(parameterReplicatorUsages, parameterBinding :: Nil)
       (Some(checkedParameterReplicator), verifiedParameterReplicatorUsages)
     case None =>
-      (inputEffectsContinuaionUsage, parameterBindingUsage) match
+      (inputEffectsContinuationUsage, parameterBindingUsage) match
         case (UsageLiteral(effUsage), UsageLiteral(paramUsage))
           if effUsage <= Usage.UAff || paramUsage >= Usage.URel || paramUsage == Usage.U0 =>
           (None, Usages.zero)
@@ -1667,18 +1656,30 @@ def checkHandler
     h.transform,
     F(outputTy, outputEffects, outputUsage).weaken(2, 0),
   )(using Γ :+ parameterBinding :+ inputBinding)
+
   val handlerAndUsages = operations.map { (qn, effArgs, operation) =>
+    val effect = Σ.getEffect(qn.parent)
     val handlerImpl = h.handlers(qn)
+    checkHandlerTypeSubsumption(
+      HandlerTypeLiteral(handlerImpl.handlerConstraint.handlerType),
+      effect.handlerType.substLowers(effArgs: _*),
+    )
+    // Note that usage subsumption check is reversed because this is checking how continuation
+    // can be used by handler.
+    checkUsageSubsumption(
+      effect.continuationUsage.substLowers(effArgs: _*),
+      UsageLiteral(handlerImpl.handlerConstraint.continuationUsage),
+    )
     // The followings do not need to be weakened for handler parameter because after substituting the effect args,
     // they do not contain any free variables beyond beginning of paramTys.
     val paramTys = operation.paramTys.substLowers(effArgs: _*)
     val resultTy = operation.resultTy.substLowers(effArgs: _*)
     val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
-    val (newHandlerImpl, usages) = operation.continuationUsage match
-      case HandlerConstraint(usage, HandlerType.Simple) =>
+    val (newHandlerImpl, usages) = handlerImpl.handlerConstraint match
+      case HandlerConstraint(continuationUsage, HandlerType.Simple) =>
         given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val implOffset = implΓ.size - Γ.size
-        val uncheckedImplTy = usage match
+        val uncheckedImplTy = continuationUsage match
           case U1 =>
             F(
               DataType(
@@ -1742,13 +1743,12 @@ def checkHandler
         val (implTy, _) = checkIsCType(uncheckedImplTy)
         val (body, usages) = checkType(handlerImpl.body, implTy)
         val effects = checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
-        usage match
-          // Simple U1 operation can only perform U1 effects so that linear resources in the contination are
-          // managed correctly.
-          case U1 =>
-            val continuationUsage = getEffectsContinuationUsage(effects)
-            ctx.checkSolved(checkUsageSubsumption(continuationUsage, u1), ExpectU1Effect(qn))
-          case _ =>
+        // Simple operation can only perform U1 effects so that linear resources in the continuation
+        // are managed correctly.
+        ctx.checkSolved(
+          checkUsageSubsumption(getEffectsContinuationUsage(effects), u1),
+          ExpectU1Effect(qn),
+        )
         ctx.checkSolved(
           checkEffSubsumption(effects, implOutputEffects),
           NotEffectSubsumption(effects, implOutputEffects),
@@ -1825,11 +1825,11 @@ private def getEffectsContinuationUsage
   : VTerm =
   val usage = ctx.withMetaResolved(effects.normalized):
     case Effects(literal, operands) =>
-      val literalUsages = literal.foldLeft(Usage.U1) { case (acc, (qn, _)) =>
-        Σ.getEffect(qn).continuationUsage.continuationUsage | acc
+      val literalUsages = literal.map { case (qn, args) =>
+        Σ.getEffect(qn).continuationUsage.substLowers(args: _*)
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)
-      UsageJoin(usages + UsageLiteral(literalUsages))
+      UsageJoin(usages ++ literalUsages)
     case v: Var =>
       Γ.resolve(v).ty match
         case EffectsType(continuationUsage, _) => continuationUsage
@@ -1851,20 +1851,19 @@ private def checkEffectsAreSimple
   val effects = rawEffects.normalized
   ctx.withMetaResolved(effects):
     case Effects(literal, operands) =>
-      if literal.exists { case (qn, _) =>
-          Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Complex
-        }
-      then throw ExpectSimpleEffects(effects)
-      else operands.keySet.map(getEffectsContinuationUsage)
+      literal.foreach { case (qn, _) =>
+        checkHandlerTypeSubsumption(Σ.getEffect(qn).handlerType, VTerm.HandlerTypeLiteral(Simple))
+      }
+      operands.keySet.map(getEffectsContinuationUsage)
     case v: Var =>
       Γ.resolve(v).ty match
-        case EffectsType(_, HandlerType.Simple)  =>
-        case EffectsType(_, HandlerType.Complex) => throw ExpectSimpleEffects(effects)
-        case _                                   => throw IllegalStateException("type error")
+        case EffectsType(_, handlerType) =>
+          checkHandlerTypeSubsumption(handlerType, VTerm.HandlerTypeLiteral(Simple))
+        case _ => throw IllegalStateException("type error")
     case r: ResolvedMetaVariable =>
       r.ty match
-        case F(EffectsType(_, HandlerType.Simple), _, _)  =>
-        case F(EffectsType(_, HandlerType.Complex), _, _) => throw ExpectSimpleEffects(effects)
+        case F(EffectsType(_, handlerType), _, _) =>
+          checkHandlerTypeSubsumption(handlerType, VTerm.HandlerTypeLiteral(Simple))
         case _ => throw IllegalStateException("type error")
     case _ =>
   effects
@@ -1971,15 +1970,6 @@ private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ
     ty match
       case ty: CTerm => ty.strengthened.asInstanceOf[T]
       case ty: VTerm => ty.strengthened.asInstanceOf[T]
-
-// TODO: delete this.
-def allRight[L](es: Iterable[Either[L, ?]]): Either[L, Unit] =
-  es.first {
-    case Left(l) => Some(l)
-    case _       => None
-  } match
-    case Some(l) => Left(l)
-    case _       => Right(())
 
 def isMeta(t: VTerm): Boolean = t match
   case Collapse(Redex(Meta(_), _)) => true

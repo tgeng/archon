@@ -301,7 +301,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case EffectsType
     (
       continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny),
-      handlerType: HandlerType = HandlerType.Complex,
+      handlerType: VTerm = VTerm.HandlerTypeLiteral(HandlerType.Complex),
     )
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
@@ -312,7 +312,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Effects
     (
       literal: Set[Eff],
-      unionOperands: Map[VTerm, /* whether to filter out complex effects */ Boolean],
+      unionOperands: Map[VTerm, /* whether to filter out complex or non-linear effects */ Boolean],
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -463,7 +463,7 @@ object VTerm:
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
     Effects(Set.empty, Map(effects1 -> false, effects2 -> false))
 
-  def EffectsRetainSimple(effects: VTerm): Effects =
+  def EffectsRetainSimpleLinear(effects: VTerm): Effects =
     Effects(Set.empty, Map(effects -> true))
 
   /** @param firstIndex

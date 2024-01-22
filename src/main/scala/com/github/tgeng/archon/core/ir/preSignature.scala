@@ -42,6 +42,8 @@ enum PreDeclaration:
     (
       val tParamTys: PreContext,
       val operations: List[PreOperation],
+      val continuationUsage: CTerm,
+      val handlerType: CTerm,
     )
 
   def qn: QualifiedName
@@ -57,4 +59,4 @@ case class PreClause
     rhs: Option[CTerm], // `None` for absurd pattern
   )
 
-case class PreOperation(name: Name, handlerConstraint: HandlerConstraint, ty: CTerm)
+case class PreOperation(name: Name, ty: CTerm)

@@ -741,9 +741,19 @@ private def elaborateHead
   : Signature =
   ctx.trace(s"elaborating effect signature ${effect.qn}") {
     val tParamTys = elaborateContext(effect.tParamTys)
+    val continuationUsage = checkType(effect.continuationUsage, F(UsageType()))(using tParamTys)._1
+      .normalized(Some(F(UsageType()))) match
+      case Return(continuationUsage, _) => continuationUsage
+      case c                            => throw ExpectReturnAValue(c)
+    val handlerType = checkType(effect.handlerType, F(HandlerTypeType()))(using tParamTys)._1
+      .normalized(Some(F(HandlerTypeType()))) match
+      case Return(handlerType, _) => handlerType
+      case c                      => throw ExpectReturnAValue(c)
+
     val e: Effect = Effect(effect.qn)(
       tParamTys,
-      effect.operations.map(_.handlerConstraint).foldLeft(HandlerConstraint.CuLinear)(_ | _),
+      continuationUsage,
+      handlerType,
     )
     Σ.addDeclaration(checkEffect(e))
   }
@@ -780,7 +790,7 @@ private def elaborateBody
       given Signature = _Σ
       ctx.trace(s"elaborating operation ${operation.name}") {
         val (paramTys, resultTy, usage) = elaborateTy(operation.ty)
-        val o = Operation(operation.name, operation.handlerConstraint, paramTys, resultTy, usage)
+        val o = Operation(operation.name, paramTys, resultTy, usage)
         _Σ.addOperation(effect.qn, checkOperation(effect.qn, o))
       }
     }

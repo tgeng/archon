@@ -45,7 +45,7 @@ import Name.{Generated, *}
 
 enum QualifiedName extends Comparable[QualifiedName]:
   case Root
-  case Node(parent: QualifiedName, name: Name)
+  case Node(override val parent: QualifiedName, name: Name)
 
   override def compareTo(that: QualifiedName): Int = (this, that) match
     case _ if this == that => 0
@@ -70,6 +70,8 @@ enum QualifiedName extends Comparable[QualifiedName]:
   def shortName: Name = this match
     case Root          => throw IllegalArgumentException()
     case Node(_, name) => name
+
+  def parent: QualifiedName = throw IllegalArgumentException()
 
 import QualifiedName.*
 

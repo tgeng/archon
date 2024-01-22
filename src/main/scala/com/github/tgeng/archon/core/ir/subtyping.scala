@@ -7,6 +7,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
 import com.github.tgeng.archon.core.ir.EqDecidability.*
+import com.github.tgeng.archon.core.ir.HandlerType.{Complex, Simple}
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
@@ -86,13 +87,12 @@ def checkIsSubtype
       EffectsType(continuationUsage1, handlerType1),
       EffectsType(continuationUsage2, handlerType2),
     ) =>
-    if handlerType1 == HandlerType.Simple || handlerType1 == handlerType2 then
-      // Note that subsumption checking is reversed because the effect of the computation
-      // marks how the continuation can be invoked. Normally, checking usage is checking
-      // how a resource is *consumed*. But here, checking usage is checking how the
-      // continuation (as a resource) is provided.
-      checkUsageSubsumption(continuationUsage2, continuationUsage1)
-    else throw NotVSubtype(sub, sup)
+    checkHandlerTypeSubsumption(handlerType1, handlerType2)
+    // Note that subsumption checking is reversed because the effect of the computation
+    // marks how the continuation can be invoked. Normally, checking usage is checking
+    // how a resource is *consumed*. But here, checking usage is checking how the
+    // continuation (as a resource) is provided.
+    checkUsageSubsumption(continuationUsage2, continuationUsage1)
   case (UsageType(Some(u1)), UsageType(Some(u2))) => checkUsageSubsumption(u1, u2)
   case (UsageType(Some(_)), UsageType(None))      => Set.empty
   case (v: Var, ty2: VTerm) =>
@@ -314,7 +314,12 @@ private def typeUnion
         EffectsType(continuationUsage2, handlerType2),
       ) =>
       val continuationUsage = UsageJoin(continuationUsage1, continuationUsage2).normalized
-      val handlerType = handlerType1 | handlerType2
+      val handlerType =
+        if handlerType1.normalized == HandlerTypeLiteral(
+            Simple,
+          ) && handlerType2.normalized == HandlerTypeLiteral(Simple)
+        then HandlerTypeLiteral(Simple)
+        else HandlerTypeLiteral(Complex)
       EffectsType(continuationUsage, handlerType)
     case (LevelType(level1), LevelType(level2)) =>
       LevelType(LevelMax(level1, level2).normalized)
@@ -339,7 +344,22 @@ private def eqDecidabilityJoin(t1: VTerm, t2: VTerm): VTerm =
     case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
     case _ => EqDecidabilityLiteral(EqDecidability.EqUnknown)
 
-// TODO[P0]: add checkHandlerTypeSubsumption
+@throws(classOf[IrError])
+private def checkHandlerTypeSubsumption
+  (handlerType1: VTerm, handlerType2: VTerm)
+  (using Γ: Context)
+  (using Signature)
+  (using ctx: TypingContext)
+  : Set[Constraint] = check2(handlerType1, handlerType2):
+  case (HandlerTypeLiteral(Simple), _) | (_, HandlerTypeLiteral(Complex)) =>
+    Set.empty
+  case (u: RUnsolved, HandlerTypeLiteral(Simple)) =>
+    ctx.assignUnsolved(u, Return(handlerType2, u1))
+  case (HandlerTypeLiteral(Complex), u: RUnsolved) =>
+    ctx.assignUnsolved(u, Return(handlerType1, u1))
+  case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
+    Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
+  case _ => throw NotHandlerTypeSubsumption(handlerType1, handlerType2)
 
 @throws(classOf[IrError])
 private def checkEqDecidabilitySubsumption

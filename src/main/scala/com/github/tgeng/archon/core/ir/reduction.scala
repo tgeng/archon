@@ -548,17 +548,22 @@ extension (v: VTerm)
       lubToTerm(dfs(u))
     case e: Effects =>
       @throws(classOf[IrError])
-      def dfs(tm: VTerm, retainSimpleOnly: Boolean): (Set[Eff], Map[VTerm, Boolean]) =
+      def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], Map[VTerm, Boolean]) =
         ctx.withMetaResolved(tm):
           case Effects(literal, operands) =>
             val literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] =
-              operands.map((k, v) => dfs(k.normalized, retainSimpleOnly || v)).toSeq
+              operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
             (
               (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
-                .filter((qn, _) =>
-                  if retainSimpleOnly then
-                    Σ.getEffect(qn).continuationUsage.handlerType == HandlerType.Simple
-                  else true,
+                .filter((qn, args) =>
+                  if retainSimpleLinearOnly then {
+                    val effect = Σ.getEffect(qn)
+                    effect.continuationUsage
+                      .substLowers(args: _*)
+                      .normalized == UsageLiteral(U1) && effect.handlerType
+                      .substLowers(args: _*)
+                      .normalized == HandlerTypeLiteral(HandlerType.Simple)
+                  } else true,
                 )
                 .toSet,
               literalsAndOperands
@@ -568,12 +573,14 @@ extension (v: VTerm)
           case _: Collapse => (Set.empty, Map(tm -> false))
           case v: Var =>
             Γ.resolve(v).ty match
-              case EffectsType(_, HandlerType.Simple) => (Set.empty, Map(tm -> true))
-              case _                                  => (Set.empty, Map(tm -> false))
+              case EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)) =>
+                (Set.empty, Map(tm -> true))
+              case _ => (Set.empty, Map(tm -> false))
           case r: ResolvedMetaVariable =>
             r.ty match
-              case F(EffectsType(_, HandlerType.Simple), _, _) => (Set.empty, Map(tm -> true))
-              case _                                           => (Set.empty, Map(tm -> false))
+              case F(EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)), _, _) =>
+                (Set.empty, Map(tm -> true))
+              case _ => (Set.empty, Map(tm -> false))
           case _ =>
             throw IllegalStateException(s"expect to be of Effects type: $tm")
 

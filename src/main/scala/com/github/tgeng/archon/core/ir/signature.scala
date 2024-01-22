@@ -48,10 +48,8 @@ enum Declaration:
     (qn: QualifiedName)
     (
       val tParamTys: Context = IndexedSeq(),
-      /** This value must be the join of the continuation usages of all operations. If control mode
-        * is simple, this effect is a simple effect. Otherwise it's a complex effect.
-        */
-      val continuationUsage: HandlerConstraint,
+      val continuationUsage: VTerm, // binding += tParamTys
+      val handlerType: VTerm, // binding += tParamTys
     )
 
   def qn: QualifiedName
@@ -83,7 +81,6 @@ case class Clause
 case class Operation
   (
     name: Name,
-    continuationUsage: HandlerConstraint,
     paramTys: Telescope, /* + tParamTys */
     resultTy: VTerm /* + tParamTys + paramTys */ ,
     resultUsage: VTerm, /* + tParamTys + paramTys */
