@@ -17,6 +17,7 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.17" % "test",
+      "com.lihaoyi" %% "pprint" % "0.8.1",
     ),
     Compile / unmanagedJars += {
       baseDirectory.value / "unmanaged" / "scalaz3_3-4.8.14-macos-aarch64.jar"
