@@ -57,7 +57,7 @@ def checkIsSubtype
         val args = ArrayBuffer[VTerm]()
         args1
           .zip(args2)
-          .zip(data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
+          .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
           .map { case ((arg1, arg2), (binding, variance)) =>
             variance match
               case Variance.INVARIANT =>
@@ -176,7 +176,7 @@ def checkIsSubtype
         val effConstraint = checkEffSubsumption(eff1, eff2)
         val argConstraint = args1
           .zip(args2)
-          .zip(record.tParamTys)
+          .zip(record.context)
           .map { case ((arg1, arg2), (binding, variance)) =>
             variance match
               case Variance.INVARIANT =>
@@ -242,7 +242,7 @@ private def typeUnion
         val effects = EffectsUnion(effects1, effects2).normalized
         val args = args1
           .zip(args2)
-          .zip(record.tParamTys)
+          .zip(record.context)
           .map { case ((arg1, arg2), (_, variance)) =>
             variance match
               case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
@@ -296,7 +296,7 @@ private def typeUnion
       val data = Σ.getData(qn1)
       val args = args1
         .zip(args2)
-        .zip(data.tParamTys)
+        .zip(data.context)
         .map { case ((arg1, arg2), (_, variance)) =>
           variance match
             case Variance.COVARIANT => Some(typeUnion(arg1, arg2))

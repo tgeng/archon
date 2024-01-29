@@ -6,6 +6,7 @@ import com.github.tgeng.archon.common.Nat
   * Nat :: y: Vector String x :: []`
   */
 type Telescope = List[Binding[VTerm]]
+type TTelescope = List[(Binding[VTerm], Variance)]
 
 /** First element is the outermost binding.
   */
@@ -26,3 +27,4 @@ extension (ctx: collection.IndexedSeq[Binding[VTerm]])
 
 object Context:
   def fromTelescope(telescope: Telescope) = telescope.toIndexedSeq
+  def empty = IndexedSeq.empty

@@ -80,7 +80,7 @@ def checkIsConvertible
           case Some(data) =>
             args1
               .zip(args2)
-              .zip(data.tParamTys ++ data.tIndexTys.map((_, Variance.INVARIANT)))
+              .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
               .zipWithIndex
               .map { case (((arg1, arg2), (binding, _)), i) =>
                 checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i): _*)))
@@ -253,7 +253,7 @@ def checkIsConvertible
                 val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
                 val argConstraint = args1
                   .zip(args2)
-                  .zip(record.tParamTys)
+                  .zip(record.context)
                   .map { case ((arg1, arg2), (binding, variance)) =>
                     variance match
                       case Variance.INVARIANT =>
@@ -301,7 +301,7 @@ def checkIsConvertible
                     val tArgConstraint =
                       tArgs1
                         .zip(tArgs2)
-                        .zip(effect.tParamTys)
+                        .zip(effect.context)
                         .map { case ((tArg1, tArg2), binding) =>
                           val r = checkIsConvertible(tArg1, tArg2, Some(binding.ty))
                           args = args :+ tArg1

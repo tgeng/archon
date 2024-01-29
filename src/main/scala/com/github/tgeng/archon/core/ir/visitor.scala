@@ -163,7 +163,7 @@ trait Visitor[C, R]:
         ct.cases.flatMap { (qn, body) =>
           Seq(
             visitQualifiedName(qn),
-            withBindings(Σ.getData(qn).tParamTys.map(_._1.name).toList) {
+            withBindings(Σ.getData(qn).context.map(_._1.name).toList) {
               visitCaseTree(body)
             },
           )
@@ -496,7 +496,7 @@ trait Transformer[C]:
         val data = Σ.getData(qn)
         (
           qn,
-          withBindings((data.tParamTys.map(_._1.name) ++ data.tIndexTys.map(_.name)).toList) {
+          withBindings((data.context.map(_._1.name) ++ data.tIndexTys.map(_.name)).toList) {
             body
           },
         )

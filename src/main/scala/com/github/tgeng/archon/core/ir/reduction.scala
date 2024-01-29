@@ -200,8 +200,19 @@ private final class StackMachine
                 mapping,
               ) match
                 case MatchingStatus.Matched =>
+                  val defContext = Σ.getDefinition(qn).context
                   stack.dropRightInPlace(lhs.length)
-                  Some((rhs.subst(mapping.get), /* stuck */ false))
+                  val partiallySubstituted = rhs.subst(mapping.get)
+
+                  val defArgs = stack
+                    .takeRight(defContext.size)
+                    .map {
+                      case ETerm(arg) => arg
+                      case _          => throw IllegalStateException("type error")
+                    }
+                    .toSeq
+                  stack.dropRightInPlace(defContext.size)
+                  Some((partiallySubstituted.substLowers(defArgs: _*), /* stuck */ false))
                 case MatchingStatus.Stuck =>
                   Some((reconstructTermFromStack(pc), /* stuck */ true))
                 case MatchingStatus.Mismatch => None

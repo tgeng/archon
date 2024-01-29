@@ -113,7 +113,8 @@ object Builtins:
   val IsReplicableQn: QualifiedName = UsagePredicateQn / "IsReplicable"
   val IsResumableQn: QualifiedName = UsagePredicateQn / "IsResumable"
 
-  def Σ(using ctx: TypingContext): Signature = elaborateAll(builtins)(using SimpleSignature())
+  def Σ(using ctx: TypingContext): Signature =
+    elaborateAll(builtins)(using Context.empty)(using SimpleSignature())
 
   import CTerm.*
   import EqDecidability.*

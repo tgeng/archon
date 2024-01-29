@@ -507,10 +507,10 @@ extension (us1: Usages)
 
 @throws(classOf[IrError])
 def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
+  given Context = IndexedSeq()
   ctx.trace(s"checking data signature ${data.qn}") {
-    given Context = IndexedSeq()
 
-    val tParamsTysTelescope = checkParameterTyDeclarations(data.tParamTys.map(_._1).toTelescope)
+    val tParamsTysTelescope = checkParameterTyDeclarations(data.context.map(_._1).toTelescope)
     val tParamTys = Context.fromTelescope(tParamsTysTelescope)
     val tIndexTys = checkParameterTyDeclarations(data.tIndexTys)(using tParamTys)
     val tContext = tParamTys ++ tIndexTys
@@ -519,7 +519,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
       checkType(data.inherentEqDecidability, EqDecidabilityType())(using tContext)
     checkTParamsAreUnrestricted(tContext.toTelescope)
     Data(data.qn)(
-      tParamTys.zip(data.tParamTys.map(_._2)),
+      tParamTys.zip(data.context.map(_._2)),
       tIndexTys,
       level,
       inherentEqDecidability,
@@ -532,27 +532,26 @@ def checkDataConstructor
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Constructor =
-  ctx.trace(s"checking data constructor $qn.${con.name}") {
-    Σ.getDataOption(qn) match
-      case None => throw MissingDeclaration(qn)
-      case Some(data) =>
-        given Γ: Context = data.tParamTys.map(_._1)
+  Σ.getDataOption(qn) match
+    case None => throw MissingDeclaration(qn)
+    case Some(data) =>
+      given Γ: Context = data.context.map(_._1)
+      ctx.trace(s"checking data constructor $qn.${con.name}") {
         val paramTys = checkParameterTyDeclarations(con.paramTys, Some(data.level))
         val (tArgs, _) =
           checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
         checkInherentEqDecidable(Σ.getData(qn), con)
         val violatingVars =
-          VarianceChecker.visitTelescope(con.paramTys)(using data.tParamTys, Variance.COVARIANT, 0)
+          VarianceChecker.visitTelescope(con.paramTys)(using data.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars)
         Constructor(con.name, paramTys, tArgs)
-  }
+      }
 
 @throws(classOf[IrError])
 def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): Record =
+  given Context = IndexedSeq()
   ctx.trace(s"checking record signature ${record.qn}") {
-    given Context = IndexedSeq()
-
-    val tParams = record.tParamTys.map(_._1)
+    val tParams = record.context.map(_._1)
     val tParamTysTelescope = checkParameterTyDeclarations(tParams.toList)
     val tParamTys = Context.fromTelescope(tParamTysTelescope)
     checkTParamsAreUnrestricted(tParams.toList)
@@ -561,7 +560,7 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
       checkType(record.selfBinding.usage, UsageType())(using tParams.toIndexedSeq)
     val (selfTy, _) = checkIsType(record.selfBinding.ty)(using tParams.toIndexedSeq)
     Record(record.qn)(
-      tParamTys.zip(record.tParamTys.map(_._2)),
+      tParamTys.zip(record.context.map(_._2)),
       level,
       Binding(selfTy, selfUsage)(record.selfBinding.name),
     )
@@ -573,17 +572,18 @@ def checkRecordField
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Field =
-  ctx.trace(s"checking record field $qn.${field.name}") {
-    Σ.getRecordOption(qn) match
-      case None => throw MissingDeclaration(qn)
-      case Some(record) =>
-        given Context = record.tParamTys.map(_._1).toIndexedSeq :+ record.selfBinding
+  Σ.getRecordOption(qn) match
+    case None => throw MissingDeclaration(qn)
+    case Some(record) =>
+      given Context = record.context.map(_._1).toIndexedSeq :+ record.selfBinding
+
+      ctx.trace(s"checking record field $qn.${field.name}") {
         val (ty, _) = checkIsCType(field.ty, Some(record.level.weakened))
         val violatingVars =
-          VarianceChecker.visitCTerm(field.ty)(using record.tParamTys, Variance.COVARIANT, 0)
+          VarianceChecker.visitCTerm(field.ty)(using record.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInRecord(record.qn, violatingVars)
         Field(field.name, ty)
-  }
+      }
 
 private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Var]]:
   override def combine
@@ -633,7 +633,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
     : Seq[Var] =
     val (tContext, variance, offset) = ctx
     val data = Σ.getData(dataType.qn)
-    (data.tParamTys.map(_._2) ++ data.tIndexTys.map(_ => Variance.INVARIANT))
+    (data.context.map(_._2) ++ data.tIndexTys.map(_ => Variance.INVARIANT))
       .zip(dataType.args)
       .flatMap:
         case (Variance.INVARIANT, arg) =>
@@ -694,7 +694,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
     : Seq[Var] =
     val (tContext, variance, offset) = ctx
     val record = Σ.getRecord(recordType.qn)
-    record.tParamTys
+    record.context
       .map(_._2)
       .zip(recordType.args)
       .flatMap:
@@ -707,18 +707,18 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 
 @throws(classOf[IrError])
 def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext): Definition =
+  given Context = definition.context
   ctx.trace(s"checking def signature ${definition.qn}") {
-    given Context = IndexedSeq()
     val (ty, _) = checkIsCType(definition.ty)
-    Definition(definition.qn)(ty)
+    Definition(definition.qn)(definition.context, ty)
   }
 
 @throws(classOf[IrError])
 def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effect =
+  given Context = IndexedSeq()
   ctx.trace(s"checking effect signature ${effect.qn}") {
-    given Context = IndexedSeq()
 
-    val telescope = checkParameterTyDeclarations(effect.tParamTys.toTelescope)
+    val telescope = checkParameterTyDeclarations(effect.context.toTelescope)
     checkTParamsAreUnrestricted(telescope)
     checkAreEqDecidableTypes(telescope)
     val Γ = telescope.reverse.toIndexedSeq
@@ -733,17 +733,18 @@ def checkOperation
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Operation =
-  ctx.trace(s"checking effect operation $qn.${operation.name}") {
-    Σ.getEffectOption(qn) match
-      case None => throw MissingDeclaration(qn)
-      case Some(effect) =>
-        val Γ = effect.tParamTys.toIndexedSeq
+  Σ.getEffectOption(qn) match
+    case None => throw MissingDeclaration(qn)
+    case Some(effect) =>
+      given Γ: Context = effect.context
 
-        val paramTys = checkParameterTyDeclarations(operation.paramTys)(using Γ)
+      ctx.trace(s"checking effect operation $qn.${operation.name}") {
+        val paramTys = checkParameterTyDeclarations(operation.paramTys)
         val (resultTy, _) = checkIsType(operation.resultTy)(using Γ ++ operation.paramTys)
-        val (resultUsage, _) = checkType(operation.resultUsage, UsageType(None))
+        val (resultUsage, _) =
+          checkType(operation.resultUsage, UsageType(None))(using Γ ++ operation.paramTys)
         operation.copy(paramTys = paramTys, resultTy = resultTy, resultUsage = resultUsage)
-  }
+      }
 
 @tailrec
 @throws(classOf[IrError])
@@ -858,7 +859,7 @@ def inferType
           case None => throw MissingDeclaration(qn)
           case Some(data) =>
             val (args, usage) =
-              checkTypes(uncheckedArgs, (data.tParamTys.map(_._1) ++ data.tIndexTys).toList)
+              checkTypes(uncheckedArgs, (data.context.map(_._1) ++ data.tIndexTys).toList)
             val newTm = DataType(qn, args.map(_.normalized))(using tm.sourceInfo)
             (newTm, Type(newTm), usage)
       case _: Con          => throw IllegalArgumentException("cannot infer type")
@@ -900,7 +901,7 @@ def inferType
             Σ.getEffectOption(qn) match
               case None => throw MissingDeclaration(qn)
               case Some(effect) =>
-                val (checkedArgs, usages) = checkTypes(args, effect.tParamTys.toList)
+                val (checkedArgs, usages) = checkTypes(args, effect.context.toList)
                 ((qn, checkedArgs), usages)
           },
         )
@@ -953,8 +954,8 @@ def checkType
               case None => throw MissingConstructor(name, qn)
               case Some(con) =>
                 val data = Σ.getData(qn)
-                val tParamArgs = tArgs.take(data.tParamTys.size)
-                val tIndexArgs = tArgs.drop(data.tParamTys.size)
+                val tParamArgs = tArgs.take(data.context.size)
+                val tIndexArgs = tArgs.drop(data.context.size)
                 val (args, usages) =
                   checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs: _*))
                 val constraints = ctx.solve(
@@ -1050,8 +1051,15 @@ def inferType
       case m: Meta => (m, ctx.resolveMeta(m).contextFreeType, Usages.zero)
       case d @ Def(qn) =>
         Σ.getDefinitionOption(qn) match
-          case None             => throw MissingDeclaration(qn)
-          case Some(definition) => (d, definition.ty, Usages.zero)
+          case None => throw MissingDeclaration(qn)
+          case Some(definition) =>
+            (
+              d,
+              definition.context.foldRight(definition.ty) { case (binding, bodyTy) =>
+                FunctionType(binding, bodyTy, Total())
+              },
+              Usages.zero,
+            )
       case Force(uncheckedV) =>
         val (v, vTy, vUsages) = inferType(uncheckedV)
         val cTy = vTy match
@@ -1151,7 +1159,7 @@ def inferType
                     case None => throw MissingField(name, qn)
                     case Some(f) =>
                       val record = Σ.getRecord(qn)
-                      val (args, _) = checkTypes(uncheckedArgs, record.tParamTys.map(_._1).toList)
+                      val (args, _) = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
                       // TODO[P2]: refactor this and track an accumulating usage so that checking record usage here
                       // won't be O(n^2)
                       val (recordTerm, recordUsages) = checkType(redex(c, checkedElims), cty)
@@ -1176,7 +1184,7 @@ def inferType
           case None => throw MissingDeclaration(qn)
           case Some(record) =>
             val (effects, effUsages) = checkType(uncheckedEffects, EffectsType())
-            val (args, argsUsages) = checkTypes(uncheckedArgs, record.tParamTys.map(_._1).toList)
+            val (args, argsUsages) = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
             (RecordType(qn, args, effects), CType(tm, Total()), effUsages + argsUsages)
       case OperationCall((qn, uncheckedTArgs), name, uncheckedArgs) =>
         Σ.getEffectOption(qn) match
@@ -1185,7 +1193,7 @@ def inferType
             Σ.getOperationOption(qn, name) match
               case None => throw MissingDefinition(qn)
               case Some(op) =>
-                val (checkedTArgs, effUsages) = checkTypes(uncheckedTArgs, effect.tParamTys.toList)
+                val (checkedTArgs, effUsages) = checkTypes(uncheckedTArgs, effect.context.toList)
                 val tArgs = checkedTArgs.map(_.normalized)
                 val (args, argsUsages) =
                   checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs: _*))
@@ -1300,7 +1308,7 @@ private def checkInherentEqDecidable
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Unit =
-  given Context = data.tParamTys.map(_._1) ++ data.tIndexTys
+  given Context = data.context.map(_._1) ++ data.tIndexTys
 
   // 1. check that a the component types are all eq-decidable if the data is eq-decidable
   @tailrec
@@ -1347,7 +1355,7 @@ private def checkInherentEqDecidable
   // Call 1, 2
   else
     checkComponentTypes(
-      (data.tParamTys.map(_._1) ++ data.tIndexTys ++ constructor.paramTys).toList,
+      (data.context.map(_._1) ++ data.tIndexTys ++ constructor.paramTys).toList,
       data.inherentEqDecidability,
     )(using IndexedSeq())
     checkComponentUsage(constructor)

@@ -4,14 +4,14 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
 
-type PreTContext = List[(Binding[CTerm], Variance)]
-type PreContext = List[Binding[CTerm]]
+type PreTTelescope = List[(Binding[CTerm], Variance)]
+type PreTelescope = List[Binding[CTerm]]
 
 enum PreDeclaration:
   case PreData
     (qn: QualifiedName)
     (
-      val tParamTys: PreTContext,
+      val tParamTys: PreTTelescope,
       // This could be a function type that ends with `F Type` for indexed families. In this
       // case, during elaboration, all constructors are weakened by the number of args in the
       // declared function type. That is, indexed families are converted to parameterized inductive
@@ -22,7 +22,7 @@ enum PreDeclaration:
   case PreRecord
     (qn: QualifiedName)
     (
-      val tParamTys: PreTContext,
+      val tParamTys: PreTTelescope,
       // Unlike data, for record, this `ty` is expected to be a simple computation type.
       val ty: CTerm,
       val selfUsage: CTerm,
@@ -33,14 +33,14 @@ enum PreDeclaration:
   case PreDefinition
     (qn: QualifiedName)
     (
-      val paramTys: PreContext,
+      val paramTys: PreTelescope,
       val ty: CTerm,
       val clauses: List[PreClause],
     )
   case PreEffect
     (qn: QualifiedName)
     (
-      val tParamTys: PreContext,
+      val tParamTys: PreTelescope,
       val operations: List[PreOperation],
       val continuationUsage: CTerm,
       val handlerType: CTerm,

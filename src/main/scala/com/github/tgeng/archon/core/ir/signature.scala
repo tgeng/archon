@@ -19,7 +19,7 @@ enum Declaration:
   case Data
     (qn: QualifiedName)
     (
-      val tParamTys: TContext,
+      val context: TContext,
       /* binding + tParamTys */
       val tIndexTys: Telescope,
       /* binding + tParamTys + tIndexTys */
@@ -30,11 +30,12 @@ enum Declaration:
   case Record
     (qn: QualifiedName)
     (
-      val tParamTys: TContext = IndexedSeq(),
+      val context: TContext = IndexedSeq(),
       val level: VTerm, // binding + tParamTys
       val selfBinding: Binding[VTerm],
     )
-  case Definition(qn: QualifiedName)(val ty: CTerm)
+
+  case Definition(qn: QualifiedName)(val context: Context, val ty: CTerm /* binding += context */ )
 
   /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest
     * `U` are not allowed. This is necessary because type-based handler matching needs a "simple"
@@ -47,7 +48,7 @@ enum Declaration:
   case Effect
     (qn: QualifiedName)
     (
-      val tParamTys: Context = IndexedSeq(),
+      val context: Context = IndexedSeq(),
       val continuationUsage: VTerm, // binding += tParamTys
       val handlerType: VTerm, // binding += tParamTys
     )
@@ -72,17 +73,18 @@ case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
 
 case class Clause
   (
-    bindings: Context,
-    lhs: List[CoPattern], /* + bindings */
-    rhs: CTerm, /* + bindings */
-    ty: CTerm, /* + bindings */
+    // contains def.context
+    context: Context,
+    lhs: List[CoPattern], /* bindings += clause.context */
+    rhs: CTerm, /* bindings += clause.context */
+    ty: CTerm, /* bindings += clause.context */
   )
 
 case class Operation
   (
     name: Name,
     paramTys: Telescope, /* + tParamTys */
-    resultTy: VTerm /* + tParamTys + paramTys */ ,
+    resultTy: VTerm /* + tParamTys + paramTys */,
     resultUsage: VTerm, /* + tParamTys + paramTys */
   )
 
