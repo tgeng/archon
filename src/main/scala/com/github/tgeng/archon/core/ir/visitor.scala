@@ -354,7 +354,7 @@ trait Visitor[C, R]:
     visitVTerm(let.eff),
     visitVTerm(let.usage),
     withBindings(Seq(let.boundName)) {
-      visitCTerm(let.ctx)
+      visitCTerm(let.body)
     },
   )
 
@@ -726,7 +726,7 @@ trait Transformer[C]:
       transformVTerm(let.eff),
       transformVTerm(let.usage),
       withBindings(Seq(let.boundName)) {
-        transformCTerm(let.ctx)
+        transformCTerm(let.body)
       },
     )(let.boundName)(using let.sourceInfo)
 

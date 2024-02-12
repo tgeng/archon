@@ -1546,8 +1546,8 @@ private def checkLet
       // more specific type. More importantly, this way we do not need to reference
       // the result of a computation in the inferred type.
       val uncheckedNewBody = t.normalized(Some(tTy)) match
-        case Return(v, _) => tm.ctx.substLowers(v)
-        case c            => tm.ctx.substLowers(Collapse(c))
+        case Return(v, _) => tm.body.substLowers(v)
+        case c            => tm.body.substLowers(Collapse(c))
       bodyTy match
         case Some(uncheckedBodyTy) =>
           val (bodyTy, _) = checkIsCType(uncheckedBodyTy)
@@ -1560,10 +1560,10 @@ private def checkLet
       val (body, checkedBodyTy, usagesInBody) =
         given Context = Γ :+ tBinding
         bodyTy match
-          case None => inferType(tm.ctx)
+          case None => inferType(tm.body)
           case Some(uncheckedBodyTy) =>
             val (bodyTy, _) = checkIsCType(uncheckedBodyTy)(using Γ)
-            val (body, usages) = checkType(tm.ctx, bodyTy.weakened)
+            val (body, usages) = checkType(tm.body, bodyTy.weakened)
             (body, bodyTy, usages)
       val leakCheckedBodyTy =
         checkVar0Leak(checkedBodyTy, LeakedReferenceToEffectfulComputationResult(t))
