@@ -312,7 +312,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Effects
     (
       literal: Set[Eff],
-      unionOperands: Map[VTerm, /* whether to filter out complex or non-linear effects */ Boolean],
+      unionOperands: Map[
+        VTerm,
+        /* whether to filter out complex or non-linear effects. True means only retain simple linear effects */ Boolean,
+      ],
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -657,7 +660,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       parameterBinding: Binding[VTerm],
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
-      transform: CTerm, // binding offset + 1 (for parameter) + 1 (for value)
+      transform: CTerm, // binding offset + 1 (for parameter) + 1 (for input value)
       handlers: Map[ /* name identifying an effect operation */ QualifiedName, HandlerImpl],
       input: CTerm,
       inputBinding: Binding[VTerm],
