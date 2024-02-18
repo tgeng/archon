@@ -319,7 +319,11 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case LevelType(upperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
+  /** @param strictUpperBound
+    *   the upper bound of the level. It's called strict because only levels that are strictly less
+    *   than this level are inhabitants.
+    */
+  case LevelType(strictUpperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(LevelQn)
 
@@ -376,7 +380,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case EffectsType(continuationUsage, handlerType) =>
         EffectsType(continuationUsage, handlerType)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
-      case LevelType(upperBound)           => LevelType(upperBound)
+      case LevelType(strictUpperBound)           => LevelType(strictUpperBound)
       case Level(literal, maxOperands)     => Level(literal, maxOperands)
       case Auto()                          => Auto()
 

@@ -18,7 +18,7 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
       assertType(LevelLiteral(0), LevelType())
       assertType(LevelLiteral(1), LevelType())
       assertNotType(LevelLiteral(1, 1), LevelType())
-      assertType(LevelLiteral(1, 1), LevelType(LevelLiteral(1, 1)))
+      assertType(LevelLiteral(1, 0), LevelType(LevelLiteral(1, 1)))
       assertNotType(UsageLiteral(U0), LevelType())
 
     "check usage literals" in:
@@ -46,4 +46,11 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
       assertType(HandlerTypeLiteral(Simple), HandlerTypeType())
       assertType(HandlerTypeLiteral(Complex), HandlerTypeType())
       assertNotType(LevelLiteral(1), HandlerTypeType())
+
+    "check type types" in:
+      assertType(UsageType(), Type(UsageType()))
+      assertType(UsageType(), Type(Top(LevelLiteral(0))))
+      assertType(LevelType(), Type(LevelType()))
+      assertNotType(LevelType(), Type(Top(LevelLiteral(0))))
+      assertType(LevelType(), Type(Top(LevelLiteral(1, 0))))
   }

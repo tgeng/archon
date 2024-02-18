@@ -3,7 +3,7 @@ package com.github.tgeng.archon.core.ir.testing
 import com.github.tgeng.archon.core.ir.*
 import org.scalatest.Assertions.*
 
-def assertType
+inline def assertType
   (t: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -19,7 +19,7 @@ def assertType
   }
 }
 
-def assertNotType
+inline def assertNotType
   (t: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)

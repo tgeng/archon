@@ -649,13 +649,13 @@ private def check2
   else ctx.withMetaResolved2(a.normalized(None), b.normalized(None))(action)
 
 @throws(classOf[IrError])
-private inline def debugSubsumption[R]
+private inline def debugSubsumption
   (name: String, rawSub: CTerm | VTerm, rawSup: CTerm | VTerm)
-  (result: => R)
+  (result: => Set[Constraint])
   (using Context)
   (using Signature)
   (using ctx: TypingContext)
-  : R =
+  : Set[Constraint] =
   ctx.trace(
     name,
     Block(
@@ -667,6 +667,10 @@ private inline def debugSubsumption[R]
       yellow(rawSup.sourceInfo),
       pprint(rawSup),
     ),
+    { (constraints: Set[Constraint]) =>
+      if constraints.isEmpty then ""
+      else s"with ${constraints.size} unsolved constraints"
+    },
   )(result)
 
 /* References

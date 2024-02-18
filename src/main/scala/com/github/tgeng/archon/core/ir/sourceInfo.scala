@@ -31,7 +31,7 @@ enum SourceInfo:
   case SiBuiltin(qn: QualifiedName)
 
   override def toString: String = this match
-    case SiEmpty                           => "<empty>"
+    case SiEmpty                           => "ε"
     case SiText(text, range)               => s"'${text.substring(range)}'"
     case SiLevelSuc(operand)               => s"<suc $operand>"
     case SiLevelMax(operand1, operand2)    => s"<max $operand1 $operand2>"

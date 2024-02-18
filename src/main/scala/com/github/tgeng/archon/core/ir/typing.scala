@@ -809,7 +809,7 @@ private def inferLevel
     case U(cty)             => inferLevel(cty)
     case DataType(qn, args) => Σ.getData(qn).level.substLowers(args: _*)
     case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
-    case LevelType(upperBound) => LevelSuc(checkLevel(upperBound)._1)
+    case LevelType(strictUpperBound)                           => checkLevel(strictUpperBound)._1
     case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
 
 @throws(classOf[IrError])
@@ -917,13 +917,14 @@ def inferType
         EffectsType(usage),
         literalUsages + operandsUsages,
       )
-    case LevelType(order) => (LevelType(order), Type(LevelType(order)), Usages.zero)
+    case LevelType(strictUpperBound) =>
+      (LevelType(strictUpperBound), Type(LevelType(strictUpperBound)), Usages.zero)
     case Level(op, maxOperands) =>
       val (operands, usages) = transposeCheckTypeResults(maxOperands.map { (ref, _) =>
         checkLevel(ref)
       })
       val newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
-      (newTm, LevelType(newTm), usages)
+      (newTm, LevelType(LevelSuc(newTm)), usages)
     case Auto() => throw IllegalArgumentException("cannot infer type")
 
 @throws(classOf[IrError])
@@ -972,7 +973,7 @@ def checkType
     case _ =>
       val (newTm, inferred, usages) = inferType(tm)
       val constraints = checkIsSubtype(inferred, ty)
-      if !constraints.isEmpty then throw NotVSubtype(inferred, ty)
+      ctx.checkSolved(constraints, NotVSubtype(inferred, ty))
       (newTm, usages)
 
 // Precondition: tm is already type-checked
@@ -2015,7 +2016,7 @@ private inline def debugInferType[R <: CTerm | VTerm]
   ctx.trace[(R, R, Usages)](
     s"inferType",
     Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
-    ty => Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty._1))),
+    ty => Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty._2))),
   ):
     val (v, r, u) = result
     (v, r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
