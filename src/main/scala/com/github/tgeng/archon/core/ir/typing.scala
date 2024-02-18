@@ -150,8 +150,8 @@ import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
 
 class TypingContext
   (
-    var traceLevel: Int,
-    var enableDebugging: Boolean,
+    var traceLevel: Int = 0,
+    var enableDebugging: Boolean = false,
   ):
 
   private val metaVars: mutable.ArrayBuffer[MetaVariable] = mutable.ArrayBuffer()
@@ -1496,8 +1496,9 @@ def checkTypes
 @throws(classOf[IrError])
 private def transposeCheckTypeResults[R]
   (resultsAndUsages: Iterable[(R, Usages)])
+  (using Context)
   : (List[R], Usages) =
-  (resultsAndUsages.map(_._1).toList, resultsAndUsages.map(_._2).reduce(_ + _))
+  (resultsAndUsages.map(_._1).toList, resultsAndUsages.map(_._2).fold(Usages.zero)(_ + _))
 
 @throws(classOf[IrError])
 private def checkLet

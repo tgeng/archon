@@ -55,7 +55,7 @@ enum IrError extends Exception:
   case NotLevelSubsumption(sub: VTerm, sup: VTerm)
   case NotTypeError(tm: VTerm)
   case NotUsageSubsumption(sub: VTerm, sup: VTerm)
-  case NotVConvertible(sub: VTerm, sup: VTerm, ty: Option[VTerm])
+  case NotVConvertible(left: VTerm, right: VTerm, ty: Option[VTerm])
   case NotVSubtype(sub: VTerm, sup: VTerm)
   case TelescopeLengthMismatch(tms: Seq[VTerm], tys: Telescope)
   case UnexpectedAbsurdPattern(p: Pattern)
@@ -67,3 +67,6 @@ enum IrError extends Exception:
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])
   case UnsatisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnsolvedElaboration(clause: PreClause)
+
+  override def getMessage: String = pprint.apply(this).toString
+

@@ -99,6 +99,7 @@ def checkIsSubtype
     Γ.resolve(v).ty match
       case Type(upperBound) => checkIsSubtype(upperBound, ty2)
       case _                => throw NotVSubtype(sub, sup)
+  case (LevelType(ub1), LevelType(ub2)) => checkLevelSubsumption(ub1, ub2)
   case _ => checkIsConvertible(sub, sup, None)
 
 /** Preconditions: sub and sup are both types
