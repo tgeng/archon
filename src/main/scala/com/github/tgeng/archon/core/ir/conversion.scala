@@ -26,7 +26,7 @@ def checkIsConvertible
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
-  : Set[Constraint] = debugConversion(left, right, ty):
+  : Set[Constraint] = debugCheckIsConvertible(left, right, ty):
   if left == right then Set.empty
   else
     (left.normalized, right.normalized, ty) match
@@ -115,7 +115,7 @@ def checkIsConvertible
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Set[Constraint] = debugConversion(aLeft, aRight, ty):
+  : Set[Constraint] = debugCheckIsConvertible(aLeft, aRight, ty):
   val left = aLeft.normalized(ty)
   val right = aRight.normalized(ty)
   if left == right then Set.empty
@@ -415,7 +415,7 @@ private def checkElimIsConvertible
     // Different length may not be a problem since it's possible that one side may be calling more projection of some record
     case (_ :: _, Nil, _) | (Nil, _ :: _, _) => resultConstraint
 
-private inline def debugConversion[R]
+private inline def debugCheckIsConvertible[R]
   (rawLeft: CTerm | VTerm, rawRight: CTerm | VTerm, rawTy: Option[CTerm | VTerm])
   (result: => R)
   (using Context)
@@ -423,7 +423,7 @@ private inline def debugConversion[R]
   (using ctx: TypingContext)
   : R =
   ctx.trace(
-    s"deciding",
+    s"checkIsConvertible",
     Block(
       ChopDown,
       Aligned,
