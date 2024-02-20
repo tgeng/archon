@@ -419,8 +419,8 @@ def checkUsageSubsumption
     // Note on direction of usage comparison: UAny > U1 but UAny subsumes U1 when counting usage
     case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Set.empty
     case (UsageLiteral(UAny), _)                          => Set.empty
-    case (UsageJoin(operands1), v: VTerm) =>
-      val operands2 = v match
+    case (sub@UsageJoin(operands1), sup: VTerm) =>
+      val operands2 = sup match
         case UsageJoin(operands2) => operands2
         case v: VTerm             => Set(v)
 
@@ -521,7 +521,7 @@ private def checkEffSubsumption
         case _ => Set(Constraint.EffSubsumption(Γ, sub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.EffSubsumption(Γ, sub, sup))
-    case (_, Effects(literals2, unionOperands2)) =>
+    case (sub: VTerm, sup@Effects(literals2, unionOperands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
       val (literals1, unionOperands1) = sub match
         case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
@@ -571,19 +571,21 @@ private def checkLevelSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkLevelSubsumption", sub, sup):
   check2(sub, sup):
-    case (v: VTerm, Level(literal2, operands2)) =>
+    case (sub: VTerm, sup@Level(literal2, operands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
-      val (literal1, operands1) = v match
+      val (literal1, operands1) = sub match
         case Level(literal1, operands1) => (literal1, operands1)
         case v: VTerm                   => (LevelOrder.zero, Map(v -> 0))
       val spuriousOperands = getSpurious[VTerm, Int](operands1, operands2)
-      if spuriousOperands.isEmpty && literal1.compareTo(literal2) <= 0 then Set.empty
-      else
-      // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
-      // ends up being assigned small levels
-      // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary large level and
-      // hence we can't decide subsumption yet.
-      if spuriousOperands.keys.forall(isMeta) || operands2.keys.exists(isMeta) then
+      val areLiteralsSubsumed = literal1.compareTo(literal2) <= 0
+      if spuriousOperands.isEmpty && areLiteralsSubsumed then Set.empty
+      else if areLiteralsSubsumed && spuriousOperands.keys.forall(isMeta) ||
+        operands2.keys.exists(isMeta)
+      then
+        // If spurious operands are all meta variables, it's possible for sub to be if all of these
+        // stuck computation ends up being assigned small levels
+        // if sup contains unsolved meta variables, it's possible for sup to end up including
+        // arbitrary large level and hence we can't decide subsumption yet.
         Set(Constraint.LevelSubsumption(Γ, sub, sup))
       else throw NotLevelSubsumption(sub, sup)
     // Handle the special case that the right hand side simply contains the left hand side as an operand.

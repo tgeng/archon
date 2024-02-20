@@ -1,11 +1,9 @@
 package com.github.tgeng.archon.common
 
-import java.io.{BufferedWriter, File, FileWriter}
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
 import scala.collection.mutable
 import scala.math.max
-import scala.util.boundary, boundary.break
+import scala.util.boundary
+import scala.util.boundary.break
 
 trait Ref[T]:
   def value: T

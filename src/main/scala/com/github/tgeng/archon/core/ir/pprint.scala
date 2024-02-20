@@ -127,22 +127,32 @@ object PPrintContext:
     ctx.map(_.name).to(mutable.ArrayBuffer),
   )
 
+import pprint as genericPprint
+
 object PrettyPrinter extends Visitor[PPrintContext, Block]:
-  def pprint
-    (tm: VTerm | CTerm | List[Binding[VTerm]])
-    (using Γ: Context)
-    (using Σ: Signature)
-    : Block = tm match
+  def pprint(telescope: Telescope)(using Γ: Context)(using Σ: Signature): Block =
+    Renamer.rename(telescope)
+    visitTelescope(telescope)(using PPrintContext(Γ))
+
+  def pprint(tm: VTerm | CTerm)(using Γ: Context)(using Σ: Signature): Block = tm match
     case tm: VTerm =>
       Renamer.rename(tm)
       visitVTerm(tm)(using PPrintContext(Γ))
     case tm: CTerm =>
       Renamer.rename(tm)
       visitCTerm(tm)(using PPrintContext(Γ))
-    case _: List[?] =>
-      val t = tm.asInstanceOf[List[Binding[VTerm]]]
-      Renamer.rename(t)
-      visitTelescope(t)(using PPrintContext(Γ))
+
+  def pprint(any: Any)(using Γ: Context)(using Σ: Signature): Block =
+    Block(
+      genericPprint
+        .copy(
+          additionalHandlers = { case value: (VTerm | CTerm) =>
+            genericPprint.Tree.Literal(pprint(value).toString())
+          },
+        )
+        .apply(any)
+        .toString,
+    )
 
   given (using PPrintContext)(using Signature): Conversion[VTerm, Block] =
     visitVTerm(_)
@@ -192,7 +202,11 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       },
     )
 
-  override def visitUsageLiteral(usageLiteral: VTerm.UsageLiteral)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitUsageLiteral
+    (usageLiteral: VTerm.UsageLiteral)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
     Block(usageLiteral.usage.toString)
 
   override def visitTContext

@@ -430,7 +430,8 @@ class TypingContext
       title: => String,
       description: => Block | String = "",
       successMsg: R => Block | String = (_: R) => "",
-      failureMsg: IrError => Block | String = (l: IrError) => l.toString,
+      failureMsg: (Context, Signature) ?=> IrError => Block | String = (e: IrError) =>
+        PrettyPrinter.pprint(e),
     )
     (action: => R)
     (using Γ: Context)

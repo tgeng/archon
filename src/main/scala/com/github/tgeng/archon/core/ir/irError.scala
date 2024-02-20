@@ -67,6 +67,3 @@ enum IrError extends Exception:
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])
   case UnsatisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnsolvedElaboration(clause: PreClause)
-
-  override def getMessage: String = pprint.apply(this).toString
-
