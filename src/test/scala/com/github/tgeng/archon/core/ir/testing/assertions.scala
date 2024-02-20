@@ -1,16 +1,24 @@
 package com.github.tgeng.archon.core.ir.testing
 
+import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.ir.*
 import org.scalatest.Assertions.*
 
-inline def assertType
-  (t: VTerm, ty: VTerm)
+def assertType
+  (t: VTerm, ty: VTerm, expectedNormalizedT: Option[VTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Unit = {
   try {
-    checkType(t, ty)
+    val (actualNormalizedT, usages) = checkType(t, ty)
+    expectedNormalizedT match
+      case Some(expected) if expected != actualNormalizedT =>
+        fail(
+          s"Actual: ${PrettyPrinter.pprint(actualNormalizedT)}\nExpected: ${PrettyPrinter.pprint(expected)}",
+        )
+      case _ =>
+    verifyUsages(usages, Γ.toTelescope)(using Context.empty)
   } catch {
     case e: IrError => {
       enableDebugging
@@ -19,7 +27,7 @@ inline def assertType
   }
 }
 
-inline def assertNotType
+def assertNotType
   (t: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -35,6 +43,8 @@ inline def assertNotType
   }
 }
 
-def enableDebugging(using ctx: TypingContext): Unit = {
+private inline def enableDebugging(using ctx: TypingContext): Unit = {
+  val stacktrace = Thread.currentThread().!!.getStackTrace.!!
+  println(s"Debugging ${stacktrace(2)}")
   ctx.enableDebugging = true
 }

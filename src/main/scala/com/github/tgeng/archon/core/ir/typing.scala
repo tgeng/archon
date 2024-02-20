@@ -1438,37 +1438,6 @@ private def verifyUsages
       case _: StrengthenException => UsageLiteral(Usage.UAny)
   }
 
-/** @param usages
-  *   usage terms should live in Γ
-  * @param count
-  *   number of usages to verify, counting from the end (right)
-  * @return
-  *   unverified usages
-  */
-@deprecated("use verifyUsages above instead")
-@throws(classOf[IrError])
-private def verifyUsages
-  (usages: Usages)
-  (count: Nat = usages.size)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Usages =
-  usages.takeRight(count).reverse.zipWithIndex.foreach { (v, i) =>
-    ctx.checkSolved(
-      checkUsageSubsumption(v, Γ.resolve(i).usage),
-      NotUsageSubsumption(v, Γ.resolve(i).usage),
-    )
-  }
-  usages.drop(count).map { v =>
-    try v.strengthen(count, 0)
-    catch
-      // It's possible for a term's usage to reference a usage term after it. For example consider
-      // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
-      // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UAny.
-      case _: StrengthenException => UsageLiteral(Usage.UAny)
-  }
-
 @throws(classOf[IrError])
 def checkTypes
   (tms: Seq[VTerm], tys: Telescope)
