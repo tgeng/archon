@@ -192,6 +192,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       },
     )
 
+  override def visitUsageLiteral(usageLiteral: VTerm.UsageLiteral)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    Block(usageLiteral.usage.toString)
+
   override def visitTContext
     (tTelescope: List[(Binding[VTerm], Variance)])
     (using PPrintContext)

@@ -1800,7 +1800,7 @@ private def getEffectsContinuationUsage
         Σ.getEffect(qn).continuationUsage.substLowers(args: _*)
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)
-      UsageJoin(usages ++ literalUsages)
+      UsageJoin(Set(UsageLiteral(U1)) ++ usages ++ literalUsages)
     case v: Var =>
       Γ.resolve(v).ty match
         case EffectsType(continuationUsage, _) => continuationUsage
