@@ -444,12 +444,9 @@ class TypingContext
         indent + "   " + ANSI_BLUE + pprint(Γ.toList)(using IndexedSeq[Binding[VTerm]]()).toString
           .replaceAll("\n", "\n" + indent + "   ") + ANSI_RESET,
       )
-      val stacktrace = Thread.currentThread().!!.getStackTrace.!!
-      println(
-        indent + "┌─ " + title + " " + ANSI_WHITE + "@" + stacktrace(
-          2,
-        ).toString + ANSI_RESET,
-      )
+      val stacktrace: String = Thread.currentThread().!!.getStackTrace.!!(2).toString
+      val stacktraceLine = stacktrace.split('(').last.stripSuffix(")")
+      println(indent + "┌─ " + title + " " + ANSI_WHITE + "@ " + stacktraceLine + ANSI_RESET)
       if description != "" then
         println(
           (indent + "│  " + description).replaceAll("\n", "\n" + indent + "│  "),
