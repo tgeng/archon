@@ -481,6 +481,7 @@ private def elaborateDefBody
                 field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
                 filter(problem, field.name),
               )(using Γ)(using _Σ)
+
               (_Σmod, fields + (field.name -> ct))
           }
         (_Σ, CtRecord(fields))
