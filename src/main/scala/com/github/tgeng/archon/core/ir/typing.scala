@@ -19,7 +19,7 @@ import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.annotation.tailrec
-import scala.collection.immutable.{Map, Set}
+import scala.collection.immutable.{SeqMap, Set}
 import scala.collection.mutable
 
 private val ANSI_RESET = "\u001b[0m"
@@ -908,7 +908,7 @@ def inferType
           ((v, retainSimple), usages)
         }.toList,
       )
-      val newTm: Effects = Effects(literal.toSet, operands.toMap)(using tm.sourceInfo)
+      val newTm: Effects = Effects(literal.toSet, operands.to(SeqMap))(using tm.sourceInfo)
       val usage = getEffectsContinuationUsage(newTm)
       (
         newTm,
@@ -1773,7 +1773,7 @@ def checkHandler
       parameterDisposer,
       parameterReplicator,
       transform,
-      handlerAndUsages.map((qn, impl, _) => (qn, impl)).toMap,
+      handlerAndUsages.map((qn, impl, _) => (qn, impl)).to(SeqMap),
       input,
       inputBinding,
     )(h.handlersBoundNames)(using h.sourceInfo),

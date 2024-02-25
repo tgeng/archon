@@ -3,6 +3,8 @@ package com.github.tgeng.archon.core.fir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
+import scala.collection.immutable.SeqMap
+
 /** # Syntax
   *
   * ## Hard keywrods: -> ; , ( ) { } $ => ## Soft keywords: < > [ ]
@@ -88,7 +90,7 @@ enum FStatement:
       transform: Option[FTerm],
       // TODO: Properly handle handler implementation requires term synthesis and type-drive
       //  qualified name resolution. Otherwise, manually write down these is very cumbersome.
-      handlers: Map[QualifiedName, FTerm],
+      handlers: SeqMap[QualifiedName, FTerm],
     )
   case FSHeapHandler(name: Name)
 

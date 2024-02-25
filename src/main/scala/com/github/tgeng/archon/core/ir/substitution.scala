@@ -5,7 +5,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.VTerm.Type
 
 import scala.annotation.targetName
-import scala.collection.immutable.{Map, Set}
+import scala.collection.immutable.{SeqMap, Set}
 import scala.collection.mutable
 
 type PartialSubstitution[T] = Int => Option[T]
@@ -88,7 +88,8 @@ private object PatternSubstituteTransformer
   override def transformVar
     (v: Var)
     (using ctx: (PartialSubstitution[Pattern], /* offset */ Int))
-    (using Σ: Signature): VTerm =
+    (using Σ: Signature)
+    : VTerm =
     ctx._1(v.idx - ctx._2) match
       case Some(t) =>
         RaisableVTerm.raise(
@@ -104,7 +105,8 @@ private object PatternSubstituteTransformer
   override def transformPVar
     (v: PVar)
     (using ctx: (PartialSubstitution[Pattern], /* offset */ Int))
-    (using Σ: Signature): Pattern =
+    (using Σ: Signature)
+    : Pattern =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisablePattern.raise(t, ctx._2)
       case _       => v
@@ -146,7 +148,8 @@ private object VTermSubstituteTransformer
   override def transformVar
     (v: Var)
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
-    (using Σ: Signature): VTerm =
+    (using Σ: Signature)
+    : VTerm =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => RaisableVTerm.raise(t, ctx._2)
       case _       => v
@@ -154,7 +157,8 @@ private object VTermSubstituteTransformer
   override def transformPVar
     (v: PVar)
     (using ctx: (PartialSubstitution[VTerm], /* offset */ Int))
-    (using Σ: Signature): Pattern =
+    (using Σ: Signature)
+    : Pattern =
     ctx._1(v.idx - ctx._2) match
       case Some(t) => PForced(RaisableVTerm.raise(t, ctx._2))
       case _       => v

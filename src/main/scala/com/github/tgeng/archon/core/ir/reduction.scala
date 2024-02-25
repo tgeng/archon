@@ -17,6 +17,7 @@ import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.annotation.tailrec
+import scala.collection.immutable.SeqMap
 import scala.collection.mutable
 
 trait Reducible[T]:
@@ -186,7 +187,7 @@ private final class StackMachine
           case None => reconstructTermFromStack(pc)
           case Some(clauses) =>
             clauses.first { case Clause(_, lhs, rhs, _) =>
-              val mapping = mutable.Map[Nat, VTerm]()
+              val mapping = mutable.SeqMap[Nat, VTerm]()
               matchCoPattern(
                 lhs.zip(
                   stack.reverseIterator.map {
@@ -559,10 +560,10 @@ extension (v: VTerm)
       lubToTerm(dfs(u))
     case e: Effects =>
       @throws(classOf[IrError])
-      def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], Map[VTerm, Boolean]) =
+      def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], SeqMap[VTerm, Boolean]) =
         ctx.withMetaResolved(tm):
           case Effects(literal, operands) =>
-            val literalsAndOperands: Seq[(Set[Eff], Map[VTerm, Boolean])] =
+            val literalsAndOperands: Seq[(Set[Eff], SeqMap[VTerm, Boolean])] =
               operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
             (
               (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
@@ -577,21 +578,22 @@ extension (v: VTerm)
                   } else true,
                 )
                 .toSet,
-              literalsAndOperands
-                .flatMap { case (_, o) => o }
-                .groupMapReduce(_._1)(_._2)(_ && _),
+              groupMapReduce(
+                literalsAndOperands
+                  .flatMap { case (_, o) => o },
+              )(_._1)(_._2)(_ && _),
             )
-          case _: Collapse => (Set.empty, Map(tm -> false))
+          case _: Collapse => (Set.empty, SeqMap(tm -> false))
           case v: Var =>
             Γ.resolve(v).ty match
               case EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)) =>
-                (Set.empty, Map(tm -> true))
-              case _ => (Set.empty, Map(tm -> false))
+                (Set.empty, SeqMap(tm -> true))
+              case _ => (Set.empty, SeqMap(tm -> false))
           case r: ResolvedMetaVariable =>
             r.ty match
               case F(EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)), _, _) =>
-                (Set.empty, Map(tm -> true))
-              case _ => (Set.empty, Map(tm -> false))
+                (Set.empty, SeqMap(tm -> true))
+              case _ => (Set.empty, SeqMap(tm -> false))
           case _ =>
             throw IllegalStateException(s"expect to be of Effects type: $tm")
 
@@ -600,21 +602,19 @@ extension (v: VTerm)
       else Effects(eff, operands)
     case l: Level =>
       @throws(classOf[IrError])
-      def dfs(tm: VTerm): (LevelOrder, Map[VTerm, Nat]) = ctx.withMetaResolved(tm):
+      def dfs(tm: VTerm): (LevelOrder, SeqMap[VTerm, Nat]) = ctx.withMetaResolved(tm):
         case Level(literal, operands) =>
-          val literalsAndOperands: Seq[(LevelOrder, Map[VTerm, Nat])] =
+          val literalsAndOperands: Seq[(LevelOrder, SeqMap[VTerm, Nat])] =
             operands.map { (tm, offset) =>
               val (l, m) = dfs(tm.normalized)
               (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
             }.toList
           (
             (literalsAndOperands.map(_._1) ++ Seq(literal)).max,
-            literalsAndOperands
-              .flatMap[(VTerm, Nat)](_._2)
-              .groupMap(_._1)(_._2)
+            groupMap(literalsAndOperands.flatMap[(VTerm, Nat)](_._2))(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) },
           )
-        case _: ResolvedMetaVariable | _: Var | _: Collapse => (LevelOrder.zero, Map((tm, 0)))
+        case _: ResolvedMetaVariable | _: Var | _: Collapse => (LevelOrder.zero, SeqMap((tm, 0)))
         case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
 
       val (literal, m) = dfs(l)
@@ -657,7 +657,7 @@ enum MatchingStatus:
 def matchPattern
   (
     constraints: List[(Pattern, VTerm)],
-    mapping: mutable.Map[Nat, VTerm],
+    mapping: mutable.SeqMap[Nat, VTerm],
     matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
@@ -712,7 +712,7 @@ def matchPattern
 def matchCoPattern
   (
     elims: List[(CoPattern, Elimination[VTerm])],
-    mapping: mutable.Map[Nat, VTerm],
+    mapping: mutable.SeqMap[Nat, VTerm],
     matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
@@ -762,5 +762,5 @@ private def processStackEntryForDisposerCall
 
 private def joinContinuationUsages[K]
   (m1: IterableOnce[(K, HandlerConstraint)], m2: IterableOnce[(K, HandlerConstraint)])
-  : Map[K, HandlerConstraint] =
-  (m1.iterator.to(Seq) ++ m2).groupMapReduce(_._1)(_._2)(_ | _)
+  : SeqMap[K, HandlerConstraint] =
+  groupMapReduce(m1.iterator.to(Seq) ++ m2)(_._1)(_._2)(_ | _)

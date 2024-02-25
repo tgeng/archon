@@ -44,11 +44,11 @@ def assertNotVType
 }
 
 def assertCType
-(t: CTerm, ty: CTerm, expectedNormalizedT: Option[CTerm] = None)
-(using Γ: Context)
-(using Σ: Signature)
-(using ctx: TypingContext)
-: Unit = {
+  (t: CTerm, ty: CTerm, expectedNormalizedT: Option[CTerm] = None)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Unit = {
   try {
     val (actualNormalizedT, usages) = checkType(t, ty)
     expectedNormalizedT match
@@ -67,11 +67,11 @@ def assertCType
 }
 
 def assertNotCType
-(t: CTerm, ty: CTerm)
-(using Γ: Context)
-(using Σ: Signature)
-(using ctx: TypingContext)
-: Unit = {
+  (t: CTerm, ty: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Unit = {
   try {
     checkType(t, ty)
     enableDebugging

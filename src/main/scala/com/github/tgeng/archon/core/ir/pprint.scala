@@ -21,8 +21,8 @@ private class RenamerContext:
   val allNames: mutable.LinkedHashSet[Ref[Name]] = mutable.LinkedHashSet[Ref[Name]]()
   val allReferencedNames: mutable.Set[Ref[Name]] = mutable.Set[Ref[Name]]()
 
-  val potentiallyConflictingNames: mutable.Map[Ref[Name], ArrayBuffer[Ref[Name]]] =
-    mutable.Map[Ref[Name], mutable.ArrayBuffer[Ref[Name]]]()
+  val potentiallyConflictingNames: mutable.SeqMap[Ref[Name], ArrayBuffer[Ref[Name]]] =
+    mutable.SeqMap[Ref[Name], mutable.ArrayBuffer[Ref[Name]]]()
 
 object Renamer extends Visitor[RenamerContext, Unit]:
 

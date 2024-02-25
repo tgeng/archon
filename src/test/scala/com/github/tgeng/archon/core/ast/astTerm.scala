@@ -4,6 +4,8 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
+import scala.collection.immutable.SeqMap
+
 type AstEff = (Name, List[AstTerm])
 
 enum AstTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[AstTerm]:
@@ -53,6 +55,6 @@ enum Statement:
       outputType: AstTerm,
       transformInputName: Name,
       transform: AstTerm,
-      handlers: Map[Name, ( /* op args */ List[Name], AstTerm)],
+      handlers: SeqMap[Name, ( /* op args */ List[Name], AstTerm)],
     )
   case SHeapHandler(outputEffects: AstTerm, heapVarName: Name)

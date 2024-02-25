@@ -3,21 +3,23 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
+import scala.collection.immutable.SeqMap
+
 enum CaseTree:
   case CtTerm(term: CTerm)
   case CtLambda( /* binding + 1 */ body: CaseTree)(val boundName: Ref[Name])
-  case CtRecord(fields: Map[Name, CaseTree])
+  case CtRecord(fields: SeqMap[Name, CaseTree])
   case CtTypeCase
     (
       operand: VTerm,
-      cases: Map[QualifiedName, /* binding + arg count */ CaseTree],
+      cases: SeqMap[QualifiedName, /* binding + arg count */ CaseTree],
       default: CaseTree,
     )
   case CtDataCase
     (
       operand: VTerm,
       qn: QualifiedName,
-      cases: Map[Name, /* binding + arg count */ CaseTree],
+      cases: SeqMap[Name, /* binding + arg count */ CaseTree],
     )
 
 // [1] Jesper Cockx and Andreas Abel. 2018. Elaborating dependent (co)pattern matching. Proc. ACM

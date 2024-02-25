@@ -5,11 +5,9 @@ import com.github.tgeng.archon.parser.combinators.{*, given}
 import org.scalatest.freespec.AnyFreeSpec
 
 import java.io.File
-import java.net.URL
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
-import scala.util.Using
 
 enum JValue {
   case JNull
@@ -20,7 +18,7 @@ enum JValue {
   case JObject(value: Map[String, JValue])
 }
 
-import JValue.*
+import com.github.tgeng.archon.parser.combinators.JValue.*
 
 class Parsers:
   def any = P(P.any << P.eos)
@@ -137,7 +135,6 @@ class ParserCombinatorsTest extends AnyFreeSpec:
   testParsers()
 
   private def testParsers() =
-    import scala.io.Source
     val obj = Parsers()
     val parsers =
       obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$"))

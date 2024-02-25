@@ -1,6 +1,8 @@
 package com.github.tgeng.archon.common
 
-import scala.collection.mutable
+import scala.collection.immutable.SeqMap
+import scala.collection.mutable.Builder
+import scala.collection.{IterableOps, mutable}
 import scala.math.max
 import scala.util.boundary
 import scala.util.boundary.break
@@ -124,7 +126,7 @@ extension [T](inline t: T)
   inline def systemId: Int = System.identityHashCode(t)
 
 def caching[A, B](f: A => B): A => B =
-  val cache = mutable.Map[A, B]()
+  val cache = mutable.SeqMap[A, B]()
   a => cache.getOrElseUpdate(a, f(a))
 
 extension [T](elems: IterableOnce[T])
@@ -136,20 +138,20 @@ extension [T](elems: IterableOnce[T])
     None
   }
 
-  def associatedBy[K](keyExtractor: T => K): Map[K, T] =
-    val result = mutable.Map[K, T]()
+  def associatedBy[K](keyExtractor: T => K): SeqMap[K, T] =
+    val result = mutable.SeqMap[K, T]()
     for elem <- elems.iterator do result(keyExtractor(elem)) = elem
-    result.toMap
+    result.to(SeqMap)
 
   def associatedBy[K, V]
     (
       keyExtractor: T => K,
       valueExtractor: T => V,
     )
-    : Map[K, V] =
-    val result = mutable.Map[K, V]()
+    : SeqMap[K, V] =
+    val result = mutable.SeqMap[K, V]()
     for elem <- elems.iterator do result(keyExtractor(elem)) = valueExtractor(elem)
-    result.toMap
+    result.to(SeqMap)
 
 def swap[A, B](t: (A, B)): (B, A) = t match
   case (a, b) => (b, a)
@@ -188,14 +190,14 @@ def transpose[L, R](l: Iterable[Either[L, R]]): Either[L, Seq[R]] =
 def transpose[L, R](l: Set[Either[L, R]]): Either[L, Set[R]] =
   transpose(l.toList).map(Set(_: _*))
 
-def transposeValues[K, L, R](m: Map[K, Either[L, R]]): Either[L, Map[K, R]] =
+def transposeValues[K, L, R](m: SeqMap[K, Either[L, R]]): Either[L, SeqMap[K, R]] =
   transpose(
     m.toList.map { (k, v) =>
       v match
         case Right(r) => Right((k, r))
         case Left(l)  => Left(l)
     },
-  ).map(Map.from)
+  ).map(SeqMap.from)
 
 def topologicalSort[T]
   (ts: Seq[T])
@@ -261,20 +263,60 @@ def topologicalSort[T]
   */
 type Nat = Int
 
-type Multiset[T] = Map[T, Nat]
+type Multiset[T] = SeqMap[T, Nat]
 
 extension [T](ts: Iterable[T])
-  def toMultiset: Multiset[T] = ts.groupMapReduce(t => t)(_ => 1)(_ + _)
+  def toMultiset: Multiset[T] = groupMapReduce(ts)(t => t)(_ => 1)(_ + _)
 
 extension [T](ms: Multiset[T])
   def multiMap[R](f: T => R): Multiset[R] = ms.map((k, v) => (f(k), v))
   def multiToSeq: Seq[T] = ms.toSeq.flatMap((t, count) => Seq.fill(count)(t))
 
 def flattenMultisets[T](ms: Iterable[Multiset[T]]): Multiset[T] =
-  ms.flatten.groupMapReduce(_._1)(_._2)(_ + _)
+  groupMapReduce(ms.flatten)(_._1)(_._2)(_ + _)
 
 def multisetOf[T](ts: T*): Multiset[T] =
-  ts.groupMapReduce(t => t)(_ => 1)(_ + _)
+  groupMapReduce(ts)(t => t)(_ => 1)(_ + _)
+
+def groupMapReduce[A, CC[_], C, K, B]
+  (elems: IterableOps[A, CC, C])
+  (key: A => K)
+  (f: A => B)
+  (reduce: (B, B) => B)
+  : SeqMap[K, B] = {
+  val m = mutable.SeqMap.empty[K, B]
+  for (elem <- elems) {
+    val k = key(elem)
+    val v =
+      m.get(k) match {
+        case Some(b) => reduce(b, f(elem))
+        case None    => f(elem)
+      }
+    m.put(k, v)
+  }
+  m.to(SeqMap)
+}
+
+def groupMap[A, CC[_], C, K, B]
+  (elems: IterableOps[A, CC, C])
+  (key: A => K)
+  (f: A => B)
+  : SeqMap[K, CC[B]] = {
+  val m = mutable.SeqMap.empty[K, mutable.Builder[B, CC[B]]]
+  for (elem <- elems) {
+    val k = key(elem)
+    val bldr = m.getOrElseUpdate(k, elems.iterableFactory.newBuilder[B])
+    bldr += f(elem)
+  }
+  class Result extends runtime.AbstractFunction1[(K, mutable.Builder[B, CC[B]]), Unit] {
+    var built = SeqMap.empty[K, CC[B]]
+    def apply(kv: (K, mutable.Builder[B, CC[B]])) =
+      built = built.updated(kv._1, kv._2.result())
+  }
+  val result = new Result
+  m.foreach(result)
+  result.built
+}
 
 package eitherFilter {
   extension [L, R](e: Either[L, R])

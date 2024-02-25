@@ -14,6 +14,7 @@ import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.UnificationResult.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
+import scala.collection.immutable.SeqMap
 import scala.collection.mutable
 
 @throws(classOf[IrError])
@@ -349,7 +350,7 @@ private def elaborateDefBody
     (using Γ: Context)
     (using Signature)
     : Option[PartialSubstitution[VTerm]] =
-    val σ = mutable.Map[Nat, VTerm]()
+    val σ = mutable.SeqMap[Nat, VTerm]()
     matchPattern(constraints.map { case (w, p, _) => (p, w) }, σ) match
       case MatchingStatus.Matched =>
         constraints.foreach { case (w, pattern, _A) =>
@@ -473,13 +474,14 @@ private def elaborateDefBody
         ) =>
         val (_Σ, fields) = Σ
           .getFields(qn)
-          .foldLeft[(Signature, Map[Name, CaseTree])]((Σ, Map())) { case ((_Σ, fields), field) =>
-            val (_Σmod, ct) = elaborate(
-              q̅ :+ CProjection(field.name),
-              field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
-              filter(problem, field.name),
-            )(using Γ)(using _Σ)
-            (_Σmod, fields + (field.name -> ct))
+          .foldLeft[(Signature, SeqMap[Name, CaseTree])]((Σ, SeqMap())) {
+            case ((_Σ, fields), field) =>
+              val (_Σmod, ct) = elaborate(
+                q̅ :+ CProjection(field.name),
+                field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
+                filter(problem, field.name),
+              )(using Γ)(using _Σ)
+              (_Σmod, fields + (field.name -> ct))
           }
         (_Σ, CtRecord(fields))
       // [cosplit empty]
@@ -488,7 +490,7 @@ private def elaborateDefBody
       case (ElabClause(_, Nil, None, source) :: _, RecordType(qn, _, _)) =>
         Σ.getFields(qn).size match
           // There is no need to modify Σ because empty record does not have any clause
-          case 0 => (Σ, CtRecord(Map()))
+          case 0 => (Σ, CtRecord(SeqMap()))
           case _ => throw MissingFieldsInCoPattern(source)
       // [intro]
       case (
@@ -556,10 +558,10 @@ private def elaborateDefBody
                   .foldLeft[
                     Either[
                       IrError,
-                      (Signature, Map[QualifiedName, CaseTree], Option[CaseTree]),
+                      (Signature, SeqMap[QualifiedName, CaseTree], Option[CaseTree]),
                     ],
                   ](
-                    Right(Σ, Map(), None),
+                    Right(Σ, SeqMap(), None),
                   ) {
                     // Normal type case
                     case (Right(_, branches, defaultCase), Some(qn)) =>
@@ -620,8 +622,8 @@ private def elaborateDefBody
                 )
                 val data = Σ.getData(qn)
                 Σ.getConstructors(qn)
-                  .foldLeft[Either[IrError, (Signature, Map[Name, CaseTree])]](
-                    Right(Σ, Map()),
+                  .foldLeft[Either[IrError, (Signature, SeqMap[Name, CaseTree])]](
+                    Right(Σ, SeqMap()),
                   ) {
                     case (Right(_Σ, branches), constructor) =>
                       given Signature = _Σ
@@ -698,7 +700,7 @@ private def elaborateDefBody
                         case _: UNo => true
                         case _      => false
                     })
-                  if isEmpty then Right(Σ, CtDataCase(x, qn, Map()))
+                  if isEmpty then Right(Σ, CtDataCase(x, qn, SeqMap()))
                   else Left(NonEmptyType(_A, source1))
                 case _ => Left(NonEmptyType(_A, source1))
             // No action to do, just forward the previous error

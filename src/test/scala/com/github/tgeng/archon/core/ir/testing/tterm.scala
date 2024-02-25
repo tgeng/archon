@@ -37,7 +37,7 @@ enum TTerm:
       parameterDisposer: Option[TTerm],
       parameterReplicator: Option[TTerm],
       transform: TTerm,
-      handlers: Map[QualifiedName, THandlerImpl],
+      handlers: Seq[(QualifiedName, THandlerImpl)],
       input: TTerm,
       inputBinding: TTerm,
     )

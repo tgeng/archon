@@ -15,6 +15,7 @@ import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
+import scala.collection.immutable.SeqMap
 import scala.collection.mutable.ArrayBuffer
 import scala.math.Ordering.ordered
 
@@ -419,7 +420,7 @@ def checkUsageSubsumption
     // Note on direction of usage comparison: UAny > U1 but UAny subsumes U1 when counting usage
     case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Set.empty
     case (UsageLiteral(UAny), _)                          => Set.empty
-    case (sub@UsageJoin(operands1), sup: VTerm) =>
+    case (sub @ UsageJoin(operands1), sup: VTerm) =>
       val operands2 = sup match
         case UsageJoin(operands2) => operands2
         case v: VTerm             => Set(v)
@@ -521,11 +522,11 @@ private def checkEffSubsumption
         case _ => Set(Constraint.EffSubsumption(Γ, sub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.EffSubsumption(Γ, sub, sup))
-    case (sub: VTerm, sup@Effects(literals2, unionOperands2)) =>
+    case (sub: VTerm, sup @ Effects(literals2, unionOperands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
       val (literals1, unionOperands1) = sub match
         case Effects(literals1, unionOperands1) => (literals1, unionOperands1)
-        case v: VTerm                           => (Set.empty, Map(v -> false))
+        case v: VTerm                           => (Set.empty, SeqMap(v -> false))
       // false is considered "greater" because false means complex effects are not filtered out, which is "greater" than
       // true where complex effects are filtered out.
       given PartialOrdering[Boolean] = Ordering.fromLessThan[Boolean]:
@@ -571,11 +572,11 @@ private def checkLevelSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkLevelSubsumption", sub, sup):
   check2(sub, sup):
-    case (sub: VTerm, sup@Level(literal2, operands2)) =>
+    case (sub: VTerm, sup @ Level(literal2, operands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
       val (literal1, operands1) = sub match
         case Level(literal1, operands1) => (literal1, operands1)
-        case v: VTerm                   => (LevelOrder.zero, Map(v -> 0))
+        case v: VTerm                   => (LevelOrder.zero, SeqMap(v -> 0))
       val spuriousOperands = getSpurious[VTerm, Int](operands1, operands2)
       val areLiteralsSubsumed = literal1.compareTo(literal2) <= 0
       if spuriousOperands.isEmpty && areLiteralsSubsumed then Set.empty
@@ -607,7 +608,7 @@ private def checkLevelSubsumption
         u @ RUnsolved(_, _, UmcLevelSubsumption(_), _, _),
         Level(LevelOrder.zero, operands),
       ) if operands.isEmpty =>
-      ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, Map()), u1))
+      ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, SeqMap()), u1))
     case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), _, _), sup: VTerm) =>
       ctx.adaptForMetaVariable(u, sub) match
         case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
@@ -616,7 +617,7 @@ private def checkLevelSubsumption
       Set(Constraint.LevelSubsumption(Γ, sub, sup))
     case _ => throw NotLevelSubsumption(sub, sup)
 
-private def getSpurious[T, E: PartialOrdering](sub: Map[T, E], sup: Map[T, E]): Map[T, E] =
+private def getSpurious[T, E: PartialOrdering](sub: SeqMap[T, E], sup: SeqMap[T, E]): SeqMap[T, E] =
   sub.filter { case (operand1, e1) =>
     sup.get(operand1) match
       case None     => true

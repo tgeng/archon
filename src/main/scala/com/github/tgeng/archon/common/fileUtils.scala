@@ -17,7 +17,7 @@ import java.io.ObjectOutputStream
 import java.nio.charset.StandardCharsets.*
 import java.nio.file.{Files, Paths}
 import java.io.IOException
-import scala.collection.immutable.ArraySeq
+import scala.collection.immutable.{ArraySeq, SeqMap}
 
 extension (f: File) {
 
@@ -62,9 +62,9 @@ extension (f: File) {
     }
   }
 
-  def children: Map[String, File] = {
+  def children: SeqMap[String, File] = {
     val childrenNames = f.list
-    if (childrenNames == null) Map.empty
-    else childrenNames.map(name => (name.!!, f / name.!!)).toMap
+    if (childrenNames == null) SeqMap.empty
+    else childrenNames.map(name => (name.!!, f / name.!!)).to(SeqMap)
   }
 }

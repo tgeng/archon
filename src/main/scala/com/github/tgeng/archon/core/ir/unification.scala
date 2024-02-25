@@ -1,7 +1,7 @@
-/** This file contains unification used during elaboration (aka pattern matching clause elaboration).
-  * Meta-variable unification is done separately in `typing.scala`. The major difference is that
-  * unification here creates substitutors that unifies a `Var` with a concrete terms, while
-  * meta-variable unification solves meta-variables in the typing context.
+/** This file contains unification used during elaboration (aka pattern matching clause
+  * elaboration). Meta-variable unification is done separately in `typing.scala`. The major
+  * difference is that unification here creates substitutors that unifies a `Var` with a concrete
+  * terms, while meta-variable unification solves meta-variables in the typing context.
   */
 package com.github.tgeng.archon.core.ir
 

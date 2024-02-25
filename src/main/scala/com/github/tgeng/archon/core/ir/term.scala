@@ -7,6 +7,7 @@ import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.Usage.*
 
 import scala.annotation.targetName
+import scala.collection.immutable.SeqMap
 
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
@@ -312,7 +313,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Effects
     (
       literal: Set[Eff],
-      unionOperands: Map[
+      unionOperands: SeqMap[
         VTerm,
         /* whether to filter out complex or non-linear effects. True means only retain simple linear effects */ Boolean,
       ],
@@ -323,12 +324,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   the upper bound of the level. It's called strict because only levels that are strictly less
     *   than this level are inhabitants.
     */
-  case LevelType(strictUpperBound: VTerm = Level(LevelOrder.ω, Map()))(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo),
-    QualifiedNameOwner(LevelQn)
+  case LevelType
+    (strictUpperBound: VTerm = Level(LevelOrder.ω, SeqMap()))
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(LevelQn)
 
   case Level
-    (literal: LevelOrder, maxOperands: Map[VTerm, /* level offset */ Nat])
+    (literal: LevelOrder, maxOperands: SeqMap[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
@@ -380,7 +381,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case EffectsType(continuationUsage, handlerType) =>
         EffectsType(continuationUsage, handlerType)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
-      case LevelType(strictUpperBound)           => LevelType(strictUpperBound)
+      case LevelType(strictUpperBound)     => LevelType(strictUpperBound)
       case Level(literal, maxOperands)     => Level(literal, maxOperands)
       case Auto()                          => Auto()
 
@@ -431,16 +432,16 @@ object VTerm:
     }
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
-    Level(LevelOrder(0, n), Map())
+    Level(LevelOrder(0, n), SeqMap())
 
   def LevelLiteral(m: Nat, n: Nat)(using sourceInfo: SourceInfo): Level =
-    Level(LevelOrder(m, n), Map())
+    Level(LevelOrder(m, n), SeqMap())
 
-  def LevelUpperBound(): Level = Level(LevelOrder.upperBound, Map())
+  def LevelUpperBound(): Level = Level(LevelOrder.upperBound, SeqMap())
 
-  def LevelSuc(t: VTerm): Level = Level(LevelOrder.zero, Map(t -> 1))
+  def LevelSuc(t: VTerm): Level = Level(LevelOrder.zero, SeqMap(t -> 1))
 
-  def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, Map(ts.map(_ -> 0): _*))
+  def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, SeqMap(ts.map(_ -> 0): _*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
   val u0: VTerm = VTerm.UsageLiteral(Usage.U0)
@@ -465,13 +466,13 @@ object VTerm:
   )
 
   def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
-    Effects(effects, Map.empty)
+    Effects(effects, SeqMap.empty)
 
   def EffectsUnion(effects1: VTerm, effects2: VTerm): Effects =
-    Effects(Set.empty, Map(effects1 -> false, effects2 -> false))
+    Effects(Set.empty, SeqMap(effects1 -> false, effects2 -> false))
 
   def EffectsRetainSimpleLinear(effects: VTerm): Effects =
-    Effects(Set.empty, Map(effects -> true))
+    Effects(Set.empty, SeqMap(effects -> true))
 
   /** @param firstIndex
     *   inclusive
@@ -665,12 +666,12 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
       parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
       transform: CTerm, // binding offset + 1 (for parameter) + 1 (for input value)
-      handlers: Map[ /* name identifying an effect operation */ QualifiedName, HandlerImpl],
+      handlers: SeqMap[ /* name identifying an effect operation */ QualifiedName, HandlerImpl],
       input: CTerm,
       inputBinding: Binding[VTerm],
     )
     (
-      val handlersBoundNames: Map[
+      val handlersBoundNames: SeqMap[
         QualifiedName,
         (Seq[Ref[Name]], /* resume name */ Option[Ref[Name]]),
       ],

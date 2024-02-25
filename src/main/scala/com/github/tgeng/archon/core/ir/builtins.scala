@@ -4,14 +4,16 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.*
 import com.github.tgeng.archon.core.ir.Declaration.*
 
+import scala.collection.immutable.SeqMap
+
 private case class SimpleSignature
   (
-    declarations: Map[QualifiedName, Declaration] = Map(),
-    constructors: Map[QualifiedName, IndexedSeq[Constructor]] = Map(),
-    fields: Map[QualifiedName, IndexedSeq[Field]] = Map(),
-    clauses: Map[QualifiedName, IndexedSeq[Clause]] = Map(),
-    caseTrees: Map[QualifiedName, CaseTree] = Map(),
-    operations: Map[QualifiedName, IndexedSeq[Operation]] = Map(),
+    declarations: SeqMap[QualifiedName, Declaration] = SeqMap(),
+    constructors: SeqMap[QualifiedName, IndexedSeq[Constructor]] = SeqMap(),
+    fields: SeqMap[QualifiedName, IndexedSeq[Field]] = SeqMap(),
+    clauses: SeqMap[QualifiedName, IndexedSeq[Clause]] = SeqMap(),
+    caseTrees: SeqMap[QualifiedName, CaseTree] = SeqMap(),
+    operations: SeqMap[QualifiedName, IndexedSeq[Operation]] = SeqMap(),
   )
   extends Signature:
 
