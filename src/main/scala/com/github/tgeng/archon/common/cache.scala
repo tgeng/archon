@@ -2,7 +2,7 @@ package com.github.tgeng.archon.common
 
 import java.util.Base64
 import java.util.Arrays
-import scala.collection.SeqMap
+import scala.collection.Map
 import scala.collection.mutable
 import com.github.tgeng.archon.common.*
 
@@ -11,7 +11,7 @@ trait Cache[K, V] {
 }
 
 class SingleLoadingCache[K, V](loadingFn: (key: K) => Option[V]) extends Cache[K, V] {
-  private val cache = mutable.SeqMap[K, V]()
+  private val cache = mutable.Map[K, V]()
   override def load(key: K): Option[V] = {
     cache.get(key) match {
       case s @ Some(_) => s
@@ -29,8 +29,8 @@ class SingleLoadingCache[K, V](loadingFn: (key: K) => Option[V]) extends Cache[K
   def remove(key: K) = cache.remove(key)
 }
 
-class BatchLoadingCache[K, V](loadingFn: (key: K) => SeqMap[K, V]) extends Cache[K, V] {
-  private val cache = mutable.SeqMap[K, V]()
+class BatchLoadingCache[K, V](loadingFn: (key: K) => Map[K, V]) extends Cache[K, V] {
+  private val cache = mutable.Map[K, V]()
   override def load(key: K): Option[V] = {
     cache.get(key) match {
       case s @ Some(_) => s

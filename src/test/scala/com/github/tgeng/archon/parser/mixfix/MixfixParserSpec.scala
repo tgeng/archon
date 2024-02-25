@@ -21,7 +21,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
     assert(parts.size == 2)
     val rules = rulesParser.parse(parts(0)).asRight
     val gb = PrecedenceGraphBuilder()
-    val operatorMap = mutable.SeqMap[String, Operator]()
+    val operatorMap = mutable.Map[String, Operator]()
     for rule <- rules do
       for operatorName <- rule.operatorNames do
         val operator = Operator(

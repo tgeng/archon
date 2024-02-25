@@ -126,7 +126,7 @@ extension [T](inline t: T)
   inline def systemId: Int = System.identityHashCode(t)
 
 def caching[A, B](f: A => B): A => B =
-  val cache = mutable.SeqMap[A, B]()
+  val cache = mutable.Map[A, B]()
   a => cache.getOrElseUpdate(a, f(a))
 
 extension [T](elems: IterableOnce[T])
