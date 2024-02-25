@@ -9,6 +9,9 @@ import com.github.tgeng.archon.core.ir.Usage.*
 import scala.annotation.targetName
 import scala.collection.immutable.SeqMap
 
+// TODO[P2]: Replace all Set with SeqSet so that type checking become deterministic after
+//  https://github.com/scala/scala-library-next/issues/22 is resolved
+
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
