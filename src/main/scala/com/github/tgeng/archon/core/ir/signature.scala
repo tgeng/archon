@@ -2,6 +2,7 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.CTerm.redex
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 
 enum Variance:
@@ -20,11 +21,11 @@ enum Declaration:
     (qn: QualifiedName)
     (
       val context: TContext,
-      /* binding + tParamTys */
+      /* binding: + context */
       val tIndexTys: Telescope,
-      /* binding + tParamTys + tIndexTys */
+      /* binding: + context + tIndexTys */
       val level: VTerm,
-      /* binding + tParamTys + tIndexTys */
+      /* binding: + context + tIndexTys */
       val inherentEqDecidability: VTerm,
     )
   case Record
@@ -83,9 +84,9 @@ case class Clause
 case class Operation
   (
     name: Name,
-    paramTys: Telescope, /* + tParamTys */
-    resultTy: VTerm /* + tParamTys + paramTys */,
-    resultUsage: VTerm, /* + tParamTys + paramTys */
+    paramTys: Telescope, /* + context */
+    resultTy: VTerm /* + context + paramTys */,
+    resultUsage: VTerm, /* + context + paramTys */
   )
 
 trait Signature:
@@ -145,11 +146,17 @@ trait Signature:
       throw IllegalArgumentException(s"missing field $fieldName"),
     )
 
-  def getDefinitionOption(qn: QualifiedName): Option[Definition]
+  def getDefinitionOption(qn: QualifiedName): Option[Definition] =
+    getDefinitionOptionImpl(qn).orElse(getDerivedDefinitionOption(qn))
+
+  def getDefinitionOptionImpl(qn: QualifiedName): Option[Definition]
 
   def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).get
 
-  def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]]
+  def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    getClausesOptionImpl(qn).orElse(getDerivedClausesOption(qn))
+
+  def getClausesOptionImpl(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
   def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(
     qn,
@@ -180,3 +187,245 @@ trait Signature:
     getOperationOption(qn, opName).getOrElse(
       throw IllegalArgumentException(s"missing operation $opName"),
     )
+
+  private def getDerivedDefinitionOption(qn: QualifiedName): Option[Definition] =
+    getDataDerivedDefinitionOption(qn)
+      .orElse(getDataConDerivedDefinitionOption(qn))
+      .orElse(getRecordDerivedDefinitionOption(qn))
+      .orElse(getRecordFieldDerivedDefinitionOption(qn))
+      .orElse(getEffectDerivedDefinitionOption(qn))
+      .orElse(getEffectOpDerivedDefinitionOption(qn))
+
+  private def getDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    getDataDerivedClausesOption(qn)
+      .orElse(getDataConDerivedClausesOption(qn))
+      .orElse(getRecordDerivedClausesOption(qn))
+      .orElse(getRecordFieldDerivedClausesOption(qn))
+      .orElse(getEffectDerivedClausesOption(qn))
+      .orElse(getEffectOpDerivedClausesOption(qn))
+
+  import CTerm.*
+  import CoPattern.*
+  import QualifiedName.*
+  import VTerm.*
+
+  given SourceInfo = SiEmpty
+  given Signature = this
+
+  def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    getDataOption(qn).map { data =>
+      val context = data.context.map(_._1) ++ data.tIndexTys
+      Definition(qn)(
+        context,
+        F(Type(DataType(qn, vars(context.size - 1)))),
+      )
+    }
+
+  def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    getDataOption(qn)
+      .map(data => {
+        val context = data.context.map(_._1) ++ data.tIndexTys
+        val dataType = DataType(qn, vars(context.size - 1))
+        val highestDbIndex = context.size - 1
+        IndexedSeq(
+          Clause(
+            context,
+            Nil,
+            Return(dataType, uAny),
+            F(Type(dataType), uAny),
+          ),
+        )
+      })
+
+  def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    qn match
+      case Node(dataQn, conName) =>
+        for
+          data <- getDataOption(dataQn)
+          constructor <- getConstructorOption(dataQn, conName)
+        yield
+          val context = data.context.map(_._1) ++ data.tIndexTys
+          // Synthesize a usage parameter for polymorphic usages in data types.
+          val conContext =
+            (context :+ Binding(UsageType(), uAny)(gn"usage")) ++
+              constructor.paramTys.zipWithIndex.map((b, i) =>
+                Binding(
+                  b.ty.weakened,
+                  // multiply the usage by the synthesized usage parameter
+                  UsageProd(b.usage.weakened, Var(i)),
+                )(b.name),
+              )
+          Definition(qn / conName)(
+            conContext,
+            F(
+              DataType(
+                dataQn,
+                vars(conContext.size - 1, constructor.paramTys.size + 1) ++
+                  // weaken due to the synthesized usage parameter
+                  constructor.tArgs.map(_.weaken(1, constructor.paramTys.size)),
+              ),
+              Total(),
+              Var(constructor.paramTys.size), // reference the synthesized usage parameter
+            ),
+          )
+      case _ => None
+
+  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    qn match
+      case Node(dataQn, conName) =>
+        for
+          data <- getDataOption(dataQn)
+          constructor <- getConstructorOption(dataQn, conName)
+        yield
+          val context = data.context.map(_._1) ++ data.tIndexTys
+          // Synthesize a usage parameter for polymorphic usages in data types.
+          val conContext =
+            (context :+ Binding(UsageType(), uAny)(gn"usage")) ++
+              constructor.paramTys.zipWithIndex.map((b, i) =>
+                Binding(
+                  b.ty.weakened,
+                  // multiply the usage by the synthesized usage parameter
+                  UsageProd(b.usage.weakened, Var(i)),
+                )(b.name),
+              )
+          IndexedSeq(
+            Clause(
+              conContext,
+              Nil,
+              Return(
+                Con(
+                  conName,
+                  vars(constructor.paramTys.size - 1),
+                ),
+                Var(constructor.paramTys.size), // reference the synthesized usage parameter
+              ),
+              F(
+                DataType(
+                  dataQn,
+                  vars(conContext.size - 1, constructor.paramTys.size + 1) ++
+                    // weaken due to the synthesized usage parameter
+                    constructor.tArgs.map(_.weaken(1, constructor.paramTys.size)),
+                ),
+                Total(),
+                Var(constructor.paramTys.size), // reference the synthesized usage parameter
+              ),
+            ),
+          )
+      case _ => None
+
+  def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    getRecordOption(qn)
+      .map(record =>
+        Definition(qn)(
+          record.context.map(_._1),
+          CType(RecordType(qn, vars(record.context.size - 1))),
+        ),
+      )
+
+  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    getRecordOption(qn)
+      .map(record => {
+        val recordType = RecordType(qn, vars(record.context.size - 1))
+        IndexedSeq(
+          Clause(
+            record.context.map(_._1),
+            Nil,
+            recordType,
+            CType(recordType),
+          ),
+        )
+      })
+
+  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    qn match
+      case Node(recordQn, fieldName) =>
+        for
+          record <- getRecordOption(qn)
+          field <- getFieldOption(qn, fieldName)
+        yield Definition(qn)(
+          record.context.map(_._1) :+ record.selfBinding,
+          field.ty,
+        )
+      case _ => None
+
+  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    qn match
+      case Node(recordQn, fieldName) =>
+        for
+          record <- getRecordOption(qn)
+          field <- getFieldOption(qn, fieldName)
+        yield IndexedSeq(
+          Clause(
+            record.context.map(_._1) :+ record.selfBinding,
+            Nil,
+            redex(Force(Var(0)), fieldName),
+            field.ty,
+          ),
+        )
+      case _ => None
+
+  def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    getEffectOption(qn)
+      .map(effect =>
+        Definition(qn)(
+          effect.context,
+          F(EffectsType()),
+        ),
+      )
+
+  def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    for effect <- getEffectOption(qn)
+    yield {
+      IndexedSeq(
+        Clause(
+          effect.context,
+          Nil,
+          Return(EffectsLiteral(Set((qn, vars(effect.context.size - 1)))), uAny),
+          F(EffectsType()),
+        ),
+      )
+    }
+
+  def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
+    qn match
+      case Node(effectQn, opName) =>
+        for
+          eff <- getEffectOption(effectQn)
+          op <- getOperationOption(effectQn, opName)
+        yield
+          val context = eff.context ++ op.paramTys
+          Definition(qn)(
+            context,
+            F(
+              op.resultTy,
+              EffectsLiteral(Set((effectQn, vars(context.size - 1, op.paramTys.size)))),
+              op.resultUsage,
+            ),
+          )
+      case _ => None
+
+  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+    qn match
+      case Node(effectQn, opName) =>
+        for
+          eff <- getEffectOption(effectQn)
+          op <- getOperationOption(effectQn, opName)
+        yield
+          val context = eff.context ++ op.paramTys
+          IndexedSeq(
+            Clause(
+              context,
+              Nil,
+              OperationCall(
+                (effectQn, vars(context.size - 1, op.paramTys.size)),
+                opName,
+                vars(op.paramTys.size - 1),
+              ),
+              F(
+                op.resultTy,
+                EffectsLiteral(Set((effectQn, vars(context.size - 1, op.paramTys.size)))),
+                op.resultUsage,
+              ),
+            ),
+          )
+      case _ => None

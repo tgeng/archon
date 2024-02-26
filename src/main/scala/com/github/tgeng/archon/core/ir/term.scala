@@ -733,6 +733,10 @@ object CTerm:
   @targetName("redexFromTermsStar")
   def redex(c: CTerm, args: VTerm*)(using SourceInfo): Redex = redex(c, args)
 
+  @targetName("redexFromProjection")
+  def redex(c: CTerm, fieldName: Name)(using SourceInfo): Redex =
+    redex(c, Elimination.EProj(fieldName))
+
   def Application(fun: CTerm, arg: VTerm)(using SourceInfo): Redex =
     fun match
       case Redex(c, elims) => Redex(c, elims :+ Elimination.ETerm(arg))

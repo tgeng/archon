@@ -32,9 +32,9 @@ private case class SimpleSignature
   override def addOperation(qn: QualifiedName, o: Operation): SimpleSignature =
     copy(operations = operations + (qn -> (operations.getOrElse(qn, IndexedSeq()) :+ o)))
 
-  override def getDefinitionOption(qn: QualifiedName): Option[Definition] =
+  override def getDefinitionOptionImpl(qn: QualifiedName): Option[Definition] =
     declarations.get(qn).collect { case d: Definition => d }
-  override def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
+  override def getClausesOptionImpl(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     clauses.get(qn)
   override def getCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
     caseTrees.get(qn)
