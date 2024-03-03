@@ -1,6 +1,8 @@
+package com.github.tgeng.archon.core.ir.testing.tterm
+
 import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.{Name, QualifiedName}
-import com.github.tgeng.archon.core.ir.{Elimination, HandlerConstraint, Usage}
+import com.github.tgeng.archon.core.ir.*
 
 enum UsageOperator:
   case UoProd, UoSum, UoJoin
