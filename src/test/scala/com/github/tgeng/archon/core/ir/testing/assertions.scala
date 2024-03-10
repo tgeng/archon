@@ -83,7 +83,7 @@ def assertNotCType
 }
 
 private inline def enableDebugging(using ctx: TypingContext): Unit = {
-  val stacktrace = Thread.currentThread().!!.getStackTrace.!!
+  val stacktrace = Thread.currentThread().nn.getStackTrace.nn
   println(s"Debugging ${stacktrace(2)}")
   ctx.enableDebugging = true
 }

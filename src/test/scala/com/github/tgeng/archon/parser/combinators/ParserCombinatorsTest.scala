@@ -5,6 +5,7 @@ import com.github.tgeng.archon.parser.combinators.{*, given}
 import org.scalatest.freespec.AnyFreeSpec
 
 import java.io.File
+import java.nio.file.Path
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
@@ -137,9 +138,9 @@ class ParserCombinatorsTest extends AnyFreeSpec:
   private def testParsers() =
     val obj = Parsers()
     val parsers =
-      obj.getClass.getDeclaredMethods.!!.filter(!_.!!.getName.!!.contains("$"))
+      obj.getClass.getDeclaredMethods.nn.filter(!_.nn.getName.nn.contains("$"))
         .map(
-          _.!!.invoke(
+          _.nn.invoke(
             obj,
           ).asInstanceOf[Parser[Char, Any]],
         )
@@ -161,9 +162,9 @@ class ParserCombinatorsTest extends AnyFreeSpec:
       }
 
   @nowarn
-  private def testParser(p: Parser[Char, Any], testDataFile: File): (String, String) =
-    val testDataString = Source.fromFile(testDataFile).use { source =>
-      source.mkString.replace(System.lineSeparator(), "\n").!!
+  private def testParser(p: Parser[Char, Any], testDataFile: Path): (String, String) =
+    val testDataString = Source.fromFile(testDataFile.toFile.nn).use { source =>
+      source.mkString.replace(System.lineSeparator(), "\n").nn
     }
     val actualParts = ArrayBuffer[String]()
     val expectedParts = ArrayBuffer[String]()

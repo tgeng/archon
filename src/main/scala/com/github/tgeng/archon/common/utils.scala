@@ -24,14 +24,6 @@ object Ref:
 
   given [T]: Conversion[Ref[T], T] = _.value
 
-extension [T](t: T | Null)
-  inline def !! : T =
-    assert(t != null)
-    t.asInstanceOf[T]
-
-  inline def ifNullUse(default: T) = if (t == null) default else t
-  inline def ifNotNull[R](fn: T => R) = if (t == null) null else fn(t)
-
 def indexToLineColumn(input: IndexedSeq[Char], index: Int): (Int, Int) =
   var line = 0
   var column = 0

@@ -1,20 +1,22 @@
 package com.github.tgeng.archon.common
 
-import java.io.File
-import scala.io.Source
 import org.scalatest.freespec.AnyFreeSpec
+
+import java.nio.file.Path
+import scala.io.Source
+import scala.language.unsafeNulls
 
 abstract class SingleFileBasedSpec
   (
     relativePath: String,
-    fileFilter: File => Boolean = _ => true,
+    fileFilter: Path => Boolean = _ => true,
   )
   extends AnyFreeSpec:
   private val testDataDir = TestDataConstants.testResourcesRoot / relativePath
-  for file <- testDataDir.listFiles().!! if fileFilter(file.!!) do
-    file.!!.getName.!! in {
-      Source.fromFile(file.!!).use { source =>
-        runTest(file.!!, source)
+  for file <- testDataDir.listFiles() if fileFilter(file) do
+    file.getName.toString in {
+      Source.fromFile(file.toFile).use { source =>
+        runTest(file, source)
       }
     }
-  def runTest(testData: File, source: Source): Unit
+  def runTest(testData: Path, source: Source): Unit

@@ -189,7 +189,7 @@ extension (errors: collection.Seq[ParseError])
       val numberOfSpaces = lineAndColumn.length + column + 1
       val spaces: String = (0 until numberOfSpaces).map(_ => " ").mkString
       sb.append(spaces + s"^ expect ${es.map(_.description).distinct.mkString(" | ")}\n")
-    sb.toString.trim.!!
+    sb.toString.trim.nn
 
 
 extension[M[+_]]

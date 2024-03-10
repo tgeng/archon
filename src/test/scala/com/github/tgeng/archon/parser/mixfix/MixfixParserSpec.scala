@@ -1,21 +1,22 @@
 package com.github.tgeng.archon.parser.mixfix
 
-import java.io.File
-import io.Source
-import collection.mutable
-import collection.mutable.ArrayBuffer
-import collection.immutable.ArraySeq
-
 import com.github.tgeng.archon.common.{*, given}
 import com.github.tgeng.archon.core.common.{*, given}
 import com.github.tgeng.archon.parser.combinators.{*, given}
 import com.github.tgeng.archon.parser.mixfix.*
 
+import java.io.File
+import java.nio.file.Path
+import scala.collection.immutable.ArraySeq
+import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
+
 class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
-  override def runTest(file: File, source: Source) =
+  override def runTest(file: Path, source: Source) =
     import MixfixParserSpec.*
-    import QualifiedName.*
     import PrecedenceGraphBuilder.*
+    import QualifiedName.*
     val expected = file.readText()
     val parts = expected.split2("\n====\n")
     assert(parts.size == 2)
@@ -65,7 +66,7 @@ class MixfixParserSpec extends SingleFileBasedSpec("parser/mixfix"):
 
     val testCases = parts(1).split2("\n\n")
     val actualParts = ArrayBuffer[String]()
-    timed(file.getName.!!) {
+    timed(file.getName.toString) {
       for testCase <- testCases
       do
         val actualPart = StringBuilder()

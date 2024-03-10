@@ -24,8 +24,8 @@ enum Name extends Comparable[Name]:
     case Unreferenced => throw IllegalArgumentException()
     case Normal(n) =>
       val prefixEnd = n.lastIndexWhere(c => !c.isDigit) + 1
-      val prefix = n.substring(0, prefixEnd).!!
-      var suffix = n.substring(prefixEnd, n.length).!!.toIntOption.getOrElse(1)
+      val prefix = n.substring(0, prefixEnd).nn
+      var suffix = n.substring(prefixEnd, n.length).nn.toIntOption.getOrElse(1)
       var name = prefix
       while namesToAvoid(Normal(name)) do
         name = prefix + suffix
@@ -33,8 +33,8 @@ enum Name extends Comparable[Name]:
       Normal(name)
     case Generated(n) =>
       val prefixEnd = n.lastIndexWhere(c => !c.isDigit) + 1
-      val prefix = n.substring(0, prefixEnd).!!
-      var suffix = n.substring(prefixEnd, n.length).!!.toIntOption.getOrElse(1)
+      val prefix = n.substring(0, prefixEnd).nn
+      var suffix = n.substring(prefixEnd, n.length).nn.toIntOption.getOrElse(1)
       var name = prefix
       while namesToAvoid(Generated(name)) do
         name = prefix + suffix

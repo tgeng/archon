@@ -8,7 +8,7 @@ extension (value: Any)
     val oos = new ObjectOutputStream(stream)
     oos.writeObject(value)
     oos.close()
-    stream.toByteArray.!!
+    stream.toByteArray.nn
   }
 
 extension (bytes: Array[Byte])

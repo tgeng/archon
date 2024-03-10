@@ -67,7 +67,7 @@ class SingleLoadingExpirableCache[K, V, F](loadingFn: (key: K) => (V, F))
   }
 }
 
-private val base64 = Base64.getEncoder.!!
+private val base64 = Base64.getEncoder.nn
 
 case class FingerPrint private (private val bytes: Array[Byte]) {
   @transient lazy override val hashCode = Arrays.hashCode(bytes)

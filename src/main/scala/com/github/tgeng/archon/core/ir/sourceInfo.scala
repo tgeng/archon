@@ -18,7 +18,7 @@ case class Range
   def +(that: Range): Range =
     Range(math.min(this.start, that.start), math.max(this.end, that.end))
 
-extension (s: String) def substring(r: Range): String = s.substring(r.start, r.end).!!
+extension (s: String) def substring(r: Range): String = s.substring(r.start, r.end).nn
 
 enum SourceInfo:
   case SiEmpty
