@@ -216,8 +216,14 @@ sealed trait UsageCompound(val distinctOperands: Set[VTerm])
   *   - complex
   *     - handler param -> op param1 -> op param2 -> ... -> op paramN -> continuation -> (handler
   *       param, handler output)
+  * @param boundNames
+  *   the parameter and optional continuation parameter names. Note that handler parameter name is
+  *   not among the names here because it's shared across all handler implementations and stored in
+  *   the parent `Handler` construct under the `parameterBinding` field.
   */
-case class HandlerImpl(handlerConstraint: HandlerConstraint, body: CTerm)
+case class HandlerImpl
+  (handlerConstraint: HandlerConstraint, body: CTerm)
+  (val boundNames: Seq[Ref[Name]])
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
@@ -673,12 +679,6 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       input: CTerm,
       inputBinding: Binding[VTerm],
     )
-    (
-      val handlersBoundNames: SeqMap[
-        QualifiedName,
-        (Seq[Ref[Name]], /* resume name */ Option[Ref[Name]]),
-      ],
-    )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
@@ -700,7 +700,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case t: RecordType              => t.copy()
       case t: OperationCall           => t.copy()
       case c: Continuation            => c
-      case h: Handler                 => h.copy()(h.handlersBoundNames)
+      case h: Handler                 => h.copy()
 
   // TODO[P3]: support array operations on heap
   // TODO[P3]: consider adding builtin set and maps with decidable equality because we do not

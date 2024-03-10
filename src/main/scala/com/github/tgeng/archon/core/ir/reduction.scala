@@ -104,12 +104,8 @@ private final class StackMachine
                 case Return(Con(name, param1 :: param2 :: Nil), _) if name == n"MkPair" =>
                   replicate(
                     baseStackSize,
-                    handler.copy(parameter = param1, input = continuationTerm1)(
-                      handler.handlersBoundNames,
-                    ),
-                    handler.copy(parameter = param2, input = continuationTerm2)(
-                      handler.handlersBoundNames,
-                    ),
+                    handler.copy(parameter = param1, input = continuationTerm1),
+                    handler.copy(parameter = param2, input = continuationTerm2),
                     continuationUsage,
                   )
                 case _ => throw IllegalStateException("type error")
@@ -121,9 +117,7 @@ private final class StackMachine
               pc match
                 case Return(Con(name, param :: result :: Nil), _) if name == n"MkPair" =>
                   val handler = stack(handlerIndex).asInstanceOf[Handler]
-                  stack(handlerIndex) = handler.copy(parameter = param)(
-                    handler.handlersBoundNames,
-                  )
+                  stack(handlerIndex) = handler.copy(parameter = param)
                   def getU0Term(result: VTerm): CTerm =
                     val capturedStack = stack.slice(handlerIndex, stack.size).toIndexedSeq
                     stack.dropRightInPlace(stack.size - handlerIndex)
@@ -278,8 +272,7 @@ private final class StackMachine
                   .foldRight(tip):
                     case (entry: Elimination[VTerm], term) => redex(term, entry)
                     case (entry: Let, term)                => entry.copy(t = term)(entry.boundName)
-                    case (HandlerEntry(_, entry, _), term) =>
-                      entry.copy(input = term)(entry.handlersBoundNames)
+                    case (HandlerEntry(_, entry, _), term) => entry.copy(input = term)
                     case _ => throw IllegalStateException("type error")
                 stack.dropRightInPlace(stack.size - matchingHandlerIdx)
                 val continuation =
@@ -287,24 +280,20 @@ private final class StackMachine
                 handlerImpl.body.substLowers(handler.parameter +: args :+ continuation: _*),
             )
       case Continuation(continuationTerm, continuationUsage) =>
-        def getContinuationTermWithNewParameter(param: VTerm) =
-          continuationTerm.copy(parameter = param)(
-            continuationTerm.handlersBoundNames,
-          )
         stack.pop() match
           case EProj(name) if name == n"resume" =>
             val ETerm(param) = stack.pop(): @unchecked
             val ETerm(arg) = stack.pop(): @unchecked
             run(
               replaceTip(
-                getContinuationTermWithNewParameter(param),
+                continuationTerm.copy(parameter = param),
                 arg,
               ),
             )
           case EProj(name) if name == n"dispose" =>
             val ETerm(param) = stack.pop(): @unchecked
             val (handlerStack, handlerEntry) =
-              expandTermToStack(getContinuationTermWithNewParameter(param))(
+              expandTermToStack(continuationTerm.copy(parameter = param))(
                 processStackEntryForDisposerCall(Hole),
               )()
             stack.pushAll(handlerStack)
@@ -315,8 +304,8 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(getContinuationTermWithNewParameter(param))(h =>
-                h.copy(input = Hole)(h.handlersBoundNames),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
+                h.copy(input = Hole),
               ) {
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)
@@ -339,7 +328,7 @@ private final class StackMachine
           stack.push(
             HandlerEntry(
               stack.size,
-              h.copy(eff = eff, input = Hole)(h.handlersBoundNames),
+              h.copy(eff = eff, input = Hole),
               this.currentHandlerEntry,
             ),
           )
@@ -409,8 +398,8 @@ private final class StackMachine
             case None =>
               replicate(
                 baseStackSize,
-                h.copy(input = continuationTerm1)(h.handlersBoundNames),
-                h.copy(input = continuationTerm2)(h.handlersBoundNames),
+                h.copy(input = continuationTerm1),
+                h.copy(input = continuationTerm2),
                 continuationUsage,
               )
         case _ => throw IllegalStateException("type error")
@@ -420,7 +409,7 @@ private final class StackMachine
 
     ctx match
       case t: Let     => t.copy(t = c)(t.boundName)
-      case t: Handler => t.copy(input = c)(t.handlersBoundNames)
+      case t: Handler => t.copy(input = c)
       case t: Redex   => t.copy(t = c)
       case _          => throw IllegalArgumentException("unexpected context")
 
@@ -756,8 +745,6 @@ private def processStackEntryForDisposerCall
     transform = handler.parameterDisposer match
       case Some(parameterDisposer) => parameterDisposer.weakened
       case None                    => Return(Con(n"MkUnit", Nil), uAny),
-  )(
-    handler.handlersBoundNames,
   )
 
 private def joinContinuationUsages[K]

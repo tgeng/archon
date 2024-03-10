@@ -593,9 +593,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                     ),
                   )
                   .toSeq ++ handlers.keys.toSeq.map { name =>
-                  val (paramNames, resumeNameOption) = h.handlersBoundNames(name)
                   val handlerImpl = handlers(name)
-                  val allParamNames = paramNames ++ resumeNameOption
+                  val allParamNames = handlerImpl.boundNames
                   val paramBlock = Block(
                     Whitespace,
                     NoWrap,

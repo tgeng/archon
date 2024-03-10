@@ -411,8 +411,7 @@ trait Visitor[C, R]:
           visitCTerm(handler.transform)
         },
       ) ++ handler.handlers.map { (name, handlerImpl) =>
-        val (argNames, resumeName) = handler.handlersBoundNames(name)
-        withBindings((handler.parameterBinding.name +: argNames) ++ resumeName) {
+        withBindings(handler.parameterBinding.name +: handlerImpl.boundNames) {
           visitHandlerImpl(handlerImpl)
         }
       } ++ Seq(
@@ -800,18 +799,15 @@ trait Transformer[C]:
         transformCTerm(handler.transform)
       },
       handler.handlers.map { (name, handlerImpl) =>
-        val (argNames, resumeName) = handler.handlersBoundNames(name)
         (
           name,
-          withBindings((handler.parameterBinding.name +: argNames) ++ resumeName) {
+          withBindings(handler.parameterBinding.name +: handlerImpl.boundNames) {
             transformHandlerImpl(handlerImpl)
           },
         )
       },
       transformCTerm(handler.input),
       handler.inputBinding.map(transformVTerm),
-    )(
-      handler.handlersBoundNames,
     )(using handler.sourceInfo)
 
   def transformHandlerImpl
@@ -819,7 +815,7 @@ trait Transformer[C]:
     (using ctx: C)
     (using Σ: Signature)
     : HandlerImpl =
-    handlerImpl.copy(body = transformCTerm(handlerImpl.body))
+    handlerImpl.copy(body = transformCTerm(handlerImpl.body))(handlerImpl.boundNames)
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))

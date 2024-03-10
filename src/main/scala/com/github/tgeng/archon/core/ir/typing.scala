@@ -1722,7 +1722,7 @@ def checkHandler
           checkEffSubsumption(effects, implOutputEffects),
           NotEffectSubsumption(effects, implOutputEffects),
         )
-        (handlerImpl.copy(body = body), usages)
+        (handlerImpl.copy(body = body)(handlerImpl.boundNames), usages)
       case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
         given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val continuationWeakenOffset = continuationΓ.size - Γ.size
@@ -1758,7 +1758,7 @@ def checkHandler
             outputUsage.weaken(implOffset, 0),
           ),
         )(using implΓ)
-        (handlerImpl.copy(body = body), usages)
+        (handlerImpl.copy(body = body)(handlerImpl.boundNames), usages)
     (qn, newHandlerImpl, usages)
   }
   (
@@ -1776,7 +1776,7 @@ def checkHandler
       handlerAndUsages.map((qn, impl, _) => (qn, impl)).to(SeqMap),
       input,
       inputBinding,
-    )(h.handlersBoundNames)(using h.sourceInfo),
+    )(using h.sourceInfo),
     F(outputTy, outputEffects, outputUsage),
     inputUsages + parameterUsages + parameterDisposerUsages + parameterReplicatorUsages + transformUsages + handlerAndUsages
       .map((_, _, usages) => usages)
