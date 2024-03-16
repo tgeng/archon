@@ -408,13 +408,13 @@ object AstParser:
 extension(ctx: StringContext)
   def t(args: String*): AstTerm =
     (P.whitespaces >> AstParser.term << P.whitespaces).parseOrThrow(
-      ctx.s(args: _*)
+      ctx.s(args*)
     )
   def d(args: String*): List[AstDeclaration] =
     (P.whitespaces >> AstParser.declarations << P.whitespaces).parseOrThrow(
-      ctx.s(args: _*)
+      ctx.s(args*)
     )
   def b(args: String*): Binding[AstTerm] =
     (P.whitespaces >> AstParser.binding << P.whitespaces).parseOrThrow(
-      ctx.s(args: _*)
+      ctx.s(args*)
     )

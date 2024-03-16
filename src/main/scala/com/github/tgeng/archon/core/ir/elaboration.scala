@@ -92,26 +92,26 @@ def sortPreDeclarations
           QualifiedNameVisitor.combine(
             data.constructors.map { constructor =>
               constructor.ty.visitWith(QualifiedNameVisitor)
-            }: _*,
+            }*,
           ) + data.qn
         case record: PreRecord =>
           QualifiedNameVisitor.combine(
             record.fields.map { field =>
               field.ty.visitWith(QualifiedNameVisitor)
-            }: _*,
+            }*,
           ) + record.qn
         case definition: PreDefinition =>
           QualifiedNameVisitor.combine(
             definition.clauses.flatMap { clause =>
               clause.lhs.map(QualifiedNameVisitor.visitCoPattern) ++
                 clause.rhs.map(QualifiedNameVisitor.visitCTerm(_))
-            }: _*,
+            }*,
           ) + definition.qn
         case effect: PreEffect =>
           QualifiedNameVisitor.combine(
             effect.operations.map { operation =>
               operation.ty.visitWith(QualifiedNameVisitor)
-            }: _*,
+            }*,
           ) + effect.qn
       },
     )
@@ -425,7 +425,7 @@ private def elaborateDefBody
           // can cause it to happen.
           val dataType = _A.asInstanceOf[DataType]
           val constructor = Σ.getConstructor(dataType.qn, name)
-          val _As = constructor.paramTys.substLowers(dataType.args: _*)
+          val _As = constructor.paramTys.substLowers(dataType.args*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
         case (Con(_, _), PConstructor(_, _))                     => None
@@ -435,7 +435,7 @@ private def elaborateDefBody
           assert(name == pName)
           val dataType = _A.asInstanceOf[DataType]
           val constructor = Σ.getConstructor(dataType.qn, name)
-          val _As = constructor.paramTys.substLowers(dataType.args: _*)
+          val _As = constructor.paramTys.substLowers(dataType.args*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
         case _ => Some(List((v, p, _A)))
@@ -478,7 +478,7 @@ private def elaborateDefBody
             case ((_Σ, fields), field) =>
               val (_Σmod, ct) = elaborate(
                 q̅ :+ CProjection(field.name),
-                field.ty.substLowers(args :+ Thunk(apply(qn, q̅)): _*),
+                field.ty.substLowers(args :+ Thunk(apply(qn, q̅))*),
                 filter(problem, field.name),
               )(using Γ)(using _Σ)
 
@@ -630,11 +630,11 @@ private def elaborateDefBody
                       given Signature = _Σ
                       // in context _Γ1
                       val tArgs = binding.ty.asInstanceOf[DataType].args
-                      val Δ = constructor.paramTys.substLowers(tArgs: _*)
+                      val Δ = constructor.paramTys.substLowers(tArgs*)
 
                       // in context _Γ1 ⊎ Δ
                       val cTArgs = constructor.tArgs.map(
-                        _.substLowers(tArgs ++ vars(constructor.paramTys.size - 1): _*),
+                        _.substLowers(tArgs ++ vars(constructor.paramTys.size - 1)*),
                       )
                       val unificationResult = unifyAll(
                         tArgs.drop(data.context.size).map(_.weaken(Δ.size, 0)),
@@ -688,14 +688,14 @@ private def elaborateDefBody
                       // all constructor arg unification fails
                       val tParamArgs = args.take(data.context.size)
                       val tIndexArgs = args.drop(data.context.size)
-                      val conTArgs = constructor.tArgs.map(_.substLowers(tParamArgs: _*))
-                      val newΓ = Γ ++ constructor.paramTys.substLowers(tParamArgs: _*)
+                      val conTArgs = constructor.tArgs.map(_.substLowers(tParamArgs*))
+                      val newΓ = Γ ++ constructor.paramTys.substLowers(tParamArgs*)
                       // All unification should be successful or inconclusive. That is, no failure is found.
                       unifyAll(
                         tIndexArgs.map(_.weaken(constructor.paramTys.size, 0)),
                         conTArgs,
                         data.tIndexTys
-                          .substLowers(tParamArgs: _*)
+                          .substLowers(tParamArgs*)
                           .weaken(constructor.paramTys.size, 0),
                       )(using newΓ) match
                         case _: UNo => true

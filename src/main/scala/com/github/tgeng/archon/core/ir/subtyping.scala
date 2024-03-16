@@ -66,7 +66,7 @@ def checkIsSubtype
                   val r = checkIsConvertible(
                     arg1,
                     arg2,
-                    Some(binding.ty.substLowers(args.toSeq: _*)),
+                    Some(binding.ty.substLowers(args.toSeq*)),
                   )
                   args += arg1
                   r
@@ -187,7 +187,7 @@ def checkIsSubtype
                   val r = checkIsConvertible(
                     arg1,
                     arg2,
-                    Some(binding.ty.substLowers(args.toSeq: _*)),
+                    Some(binding.ty.substLowers(args.toSeq*)),
                   )
                   args += arg1
                   r

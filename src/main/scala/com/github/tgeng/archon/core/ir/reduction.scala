@@ -170,7 +170,7 @@ private final class StackMachine
               case _          => throw IllegalStateException("bad meta variable application")
             }
             stack.dropRightInPlace(context.size)
-            Some(value.substLowers(args.toSeq: _*)) // stuck for unresolved meta variables
+            Some(value.substLowers(args.toSeq*)) // stuck for unresolved meta variables
           case _ => None
         t match
           case Some(t) => run(t)
@@ -207,7 +207,7 @@ private final class StackMachine
                     }
                     .toSeq
                   stack.dropRightInPlace(defContext.size)
-                  Some((partiallySubstituted.substLowers(defArgs: _*), /* stuck */ false))
+                  Some((partiallySubstituted.substLowers(defArgs*), /* stuck */ false))
                 case MatchingStatus.Stuck =>
                   Some((reconstructTermFromStack(pc), /* stuck */ true))
                 case MatchingStatus.Mismatch => None
@@ -257,14 +257,14 @@ private final class StackMachine
               case HandlerConstraint(usage, HandlerType.Simple) =>
                 preConstructedTerm = Some(reconstructTermFromStack(pc))
                 stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
-                handlerImpl.body.substLowers(handler.parameter :: args: _*)
+                handlerImpl.body.substLowers(handler.parameter :: args*)
               case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
                 val allOperationArgs = effArgs ++ args
                 val tip = CapturedContinuationTip(
                   F(
-                    operation.resultTy.substLowers(allOperationArgs: _*),
+                    operation.resultTy.substLowers(allOperationArgs*),
                     Total(),
-                    operation.resultUsage.substLowers(allOperationArgs: _*),
+                    operation.resultUsage.substLowers(allOperationArgs*),
                   ),
                 )
                 val continuationTerm = stack
@@ -277,7 +277,7 @@ private final class StackMachine
                 stack.dropRightInPlace(stack.size - matchingHandlerIdx)
                 val continuation =
                   Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
-                handlerImpl.body.substLowers(handler.parameter +: args :+ continuation: _*),
+                handlerImpl.body.substLowers(handler.parameter +: args :+ continuation*),
             )
       case Continuation(continuationTerm, continuationUsage) =>
         stack.pop() match
@@ -535,11 +535,11 @@ extension (v: VTerm)
         case _ =>
           throw IllegalStateException(s"expect to be of Usage type: $tm")
 
-      def lubToTerm(lub: ULub[VTerm]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq: _*)
+      def lubToTerm(lub: ULub[VTerm]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq*)
 
-      def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm): _*)
+      def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm)*)
 
-      def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq: _*)
+      def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq*)
 
       def varOrUsageToTerm(t: VTerm | Usage): VTerm = t match
         case v: VTerm => v
@@ -559,9 +559,9 @@ extension (v: VTerm)
                   if retainSimpleLinearOnly then {
                     val effect = Σ.getEffect(qn)
                     effect.continuationUsage
-                      .substLowers(args: _*)
+                      .substLowers(args*)
                       .normalized == UsageLiteral(U1) && effect.handlerType
-                      .substLowers(args: _*)
+                      .substLowers(args*)
                       .normalized == HandlerTypeLiteral(HandlerType.Simple)
                   } else true,
                 )

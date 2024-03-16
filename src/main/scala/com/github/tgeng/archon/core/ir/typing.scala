@@ -61,15 +61,15 @@ enum UnsolvedMetaVariableConstraint:
   def substLowers(args: VTerm*)(using Signature): UnsolvedMetaVariableConstraint = this match
     case UmcNothing => UmcNothing
     case UmcCSubtype(lowerBounds) =>
-      UmcCSubtype(lowerBounds.map(_.substLowers(args: _*)))
+      UmcCSubtype(lowerBounds.map(_.substLowers(args*)))
     case UmcVSubtype(lowerBounds) =>
-      UmcVSubtype(lowerBounds.map(_.substLowers(args: _*)))
+      UmcVSubtype(lowerBounds.map(_.substLowers(args*)))
     case UmcEffSubsumption(lowerBound) =>
-      UmcEffSubsumption(lowerBound.substLowers(args: _*))
+      UmcEffSubsumption(lowerBound.substLowers(args*))
     case UmcLevelSubsumption(lowerBound) =>
-      UmcLevelSubsumption(lowerBound.substLowers(args: _*))
+      UmcLevelSubsumption(lowerBound.substLowers(args*))
     case UmcUsageSubsumption(upperBound) =>
-      UmcUsageSubsumption(upperBound.substLowers(args: _*))
+      UmcUsageSubsumption(upperBound.substLowers(args*))
 
 /** @param context:
   *   context of this meta-variable
@@ -110,14 +110,14 @@ enum MetaVariable(val context: Context, val ty: CTerm):
     require(context.size >= args.size)
     this match
       case Unsolved(context, ty, constraint) =>
-        Unsolved(context.drop(args.size), ty.substLowers(args: _*), constraint)
+        Unsolved(context.drop(args.size), ty.substLowers(args*), constraint)
       case Solved(context, ty, value) =>
-        Solved(context.drop(args.size), ty.substLowers(args: _*), value.substLowers(args: _*))
+        Solved(context.drop(args.size), ty.substLowers(args*), value.substLowers(args*))
       case Guarded(context, ty, value, preconditions) =>
         Guarded(
           context.drop(args.size),
-          ty.substLowers(args: _*),
-          value.substLowers(args: _*),
+          ty.substLowers(args*),
+          value.substLowers(args*),
           preconditions,
         )
 
@@ -231,18 +231,18 @@ class TypingContext
           ResolvedMetaVariable.RUnsolved(
             index,
             substitution,
-            constraints.substLowers(args: _*),
+            constraints.substLowers(args*),
             c,
-            ty.substLowers(args: _*),
+            ty.substLowers(args*),
           ),
           extraElims,
         )
       case Solved(context, ty, _) =>
         val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
-        Some(RSolved(ty.substLowers(args: _*)), elims.drop(context.size))
+        Some(RSolved(ty.substLowers(args*)), elims.drop(context.size))
       case Guarded(context, ty, _, _) =>
         val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
-        Some(RGuarded(ty.substLowers(args: _*)), elims.drop(context.size))
+        Some(RGuarded(ty.substLowers(args*)), elims.drop(context.size))
 
   def resolveMetaVariableType(c: CTerm)(using Signature): Option[CTerm] = c match
     case Meta(index) =>
@@ -256,7 +256,7 @@ class TypingContext
         val args = elims.take(resolved.context.size).collect { case Elimination.ETerm(t) =>
           t
         }
-        Some(resolved.ty.substLowers(args: _*))
+        Some(resolved.ty.substLowers(args*))
       else None
     case _ => None
 
@@ -804,7 +804,7 @@ private def inferLevel
         case Type(upperBound) => inferLevel(upperBound)
         case _                => throw NotTypeError(tm)
     case U(cty)             => inferLevel(cty)
-    case DataType(qn, args) => Σ.getData(qn).level.substLowers(args: _*)
+    case DataType(qn, args) => Σ.getData(qn).level.substLowers(args*)
     case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
     case LevelType(strictUpperBound)                           => checkLevel(strictUpperBound)._1
     case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
@@ -951,12 +951,12 @@ def checkType
               val tParamArgs = tArgs.take(data.context.size)
               val tIndexArgs = tArgs.drop(data.context.size)
               val (args, usages) =
-                checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs: _*))
+                checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs*))
               val constraints = ctx.solve(
                 checkAreConvertible(
-                  con.tArgs.map(_.substLowers(tParamArgs ++ args: _*)),
+                  con.tArgs.map(_.substLowers(tParamArgs ++ args*)),
                   tIndexArgs,
-                  data.tIndexTys.substLowers(tParamArgs: _*),
+                  data.tIndexTys.substLowers(tParamArgs*),
                 ),
               )
               if constraints.nonEmpty then throw UnmatchedDataIndex(c, dataType)
@@ -992,7 +992,7 @@ private def inferLevel
       // strengthen is always safe because the only case that bodyLevel would reference 0 is when
       // arg is of type Level. But in that case the overall level would be ω.
       LevelMax(argLevel.weakened, bodyLevel).strengthened
-    case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args: _*)
+    case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args*)
     case tm =>
       ctx.resolveMetaVariableType(tm) match
         case Some(ty) =>
@@ -1158,7 +1158,7 @@ def inferType
                       val (recordTerm, recordUsages) = checkType(redex(c, checkedElims), cty)
                       val (rest, checkedCty, restUsages) = checkElims(
                         e :: checkedElims,
-                        f.ty.substLowers(args :+ Thunk(recordTerm): _*).normalized(None),
+                        f.ty.substLowers(args :+ Thunk(recordTerm)*).normalized(None),
                         uncheckedRest,
                       )
                       val (effects, _) = checkType(uncheckedEffects, EffectsType())
@@ -1189,10 +1189,10 @@ def inferType
                 val (checkedTArgs, effUsages) = checkTypes(uncheckedTArgs, effect.context.toList)
                 val tArgs = checkedTArgs.map(_.normalized)
                 val (args, argsUsages) =
-                  checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs: _*))
+                  checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs*))
                 val newEff = (qn, tArgs)
                 val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
-                val ty = op.resultTy.substLowers(tArgs ++ args: _*).normalized
+                val ty = op.resultTy.substLowers(tArgs ++ args*).normalized
                 (
                   newTm,
                   F(
@@ -1374,7 +1374,7 @@ def inferEqDecidability
   case d: DataType =>
     Σ.getDataOption(d.qn) match
       case Some(data) =>
-        data.inherentEqDecidability.substLowers(d.args: _*)
+        data.inherentEqDecidability.substLowers(d.args*)
       case _ => throw MissingDeclaration(d.qn)
   case _ => throw ExpectVType(ty)
 
@@ -1447,7 +1447,7 @@ def checkTypes
     else
       transposeCheckTypeResults(
         tms.zip(tys).zipWithIndex.map { case ((tm, binding), index) =>
-          checkType(tm, binding.ty.substLowers(tms.take(index): _*))
+          checkType(tm, binding.ty.substLowers(tms.take(index)*))
         },
       )
   }
@@ -1630,19 +1630,19 @@ def checkHandler
     val handlerImpl = h.handlers(qn)
     checkHandlerTypeSubsumption(
       HandlerTypeLiteral(handlerImpl.handlerConstraint.handlerType),
-      effect.handlerType.substLowers(effArgs: _*),
+      effect.handlerType.substLowers(effArgs*),
     )
     // Note that usage subsumption check is reversed because this is checking how continuation
     // can be used by handler.
     checkUsageSubsumption(
-      effect.continuationUsage.substLowers(effArgs: _*),
+      effect.continuationUsage.substLowers(effArgs*),
       UsageLiteral(handlerImpl.handlerConstraint.continuationUsage),
     )
     // The followings do not need to be weakened for handler parameter because after substituting the effect args,
     // they do not contain any free variables beyond beginning of paramTys.
-    val paramTys = operation.paramTys.substLowers(effArgs: _*)
-    val resultTy = operation.resultTy.substLowers(effArgs: _*)
-    val resultUsage = operation.resultUsage.substLowers(effArgs: _*)
+    val paramTys = operation.paramTys.substLowers(effArgs*)
+    val resultTy = operation.resultTy.substLowers(effArgs*)
+    val resultUsage = operation.resultUsage.substLowers(effArgs*)
     val (newHandlerImpl, usages) = handlerImpl.handlerConstraint match
       case HandlerConstraint(continuationUsage, HandlerType.Simple) =>
         given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
@@ -1794,7 +1794,7 @@ private def getEffectsContinuationUsage
   val usage = ctx.withMetaResolved(effects.normalized):
     case Effects(literal, operands) =>
       val literalUsages = literal.map { case (qn, args) =>
-        Σ.getEffect(qn).continuationUsage.substLowers(args: _*)
+        Σ.getEffect(qn).continuationUsage.substLowers(args*)
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)
       UsageJoin(Set(UsageLiteral(U1)) ++ usages ++ literalUsages)

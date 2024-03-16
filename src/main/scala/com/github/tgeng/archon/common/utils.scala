@@ -48,7 +48,7 @@ extension [E](startingNodes: IterableOnce[E])
       seen: mutable.Set[E] = mutable.Set[E](),
     )
     : IterableOnce[E] =
-    val queue = mutable.Queue(startingNodes.iterator.toSeq: _*)
+    val queue = mutable.Queue(startingNodes.iterator.toSeq*)
     seen.addAll(queue)
     new Iterator[E]:
       def hasNext: Boolean = queue.nonEmpty
@@ -62,7 +62,7 @@ extension [E](startingNodes: IterableOnce[E])
 extension [E](nodes: IterableOnce[E])
   def detectLoop(getNeighbors: E => IterableOnce[E]): Option[Seq[E]] =
     val stack =
-      mutable.Stack[(E, Int)](nodes.iterator.map(n => (n, 0)).toSeq: _*)
+      mutable.Stack[(E, Int)](nodes.iterator.map(n => (n, 0)).toSeq*)
     val parents = mutable.LinkedHashSet[E]()
     val safeNodes = mutable.Set[E]()
     while stack.nonEmpty do
@@ -85,7 +85,7 @@ extension [E](allNodes: IterableOnce[E])
       if !inDegree.contains(node) then inDegree(node) = 0
     val maxIncomingPathLengths = mutable.Map[E, Int]().withDefaultValue(0)
     val queue = mutable.Queue(
-      inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq: _*,
+      inDegree.filter((_, inDegree) => inDegree == 0).keys.toSeq*,
     )
     assert(queue.nonEmpty)
     val maxDegreeForDag = inDegree.size * (inDegree.size - 1)
@@ -177,10 +177,10 @@ def transpose[L, R](l: Option[Either[L, R]]): Either[L, Option[R]] =
         case Right(r) => Right(Some(r))
 
 def transpose[L, R](l: Iterable[Either[L, R]]): Either[L, Seq[R]] =
-  transpose(l.toList).map(Seq(_: _*))
+  transpose(l.toList).map(Seq(_*))
 
 def transpose[L, R](l: Set[Either[L, R]]): Either[L, Set[R]] =
-  transpose(l.toList).map(Set(_: _*))
+  transpose(l.toList).map(Set(_*))
 
 def transposeValues[K, L, R](m: SeqMap[K, Either[L, R]]): Either[L, SeqMap[K, R]] =
   transpose(

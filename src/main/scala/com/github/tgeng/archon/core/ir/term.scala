@@ -450,7 +450,7 @@ object VTerm:
 
   def LevelSuc(t: VTerm): Level = Level(LevelOrder.zero, SeqMap(t -> 1))
 
-  def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, SeqMap(ts.map(_ -> 0): _*))
+  def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, SeqMap(ts.map(_ -> 0)*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
   val u0: VTerm = VTerm.UsageLiteral(Usage.U0)
@@ -478,7 +478,7 @@ object VTerm:
     Effects(effects, SeqMap.empty)
 
   def EffectsUnion(effects: VTerm*): Effects =
-    Effects(Set.empty, SeqMap(effects.map(_ -> false): _*))
+    Effects(Set.empty, SeqMap(effects.map(_ -> false)*))
 
   def EffectsRetainSimpleLinear(effects: VTerm): Effects =
     Effects(Set.empty, SeqMap(effects -> true))

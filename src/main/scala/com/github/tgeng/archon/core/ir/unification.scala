@@ -128,7 +128,7 @@ def unify
     case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
       unifyAll(args1, args2, Σ.getData(qn1).context.map(_._1).toList)
     case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
-      unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs: _*))
+      unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs*))
     // stuck
     case (_: Collapse | _: Thunk, _, _) => UUndecided(u, v, ty)
     case (_, _: Collapse | _: Thunk, _) => UUndecided(u, v, ty)

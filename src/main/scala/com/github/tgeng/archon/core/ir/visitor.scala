@@ -95,19 +95,19 @@ trait Visitor[C, R]:
   def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(pDataType.qn) +:
-        pDataType.args.map(visitPattern): _*,
+        pDataType.args.map(visitPattern)*,
     )
 
   def visitPForcedDataType(pForcedDataType: PForcedDataType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(pForcedDataType.qn) +:
-        pForcedDataType.args.map(visitPattern): _*,
+        pForcedDataType.args.map(visitPattern)*,
     )
 
   def visitPConstructor(pConstructor: PConstructor)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitName(pConstructor.name) +:
-        pConstructor.args.map(visitPattern): _*,
+        pConstructor.args.map(visitPattern)*,
     )
 
   def visitPForcedConstructor
@@ -117,7 +117,7 @@ trait Visitor[C, R]:
     : R =
     combine(
       visitName(pForcedConstructor.name) +:
-        pForcedConstructor.args.map(visitPattern): _*,
+        pForcedConstructor.args.map(visitPattern)*,
     )
 
   def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature): R =
@@ -154,7 +154,7 @@ trait Visitor[C, R]:
     combine(
       r.fields.flatMap { (name, body) =>
         Seq(visitName(name), visitCaseTree(body))
-      }.toSeq: _*,
+      }.toSeq*,
     )
 
   def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R =
@@ -167,7 +167,7 @@ trait Visitor[C, R]:
               visitCaseTree(body)
             },
           )
-        }.toSeq :+ visitCaseTree(ct.default): _*,
+        }.toSeq :+ visitCaseTree(ct.default)*,
     )
 
   def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
@@ -186,7 +186,7 @@ trait Visitor[C, R]:
               visitCaseTree(body)
             },
           )
-        }.toSeq: _*,
+        }.toSeq*,
     )
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
@@ -235,13 +235,13 @@ trait Visitor[C, R]:
   def visitDataType(dataType: DataType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(dataType.qn) +:
-        dataType.args.map(visitVTerm): _*,
+        dataType.args.map(visitVTerm)*,
     )
 
   def visitCon(con: Con)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitName(con.name) +:
-        con.args.map(visitVTerm): _*,
+        con.args.map(visitVTerm)*,
     )
 
   def visitUsageType(usageType: UsageType)(using ctx: C)(using Σ: Signature): R =
@@ -251,13 +251,13 @@ trait Visitor[C, R]:
     combine()
 
   def visitUsageProd(usageProd: UsageProd)(using ctx: C)(using Σ: Signature): R =
-    combine(usageProd.operands.toSeq.map(visitVTerm): _*)
+    combine(usageProd.operands.toSeq.map(visitVTerm)*)
 
   def visitUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): R =
-    combine(usageSum.operands.multiMap(visitVTerm).multiToSeq: _*)
+    combine(usageSum.operands.multiMap(visitVTerm).multiToSeq*)
 
   def visitUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): R =
-    combine(usageJoin.operands.toSeq.map(visitVTerm): _*)
+    combine(usageJoin.operands.toSeq.map(visitVTerm)*)
 
   def visitEqDecidabilityType
     (eqDecidabilityType: EqDecidabilityType)
@@ -294,7 +294,7 @@ trait Visitor[C, R]:
     combine(
       (effects.literal.map(visitEff) ++ effects.unionOperands.keys.map(
         visitVTerm,
-      )).toSeq: _*,
+      )).toSeq*,
     )
 
   def visitLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): R =
@@ -304,7 +304,7 @@ trait Visitor[C, R]:
     combine(
       level.maxOperands.map { case (v, _) =>
         visitVTerm(v)
-      }.toSeq: _*,
+      }.toSeq*,
     )
 
   def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature): R = combine()
@@ -359,7 +359,7 @@ trait Visitor[C, R]:
   )
 
   def visitRedex(redex: Redex)(using ctx: C)(using Σ: Signature): R = combine(
-    visitCTerm(redex.t) +: redex.elims.map(visitElim): _*,
+    visitCTerm(redex.t) +: redex.elims.map(visitElim)*,
   )
 
   def visitElim(elim: Elimination[VTerm])(using ctx: C)(using Σ: Signature): R = elim match
@@ -379,14 +379,14 @@ trait Visitor[C, R]:
     combine(
       visitQualifiedName(recordType.qn) +:
         recordType.args.map(visitVTerm) :+
-        visitVTerm(recordType.effects): _*,
+        visitVTerm(recordType.effects)*,
     )
 
   def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitEff(operationCall.eff) +:
         visitName(operationCall.name) +:
-        operationCall.args.map(visitVTerm): _*,
+        operationCall.args.map(visitVTerm)*,
     )
 
   def visitContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): R =
@@ -417,7 +417,7 @@ trait Visitor[C, R]:
       } ++ Seq(
         visitCTerm(handler.input),
         visitBinding(handler.inputBinding),
-      ): _*,
+      )*,
     )
 
   def visitHandlerImpl(handlerImpl: HandlerImpl)(using ctx: C)(using Σ: Signature): R =
@@ -426,7 +426,7 @@ trait Visitor[C, R]:
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
     combine(
       visitQualifiedName(eff._1) +:
-        eff._2.map(visitVTerm): _*,
+        eff._2.map(visitVTerm)*,
     )
 
   def visitBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature): R = combine()

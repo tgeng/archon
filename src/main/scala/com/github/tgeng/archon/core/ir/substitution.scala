@@ -245,7 +245,7 @@ extension (b: Binding[VTerm])
     * indices are taken by other (deeper) indices.
     */
   def substLowers(vTerms: VTerm*)(using Σ: Signature): Binding[VTerm] =
-    b.map(_.substLowers(vTerms: _*))
+    b.map(_.substLowers(vTerms*))
 
 extension (v: VTerm)
   def subst(substitution: PartialSubstitution[VTerm])(using Σ: Signature): VTerm =

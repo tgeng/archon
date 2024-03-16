@@ -680,7 +680,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     : Block = ctx.withPrecedence(PPEffOp) {
     if effTm.toString == "total" then // This is a hack, but it's so handy...
-      app(blocks: _*)
+      app(blocks*)
     else
       Block(
         Whitespace,
@@ -695,7 +695,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           },
           ">",
         ),
-        app(blocks: _*),
+        app(blocks*),
       )
   }
 
@@ -710,7 +710,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     (using ctx: PPrintContext)
     : Block = ctx.withPrecedence(PPApp) {
-    juxtapose(blocks: _*)
+    juxtapose(blocks*)
   }
 
   private def juxtapose
@@ -727,7 +727,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           WrapPolicy | IndentPolicy | DelimitPolicy | Block | String | Iterable[Block],
         ](
           _(using summon[PPrintContext]),
-        ): _*,
+        )*,
     )
 
   private def bracketAndSpace
@@ -804,7 +804,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   }
 
   extension (blocks: Iterable[String | Block])
-    def sepBy(delimiter: String | Block): Block =
+    infix def sepBy(delimiter: String | Block): Block =
       if blocks.isEmpty then Block()
       else
         Block(

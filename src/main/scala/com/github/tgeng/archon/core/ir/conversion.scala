@@ -83,7 +83,7 @@ def checkIsConvertible
               .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
               .zipWithIndex
               .map { case (((arg1, arg2), (binding, _)), i) =>
-                checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i): _*)))
+                checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i)*)))
               }
               .flatten
               .toSet
@@ -96,7 +96,7 @@ def checkIsConvertible
               .zip(con.paramTys)
               .zipWithIndex
               .map { case (((arg1, arg2), binding), i) =>
-                checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i): _*)))
+                checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i)*)))
               }
               .flatten
               .toSet
@@ -261,7 +261,7 @@ def checkIsConvertible
                           checkIsConvertible(
                             arg1,
                             arg2,
-                            Some(binding.ty.substLowers(args: _*)),
+                            Some(binding.ty.substLowers(args*)),
                           )
                         args = args :+ arg1
                         r
@@ -270,7 +270,7 @@ def checkIsConvertible
                           checkIsConvertible(
                             arg1,
                             arg2,
-                            Some(binding.ty.substLowers(args: _*)),
+                            Some(binding.ty.substLowers(args*)),
                           )
                         args = args :+ arg1
                         r
@@ -279,7 +279,7 @@ def checkIsConvertible
                           checkIsConvertible(
                             arg2,
                             arg1,
-                            Some(binding.ty.substLowers(args: _*)),
+                            Some(binding.ty.substLowers(args*)),
                           )
                         args = args :+ arg2
                         r
@@ -408,7 +408,7 @@ private def checkElimIsConvertible
               Projection(head, leftName),
               lefts,
               rights,
-              Σ.getField(qn, leftName).ty.substLowers(args :+ Thunk(head): _*),
+              Σ.getField(qn, leftName).ty.substLowers(args :+ Thunk(head)*),
               ty,
             )
           else resultConstraint

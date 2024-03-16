@@ -308,7 +308,7 @@ def scope
   (b: (MutableContext, TestSignature) ?=> Unit)
   (using Γ: MutableContext)
   (using Σ: TestSignature) =
-  val newContext: MutableContext = mutable.ArrayBuffer(Γ.toArray: _*)
+  val newContext: MutableContext = mutable.ArrayBuffer(Γ.toArray*)
   val newSignature: TestSignature = Σ.copy
   b(using newContext, newSignature)
 
