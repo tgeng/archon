@@ -146,9 +146,8 @@ trait Visitor[C, R]:
   def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
 
   def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): R =
-    withBindings(Seq(l.boundName)) {
+    withBindings(Seq(l.boundName)):
       visitCaseTree(l.body)
-    }
 
   def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R =
     combine(

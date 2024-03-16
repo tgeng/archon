@@ -19,7 +19,7 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
     case WLeaf(i: Int)
   import WideTree.*
 
-  "recursive tree" in {
+  "recursive tree" in:
     assert(
       Recursive.transform(
         Node(Leaf(1), Node(Leaf(2), Leaf(3))),
@@ -31,9 +31,8 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
         },
       ) == Node(Leaf(2), Node(Leaf(2), Leaf(6))),
     )
-  }
 
-  "recursive tree2" in {
+  "recursive tree2" in:
     assert(
       Recursive.transform(
         Node2(Leaf2(1), Node(Leaf(2), Leaf(3))),
@@ -45,9 +44,8 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
         },
       ) == Node2(Leaf2(2), Node(Leaf(2), Leaf(3))),
     )
-  }
 
-  "wide tree" in {
+  "wide tree" in:
     assert(
       Recursive.transform(
         WNode(
@@ -71,7 +69,6 @@ class RecursiveDerivationSpec extends AnyFreeSpec:
         ),
       ),
     )
-  }
 
 // The following test should work. Actually if `summonAllRecursive` in recursive.scala is hoisted
 // out of the `match` clause, then summoning recursive can work correctly. However, that causes

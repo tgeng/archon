@@ -191,14 +191,13 @@ class TypingContext
     : R =
     input match
       case Collapse(c) =>
-        withMetaResolved(c) {
+        withMetaResolved(c):
           case (r, Nil) => action(r)
           case (_, _) =>
             throw IllegalStateException(
               "type error: extra elims for vterm which should never happen",
             )
           case _: CTerm => action(input)
-        }
       case _ => action(input)
 
   def withMetaResolved2[R]
@@ -362,13 +361,12 @@ class TypingContext
 
   private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
     override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
-      Set(m.index) ++ {
-        ctx.resolveMeta(m) match
+      val rest = ctx.resolveMeta(m) match
           // Include all meta varialbles in the constraints of guarded meta variables so that solving these can potentially
           // turn guarded meta variables to solved ones.
           case Guarded(_, _, _, constraints) => visitConstraints(constraints)
           case _                             => Set[Nat]()
-      }
+      Set(m.index) ++ rest
 
     override def combine
       (freeVars: Set[Nat]*)
@@ -382,7 +380,7 @@ class TypingContext
       (using ctx: TypingContext)
       (using Signature)
       : Set[Nat] =
-      constraints.flatMap {
+      constraints.flatMap:
         case Constraint.Conversions(_, lhs, rhs, _) =>
           lhs.flatMap(visitVTerm) ++ rhs.flatMap(visitVTerm)
         case Constraint.VConversion(_, lhs, rhs, _)            => visitVTerm(lhs) ++ visitVTerm(rhs)
@@ -394,7 +392,6 @@ class TypingContext
         case Constraint.UsageSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
         case Constraint.EqDecidabilitySubsumption(_, sub, sup) => visitVTerm(sub) ++ visitVTerm(sup)
         case Constraint.HandlerTypeSubsumption(_, sub, sup)    => visitVTerm(sub) ++ visitVTerm(sup)
-      }
 
   @throws(classOf[IrError])
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
@@ -475,10 +472,9 @@ class TypingContext
       println(indent + " " + ANSI_CYAN + stringify(t) + " = " + t + ANSI_RESET)
     t
 
-  def breakpoint(): Unit = {
+  def breakpoint(): Unit =
     if enableDebugging then
       val i = 1
-  }
 
 type Usages = Seq[VTerm]
 
@@ -505,7 +501,7 @@ extension (us1: Usages)
 @throws(classOf[IrError])
 def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
   given Context = IndexedSeq()
-  ctx.trace(s"checking data signature ${data.qn}") {
+  ctx.trace(s"checking data signature ${data.qn}"):
 
     val tParamsTysTelescope = checkParameterTyDeclarations(data.context.map(_._1).toTelescope)
     val tParamTys = Context.fromTelescope(tParamsTysTelescope)
@@ -521,7 +517,6 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
       level,
       inherentEqDecidability,
     )
-  }
 
 @throws(classOf[IrError])
 def checkDataConstructor
@@ -533,7 +528,7 @@ def checkDataConstructor
     case None => throw MissingDeclaration(qn)
     case Some(data) =>
       given Γ: Context = data.context.map(_._1)
-      ctx.trace(s"checking data constructor $qn.${con.name}") {
+      ctx.trace(s"checking data constructor $qn.${con.name}"):
         val paramTys = checkParameterTyDeclarations(con.paramTys, Some(data.level))
         val (tArgs, _) =
           checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
@@ -542,12 +537,11 @@ def checkDataConstructor
           VarianceChecker.visitTelescope(con.paramTys)(using data.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars)
         Constructor(con.name, paramTys, tArgs)
-      }
 
 @throws(classOf[IrError])
 def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): Record =
   given Context = IndexedSeq()
-  ctx.trace(s"checking record signature ${record.qn}") {
+  ctx.trace(s"checking record signature ${record.qn}"):
     val tParams = record.context.map(_._1)
     val tParamTysTelescope = checkParameterTyDeclarations(tParams.toList)
     val tParamTys = Context.fromTelescope(tParamTysTelescope)
@@ -561,7 +555,6 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
       level,
       Binding(selfTy, selfUsage)(record.selfBinding.name),
     )
-  }
 
 @throws(classOf[IrError])
 def checkRecordField
@@ -574,13 +567,12 @@ def checkRecordField
     case Some(record) =>
       given Context = record.context.map(_._1).toIndexedSeq :+ record.selfBinding
 
-      ctx.trace(s"checking record field $qn.${field.name}") {
+      ctx.trace(s"checking record field $qn.${field.name}"):
         val (ty, _) = checkIsCType(field.ty, Some(record.level.weakened))
         val violatingVars =
           VarianceChecker.visitCTerm(field.ty)(using record.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInRecord(record.qn, violatingVars)
         Field(field.name, ty)
-      }
 
 private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Var]]:
   override def combine
@@ -705,15 +697,14 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 @throws(classOf[IrError])
 def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext): Definition =
   given Context = definition.context
-  ctx.trace(s"checking def signature ${definition.qn}") {
+  ctx.trace(s"checking def signature ${definition.qn}"):
     val (ty, _) = checkIsCType(definition.ty)
     Definition(definition.qn)(definition.context, ty)
-  }
 
 @throws(classOf[IrError])
 def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effect =
   given Context = IndexedSeq()
-  ctx.trace(s"checking effect signature ${effect.qn}") {
+  ctx.trace(s"checking effect signature ${effect.qn}"):
 
     val telescope = checkParameterTyDeclarations(effect.context.toTelescope)
     checkTParamsAreUnrestricted(telescope)
@@ -722,7 +713,6 @@ def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effe
     val (continuationUsage, _) = checkType(effect.continuationUsage, UsageType())(using Γ)
     val (handlerType, _) = checkType(effect.handlerType, HandlerTypeType())(using Γ)
     Effect(effect.qn)(Γ, continuationUsage, handlerType)
-  }
 
 @throws(classOf[IrError])
 def checkOperation
@@ -735,13 +725,12 @@ def checkOperation
     case Some(effect) =>
       given Γ: Context = effect.context
 
-      ctx.trace(s"checking effect operation $qn.${operation.name}") {
+      ctx.trace(s"checking effect operation $qn.${operation.name}"):
         val paramTys = checkParameterTyDeclarations(operation.paramTys)
         val (resultTy, _) = checkIsType(operation.resultTy)(using Γ ++ operation.paramTys)
         val (resultUsage, _) =
           checkType(operation.resultUsage, UsageType(None))(using Γ ++ operation.paramTys)
         operation.copy(paramTys = paramTys, resultTy = resultTy, resultUsage = resultUsage)
-      }
 
 @tailrec
 @throws(classOf[IrError])
@@ -1280,7 +1269,7 @@ def checkType
       ctx.checkSolved(checkIsSubtype(tmTy, normalizedTy), NotCSubtype(tmTy, normalizedTy))
       (checkedTm, usages)
 
-private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
+private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]():
   override def combine(rs: Set[Int]*)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
     rs.flatten.to(Set)
   override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
@@ -1290,7 +1279,6 @@ private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]() {
       case Guarded(_, _, value, _) => visitCTerm(value)
       case Solved(_, _, value)     => visitCTerm(value)
     )
-}
 
 @throws(classOf[IrError])
 private def checkInherentEqDecidable
@@ -1442,7 +1430,7 @@ def checkTypes
   (using Σ: Signature)
   (using ctx: TypingContext)
   : (List[VTerm], Usages) =
-  ctx.trace("checking multiple terms") {
+  ctx.trace("checking multiple terms"):
     if tms.length != tys.length then throw TelescopeLengthMismatch(tms, tys)
     else
       transposeCheckTypeResults(
@@ -1450,7 +1438,6 @@ def checkTypes
           checkType(tm, binding.ty.substLowers(tms.take(index)*))
         },
       )
-  }
 
 @throws(classOf[IrError])
 private def transposeCheckTypeResults[R]
@@ -1843,7 +1830,7 @@ def checkIsType
   (using Signature)
   (using ctx: TypingContext)
   : (VTerm, Usages) =
-  ctx.trace("checking is type") {
+  ctx.trace("checking is type"):
     val (vTy, vTyTy, usages) =
       inferType(uncheckedVTy) // inferType also checks term is correctly constructed
     vTyTy match
@@ -1853,7 +1840,6 @@ def checkIsType
           case _           =>
       case _ => throw NotTypeError(vTy)
     (vTy, usages)
-  }
 
 @throws(classOf[IrError])
 def checkIsCType
@@ -1862,7 +1848,7 @@ def checkIsCType
   (using Signature)
   (using ctx: TypingContext)
   : (CTerm, Usages) =
-  ctx.trace("checking is C type") {
+  ctx.trace("checking is C type"):
     val (cty, cTyTy, usages) = inferType(uncheckedCTy)
     cTyTy match
       case CType(_, _) if isTotal(cty, Some(cTyTy)) =>
@@ -1872,11 +1858,10 @@ def checkIsCType
       case _: CType => throw EffectfulCTermAsType(uncheckedCTy)
       case _        => throw NotCTypeError(uncheckedCTy)
     (cty.normalized(None), usages)
-  }
 
 @throws(classOf[IrError])
 def reduceUsage(usage: CTerm)(using Context)(using Signature)(using ctx: TypingContext): VTerm =
-  ctx.trace("reduce usage", Block(yellow(usage.sourceInfo), pprint(usage))) {
+  ctx.trace("reduce usage", Block(yellow(usage.sourceInfo), pprint(usage))):
     checkType(usage, F(UsageType()))
     val reduced = reduce(usage)
     reduced match
@@ -1885,7 +1870,6 @@ def reduceUsage(usage: CTerm)(using Context)(using Signature)(using ctx: TypingC
         throw IllegalStateException(
           "type checking has bugs: reduced value of type `F(UsageType())` must be `Return(u)`.",
         )
-  }
 
 @throws(classOf[IrError])
 def reduceVType
@@ -1894,7 +1878,7 @@ def reduceVType
   (using Signature)
   (using ctx: TypingContext)
   : VTerm =
-  ctx.trace("reduce V type", Block(yellow(uncheckedVTy.sourceInfo), pprint(uncheckedVTy))) {
+  ctx.trace("reduce V type", Block(yellow(uncheckedVTy.sourceInfo), pprint(uncheckedVTy))):
     val (vTy, tyTy, _) = inferType(uncheckedVTy)
     tyTy match
       case F(Type(_), _, _) if isTotal(vTy, Some(tyTy)) =>
@@ -1906,7 +1890,6 @@ def reduceVType
             )
       case F(_, _, _) => throw EffectfulCTermAsType(vTy)
       case _          => throw ExpectFType(vTy)
-  }
 
 private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
   case CType(upperBound, effects) =>

@@ -15,6 +15,7 @@ lazy val root = (project in file("."))
       "-deprecation",
       "-language:implicitConversions",
       "-new-syntax",
+      "-indent",
     ),
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.17" % "test",

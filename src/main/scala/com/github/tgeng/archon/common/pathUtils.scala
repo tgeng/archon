@@ -9,23 +9,21 @@ import scala.util.Using
 
 opaque type Timestamp = Long
 
-extension (t1: Timestamp) {
+extension (t1: Timestamp)
   def <(t2: Timestamp) = t1 < t2
   def >(t2: Timestamp) = t1 > t2
   def <=(t2: Timestamp) = t1 <= t2
   def >=(t2: Timestamp) = t1 >= t2
-}
 
-extension (f: Path) {
+extension (f: Path)
 
   def timestamp: Timestamp = Files.getLastModifiedTime(f).toMillis
 
   def readText(): String = Files.readString(f, UTF_8)
 
-  def writeText(s: String) = {
+  def writeText(s: String) =
     Files.createDirectories(f.getParent)
     Files.write(f, s.getBytes(UTF_8))
-  }
 
   def readObject[T]: T =
     Using(ObjectInputStream(Files.newInputStream(f))) { ois =>
@@ -49,4 +47,3 @@ extension (f: Path) {
   def listFiles(): Seq[Path] = Files.list(f).iterator().asScala.toSeq
 
   def exists(): Boolean = Files.exists(f)
-}

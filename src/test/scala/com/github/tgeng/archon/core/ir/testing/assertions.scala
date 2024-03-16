@@ -9,8 +9,8 @@ def assertVType
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Unit = {
-  try {
+  : Unit =
+  try
     val (actualNormalizedT, usages) = checkType(t, ty)
     expectedNormalizedT match
       case Some(expected) if expected != actualNormalizedT =>
@@ -19,37 +19,33 @@ def assertVType
         )
       case _ =>
     verifyUsages(usages, Γ.toTelescope)(using Context.empty)
-  } catch {
+  catch
     case e: IrError => {
       enableDebugging
       checkType(t, ty)
     }
-  }
-}
 
 def assertNotVType
   (t: VTerm, ty: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Unit = {
-  try {
+  : Unit =
+  try
     checkType(t, ty)
     enableDebugging
     checkType(t, ty)
     fail(s"Expected type mismatch.")
-  } catch {
+  catch
     case _: IrError => ()
-  }
-}
 
 def assertCType
   (t: CTerm, ty: CTerm, expectedNormalizedT: Option[CTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Unit = {
-  try {
+  : Unit =
+  try
     val (actualNormalizedT, usages) = checkType(t, ty)
     expectedNormalizedT match
       case Some(expected) if expected != actualNormalizedT =>
@@ -58,32 +54,27 @@ def assertCType
         )
       case _ =>
     verifyUsages(usages, Γ.toTelescope)(using Context.empty)
-  } catch {
+  catch
     case e: IrError => {
       enableDebugging
       checkType(t, ty)
     }
-  }
-}
 
 def assertNotCType
   (t: CTerm, ty: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Unit = {
-  try {
+  : Unit =
+  try
     checkType(t, ty)
     enableDebugging
     checkType(t, ty)
     fail(s"Expected type mismatch.")
-  } catch {
+  catch
     case _: IrError => ()
-  }
-}
 
-private inline def enableDebugging(using ctx: TypingContext): Unit = {
+private inline def enableDebugging(using ctx: TypingContext): Unit =
   val stacktrace = Thread.currentThread().nn.getStackTrace.nn
   println(s"Debugging ${stacktrace(2)}")
   ctx.enableDebugging = true
-}

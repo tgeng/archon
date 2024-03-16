@@ -165,10 +165,9 @@ private final class StackMachine
       case m: Meta =>
         val t = ctx.resolveMeta(m) match
           case Solved(context, _, value) =>
-            val args = stack.takeRight(context.size).map {
+            val args = stack.takeRight(context.size).map:
               case ETerm(arg) => arg.normalized
               case _          => throw IllegalStateException("bad meta variable application")
-            }
             stack.dropRightInPlace(context.size)
             Some(value.substLowers(args.toSeq*)) // stuck for unresolved meta variables
           case _ => None
@@ -201,10 +200,9 @@ private final class StackMachine
 
                   val defArgs = stack
                     .takeRight(defContext.size)
-                    .map {
+                    .map:
                       case ETerm(arg) => arg
                       case _          => throw IllegalStateException("type error")
-                    }
                     .toSeq
                   stack.dropRightInPlace(defContext.size)
                   Some((partiallySubstituted.substLowers(defArgs*), /* stuck */ false))
@@ -234,10 +232,9 @@ private final class StackMachine
           case _ if reduceDown => throw IllegalArgumentException("type error")
           case Nil             => run(t)
           case _ =>
-            val normalizedElims = elims.reverse.map[Elimination[VTerm]] {
+            val normalizedElims = elims.reverse.map[Elimination[VTerm]]:
               case ETerm(t) => ETerm.apply(t.normalized)
               case EProj(n) => EProj(n)
-            }
             stack.pushAll(normalizedElims)
             run(t)
       case OperationCall(effAndArgs @ (effQn, rawEffArgs), name, rawArgs) =>
@@ -306,11 +303,10 @@ private final class StackMachine
             val (stackToDuplicate, handlerEntry) =
               expandTermToStack(continuationTerm.copy(parameter = param))(h =>
                 h.copy(input = Hole),
-              ) {
+              ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)
                 case t        => t
-              }
             stack.pushAll(stackToDuplicate)
             this.currentHandlerEntry = handlerEntry
             val tip = stack.pop().asInstanceOf[CapturedContinuationTip]

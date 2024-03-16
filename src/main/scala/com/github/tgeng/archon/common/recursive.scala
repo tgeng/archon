@@ -74,7 +74,7 @@ object Recursive:
       )
       : P =
       val transformed =
-        t.asInstanceOf[Product].productIterator.zip(functors).map {
+        t.asInstanceOf[Product].productIterator.zip(functors).map:
           // first, invoke `Recursive.transform`
           case (t, _) if isCurrentRecursive(t) =>
             recursiveParent.transform(
@@ -99,7 +99,6 @@ object Recursive:
             )
           // finally, if none works, leave the field as it is
           case (e, _) => e
-        }
       p.fromProduct(Tuple.fromArray(transformed.toArray))
 
   private inline def summonAllRecursive[T <: Tuple]: List[Recursive[?]] =

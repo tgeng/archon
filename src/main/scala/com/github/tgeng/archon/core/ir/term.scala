@@ -435,10 +435,9 @@ object VTerm:
       case (u, terms) => UsageJoin((UsageLiteral(u) :: terms).toSet)
 
   private def collectUsage(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
-    operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)) {
+    operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)):
       case ((usages, terms), UsageLiteral(u)) => (u :: usages, terms)
       case ((usages, terms), term)            => (usages, terms)
-    }
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(0, n), SeqMap())

@@ -12,7 +12,7 @@ import com.github.tgeng.archon.core.ir.VTerm.*
   *   present it must be normalized.
   * @return
   */
-def isTotal(tm: CTerm, ty: Option[CTerm]): Boolean = {
+def isTotal(tm: CTerm, ty: Option[CTerm]): Boolean =
   ty match
     case None => true
     case Some(ty) =>
@@ -21,4 +21,3 @@ def isTotal(tm: CTerm, ty: Option[CTerm]): Boolean = {
       // TODO: use heuristics to determine if a term is total
       else if effects == MaybeDiv()(using SourceInfo.SiEmpty) then true
       else false
-}

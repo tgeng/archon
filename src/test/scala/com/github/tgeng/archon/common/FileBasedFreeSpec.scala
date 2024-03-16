@@ -16,7 +16,7 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
       .map(camelToSnake)
       .mkString("/")
 
-  private def camelToSnake(s: String): String = {
+  private def camelToSnake(s: String): String =
     @tailrec def camelToSnake(s: String, output: String, lastUppercase: Boolean): String =
       if s.isEmpty then output
       else
@@ -24,7 +24,6 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
         camelToSnake(s.tail, output + c, s.head.isUpper && !lastUppercase)
 
     camelToSnake(s, "", true)
-  }
 
   "meta" - {
     "test cases are complete" in:
@@ -45,18 +44,16 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
         )
   }
 
-  override def withFixture(test: NoArgTest) = {
+  override def withFixture(test: NoArgTest) =
     currentTestNameStorage.set(test.name)
     val outcome = super.withFixture(test)
     currentTestNameStorage.set(null)
     outcome
-  }
 
-  private def currentTestName: String = {
+  private def currentTestName: String =
     val testName = currentTestNameStorage.get()
     assert(testName != null, "currentTestName should only be called in a test")
     testName
-  }
 
   protected def runTest(): Unit = runTestImpl(testResourceDir / currentTestName)
 

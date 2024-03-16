@@ -8,12 +8,11 @@ class FunctorDerivationSpec extends AnyFreeSpec:
     case Leaf(elem: T)
   import Tree.*
 
-  "tree" in {
+  "tree" in:
     assert(
       Functor.map(Branch(Leaf(1), Branch(Leaf(2), Leaf(3))), _ + 1) ==
         Branch(Leaf(2), Branch(Leaf(3), Leaf(4))),
     )
-  }
 
   case class Blob[T]
     (
@@ -28,7 +27,7 @@ class FunctorDerivationSpec extends AnyFreeSpec:
     )
     derives Functor
 
-  "blob" in {
+  "blob" in:
     assert(
       Functor.map(
         Blob("1", 2, List(3, 4), Set(5, 6), Some(7), Right(8), 9, List(10, 11)),
@@ -45,4 +44,3 @@ class FunctorDerivationSpec extends AnyFreeSpec:
           List(10, 11),
         ),
     )
-  }

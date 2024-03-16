@@ -111,14 +111,13 @@ def uLubJoin[T](lubs: Iterable[ULub[T]]): ULub[T] = uLubNormalize(
 
 private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
   val r = lub
-    .map {
+    .map:
       _.partitionMap { prod =>
         if prod.isEmpty then Right(Usage.U1)
         else if prod.size == 1 && prod.head.isInstanceOf[Usage] then
           Right(prod.head.asInstanceOf[Usage])
         else Left(prod)
       }
-    }
     .groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U0)(_ + _))(_ | _)
     .toSet
     .map { (sum, literal) =>
@@ -145,12 +144,10 @@ private def uSumSum[T](sum1: USum[T], sum2: USum[T]): USum[T] = uSumNormalize(
 
 private def uSumNormalize[T](sum: Iterable[UProd[T]]): USum[T] =
   val r = sum
-    .map {
-      _.partitionMap {
+    .map:
+      _.partitionMap:
         case u: Usage => Right(u)
         case t        => Left(t.asInstanceOf[T | Usage])
-      }
-    }
     .groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U1)(_ * _))(_ + _)
     .toSeq
     .map { (prod, literal) =>

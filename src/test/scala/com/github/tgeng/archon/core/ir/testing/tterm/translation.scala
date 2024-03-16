@@ -18,7 +18,7 @@ case class TranslationContext
     nextDeBruijnIndex: Int = 0,
     localVars: Map[String, Int] = Map.empty,
     globalDefs: Map[String, QualifiedName] = Map.empty,
-  ) {
+  ):
   def bindLocal(name: String): TranslationContext =
     val newIndex = nextDeBruijnIndex + 1
     this.copy(nextDeBruijnIndex = newIndex, localVars = localVars + (name -> nextDeBruijnIndex))
@@ -36,7 +36,6 @@ case class TranslationContext
         globalDefs.get(name) match
           case Some(qualifiedName) => Right(qualifiedName)
           case None                => throw UnresolvedSymbol(name)
-}
 
 extension (tTerm: TTerm)
   def toCTerm(using context: TranslationContext): CTerm =

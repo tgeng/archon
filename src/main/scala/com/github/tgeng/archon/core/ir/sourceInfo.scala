@@ -41,7 +41,7 @@ enum SourceInfo:
     case SiBuiltin(qn)                     => qn.toString
 
 object SourceInfo:
-  def siMerge(sis: SourceInfo*): SourceInfo = sis.fold(SiEmpty) {
+  def siMerge(sis: SourceInfo*): SourceInfo = sis.fold(SiEmpty):
     (_, _) match
       case (SiEmpty, si2) => si2
       case (si1, SiEmpty) => si1
@@ -51,4 +51,3 @@ object SourceInfo:
           range1 + range2,
         )
       case _ => throw IllegalArgumentException()
-  }

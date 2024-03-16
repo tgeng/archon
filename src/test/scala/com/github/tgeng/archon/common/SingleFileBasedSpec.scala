@@ -14,9 +14,8 @@ abstract class SingleFileBasedSpec
   extends AnyFreeSpec:
   private val testDataDir = TestDataConstants.testResourcesRoot / relativePath
   for file <- testDataDir.listFiles() if fileFilter(file) do
-    file.getName.toString in {
+    file.getName.toString in:
       Source.fromFile(file.toFile).use { source =>
         runTest(file, source)
       }
-    }
   def runTest(testData: Path, source: Source): Unit

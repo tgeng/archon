@@ -124,7 +124,7 @@ def sortPreDeclarations
   //   2. any reference of A in a signature means the accompanied body needs full definition of A
   topologicalSort(
     declarations.flatMap(decl => Seq((HEAD, decl), (BODY, decl))),
-  ) {
+  ):
     case (HEAD, decl) =>
       sigRefQn.get(decl.qn) match
         case Some(qns) => qns.toSeq.sorted.map(qn => (HEAD, declByQn(qn)))
@@ -135,7 +135,7 @@ def sortPreDeclarations
           qns.toSeq.sorted.map(qn => (BODY, declByQn(qn))) ++
             (bodyRefQn(decl.qn) -- qns).toSeq.sorted.map(qn => (HEAD, declByQn(qn)))
         case None => Seq()
-  } match
+  match
     case Right(decls) => decls
     case Left(cycle)  => throw CyclicDeclarations(cycle)
 
@@ -164,7 +164,7 @@ private def elaborateDataHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  ctx.trace(s"elaborating data signature ${preData.qn}") {
+  ctx.trace(s"elaborating data signature ${preData.qn}"):
     val tParamTys = elaborateTTelescope(preData.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
 
@@ -196,7 +196,6 @@ private def elaborateDataHead
       ),
     )
     Σ.addDeclaration(data)
-  }
 
 @throws(classOf[IrError])
 private def elaborateDataBody
@@ -233,18 +232,16 @@ private def elaborateDataBody
   // number of index arguments
   given Context = data.context.map(_._1)
 
-  ctx.trace(s"elaborating data body ${preData.qn}") {
+  ctx.trace(s"elaborating data body ${preData.qn}"):
     preData.constructors.foldLeft[Signature](Σ) { case (_Σ, constructor) =>
       given Signature = _Σ
-      ctx.trace(s"elaborating constructor ${constructor.name}") {
+      ctx.trace(s"elaborating constructor ${constructor.name}"):
         val ty = constructor.ty
         val (paramTys, tArgs) = elaborateTy(ty)
         val con =
           checkDataConstructor(preData.qn, Constructor(constructor.name, paramTys, tArgs))
         _Σ.addConstructor(preData.qn, con)
-      }
     }
-  }
 
 @throws(classOf[IrError])
 private def elaborateRecordHead
@@ -253,7 +250,7 @@ private def elaborateRecordHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  ctx.trace(s"elaborating record signature ${record.qn}") {
+  ctx.trace(s"elaborating record signature ${record.qn}"):
     val tParamTys = elaborateTTelescope(record.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
     val selfUsage = Collapse(checkType(record.selfUsage, F(UsageType(), Total()))._1).normalized
@@ -269,7 +266,6 @@ private def elaborateRecordHead
           )
         case t => throw ExpectCType(t)
     Σ.addDeclaration(checkRecord(r))
-  }
 
 @throws(classOf[IrError])
 private def elaborateRecordBody
@@ -286,15 +282,13 @@ private def elaborateRecordBody
       record.selfBinding.name,
     )
 
-  ctx.trace(s"elaborating record body ${preRecord.qn}") {
+  ctx.trace(s"elaborating record body ${preRecord.qn}"):
     preRecord.fields.foldLeft[Signature](Σ) { case (_Σ, field) =>
-      ctx.trace(s"elaborating field ${field.name}") {
+      ctx.trace(s"elaborating field ${field.name}"):
         val ty = checkIsCType(field.ty)._1.normalized(None)
         val f = checkRecordField(preRecord.qn, Field(field.name, ty))
         _Σ.addField(preRecord.qn, f)
-      }
     }
-  }
 
 @throws(classOf[IrError])
 private def elaborateDefHead
@@ -305,7 +299,7 @@ private def elaborateDefHead
   : Signature =
   given SourceInfo = SiEmpty
 
-  ctx.trace(s"elaborating def signature ${definition.qn}") {
+  ctx.trace(s"elaborating def signature ${definition.qn}"):
     val paramTys = elaborateTelescope(definition.paramTys)(using Γ)
     given Context = Γ ++ paramTys
     val ty = checkIsCType(definition.ty)._1.normalized(None)
@@ -316,7 +310,6 @@ private def elaborateDefHead
       },
     )
     Σ.addDeclaration(checkDef(d))
-  }
 
 @throws(classOf[IrError])
 private def elaborateDefBody
@@ -474,7 +467,7 @@ private def elaborateDefBody
         ) =>
         val (_Σ, fields) = Σ
           .getFields(qn)
-          .foldLeft[(Signature, SeqMap[Name, CaseTree])]((Σ, SeqMap())) {
+          .foldLeft[(Signature, SeqMap[Name, CaseTree])]((Σ, SeqMap())):
             case ((_Σ, fields), field) =>
               val (_Σmod, ct) = elaborate(
                 q̅ :+ CProjection(field.name),
@@ -483,7 +476,6 @@ private def elaborateDefBody
               )(using Γ)(using _Σ)
 
               (_Σmod, fields + (field.name -> ct))
-          }
         (_Σ, CtRecord(fields))
       // [cosplit empty]
       // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
@@ -529,7 +521,7 @@ private def elaborateDefBody
           _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
             // Start with a very generic error in case no split actions can be taken at all.
             Left(UnsolvedElaboration(source1)),
-          ) {
+          ):
             // If a split action was successful, skip any further actions on the remaining
             // constraints.
             case (Right(r), _) => Right(r)
@@ -563,7 +555,7 @@ private def elaborateDefBody
                     ],
                   ](
                     Right(Σ, SeqMap(), None),
-                  ) {
+                  ):
                     // Normal type case
                     case (Right(_, branches, defaultCase), Some(qn)) =>
                       val data = Σ.getData(qn)
@@ -600,8 +592,7 @@ private def elaborateDefBody
                       for case (_Σ, branch) <- split(q̅, _C, problem)
                       yield (_Σ, branches, Some(branch))
                     case (Left(e), _) => Left(e)
-                  }
-                  .map {
+                  .map:
                     //  3. generate cases, where the branch corresponding to `x` goes to the default
                     //     case
                     case (_Σ, branches, Some(defaultCase)) =>
@@ -610,7 +601,6 @@ private def elaborateDefBody
                       throw IllegalStateException(
                         "impossible because missing default case should have caused missing default type error",
                       )
-                  }
 
             // split constructor
             case (_, (x: Var, PConstructor(_, _), _A @ DataType(qn, _))) =>
@@ -625,7 +615,7 @@ private def elaborateDefBody
                 Σ.getConstructors(qn)
                   .foldLeft[Either[IrError, (Signature, SeqMap[Name, CaseTree])]](
                     Right(Σ, SeqMap()),
-                  ) {
+                  ):
                     case (Right(_Σ, branches), constructor) =>
                       given Signature = _Σ
                       // in context _Γ1
@@ -674,7 +664,6 @@ private def elaborateDefBody
                         case _: UnificationResult.UNo | _: UnificationResult.UUndecided =>
                           Left(UnificationFailure(unificationResult))
                     case (Left(e), _) => Left(e)
-                  }
                   .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
             // split empty
@@ -706,7 +695,7 @@ private def elaborateDefBody
                 case _ => Left(NonEmptyType(_A, source1))
             // No action to do, just forward the previous error
             case (l, _) => l
-          } match
+          match
             case Right(r) => Right(r)
 
             // [done]: no action can be taken, try [done] or fail with error of last action, which
@@ -733,7 +722,7 @@ private def elaborateDefBody
   val definition = Σ.getDefinition(preDefinition.qn)
   given Context = definition.context
 
-  ctx.trace(s"elaborating def body ${preDefinition.qn}") {
+  ctx.trace(s"elaborating def body ${preDefinition.qn}"):
     val (_Σ, _Q) = elaborate(
       Nil,
       definition.ty,
@@ -742,7 +731,6 @@ private def elaborateDefBody
       },
     )
     _Σ.addCaseTree(preDefinition.qn, _Q)
-  }
 
 @throws(classOf[IrError])
 private def elaborateEffectHead
@@ -751,7 +739,7 @@ private def elaborateEffectHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  ctx.trace(s"elaborating effect signature ${effect.qn}") {
+  ctx.trace(s"elaborating effect signature ${effect.qn}"):
     val tParamTys = elaborateTelescope(effect.tParamTys)(using Γ)
     given Γ2: Context = Γ ++ tParamTys
     val continuationUsage = checkType(effect.continuationUsage, F(UsageType()))._1
@@ -769,7 +757,6 @@ private def elaborateEffectHead
       handlerType,
     )
     Σ.addDeclaration(checkEffect(e))
-  }
 
 @throws(classOf[IrError])
 private def elaborateEffectBody
@@ -781,7 +768,7 @@ private def elaborateEffectBody
 
   given Context = effect.context
 
-  ctx.trace(s"elaborating effect body ${effect.qn}") {
+  ctx.trace(s"elaborating effect body ${effect.qn}"):
     def elaborateTy
       (ty: CTerm)
       (using Γ: Context)
@@ -801,13 +788,11 @@ private def elaborateEffectBody
 
     preEffect.operations.foldLeft[Signature](Σ) { case (_Σ, operation) =>
       given Signature = _Σ
-      ctx.trace(s"elaborating operation ${operation.name}") {
+      ctx.trace(s"elaborating operation ${operation.name}"):
         val (paramTys, resultTy, usage) = elaborateTy(operation.ty)
         val o = Operation(operation.name, paramTys, resultTy, usage)
         _Σ.addOperation(effect.qn, checkOperation(effect.qn, o))
-      }
     }
-  }
 
 @throws(classOf[IrError])
 private def elaborateTTelescope
@@ -827,12 +812,11 @@ private def elaborateTelescope
   : Telescope = telescope match
   case Nil => Nil
   case binding :: context =>
-    ctx.trace("elaborating context") {
+    ctx.trace("elaborating context"):
       val ty = reduceVType(binding.ty)
       val usage = reduceUsage(binding.usage)
       val newBinding = Binding(ty, usage)(binding.name)
       newBinding :: elaborateTelescope(context)(using Γ :+ newBinding)
-    }
 
 // [1] Jesper Cockx and Andreas Abel. 2018. Elaborating dependent (co)pattern matching. Proc. ACM
 // Program. Lang. 2, ICFP, Article 75 (September 2018), 30 pages. https://doi.org/10.1145/3236770

@@ -3,15 +3,12 @@ package com.github.tgeng.archon.common
 import scala.deriving.*
 import scala.compiletime.*
 
-type K1[F[_]] = Mirror {
+type K1[F[_]] = Mirror:
   type MirroredType[X] = F[X]; type MirroredElemTypes[_] <: Tuple
-}
-type K1Sum[F[_]] = Mirror.Sum {
+type K1Sum[F[_]] = Mirror.Sum:
   type MirroredType[X] = F[X]; type MirroredElemTypes[_] <: Tuple
-}
-type K1Product[F[_]] = Mirror.Product {
+type K1Product[F[_]] = Mirror.Product:
   type MirroredType[X] = F[X]; type MirroredElemTypes[_] <: Tuple
-}
 
 type LiftK0[F[_], T <: Tuple] <: Tuple =
   T match

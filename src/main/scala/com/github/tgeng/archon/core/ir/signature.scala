@@ -115,9 +115,8 @@ trait Signature:
   def getConstructorOption(qn: QualifiedName, conName: Name): Option[Constructor] =
     for
       constructors <- getConstructorsOption(qn)
-      r <- constructors.collectFirst {
+      r <- constructors.collectFirst:
         case con if con.name == conName => con
-      }
     yield r
 
   def getConstructor(qn: QualifiedName, conName: Name): Constructor =
@@ -136,9 +135,8 @@ trait Signature:
   def getFieldOption(qn: QualifiedName, fieldName: Name): Option[Field] =
     for
       fields <- getFieldsOption(qn)
-      r <- fields.collectFirst {
+      r <- fields.collectFirst:
         case field if field.name == fieldName => field
-      }
     yield r
 
   def getField(qn: QualifiedName, fieldName: Name): Field =
@@ -178,9 +176,8 @@ trait Signature:
   def getOperationOption(qn: QualifiedName, opName: Name): Option[Operation] =
     for
       operations <- getOperationsOption(qn)
-      r <- operations.collectFirst {
+      r <- operations.collectFirst:
         case op if op.name == opName => op
-      }
     yield r
 
   def getOperation(qn: QualifiedName, opName: Name): Operation =
@@ -375,7 +372,7 @@ trait Signature:
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for effect <- getEffectOption(qn)
-    yield {
+    yield
       IndexedSeq(
         Clause(
           effect.context,
@@ -384,7 +381,6 @@ trait Signature:
           F(EffectsType()),
         ),
       )
-    }
 
   def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     qn match

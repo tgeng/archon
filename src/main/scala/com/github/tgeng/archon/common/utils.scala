@@ -27,11 +27,10 @@ object Ref:
 def indexToLineColumn(input: IndexedSeq[Char], index: Int): (Int, Int) =
   var line = 0
   var column = 0
-  for (i <- 0 until scala.math.min(index, input.size)) {
+  for i <- 0 until scala.math.min(index, input.size) do
     column += 1
     if input(i) == '\n' then line += 1
     if input(i) == '\n' || input(i) == '\r' then column = 0
-  }
   (line, column)
 
 extension [T <: AutoCloseable](t: T)
@@ -122,13 +121,12 @@ def caching[A, B](f: A => B): A => B =
   a => cache.getOrElseUpdate(a, f(a))
 
 extension [T](elems: IterableOnce[T])
-  def first[R](f: T => Option[R]): Option[R] = boundary {
+  def first[R](f: T => Option[R]): Option[R] = boundary:
     for elem <- elems.iterator do
       f(elem) match
         case r: Some[R] => break[Option[R]](r)
         case _          =>
     None
-  }
 
   def associatedBy[K](keyExtractor: T => K): SeqMap[K, T] =
     val result = mutable.SeqMap[K, T]()
@@ -244,12 +242,11 @@ def topologicalSort[T]
     visited.addOne(t)
     visitedSet.add(t)
 
-  try {
+  try
     for t <- ts do dfs(t)
     Right(visited.toSeq)
-  } catch {
+  catch
     case _: CycleException.type => Left(visiting.toSeq)
-  }
 
 /** Non negative int. Note that this is only a visual hint and nothing actually checks this.
   */
@@ -275,49 +272,42 @@ def groupMapReduce[A, CC[_], C, K, B]
   (key: A => K)
   (f: A => B)
   (reduce: (B, B) => B)
-  : SeqMap[K, B] = {
+  : SeqMap[K, B] =
   val m = mutable.SeqMap.empty[K, B]
-  for (elem <- elems) {
+  for elem <- elems do
     val k = key(elem)
     val v =
-      m.get(k) match {
+      m.get(k) match
         case Some(b) => reduce(b, f(elem))
         case None    => f(elem)
-      }
     m.put(k, v)
-  }
   m.to(SeqMap)
-}
 
 def groupMap[A, CC[_], C, K, B]
   (elems: IterableOps[A, CC, C])
   (key: A => K)
   (f: A => B)
-  : SeqMap[K, CC[B]] = {
+  : SeqMap[K, CC[B]] =
   val m = mutable.SeqMap.empty[K, mutable.Builder[B, CC[B]]]
-  for (elem <- elems) {
+  for elem <- elems do
     val k = key(elem)
     val bldr = m.getOrElseUpdate(k, elems.iterableFactory.newBuilder[B])
     bldr += f(elem)
-  }
-  class Result extends runtime.AbstractFunction1[(K, mutable.Builder[B, CC[B]]), Unit] {
+  class Result extends runtime.AbstractFunction1[(K, mutable.Builder[B, CC[B]]), Unit]:
     var built = SeqMap.empty[K, CC[B]]
     def apply(kv: (K, mutable.Builder[B, CC[B]])) =
       built = built.updated(kv._1, kv._2.result())
-  }
   val result = new Result
   m.foreach(result)
   result.built
-}
 
-package eitherFilter {
+package eitherFilter:
   extension [L, R](e: Either[L, R])
     inline def withFilter(inline predicate: R => Boolean): Either[L, R] = e match
       case Right(r) if predicate(r) => e
       case Right(_) =>
         throw Exception("please use irrefutable pattern with Either")
       case Left(_) => e
-}
 
 def toBoolean(e: Either[?, ?]): Boolean = e match
   case Right(_) => true
