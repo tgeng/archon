@@ -372,15 +372,14 @@ trait Signature:
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for effect <- getEffectOption(qn)
-    yield
-      IndexedSeq(
-        Clause(
-          effect.context,
-          Nil,
-          Return(EffectsLiteral(Set((qn, vars(effect.context.size - 1)))), uAny),
-          F(EffectsType()),
-        ),
-      )
+    yield IndexedSeq(
+      Clause(
+        effect.context,
+        Nil,
+        Return(EffectsLiteral(Set((qn, vars(effect.context.size - 1)))), uAny),
+        F(EffectsType()),
+      ),
+    )
 
   def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     qn match

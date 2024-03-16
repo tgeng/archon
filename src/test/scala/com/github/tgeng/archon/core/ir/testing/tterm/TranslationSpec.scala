@@ -15,4 +15,3 @@ class TranslationSpec extends FileBasedFreeSpec:
 
   "handler" in:
     runTest()
-

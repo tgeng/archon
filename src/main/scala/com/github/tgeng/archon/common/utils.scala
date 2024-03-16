@@ -245,8 +245,7 @@ def topologicalSort[T]
   try
     for t <- ts do dfs(t)
     Right(visited.toSeq)
-  catch
-    case _: CycleException.type => Left(visiting.toSeq)
+  catch case _: CycleException.type => Left(visiting.toSeq)
 
 /** Non negative int. Note that this is only a visual hint and nothing actually checks this.
   */

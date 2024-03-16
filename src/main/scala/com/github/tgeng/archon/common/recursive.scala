@@ -74,31 +74,34 @@ object Recursive:
       )
       : P =
       val transformed =
-        t.asInstanceOf[Product].productIterator.zip(functors).map:
-          // first, invoke `Recursive.transform`
-          case (t, _) if isCurrentRecursive(t) =>
-            recursiveParent.transform(
-              recursiveParent,
-              isCurrentRecursive,
-              t.asInstanceOf[T],
-              f,
-            )
-          // second, fallback to invoke `Functor.map`
-          case (functorInstance, Some(functor)) =>
-            functor.mapAny(
-              functorInstance,
-              t =>
-                if isCurrentRecursive(t) then
-                  recursiveParent.transform(
-                    recursiveParent,
-                    isCurrentRecursive,
-                    t.asInstanceOf[T],
-                    f,
-                  )
-                else t,
-            )
-          // finally, if none works, leave the field as it is
-          case (e, _) => e
+        t.asInstanceOf[Product]
+          .productIterator
+          .zip(functors)
+          .map:
+            // first, invoke `Recursive.transform`
+            case (t, _) if isCurrentRecursive(t) =>
+              recursiveParent.transform(
+                recursiveParent,
+                isCurrentRecursive,
+                t.asInstanceOf[T],
+                f,
+              )
+            // second, fallback to invoke `Functor.map`
+            case (functorInstance, Some(functor)) =>
+              functor.mapAny(
+                functorInstance,
+                t =>
+                  if isCurrentRecursive(t) then
+                    recursiveParent.transform(
+                      recursiveParent,
+                      isCurrentRecursive,
+                      t.asInstanceOf[T],
+                      f,
+                    )
+                  else t,
+              )
+            // finally, if none works, leave the field as it is
+            case (e, _) => e
       p.fromProduct(Tuple.fromArray(transformed.toArray))
 
   private inline def summonAllRecursive[T <: Tuple]: List[Recursive[?]] =

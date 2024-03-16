@@ -165,9 +165,11 @@ private final class StackMachine
       case m: Meta =>
         val t = ctx.resolveMeta(m) match
           case Solved(context, _, value) =>
-            val args = stack.takeRight(context.size).map:
-              case ETerm(arg) => arg.normalized
-              case _          => throw IllegalStateException("bad meta variable application")
+            val args = stack
+              .takeRight(context.size)
+              .map:
+                case ETerm(arg) => arg.normalized
+                case _          => throw IllegalStateException("bad meta variable application")
             stack.dropRightInPlace(context.size)
             Some(value.substLowers(args.toSeq*)) // stuck for unresolved meta variables
           case _ => None
@@ -301,8 +303,7 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
-                h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)

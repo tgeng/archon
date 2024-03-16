@@ -36,8 +36,7 @@ def assertNotVType
     enableDebugging
     checkType(t, ty)
     fail(s"Expected type mismatch.")
-  catch
-    case _: IrError => ()
+  catch case _: IrError => ()
 
 def assertCType
   (t: CTerm, ty: CTerm, expectedNormalizedT: Option[CTerm] = None)
@@ -71,8 +70,7 @@ def assertNotCType
     enableDebugging
     checkType(t, ty)
     fail(s"Expected type mismatch.")
-  catch
-    case _: IrError => ()
+  catch case _: IrError => ()
 
 private inline def enableDebugging(using ctx: TypingContext): Unit =
   val stacktrace = Thread.currentThread().nn.getStackTrace.nn

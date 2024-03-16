@@ -110,8 +110,7 @@ class PPrintContext
       if oldPrecedence == PPManualEncapsulation || oldPrecedence > precedence
       then b
       else Block(Concat, Wrap, FixedIncrement(2), "(", b, ")")
-    finally
-      currentPrecedence = oldPrecedence
+    finally currentPrecedence = oldPrecedence
 
   def withBindings[T](bindings: Seq[Ref[Name]])(action: PPrintContext ?=> T): T =
     names.appendAll(bindings)

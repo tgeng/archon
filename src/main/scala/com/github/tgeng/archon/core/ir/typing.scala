@@ -362,10 +362,10 @@ class TypingContext
   private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
     override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
       val rest = ctx.resolveMeta(m) match
-          // Include all meta varialbles in the constraints of guarded meta variables so that solving these can potentially
-          // turn guarded meta variables to solved ones.
-          case Guarded(_, _, _, constraints) => visitConstraints(constraints)
-          case _                             => Set[Nat]()
+        // Include all meta varialbles in the constraints of guarded meta variables so that solving these can potentially
+        // turn guarded meta variables to solved ones.
+        case Guarded(_, _, _, constraints) => visitConstraints(constraints)
+        case _                             => Set[Nat]()
       Set(m.index) ++ rest
 
     override def combine

@@ -205,8 +205,7 @@ class PrintContext
 
   def delimitWithNewline =
     sb.append('\n')
-    for _ <- 0 until indent do
-      sb.append(' ')
+    for _ <- 0 until indent do sb.append(' ')
     width = indent
 
   def delimitWithSpace =

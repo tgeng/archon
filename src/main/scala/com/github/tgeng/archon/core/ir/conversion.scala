@@ -322,8 +322,8 @@ def checkIsConvertible
                         .toSet
                     tArgConstraint ++ argConstraint
           case (Force(v1), Force(v2)) => checkIsConvertible(v1, v2, ty.map(U(_)))
-          case (Force(v1), c: CTerm)         => checkIsConvertible(v1, Thunk(c), ty.map(U(_)))
-          case (c: CTerm, Force(v2))         => checkIsConvertible(Thunk(c), v2, ty.map(U(_)))
+          case (Force(v1), c: CTerm)  => checkIsConvertible(v1, Thunk(c), ty.map(U(_)))
+          case (c: CTerm, Force(v2))  => checkIsConvertible(Thunk(c), v2, ty.map(U(_)))
           // For now, we skip the complex logic checking conversion of handler and continuations. It
           // seems not all that useful to keep those. But we can always add them later if it's deemed
           // necessary.
