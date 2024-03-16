@@ -416,7 +416,7 @@ private final class StackMachine
   private def reconstructTermFromStack(pc: CTerm): CTerm =
     var current = pc
     val elims = mutable.ArrayBuffer[Elimination[VTerm]]()
-    while (stack.nonEmpty) {
+    while stack.nonEmpty do
       stack.pop() match
         case e: Elimination[_] => elims.append(e)
         case c: CTerm =>
@@ -433,7 +433,6 @@ private final class StackMachine
           preConstructedTerm match
             case Some(t) => return t
             case _       => throw IllegalStateException("type error")
-    }
     current
 
   @tailrec

@@ -18,11 +18,10 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
 
   private def camelToSnake(s: String): String = {
     @tailrec def camelToSnake(s: String, output: String, lastUppercase: Boolean): String =
-      if (s.isEmpty) output
-      else {
-        val c = if (s.head.isUpper && !lastUppercase) "_" + s.head.toLower else s.head.toLower
+      if s.isEmpty then output
+      else
+        val c = if s.head.isUpper && !lastUppercase then "_" + s.head.toLower else s.head.toLower
         camelToSnake(s.tail, output + c, s.head.isUpper && !lastUppercase)
-      }
 
     camelToSnake(s, "", true)
   }

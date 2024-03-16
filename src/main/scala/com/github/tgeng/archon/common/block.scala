@@ -1,7 +1,8 @@
 package com.github.tgeng.archon.common
 
-import collection.mutable
-import scala.util.boundary, boundary.break;
+import scala.collection.mutable
+import scala.util.boundary
+import scala.util.boundary.break;
 
 trait BlockConverter[T] {
   final def pprint(t: T, widthLimit: Int = 120): String = {
@@ -31,9 +32,9 @@ enum DelimitPolicy {
   case Paragraph
 }
 
-import IndentPolicy.*
-import WrapPolicy.*
-import DelimitPolicy.*
+import com.github.tgeng.archon.common.DelimitPolicy.*
+import com.github.tgeng.archon.common.IndentPolicy.*
+import com.github.tgeng.archon.common.WrapPolicy.*
 
 object Block:
   def apply
@@ -92,55 +93,49 @@ case class Block
     ctx.withIndent(indentPolicy) {
       val canFit = !width(ctx.widthLeft).isEmpty
       var first = true
-      if ((canFit || wrapPolicy == NoWrap) && wrapPolicy != AlwaysNewline) {
+      if (canFit || wrapPolicy == NoWrap) && wrapPolicy != AlwaysNewline
+      then
         for (child <- children) {
-          if (!first) {
+          if !first then
             delimitPolicy match {
               case Whitespace => ctx.delimitWithSpace
               case Paragraph  => child.delimitInParagraph
               case Concat     => ()
             }
-          }
           child.printBlockOrString
           first = false
         }
-      } else {
+      else
         wrapPolicy match {
           case Wrap => {
             for (child <- children) {
-              if (!first) {
-                if (
-                  child
+              if !first then
+                if child
                     .width(ctx.widthLeft, onlyMeasureFirstLine = true)
                     .isEmpty
-                ) {
+                then
                   ctx.delimitWithNewline
                   first = true
-                } else {
+                else
                   delimitPolicy match {
                     case Whitespace => ctx.delimitWithSpace
                     case Paragraph  => child.delimitInParagraph
                     case Concat     => ()
                   }
-                }
-              }
               first = false
               child.printBlockOrString
             }
           }
           case ChopDown | AlwaysNewline => {
             for (child <- children) {
-              if (!first || indentPolicy.isInstanceOf[FixedIncrement])
-                ctx.delimitWithNewline
+              if !first || indentPolicy.isInstanceOf[FixedIncrement] then ctx.delimitWithNewline
               first = false
               child.printBlockOrString
             }
-            if (indentPolicy.isInstanceOf[FixedIncrement])
-              ctx.nextBlockOnNewLine = true
+            if indentPolicy.isInstanceOf[FixedIncrement] then ctx.nextBlockOnNewLine = true
           }
           case NoWrap => throw IllegalStateException()
         }
-      }
     }
   }
 
@@ -150,11 +145,9 @@ case class Block
       case s: String => ctx.append(s)
     }
 
-    private def delimitInParagraph(using ctx: PrintContext): Unit = if (
-      !Set(
-        ',', '.', '!', '?', ';',
-      ).contains(b.peek)
-    ) ctx.delimitWithSpace
+    private def delimitInParagraph(using ctx: PrintContext): Unit =
+      if !Set(',', '.', '!', '?', ';').contains(b.peek)
+      then ctx.delimitWithSpace
 
     private def peek: Char = b match {
       case b: Block  => b.children.headOption.map(_.peek).getOrElse(' ')
@@ -167,9 +160,9 @@ case class Block
       : Option[Int] =
       boundary:
         b match {
-          case s: String => if (s.size <= widthLeft) Some(s.size) else None
+          case s: String => if s.size <= widthLeft then Some(s.size) else None
           case b @ Block(children, wrapPolicy, indentPolicy, delimitPolicy) => {
-            if (onlyMeasureFirstLine) {
+            if onlyMeasureFirstLine then
               wrapPolicy match {
                 case AlwaysNewline => return Some(0)
                 case ChopDown =>
@@ -188,7 +181,6 @@ case class Block
                   }
                 case _ => ()
               }
-            }
             wrapPolicy match {
               case AlwaysNewline => return None
               case _             => ()
@@ -226,10 +218,9 @@ class PrintContext
   def widthLeft = widthLimit - width
 
   def append(s: String) = {
-    if (nextBlockOnNewLine) {
+    if nextBlockOnNewLine then
       delimitWithNewline
       nextBlockOnNewLine = false
-    }
     sb.append(s)
     width += s.size
   }
@@ -271,10 +262,9 @@ object PrintContext {
     val width = sb.length - lineStart
     var indent = 0
     var i = lineStart
-    while (i < sb.length && sb.charAt(i) == ' ') {
+    while i < sb.length && sb.charAt(i) == ' ' do
       indent += 1
       i += 1
-    }
     PrintContext(sb, width, widthLimit, indent)
   }
 }

@@ -29,8 +29,8 @@ def indexToLineColumn(input: IndexedSeq[Char], index: Int): (Int, Int) =
   var column = 0
   for (i <- 0 until scala.math.min(index, input.size)) {
     column += 1
-    if (input(i) == '\n') line += 1
-    if (input(i) == '\n' || input(i) == '\r') column = 0
+    if input(i) == '\n' then line += 1
+    if input(i) == '\n' || input(i) == '\r' then column = 0
   }
   (line, column)
 

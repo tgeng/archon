@@ -341,10 +341,9 @@ class TypingContext
   @throws(classOf[IrError])
   def solve(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
     var currentConstraints = constraints
-    while (solvedVersion != version) {
+    while solvedVersion != version do
       solvedVersion = version
       currentConstraints = solveOnce(currentConstraints)
-    }
     currentConstraints
 
   @throws(classOf[IrError])
