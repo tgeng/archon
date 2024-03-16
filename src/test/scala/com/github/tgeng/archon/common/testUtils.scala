@@ -3,7 +3,6 @@ package com.github.tgeng.archon.common
 import scala.concurrent.duration.Duration
 import com.github.tgeng.archon.common.{*, given}
 import com.github.tgeng.archon.core.common.HasException
-import com.github.tgeng.archon.parser.combinators.{*, given}
 
 extension [L, R](e: Either[L, R])
   def asRight: R = e match
