@@ -1967,5 +1967,4 @@ private inline def debugInferType[R <: CTerm | VTerm]
     Block(ChopDown, Aligned, yellow(tm.sourceInfo), pprint(tm)),
     ty => Block(ChopDown, Aligned, yellow(ty._1.sourceInfo), green(pprint(ty._2))),
   ):
-    val (v, r, u) = result
-    (v, r.withSourceInfo(SiTypeOf(tm.sourceInfo)).asInstanceOf[R], u)
+    result
