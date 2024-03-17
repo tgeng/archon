@@ -1,7 +1,6 @@
 package com.github.tgeng.archon.common
 
-import java.io.File
-import java.nio.file.{Path, Paths}
+import os.Path
 
 object TestDataConstants:
-  val testResourcesRoot: Path = Paths.get(sys.env("TEST_RESOURCES_ROOT")).nn
+  val testResourcesRoot: Path = os.Path(sys.env("TEST_RESOURCES_ROOT"))

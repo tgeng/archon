@@ -2,7 +2,7 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.FileBasedFreeSpec
 
-import java.nio.file.Path
+import os.Path
 
 class TranslationSpec extends FileBasedFreeSpec:
 

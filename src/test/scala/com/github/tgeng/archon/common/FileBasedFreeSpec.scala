@@ -1,20 +1,21 @@
 package com.github.tgeng.archon.common
 
-import com.github.tgeng.archon.common.*
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers.should
+import os.{Path, RelPath}
 
-import java.nio.file.Path
 import scala.annotation.tailrec
 import scala.language.unsafeNulls
 
 abstract class FileBasedFreeSpec extends AnyFreeSpec:
   private val currentTestNameStorage = new ThreadLocal[String]
   private val testResourceDir =
-    TestDataConstants.testResourcesRoot / this.getClass.getCanonicalName
-      .split('.')
-      .map(camelToSnake)
-      .mkString("/")
+    TestDataConstants.testResourcesRoot / RelPath(
+      this.getClass.getCanonicalName
+        .split('.')
+        .map(camelToSnake)
+        .mkString("/"),
+    )
 
   private def camelToSnake(s: String): String =
     @tailrec def camelToSnake(s: String, output: String, lastUppercase: Boolean): String =
@@ -27,15 +28,15 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
 
   "meta" - {
     "test cases are complete" in:
-      val testsMissingTestCases = (testResourceDir
-        .listFiles()
-        .map(_.getFileName.toString)
+      val testsMissingTestCases = (os
+        .list(testResourceDir)
+        .map(_.last)
         .toSet -- this.testNames).toSeq.sorted
         .map { testCase =>
           s"""
-  "${testCase}" in:
-    runTest()
-          """
+          |"${testCase}" in:
+          |  runTest()
+          """.stripMargin
         }
 
       if testsMissingTestCases.nonEmpty then
