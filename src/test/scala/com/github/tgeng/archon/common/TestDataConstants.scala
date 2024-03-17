@@ -3,4 +3,7 @@ package com.github.tgeng.archon.common
 import os.Path
 
 object TestDataConstants:
-  val testResourcesRoot: Path = os.Path(sys.env("TEST_RESOURCES_ROOT"))
+  val testResourcesRoot: Path =
+    val pathString = sys.env("TEST_RESOURCES_ROOT")
+    if pathString.startsWith("/") then os.Path(pathString)
+    else os.pwd / os.RelPath(pathString)

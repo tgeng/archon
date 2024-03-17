@@ -26,12 +26,15 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
 
     camelToSnake(s, "", true)
 
+  private def testNameToFIleName(testName: String): String =
+    testName.replace(" ", "_").replace("'", "")
+
   "meta" - {
     "test cases are complete" in:
       val testsMissingTestCases = (os
         .list(testResourceDir)
         .map(_.last)
-        .toSet -- this.testNames).toSeq.sorted
+        .toSet -- this.testNames.map(testNameToFIleName)).toSeq.sorted
         .map { testCase =>
           s"""
           |"${testCase}" in:
@@ -56,6 +59,6 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
     assert(testName != null, "currentTestName should only be called in a test")
     testName
 
-  protected def runTest(): Unit = runTestImpl(testResourceDir / currentTestName)
+  protected def runTest(): Unit = runTestImpl(testResourceDir / testNameToFIleName(currentTestName))
 
   protected def runTestImpl(testDir: Path): Unit
