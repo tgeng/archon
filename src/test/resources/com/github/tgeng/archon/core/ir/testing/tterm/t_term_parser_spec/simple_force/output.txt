@@ -1,0 +1,1 @@
+TForce(t = TThunk(t = TId(id = "abc") @ abc) @ thunk abc) @ force thunk abc

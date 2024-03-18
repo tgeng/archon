@@ -29,7 +29,7 @@ class TTermParserSpec extends FileBasedFreeSpec:
 
   override protected def runTestImpl(testDir: Path): Unit =
     val inputPath = testDir / "input.tterm"
-    val actual = TTermParserSpec.tTermPprint.apply(Parser.parse(inputPath)).plainText
+    val actual = TTermParserSpec.tTermPprint.apply(Parser.parseTTerm(inputPath)).plainText
     val outputPath = testDir / "output.txt"
     val expected = if os.exists(outputPath) then os.read(outputPath) else ""
     if actual != expected then
@@ -40,4 +40,10 @@ class TTermParserSpec extends FileBasedFreeSpec:
     runTest()
 
   "simple_def" in:
+    runTest()
+
+  "simple_force" in:
+    runTest()
+
+  "simple_u" in:
     runTest()
