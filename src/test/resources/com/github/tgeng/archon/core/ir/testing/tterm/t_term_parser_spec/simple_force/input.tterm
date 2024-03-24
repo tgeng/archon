@@ -1,1 +1,1 @@
-force thunk abc
+force (thunk abc)

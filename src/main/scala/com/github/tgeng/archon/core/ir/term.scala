@@ -409,7 +409,7 @@ object VTerm:
     Top(t, eqDecidability)
 
   def UsageProd(operands: VTerm*)(using SourceInfo): VTerm =
-    val (usages, terms) = collectUsage(operands)
+    val (usages, terms) = separateUsageLiteralsFromRest(operands)
     (usages.foldLeft(U1)(_ * _), terms) match
       case (u, Nil)    => UsageLiteral(u)
       case (U1, terms) => UsageProd(terms.toSet)
@@ -417,7 +417,7 @@ object VTerm:
       case (u, terms)  => UsageProd((UsageLiteral(u) :: terms).toSet)
 
   def UsageSum(operands: VTerm*)(using SourceInfo): VTerm =
-    val (usages, terms) = collectUsage(operands)
+    val (usages, terms) = separateUsageLiteralsFromRest(operands)
     (usages.foldLeft(U0)(_ + _), terms) match
       case (u, Nil)    => UsageLiteral(u)
       case (U0, terms) => UsageSum(terms.toMultiset)
@@ -426,7 +426,8 @@ object VTerm:
 
   def UsageJoin(operands: VTerm*)(using SourceInfo): VTerm =
     if operands.isEmpty then throw IllegalStateException("UsageJoin cannot be empty")
-    val (usages, terms) = collectUsage(operands)
+    val (usages, terms) = separateUsageLiteralsFromRest(operands)
+    if usages.isEmpty then return UsageJoin(terms.toSet)
     (usages.reduce(_ | _), terms) match
       case (u, Nil)  => UsageLiteral(u)
       case (UAny, _) => UsageLiteral(UAny)
@@ -434,10 +435,10 @@ object VTerm:
       // duplicates
       case (u, terms) => UsageJoin((UsageLiteral(u) :: terms).toSet)
 
-  private def collectUsage(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
+  private def separateUsageLiteralsFromRest(operands: Seq[VTerm]): (List[Usage], List[VTerm]) =
     operands.foldLeft[(List[Usage], List[VTerm])]((Nil, Nil)):
       case ((usages, terms), UsageLiteral(u)) => (u :: usages, terms)
-      case ((usages, terms), term)            => (usages, terms)
+      case ((usages, terms), term)            => (usages, term :: terms)
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(0, n), SeqMap())
