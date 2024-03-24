@@ -6,7 +6,6 @@ import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TTerm.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TranslationError.UnresolvedSymbol
-import com.github.tgeng.archon.core.ir.testing.tterm.UsageOperator.{UoJoin, UoProd, UoSum}
 
 import scala.collection.immutable.SeqMap
 
@@ -41,30 +40,10 @@ extension (tTerm: TTerm)
   def toCTerm(using context: TranslationContext): CTerm =
     given SourceInfo = tTerm.sourceInfo
     tTerm match
+      case TAuto()              => Return(Auto())
       case TU(t)                => Return(U(t.toCTerm))
       case TThunk(t)            => Return(Thunk(t.toCTerm))
-      case TUsageLiteral(usage) => Return(VTerm.UsageLiteral(usage))
-      case TUsageOp(op, op1, op2) =>
-        for
-          op1 <- op1.toCTerm
-          op2 <- op2.toCTerm
-        yield op match
-          case UoProd => UsageProd(op1, op2)
-          case UoSum  => UsageSum(op1, op2)
-          case UoJoin => UsageJoin(op1, op2)
-      case TEffectsUnion(eff1, eff2) =>
-        for
-          eff1 <- eff1.toCTerm
-          eff2 <- eff2.toCTerm
-        yield EffectsUnion(eff1, eff2)
-      case TEffectsFilter(eff) =>
-        for eff <- eff.toCTerm
-        yield EffectsRetainSimpleLinear(eff)
       case TLevelLiteral(level) => Return(LevelLiteral(level))
-      case TLevelSuc(level) =>
-        for level <- level.toCTerm
-        yield LevelSuc(level)
-      case TAuto() => Return(Auto())
       case TId(id) =>
         context.lookup(id) match
           case Left(index) => Return(Var(index))

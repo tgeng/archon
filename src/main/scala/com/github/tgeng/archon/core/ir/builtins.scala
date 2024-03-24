@@ -72,12 +72,13 @@ object Builtins:
   val HtComplexQn: QualifiedName = HandlerTypeQn / "Complex"
 
   val EqualityQn: QualifiedName = BuiltinType / "Equality"
-  val CellQn: QualifiedName = BuiltinType / "Cell"
-  val UCellQn: QualifiedName = BuiltinType / "UCell"
   val EffectsQn: QualifiedName = BuiltinType / "Effects"
   val LevelQn: QualifiedName = BuiltinType / "Level"
 
   val UsageQn: QualifiedName = BuiltinType / "Usage"
+  val UsageProdQn: QualifiedName = UsageQn / "prod"
+  val UsageSumQn: QualifiedName = UsageQn / "sum"
+  val UsageJoinQn: QualifiedName = UsageQn / "join"
 
   val UnitQn: QualifiedName = BuiltinType / "Unit"
   val MkUnitQn: QualifiedName = UnitQn / "MkUnit"
@@ -101,6 +102,7 @@ object Builtins:
   val SetOpQn: QualifiedName = HeapEffQn / "set"
   val GlobalHeapKeyQn: QualifiedName = HeapEffQn / "global"
   val EffectsUnionQn: QualifiedName = BuiltinEffects / "union"
+  val EffectsRetainSimpleLinearQn: QualifiedName = BuiltinEffects / "retainSimpleLinear"
   val TotalQn: QualifiedName = BuiltinEffects / "total"
   val DivQn: QualifiedName = BuiltinEffects / "div"
   val MaybeDivQn: QualifiedName = BuiltinEffects / "mdiv"
@@ -377,6 +379,60 @@ object Builtins:
         ),
       ),
     ),
+    /** prod (usage1 : UsageType) (usage2 : UsageType) : UsageType
+     *
+     * {} |- := UsageProd(usage1, usage2)
+     */
+    PreDefinition(UsageProdQn)(
+      paramTys = List(
+        binding(n"usage1", UsageType()),
+        binding(n"usage2", UsageType()),
+      ),
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(UsageProd(Var(1), Var(0)), uAny)),
+        ),
+      ),
+    ),
+    /** prod (usage1 : UsageType) (usage2 : UsageType) : UsageType
+     *
+     * {} |- := UsageSum(usage1, usage2)
+     */
+    PreDefinition(UsageSumQn)(
+      paramTys = List(
+        binding(n"usage1", UsageType()),
+        binding(n"usage2", UsageType()),
+      ),
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(UsageSum(Var(1), Var(0)), uAny)),
+        ),
+      ),
+    ),
+    /** prod (usage1 : UsageType) (usage2 : UsageType) : UsageType
+     *
+     * {} |- := UsageJoin(usage1, usage2)
+     */
+    PreDefinition(UsageJoinQn)(
+      paramTys = List(
+        binding(n"usage1", UsageType()),
+        binding(n"usage2", UsageType()),
+      ),
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(UsageJoin(Var(1), Var(0)), uAny)),
+        ),
+      ),
+    ),
 
     /** CType (level : LevelType) (effects: EffectsType) : CType(CType(CTop(level, effects))
       *
@@ -453,6 +509,23 @@ object Builtins:
           boundNames = Nil,
           lhs = Nil,
           rhs = Some(Return(EffectsUnion(Var(1), Var(0)), uAny)),
+        ),
+      ),
+    ),
+    /** filter (eff : EffectsType) : EffectsType
+      *
+      * {} |- := EffectsRetainSimpleLinear(eff1, eff2)
+      */
+    PreDefinition(EffectsRetainSimpleLinearQn)(
+      paramTys = List(
+        binding(n"eff", EffectsType()),
+      ),
+      ty = F(EffectsType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(EffectsRetainSimpleLinear(Var(0)), uAny)),
         ),
       ),
     ),

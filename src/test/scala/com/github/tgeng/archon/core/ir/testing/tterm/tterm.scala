@@ -4,9 +4,6 @@ import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.{Name, QualifiedName}
 import com.github.tgeng.archon.core.ir.*
 
-enum UsageOperator:
-  case UoProd, UoSum, UoJoin
-
 case class TBinding(name: String, ty: TTerm, usage: TTerm)
 case class THandlerImpl(handlerConstraint: HandlerConstraint, body: TTerm, boundNames: Seq[String])
 
@@ -16,14 +13,7 @@ enum TTerm(val sourceInfo: SourceInfo):
   case TU(t: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TForce(t: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TThunk(t: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
-  case TUsageLiteral(usage: Usage)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
-  case TUsageOp(op: UsageOperator, op1: TTerm, op2: TTerm)(using sourceInfo: SourceInfo)
-    extends TTerm(sourceInfo)
-  case TEffectsUnion(eff1: TTerm, eff2: TTerm)(using sourceInfo: SourceInfo)
-    extends TTerm(sourceInfo)
-  case TEffectsFilter(effect: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TLevelLiteral(level: Nat)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
-  case TLevelSuc(level: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TAuto()(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TF(ty: TTerm, effects: TTerm, usage: TTerm)(using sourceInfo: SourceInfo)
     extends TTerm(sourceInfo)
