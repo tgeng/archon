@@ -1,7 +1,7 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.Nat
-import com.github.tgeng.archon.core.common.{Name, QualifiedName}
+import com.github.tgeng.archon.core.common.QualifiedName
 import com.github.tgeng.archon.core.ir.*
 
 case class TBinding(name: String, ty: TTerm, usage: TTerm)
@@ -20,7 +20,7 @@ enum TTerm(val sourceInfo: SourceInfo):
   case TLet
     (name: String, t: TTerm, ty: TTerm, effects: TTerm, usage: TTerm, body: TTerm)
     (using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
-  case TApp(f: TTerm, arg: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
+  case TApp(f: TTerm, arg: TTerm) extends TTerm(SourceInfo.merge(f.sourceInfo, arg.sourceInfo))
   case TFunctionType(arg: TBinding, bodyType: TTerm, effects: TTerm)(using sourceInfo: SourceInfo)
     extends TTerm(sourceInfo)
   case THandler
