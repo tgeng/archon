@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.common
 
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers.should
 import os.{Path, RelPath}
@@ -31,20 +32,34 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
 
   "meta" - {
     "test cases are complete" in:
-      val testsMissingTestCases = (os
+      val missingTestNames = (os
         .list(testResourceDir)
         .map(_.last)
         .toSet -- this.testNames.map(testNameToFIleName)).toSeq.sorted
-        .map { testCase =>
+
+      val missingTestCases =
+        missingTestNames.map { testCase =>
           s"""
-          |"${testCase}" in:
-          |  runTest()
+          |  "${testCase}" in:
+          |    runTest()
           """.stripMargin
         }
 
-      if testsMissingTestCases.nonEmpty then
+      for missingTestName <- missingTestNames do
+        try runTest(missingTestName)
+        // ignore test failures so that any side effects of the test (for example update test
+        // output) are still executed
+        catch case _: TestFailedException => {}
+
+      if missingTestCases.nonEmpty then
+        val testFile =
+          TestDataConstants.testSrcRoot / RelPath(
+            this.getClass.getCanonicalName.replace('.', '/') + ".scala",
+          )
+        val missingTestCaseString = missingTestCases.mkString("\n")
+        os.write.append(testFile, missingTestCaseString)
         fail(
-          s"The following test cases are missing:\n${testsMissingTestCases.mkString("")}",
+          s"${this.getClass.getSimpleName} is missing some test cases and the test cases have been added to '$testFile'.",
         )
   }
 
@@ -59,6 +74,10 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
     assert(testName != null, "currentTestName should only be called in a test")
     testName
 
-  protected def runTest(): Unit = runTestImpl(testResourceDir / testNameToFIleName(currentTestName))
+  private def runTest(testName: String): Unit = runTestImpl(
+    testResourceDir / testNameToFIleName(testName),
+  )
+
+  protected def runTest(): Unit = runTest(currentTestName)
 
   protected def runTestImpl(testDir: Path): Unit
