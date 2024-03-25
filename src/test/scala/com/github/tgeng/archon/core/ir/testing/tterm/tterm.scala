@@ -4,7 +4,7 @@ import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.QualifiedName
 import com.github.tgeng.archon.core.ir.*
 
-case class TBinding(name: String, ty: TTerm, usage: TTerm)
+case class TBinding(name: String, ty: TTerm, usage: TTerm)(using val sourceInfo: SourceInfo)
 case class THandlerImpl(handlerConstraint: HandlerConstraint, body: TTerm, boundNames: Seq[String])
 
 enum TTerm(val sourceInfo: SourceInfo):
@@ -21,8 +21,8 @@ enum TTerm(val sourceInfo: SourceInfo):
     (name: String, t: TTerm, ty: TTerm, effects: TTerm, usage: TTerm, body: TTerm)
     (using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TApp(f: TTerm, arg: TTerm) extends TTerm(SourceInfo.merge(f.sourceInfo, arg.sourceInfo))
-  case TFunctionType(arg: TBinding, bodyType: TTerm, effects: TTerm)(using sourceInfo: SourceInfo)
-    extends TTerm(sourceInfo)
+  case TFunctionType(arg: TBinding, bodyType: TTerm, effects: TTerm)
+    extends TTerm(SourceInfo.merge(arg.sourceInfo, bodyType.sourceInfo))
   case THandler
     (
       eff: TTerm,

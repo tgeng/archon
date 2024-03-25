@@ -45,12 +45,6 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
           """.stripMargin
         }
 
-      for missingTestName <- missingTestNames do
-        try runTest(missingTestName)
-        // ignore test failures so that any side effects of the test (for example update test
-        // output) are still executed
-        catch case _: TestFailedException => {}
-
       if missingTestCases.nonEmpty then
         val testFile =
           TestDataConstants.testSrcRoot / RelPath(
@@ -58,6 +52,13 @@ abstract class FileBasedFreeSpec extends AnyFreeSpec:
           )
         val missingTestCaseString = missingTestCases.mkString("\n")
         os.write.append(testFile, missingTestCaseString)
+
+        for missingTestName <- missingTestNames do
+          try runTest(missingTestName)
+          // ignore test failures so that any side effects of the test (for example update test
+          // output) are still executed
+          catch case _: TestFailedException => {}
+
         fail(
           s"${this.getClass.getSimpleName} is missing some test cases and the test cases have been added to '$testFile'.",
         )

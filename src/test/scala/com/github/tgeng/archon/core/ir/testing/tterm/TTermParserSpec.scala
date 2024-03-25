@@ -47,3 +47,16 @@ class TTermParserSpec extends FileBasedFreeSpec:
 
   "simple_u" in:
     runTest()
+
+  "simple_F" in:
+    runTest()
+
+  "function_type_1" in:
+    runTest()
+          
+  "function_type_2" in:
+    runTest()
+          
+  "function_type_3" in:
+    runTest()
+          

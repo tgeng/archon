@@ -79,6 +79,11 @@ object Builtins:
   val UsageProdQn: QualifiedName = UsageQn / "prod"
   val UsageSumQn: QualifiedName = UsageQn / "sum"
   val UsageJoinQn: QualifiedName = UsageQn / "join"
+  val UsageAnyQn: QualifiedName = UsageQn / "any"
+  val UsageAffQn: QualifiedName = UsageQn / "aff"
+  val UsageRelQn: QualifiedName = UsageQn / "rel"
+  val UsageOneQn: QualifiedName = UsageQn / "one"
+  val UsageZeroQn: QualifiedName = UsageQn / "zero"
 
   val UnitQn: QualifiedName = BuiltinType / "Unit"
   val MkUnitQn: QualifiedName = UnitQn / "MkUnit"
@@ -380,9 +385,9 @@ object Builtins:
       ),
     ),
     /** prod (usage1 : UsageType) (usage2 : UsageType) : UsageType
-     *
-     * {} |- := UsageProd(usage1, usage2)
-     */
+      *
+      * {} |- := UsageProd(usage1, usage2)
+      */
     PreDefinition(UsageProdQn)(
       paramTys = List(
         binding(n"usage1", UsageType()),
@@ -398,9 +403,9 @@ object Builtins:
       ),
     ),
     /** prod (usage1 : UsageType) (usage2 : UsageType) : UsageType
-     *
-     * {} |- := UsageSum(usage1, usage2)
-     */
+      *
+      * {} |- := UsageSum(usage1, usage2)
+      */
     PreDefinition(UsageSumQn)(
       paramTys = List(
         binding(n"usage1", UsageType()),
@@ -416,9 +421,9 @@ object Builtins:
       ),
     ),
     /** prod (usage1 : UsageType) (usage2 : UsageType) : UsageType
-     *
-     * {} |- := UsageJoin(usage1, usage2)
-     */
+      *
+      * {} |- := UsageJoin(usage1, usage2)
+      */
     PreDefinition(UsageJoinQn)(
       paramTys = List(
         binding(n"usage1", UsageType()),
@@ -430,6 +435,61 @@ object Builtins:
           boundNames = Nil,
           lhs = Nil,
           rhs = Some(Return(UsageJoin(Var(1), Var(0)), uAny)),
+        ),
+      ),
+    ),
+    PreDefinition(UsageAnyQn)(
+      paramTys = Nil,
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(uAny, uAny)),
+        ),
+      ),
+    ),
+    PreDefinition(UsageAffQn)(
+      paramTys = Nil,
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(uAff, uAny)),
+        ),
+      ),
+    ),
+    PreDefinition(UsageRelQn)(
+      paramTys = Nil,
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(uRel, uAny)),
+        ),
+      ),
+    ),
+    PreDefinition(UsageOneQn)(
+      paramTys = Nil,
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(u1, uAny)),
+        ),
+      ),
+    ),
+    PreDefinition(UsageZeroQn)(
+      paramTys = Nil,
+      ty = F(UsageType()),
+      clauses = List(
+        PreClause(
+          boundNames = Nil,
+          lhs = Nil,
+          rhs = Some(Return(u0, uAny)),
         ),
       ),
     ),

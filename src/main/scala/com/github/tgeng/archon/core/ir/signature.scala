@@ -2,7 +2,6 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.CTerm.redex
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 
 enum Variance:
@@ -202,7 +201,6 @@ trait Signature:
       .orElse(getEffectOpDerivedClausesOption(qn))
 
   import CTerm.*
-  import CoPattern.*
   import QualifiedName.*
   import VTerm.*
 
@@ -223,7 +221,6 @@ trait Signature:
       .map(data => {
         val context = data.context.map(_._1) ++ data.tIndexTys
         val dataType = DataType(qn, vars(context.size - 1))
-        val highestDbIndex = context.size - 1
         IndexedSeq(
           Clause(
             context,
@@ -314,18 +311,20 @@ trait Signature:
     getRecordOption(qn)
       .map(record =>
         Definition(qn)(
-          record.context.map(_._1),
-          CType(RecordType(qn, vars(record.context.size - 1))),
+          record.context.map(_._1) :+ Binding(EffectsType(), uAny)(gn"effects"),
+          // The effect should be parametrically polymorphic so that one is able to construct record
+          // type with different effects.
+          CType(RecordType(qn, vars(record.context.size, 1), Var(0))),
         ),
       )
 
   def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     getRecordOption(qn)
       .map(record => {
-        val recordType = RecordType(qn, vars(record.context.size - 1))
+        val recordType = RecordType(qn, vars(record.context.size, 1), Var(0))
         IndexedSeq(
           Clause(
-            record.context.map(_._1),
+            record.context.map(_._1) :+ Binding(EffectsType(), uAny)(gn"effects"),
             Nil,
             recordType,
             CType(recordType),
@@ -335,7 +334,7 @@ trait Signature:
 
   def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     qn match
-      case Node(recordQn, fieldName) =>
+      case Node(qn, fieldName) =>
         for
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
@@ -347,7 +346,7 @@ trait Signature:
 
   def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     qn match
-      case Node(recordQn, fieldName) =>
+      case Node(qn, fieldName) =>
         for
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
