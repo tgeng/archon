@@ -19,7 +19,7 @@ object TTermParserSpec:
             .Infix(
               p.treeify(t, false, true),
               "@",
-              pprint.Tree.Literal(t.sourceInfo.toString),
+              pprint.Tree.Literal(pprint.apply(t.sourceInfo.toString).toString),
             )
       },
     )
@@ -53,10 +53,16 @@ class TTermParserSpec extends FileBasedFreeSpec:
 
   "function_type_1" in:
     runTest()
-          
+
   "function_type_2" in:
     runTest()
-          
+
   "function_type_3" in:
+    runTest()
+
+  "let_1" in:
+    runTest()
+
+  "let_2" in:
     runTest()
           

@@ -1,0 +1,3 @@
+let a: <effA> [uA] A = getA
+let b: <effB> [uB] B = getB
+plus a b

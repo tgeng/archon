@@ -1,5 +1,5 @@
 TF(
-  ty = TId(id = "Integer") @ Integer,
-  effects = TId(id = "eff1") @ eff1,
-  usage = TId(id = "usage1") @ usage1
-) @ <eff1> [usage1] Integer
+  ty = TId(id = "Integer") @ "Integer",
+  effects = TId(id = "eff1") @ "eff1",
+  usage = TId(id = "usage1") @ "usage1"
+) @ "<eff1> [usage1] Integer"

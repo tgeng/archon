@@ -9,7 +9,7 @@ import os.Path
 import scala.language.unsafeNulls
 
 class Parser(val text: String, val path: Option[Path]) {
-  private val keywords = Set("U", "force", "thunk", "auto", "F", "let", "handler", "in", "_")
+  private val keywords = Set("U", "force", "thunk", "auto", "F", "let", "handler", "_")
   private inline def PT[$: P, T, R](p: => P[T])(f: SourceInfo ?=> T => R): P[R] =
     P((Index ~ p ~ Index).map { case (start, t, end) =>
       f(using SourceInfo.SiText(text, path, Seq(TokenRange(start, end))))(t)
@@ -37,7 +37,7 @@ class Parser(val text: String, val path: Option[Path]) {
     )
   private def tLet[$: P]: P[TTerm] =
     PT(
-      "let" ~/ id ~ (":" ~/ ("<" ~/ tTerm ~ ">").? ~ ("[" ~/ tTerm ~ "]").? ~ tTerm).? ~ "=" ~/ tTerm ~ "in" ~/ tTerm,
+      "let" ~/ id ~ (":" ~/ ("<" ~/ tTerm ~ ">").? ~ ("[" ~/ tTerm ~ "]").? ~ tTerm).? ~ "=" ~/ tTerm ~ "\n" ~/ tTerm,
     ) {
       case (name, Some(effect, usage, ty), value, body) =>
         TTerm.TLet(

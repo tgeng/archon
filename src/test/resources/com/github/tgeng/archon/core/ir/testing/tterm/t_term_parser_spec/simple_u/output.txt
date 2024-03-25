@@ -1,1 +1,1 @@
-TU(t = TId(id = "abc") @ abc) @ U abc
+TU(t = TId(id = "abc") @ "abc") @ "U abc"

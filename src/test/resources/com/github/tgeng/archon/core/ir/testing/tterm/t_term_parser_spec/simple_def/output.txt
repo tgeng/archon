@@ -1,1 +1,1 @@
-TDef(qn = qn"a.b.c") @ .a.b.c
+TDef(qn = qn"a.b.c") @ ".a.b.c"

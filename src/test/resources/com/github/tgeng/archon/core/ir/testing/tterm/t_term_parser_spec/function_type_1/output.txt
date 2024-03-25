@@ -1,21 +1,21 @@
 TFunctionType(
   arg = TBinding(
     name = "_",
-    ty = TId(id = "A") @ A ,
-    usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ ε
+    ty = TId(id = "A") @ "A ",
+    usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
   ),
   bodyType = TFunctionType(
     arg = TBinding(
       name = "_",
-      ty = TId(id = "B") @ B ,
+      ty = TId(id = "B") @ "B ",
       usage = TDef(qn = qn"archon.builtin.type.Usage.any")
     ),
     bodyType = TF(
-      ty = TId(id = "C") @ C,
-      effects = TDef(qn = qn"archon.builtin.effects.total") @ ε,
-      usage = TAuto() @ ε
-    ) @ <> C,
+      ty = TId(id = "C") @ "C",
+      effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
+      usage = TAuto() @ "ε"
+    ) @ "<> C",
     effects = TDef(qn = qn"archon.builtin.effects.total")
-  ) @ B -> <> C,
+  ) @ "B -> <> C",
   effects = TDef(qn = qn"archon.builtin.effects.total")
-) @ A -> B -> <> C
+) @ "A -> B -> <> C"
