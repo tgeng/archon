@@ -1,13 +1,13 @@
 TFunctionType(
   arg = TBinding(
     name = "_",
-    ty = TId(id = "A") @ "A ",
+    ty = TId(id = "A") @ "A",
     usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
   ),
   bodyType = TFunctionType(
     arg = TBinding(
       name = "_",
-      ty = TId(id = "B") @ "B ",
+      ty = TId(id = "B") @ "B",
       usage = TDef(qn = qn"archon.builtin.type.Usage.any")
     ),
     bodyType = TF(

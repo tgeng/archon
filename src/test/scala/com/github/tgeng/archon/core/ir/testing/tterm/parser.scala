@@ -1,26 +1,27 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
+import com.github.tgeng.archon.common.parsing.{SignificantWhitespace, indexToColumn}
 import com.github.tgeng.archon.core.common.QualifiedName
 import com.github.tgeng.archon.core.ir.{Builtins, SourceInfo, TokenRange}
-import fastparse.SingleLineWhitespace.{*, given}
 import fastparse.{*, given}
 import os.Path
 
 import scala.language.unsafeNulls
 
-class Parser(val text: String, val path: Option[Path]) {
+class Parser(val text: String, val path: Option[Path], val indent: Int) {
+  given whitespace: Whitespace = SignificantWhitespace(indent)
   private val keywords = Set("U", "force", "thunk", "auto", "F", "let", "handler", "_")
   private inline def PT[$: P, T, R](p: => P[T])(f: SourceInfo ?=> T => R): P[R] =
-    P((Index ~ p ~ Index).map { case (start, t, end) =>
+    P((Index ~~ p ~~ Index).map { case (start, t, end) =>
       f(using SourceInfo.SiText(text, path, Seq(TokenRange(start, end))))(t)
     })
   private def tAuto[$: P]: P[TTerm] = PT("_")(_ => TTerm.TAuto())
   private def id[$: P]: P[String] = P((CharIn("a-zA-Z_") ~~ CharIn("a-zA-Z0-9_").repX).!)
   private def tId[$: P]: P[TTerm] = PT(id.filter(!keywords(_)))(TTerm.TId(_))
   private def tLevelLiteral[$: P]: P[TTerm] =
-    PT(CharIn("0-9").rep(1).! ~ "L")(s => TTerm.TLevelLiteral(s.toInt))
+    PT(CharIn("0-9").rep(1).! ~~ "L")(s => TTerm.TLevelLiteral(s.toInt))
   private def tDef[$: P]: P[TTerm] =
-    PT(("." ~ id).rep(1).!)(s => TTerm.TDef(QualifiedName.from(s.drop(1))))
+    PT(("." ~~ id).rep(1).!)(s => TTerm.TDef(QualifiedName.from(s.drop(1))))
   private def tU[$: P]: P[TTerm] = PT("U" ~/ atom)(TTerm.TU(_))
   private def tForce[$: P]: P[TTerm] = PT("force" ~/ atom)(TTerm.TForce(_))
   private def atom[$: P]: P[TTerm] = P(
@@ -37,7 +38,10 @@ class Parser(val text: String, val path: Option[Path]) {
     )
   private def tLet[$: P]: P[TTerm] =
     PT(
-      "let" ~/ id ~ (":" ~/ ("<" ~/ tTerm ~ ">").? ~ ("[" ~/ tTerm ~ "]").? ~ tTerm).? ~ "=" ~/ tTerm ~ "\n" ~/ tTerm,
+      "let" ~/ id ~
+        (":" ~/ ("<" ~/ tTerm ~ ">").? ~ ("[" ~/ tTerm ~ "]").? ~ tTerm).? ~
+        "=" ~/ indented(_.tTerm) ~
+        tTerm,
     ) {
       case (name, Some(effect, usage, ty), value, body) =>
         TTerm.TLet(
@@ -52,7 +56,8 @@ class Parser(val text: String, val path: Option[Path]) {
         TTerm.TLet(name, value, TTerm.TAuto(), TTerm.TAuto(), TTerm.TAuto(), body)
     }
   private def tApp[$: P]: P[TTerm] =
-    (atom ~ atom.rep).map((f, args) => args.foldLeft(f)(TTerm.TApp(_, _)))
+    (atom ~ indented(_.atom.rep)).map((f, args) => args.foldLeft(f)(TTerm.TApp(_, _)))
+
   private def tBinding[$: P]: P[TBinding] =
     PT((id ~ ":").? ~/ ("[" ~/ tTerm ~ "]").? ~ tApp)((name, usage, ty) =>
       TBinding(
@@ -73,13 +78,24 @@ class Parser(val text: String, val path: Option[Path]) {
         },
     )
   private def tTerm[$: P]: P[TTerm] = P(tFunctionType | tThunk | tLet | tApp)
+  private def indented[$: P, R](f: Parser => Whitespace ?=> P[R]): P[R] =
+    NoCut(
+      Index
+        .map { index => indexToColumn(index, text) }
+        .filter(newIndent => newIndent > indent)
+        .flatMapX(newIndent => {
+          val parser = new Parser(text, path, newIndent)
+          f(parser)(using parser.whitespace)
+        }),
+    )
+
   private def tTermEnd[$: P]: P[TTerm] = P(tTerm ~ End)
 }
 
 object Parser:
   def parseTTerm(path: Path): TTerm =
     val text = os.read(path)
-    val parser = new Parser(text, Some(path))
+    val parser = new Parser(text, Some(path), 0)
     fastparse.parse(text, parser.tTermEnd(using _)) match
       case Parsed.Success(value, _)    => value
       case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)

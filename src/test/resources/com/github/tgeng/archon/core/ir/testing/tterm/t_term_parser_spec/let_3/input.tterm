@@ -1,0 +1,5 @@
+let a = let a1 = getA1
+        let a2 = getA2
+        plus a1 a2
+let b = getB
+plus a b

@@ -66,3 +66,15 @@ class TTermParserSpec extends FileBasedFreeSpec:
   "let_2" in:
     runTest()
           
+  "let_3" in:
+    runTest()
+          
+  "let_4" in:
+    runTest()
+          
+  "app_1" in:
+    runTest()
+          
+  "app_2" in:
+    runTest()
+          
