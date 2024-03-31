@@ -2,6 +2,7 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.parsing.{SignificantWhitespace, indexToColumn}
 import com.github.tgeng.archon.core.common.QualifiedName
+import com.github.tgeng.archon.core.ir.SourceInfo.SiEmpty
 import com.github.tgeng.archon.core.ir.{Builtins, SourceInfo, TokenRange}
 import fastparse.{*, given}
 import os.Path
@@ -77,7 +78,16 @@ class Parser(val text: String, val path: Option[Path], val indent: Int) {
           )
         },
     )
-  private def tTerm[$: P]: P[TTerm] = P(tFunctionType | tThunk | tLet | tApp)
+  private def tTerm[$: P]: P[TTerm] = P(
+    tFunctionType | tThunk | tLet | tApp
+      .rep(1)
+      .map(_.reduceRight { (t, body) =>
+        given SourceInfo = SiEmpty
+        TTerm.TLet("_", t, TTerm.TAuto(), TTerm.TAuto(), TTerm.TDef(Builtins.UsageZeroQn), body)(
+          using SourceInfo.merge(t.sourceInfo, body.sourceInfo),
+        )
+      }),
+  )
   private def indented[$: P, R](f: Parser => Whitespace ?=> P[R]): P[R] =
     NoCut(
       Index
