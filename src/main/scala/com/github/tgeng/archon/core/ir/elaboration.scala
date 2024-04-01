@@ -253,14 +253,18 @@ private def elaborateRecordHead
   ctx.trace(s"elaborating record signature ${record.qn}"):
     val tParamTys = elaborateTTelescope(record.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
-    val selfUsage = Collapse(checkType(record.selfUsage, F(UsageType(), Total()))._1).normalized
     val r: Record =
       checkIsCType(record.ty)._1.normalized(None) match
         case CType(CTop(level, _), _) =>
           Record(record.qn)(
             Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
             level,
-            Binding(Thunk(RecordType(record.qn, vars(tParamTys.size - 1))), selfUsage)(
+            // Self usage is always `uAny` because
+            // 1. it's only used in field type declarations so `uAny` is handy
+            // 2. having `uAny` here does not put any restrictions because any references of `self`
+            //    are always in field types and all such usages will multiple by `u0` when type
+            //    checking field implementations.
+            Binding(U(RecordType(record.qn, vars(tParamTys.size - 1))), uAny)(
               record.selfName,
             ),
           )

@@ -13,7 +13,6 @@ import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.Reducible.reduce
-import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
@@ -1116,17 +1115,16 @@ def inferType
           elims match
             case Nil => (Nil, cty, Usages.zero)
             case (e @ ETerm(uncheckedArg)) :: uncheckedRest =>
+              // Note that this `cty` is created by `inferType` so it's already checked.
               cty match
-                case FunctionType(binding, uncheckedBodyTy, uncheckedEffects) =>
+                case FunctionType(binding, bodyTy, effects) =>
                   val (arg, argUsages) = checkType(uncheckedArg, binding.ty)
-                  val (bodyTy, _) = checkIsCType(uncheckedBodyTy)(using Γ :+ binding)
                   val (rest, cty, restUsages) =
                     checkElims(
                       e :: checkedElims,
                       bodyTy.substLowers(arg).normalized(None),
                       uncheckedRest,
                     )
-                  val (effects, _) = checkType(uncheckedEffects, EffectsType())
                   val continuationUsage = getEffectsContinuationUsage(effects)
                   (
                     ETerm(arg) :: rest,
@@ -1136,26 +1134,23 @@ def inferType
                 case _ => throw ExpectFunction(redex(c, checkedElims.reverse))
             case (e @ EProj(name)) :: uncheckedRest =>
               cty match
-                case RecordType(qn, uncheckedArgs, uncheckedEffects) =>
+                case RecordType(qn, args, effects) =>
                   Σ.getFieldOption(qn, name) match
                     case None => throw MissingField(name, qn)
                     case Some(f) =>
-                      val record = Σ.getRecord(qn)
-                      val (args, _) = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
-                      // TODO[P2]: refactor this and track an accumulating usage so that checking record usage here
-                      // won't be O(n^2)
-                      val (recordTerm, recordUsages) = checkType(redex(c, checkedElims), cty)
+                      // `self` of record is only used in type checking. Hence usages of variables
+                      // in the record are not counted.
+                      val self = redex(c, checkedElims)
                       val (rest, checkedCty, restUsages) = checkElims(
                         e :: checkedElims,
-                        f.ty.substLowers(args :+ Thunk(recordTerm)*).normalized(None),
+                        f.ty.substLowers(args :+ Thunk(self)*).normalized(None),
                         uncheckedRest,
                       )
-                      val (effects, _) = checkType(uncheckedEffects, EffectsType())
                       val continuationUsage = getEffectsContinuationUsage(effects)
                       (
                         EProj(name) :: rest,
                         augmentEffect(effects, checkedCty),
-                        recordUsages * record.selfBinding.usage + restUsages * continuationUsage,
+                        restUsages * continuationUsage,
                       )
                 case _ => throw ExpectRecord(redex(c, checkedElims.reverse))
         val (checkedC, cty, usages) = inferType(c)
