@@ -1,6 +1,6 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
-import com.github.tgeng.archon.core.ir.Variance
+import com.github.tgeng.archon.core.ir.{SourceInfo, Variance}
 
 enum TDeclaration:
   case TData
@@ -42,9 +42,17 @@ case class TField
 case class TClause
   (
     patterns: List[TCoPattern],
-    body: TTerm,
+    body: Option[TTerm],
   )
 
-enum TCoPattern:
-  // TODO: implement this
-  case Foo
+enum TCoPattern(val sourceInfo: SourceInfo):
+  case TcProjection(name: String)(using sourceInfo: SourceInfo) extends TCoPattern(sourceInfo)
+  case TcPattern(pattern: TPattern) extends TCoPattern(pattern.sourceInfo)
+
+enum TPattern(val sourceInfo: SourceInfo):
+  case TpVar(name: String)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
+  case TpXConstructor(name: String, args: List[TPattern], forced: Boolean)(using sourceInfo: SourceInfo)
+    extends TPattern(sourceInfo)
+  case TpForced(tTerm: TTerm)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
+  case TPAbsurd()(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
+

@@ -123,6 +123,10 @@ trait Signature:
       throw IllegalArgumentException(s"missing constructor $conName"),
     )
 
+  def getConstructorOption(constructorQn: QualifiedName): Option[Constructor] = constructorQn match
+    case QualifiedName.Node(dataQn, conName) => getConstructorOption(dataQn, conName)
+    case _ => throw IllegalArgumentException(s"not a constructor $constructorQn")
+
   def getRecordOption(qn: QualifiedName): Option[Record]
 
   def getRecord(qn: QualifiedName): Record = getRecordOption(qn).get
@@ -142,6 +146,10 @@ trait Signature:
     getFieldOption(qn, fieldName).getOrElse(
       throw IllegalArgumentException(s"missing field $fieldName"),
     )
+
+  def getFieldOption(fieldQn: QualifiedName): Option[Field] = fieldQn match
+    case QualifiedName.Node(recordQn, fieldName) => getFieldOption(recordQn, fieldName)
+    case _ => throw IllegalArgumentException(s"not a field $fieldQn")
 
   def getDefinitionOption(qn: QualifiedName): Option[Definition] =
     getDefinitionOptionImpl(qn).orElse(getDerivedDefinitionOption(qn))

@@ -1,40 +1,66 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
+import com.github.tgeng.archon.common.{MutableRef, Nat}
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.VTerm.*
+import com.github.tgeng.archon.core.ir.testing.tterm.TCoPattern.*
+import com.github.tgeng.archon.core.ir.testing.tterm.TDeclaration.*
+import com.github.tgeng.archon.core.ir.testing.tterm.TPattern.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TTerm.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TranslationError.UnresolvedSymbol
 
 import scala.collection.immutable.SeqMap
+import scala.collection.mutable
 
 enum TranslationError extends Exception:
   case UnresolvedSymbol(name: String)
 
 case class TranslationContext
   (
-    nextDeBruijnIndex: Int = 0,
+    moduleQn: QualifiedName,
+    localVarCount: Int = 0,
     localVars: Map[String, Int] = Map.empty,
     globalDefs: Map[String, QualifiedName] = Map.empty,
+    dataDecls: Map[String, QualifiedName] = Map.empty,
+    constructorDecls: Set[String] = Set.empty,
   ):
-  def bindLocal(name: String): TranslationContext =
-    val newIndex = nextDeBruijnIndex + 1
-    this.copy(nextDeBruijnIndex = newIndex, localVars = localVars + (name -> nextDeBruijnIndex))
-
-  def bindLocals(names: Seq[String]): TranslationContext =
-    names.foldLeft(this) { (ctx, name) => ctx.bindLocal(name) }
+  def bindLocal(names: String*): TranslationContext =
+    this.copy(
+      localVarCount = localVarCount + names.size,
+      localVars = localVars ++ names.zipWithIndex.map((n, i) => n -> (localVarCount + i)),
+    )
 
   def bindDef(name: String, qn: QualifiedName): TranslationContext =
     this.copy(globalDefs = globalDefs + (name -> qn))
 
-  def lookup(name: String): Either[Int, QualifiedName] =
+  def bindDef(name: String): TranslationContext =
+    bindDef(name, moduleQn / name)
+
+  def bindDataDecl(data: TData): TranslationContext =
+    this.copy(
+      dataDecls = dataDecls + (data.name -> (moduleQn / data.name)),
+      constructorDecls = constructorDecls ++ data.constructors.map(_.name),
+      globalDefs = (globalDefs + (data.name -> moduleQn / data.name)) ++ data.constructors.map(c =>
+        c.name -> (moduleQn / data.name / c.name),
+      ),
+    )
+
+  def lookup(name: String): Either[Nat, QualifiedName] =
     localVars.get(name) match
-      case Some(index) => Left(index)
+      case Some(index) => Left(localVarCount - 1 - index)
       case None =>
         globalDefs.get(name) match
           case Some(qualifiedName) => Right(qualifiedName)
           case None                => throw UnresolvedSymbol(name)
+  def lookupLocal(name: String): Nat = localVars.get(name) match
+    case Some(index) => localVarCount - 1 - index
+    case None        => throw UnresolvedSymbol(name)
+
+  def lookupGlobal(name: String): QualifiedName = globalDefs.get(name) match
+    case Some(qn) => qn
+    case None     => throw UnresolvedSymbol(name)
 
 extension (tTerm: TTerm)
   def toCTerm(using context: TranslationContext): CTerm =
@@ -128,7 +154,7 @@ extension (tTerm: TTerm)
                 qn -> HandlerImpl(
                   h,
                   body.toCTerm(using
-                    summon[TranslationContext].bindLocals(parameterBinding.name +: boundNames),
+                    summon[TranslationContext].bindLocal(parameterBinding.name +: boundNames*),
                   ),
                 )(boundNames.map(n => Name.Normal(n)))
               }
@@ -160,3 +186,97 @@ extension (self: CTerm)
       Auto(),
       f(using newCtx)(Var(0)),
     )(gn"v")
+
+extension (tp: TCoPattern)
+  def toCoPattern(using TranslationContext): CoPattern =
+    given SourceInfo = tp.sourceInfo
+    tp match
+      case TcProjection(name) => CoPattern.CProjection(Name.Normal(name))
+      case TcPattern(pattern) => CoPattern.CPattern(pattern.toPattern)
+
+extension (tp: TPattern)
+  def toPattern(using ctx: TranslationContext): Pattern =
+    given SourceInfo = tp.sourceInfo
+    tp match
+      case TpVar(name) => Pattern.PVar(ctx.lookupLocal(name))
+      case TpXConstructor(name, args, forced) =>
+        val argPatterns = args.map(_.toPattern)
+        ctx.dataDecls.get(name) match
+          case Some(qn) =>
+            if forced then Pattern.PForcedDataType(qn, argPatterns)
+            else Pattern.PDataType(qn, argPatterns)
+          case None =>
+            if ctx.constructorDecls(name) then
+              if forced then Pattern.PForcedConstructor(Name.Normal(name), argPatterns)
+              else Pattern.PConstructor(Name.Normal(name), argPatterns)
+            else throw UnresolvedSymbol(name)
+      case TpForced(tTerm) => Pattern.PForced(Collapse(tTerm.toCTerm))
+      case TPAbsurd()      => Pattern.PAbsurd()
+
+extension (tps: Seq[TCoPattern])
+  def collectPatternNames: List[String] =
+    val names = mutable.ListBuffer.empty[String]
+    def processPattern(pattern: TPattern): Unit = pattern match
+      case TpVar(name) =>
+        names += name
+      case TpXConstructor(_, args, _) =>
+        args.foreach(processPattern)
+      case _ =>
+    def processCoPattern(coPattern: TCoPattern): Unit = coPattern match
+      case TcProjection(name) =>
+      case TcPattern(pattern) => processPattern(pattern)
+    tps.foreach(processCoPattern)
+    names.distinct.toList
+
+extension (td: TDeclaration)
+  def toPreDeclaration(using ctx: TranslationContext): PreDeclaration =
+    td match
+      case TData(name, tParamTys, ty, constructors) =>
+        val tParamTysCTerm = tParamTys.map:
+          case (TBinding(name, ty, usage), variance) =>
+            (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
+        val tyCTerm = ty.toCTerm
+        val constructorCTerms = constructors.map(_.toPreConstructor)
+        PreDeclaration.PreData(ctx.moduleQn / name)(
+          tParamTysCTerm,
+          tyCTerm,
+          constructorCTerms,
+        )
+      case TRecord(selfName, name, tParamTys, ty, fields) =>
+        val tParamTysCTerm = tParamTys.map:
+          case (TBinding(name, ty, usage), variance) =>
+            (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
+        val tyCTerm = ty.toCTerm
+        val fieldCTerms = fields.map(_.toPreField)
+        PreDeclaration.PreRecord(ctx.moduleQn / name)(
+          tParamTysCTerm,
+          tyCTerm,
+          fieldCTerms,
+        )
+      case TDefinition(name, tParamTys, ty, clauses) =>
+        val tParamTysCTerm = tParamTys.map:
+          case TBinding(name, ty, usage) =>
+            Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name))
+        val tyCTerm = ty.toCTerm
+        val clauseCTerms = clauses.map(_.toPreClause)
+        PreDeclaration.PreDefinition(ctx.moduleQn / name)(
+          tParamTysCTerm,
+          tyCTerm,
+          clauseCTerms,
+        )
+
+extension (tc: TConstructor)
+  def toPreConstructor(using ctx: TranslationContext): PreConstructor =
+    PreConstructor(Name.Normal(tc.name), tc.ty.toCTerm)
+
+extension (tf: TField)
+  def toPreField(using ctx: TranslationContext): Field =
+    Field(Name.Normal(tf.name), tf.ty.toCTerm)
+
+extension (tc: TClause)
+  def toPreClause(using ctx: TranslationContext): PreClause =
+    val boundNames = tc.patterns.collectPatternNames
+    given TranslationContext = ctx.bindLocal(boundNames*)
+    val lhs = tc.patterns.map(_.toCoPattern)
+    val rhs = tc.body.map(_.toCTerm)
+    PreClause(boundNames.map(n => MutableRef(Name.Normal(n))), lhs, rhs)
