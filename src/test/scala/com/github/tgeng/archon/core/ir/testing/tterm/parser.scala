@@ -3,13 +3,14 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 import com.github.tgeng.archon.common.parsing.{SignificantWhitespace, indexToColumn}
 import com.github.tgeng.archon.core.common.QualifiedName
 import com.github.tgeng.archon.core.ir.SourceInfo.SiEmpty
-import com.github.tgeng.archon.core.ir.{Builtins, SourceInfo, TokenRange}
+import com.github.tgeng.archon.core.ir.testing.tterm.TDeclaration.*
+import com.github.tgeng.archon.core.ir.{Builtins, SourceInfo, TokenRange, Variance}
 import fastparse.{*, given}
 import os.Path
 
 import scala.language.unsafeNulls
 
-class Parser(val text: String, val path: Option[Path], val indent: Int) {
+class Parser(val text: String, val path: Option[Path], val indent: Int):
   given whitespace: Whitespace = SignificantWhitespace(indent)
   private val keywords = Set("U", "force", "thunk", "auto", "F", "let", "handler", "_")
   private inline def PT[$: P, T, R](p: => P[T])(f: SourceInfo ?=> T => R): P[R] =
@@ -101,12 +102,72 @@ class Parser(val text: String, val path: Option[Path], val indent: Int) {
     )
 
   private def tTermEnd[$: P]: P[TTerm] = P(tTerm ~ End)
-}
+
+  private def tBindingAndVariance[$: P]: P[(TBinding, Variance)] = P(
+    (("+" | "-").!.? ~ "(" ~ tBinding ~ ")").map:
+      case (Some("+"), b) => (b, Variance.COVARIANT)
+      case (Some("-"), b) => (b, Variance.CONTRAVARIANT)
+      case (None, b)      => (b, Variance.INVARIANT)
+      case _              => throw new RuntimeException("Impossible"),
+  )
+
+  private def tConstructor[$: P]: P[TConstructor] = P(
+    (id ~ ":" ~/ indented(_.tFunctionType)).map(TConstructor.apply),
+  )
+
+  private def tData[$: P]: P[TDeclaration] = P(
+    ("data" ~/ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tFunctionType) ~ tConstructor.rep)
+      .map(TData.apply),
+  )
+
+  private def tField[$: P]: P[TField] = P(
+    (id ~ ":" ~/ indented(_.tFunctionType)).map(TField.apply),
+  )
+
+  private def tRecord[$: P]: P[TDeclaration] = P(
+    ("record" ~/ (id ~ ":").?.map(
+      _.getOrElse("self"),
+    ) ~ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tApp) ~ tField.rep).map(TRecord.apply),
+  )
+
+  private def tProjection[$: P]: P[TCoPattern] = PT("#" ~/ id)(TCoPattern.TcProjection.apply)
+
+  private def tpVar[$: P]: P[TPattern] = PT(id)(TPattern.TpVar.apply)
+  private def tpXConstructor[$: P]: P[TPattern] =
+    PT(".".!.?.map(_.isDefined) ~ id ~ "{" ~/ tPattern.rep ~ "}")(TPattern.TpXConstructor.apply)
+  private def tpForced[$: P]: P[TPattern] = PT("." ~ "(" ~/ tTerm ~ ")")(TPattern.TpForced.apply)
+  private def tpAbsurd[$: P]: P[TPattern] = PT("(" ~/ ")")(_ => TPattern.TPAbsurd())
+  private def tPattern[$: P]: P[TPattern] = P(tpVar | tpXConstructor | tpForced | tpAbsurd)
+
+  private def tCoPattern[$: P]: P[TCoPattern] = P(
+    tProjection | tPattern.map(TCoPattern.TcPattern.apply),
+  )
+
+  private def tClause[$: P]: P[TClause] = P(
+    (tCoPattern.rep ~ "=" ~ indented(_.tTerm).?).map(TClause.apply),
+  )
+
+  private def tDefinition[$: P]: P[TDeclaration] = P(
+    ("def" ~ id ~ ("(" ~ tBinding ~ ")").rep ~ ":" ~/ indented(_.tFunctionType) ~ tClause.rep)
+      .map(TDefinition.apply),
+  )
+
+  private def tDeclaration[$: P]: P[TDeclaration] = P(tData | tRecord | tDefinition)
+
+  private def tDeclarationEnd[$: P]: P[TDeclaration] = P(tDeclaration ~ End)
 
 object Parser:
   def parseTTerm(path: Path): TTerm =
     val text = os.read(path)
     val parser = new Parser(text, Some(path), 0)
     fastparse.parse(text, parser.tTermEnd(using _)) match
+      case Parsed.Success(value, _)    => value
+      case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)
+
+  def parseDeclaration(path: Path): TDeclaration =
+    val text = os.read(path)
+    val parser = new Parser(text, Some(path), 0)
+    fastparse
+      .parse(text, parser.tDeclarationEnd(using _)) match
       case Parsed.Success(value, _)    => value
       case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)

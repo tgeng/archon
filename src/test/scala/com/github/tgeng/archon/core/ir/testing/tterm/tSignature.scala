@@ -6,24 +6,24 @@ enum TDeclaration:
   case TData
     (
       name: String,
-      tParamTys: List[(TBinding, Variance)],
+      tParamTys: Seq[(TBinding, Variance)],
       ty: TTerm,
-      constructors: List[TConstructor],
+      constructors: Seq[TConstructor],
     )
   case TRecord
     (
       selfName: String,
       name: String,
-      tParamTys: List[(TBinding, Variance)],
+      tParamTys: Seq[(TBinding, Variance)],
       ty: TTerm,
-      fields: List[TField],
+      fields: Seq[TField],
     )
   case TDefinition
     (
       name: String,
-      tParamTys: List[TBinding],
+      tParamTys: Seq[TBinding],
       ty: TTerm,
-      clauses: List[TClause],
+      clauses: Seq[TClause],
     )
   // TODO: add TEffect
 
@@ -41,7 +41,7 @@ case class TField
 
 case class TClause
   (
-    patterns: List[TCoPattern],
+    patterns: Seq[TCoPattern],
     body: Option[TTerm],
   )
 
@@ -51,7 +51,7 @@ enum TCoPattern(val sourceInfo: SourceInfo):
 
 enum TPattern(val sourceInfo: SourceInfo):
   case TpVar(name: String)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
-  case TpXConstructor(name: String, args: List[TPattern], forced: Boolean)(using sourceInfo: SourceInfo)
+  case TpXConstructor(forced: Boolean, name: String, args: Seq[TPattern])(using sourceInfo: SourceInfo)
     extends TPattern(sourceInfo)
   case TpForced(tTerm: TTerm)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
   case TPAbsurd()(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)

@@ -199,8 +199,8 @@ extension (tp: TPattern)
     given SourceInfo = tp.sourceInfo
     tp match
       case TpVar(name) => Pattern.PVar(ctx.lookupLocal(name))
-      case TpXConstructor(name, args, forced) =>
-        val argPatterns = args.map(_.toPattern)
+      case TpXConstructor(forced, name, args) =>
+        val argPatterns = args.map(_.toPattern).toList
         ctx.dataDecls.get(name) match
           case Some(qn) =>
             if forced then Pattern.PForcedDataType(qn, argPatterns)
@@ -219,7 +219,7 @@ extension (tps: Seq[TCoPattern])
     def processPattern(pattern: TPattern): Unit = pattern match
       case TpVar(name) =>
         names += name
-      case TpXConstructor(_, args, _) =>
+      case TpXConstructor(_, _, args) =>
         args.foreach(processPattern)
       case _ =>
     def processCoPattern(coPattern: TCoPattern): Unit = coPattern match
@@ -238,9 +238,9 @@ extension (td: TDeclaration)
         val tyCTerm = ty.toCTerm
         val constructorCTerms = constructors.map(_.toPreConstructor)
         PreDeclaration.PreData(ctx.moduleQn / name)(
-          tParamTysCTerm,
+          tParamTysCTerm.toList,
           tyCTerm,
-          constructorCTerms,
+          constructorCTerms.toList,
         )
       case TRecord(selfName, name, tParamTys, ty, fields) =>
         val tParamTysCTerm = tParamTys.map:
@@ -249,9 +249,9 @@ extension (td: TDeclaration)
         val tyCTerm = ty.toCTerm
         val fieldCTerms = fields.map(_.toPreField)
         PreDeclaration.PreRecord(ctx.moduleQn / name)(
-          tParamTysCTerm,
+          tParamTysCTerm.toList,
           tyCTerm,
-          fieldCTerms,
+          fieldCTerms.toList,
         )
       case TDefinition(name, tParamTys, ty, clauses) =>
         val tParamTysCTerm = tParamTys.map:
@@ -260,9 +260,9 @@ extension (td: TDeclaration)
         val tyCTerm = ty.toCTerm
         val clauseCTerms = clauses.map(_.toPreClause)
         PreDeclaration.PreDefinition(ctx.moduleQn / name)(
-          tParamTysCTerm,
+          tParamTysCTerm.toList,
           tyCTerm,
-          clauseCTerms,
+          clauseCTerms.toList,
         )
 
 extension (tc: TConstructor)
@@ -279,4 +279,4 @@ extension (tc: TClause)
     given TranslationContext = ctx.bindLocal(boundNames*)
     val lhs = tc.patterns.map(_.toCoPattern)
     val rhs = tc.body.map(_.toCTerm)
-    PreClause(boundNames.map(n => MutableRef(Name.Normal(n))), lhs, rhs)
+    PreClause(boundNames.map(n => MutableRef(Name.Normal(n))), lhs.toList, rhs)

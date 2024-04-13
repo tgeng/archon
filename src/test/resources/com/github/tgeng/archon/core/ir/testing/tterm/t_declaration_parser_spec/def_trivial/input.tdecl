@@ -1,0 +1,2 @@
+def foo: Nat -> <> Nat
+n = plus n (Suc Zero)
