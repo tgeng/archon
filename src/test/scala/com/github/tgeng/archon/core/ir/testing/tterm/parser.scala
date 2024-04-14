@@ -14,9 +14,10 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   given whitespace: Whitespace = SignificantWhitespace(indent)
   private val keywords = Set("U", "force", "thunk", "auto", "F", "let", "handler", "_")
   private inline def PT[$: P, T, R](p: => P[T])(f: SourceInfo ?=> T => R): P[R] =
-    P((Index ~~ p ~~ Index).map { case (start, t, end) =>
-      f(using SourceInfo.SiText(text, path, Seq(TokenRange(start, end))))(t)
-    })
+    P((Index ~~ p ~~ Index).map:
+      case (start, t, end) =>
+        f(using SourceInfo.SiText(text, path, Seq(TokenRange(start, end))))(t),
+    )
   private def tAuto[$: P]: P[TTerm] = PT("_")(_ => TTerm.TAuto())
   private def id[$: P]: P[String] = P((CharIn("a-zA-Z_") ~~ CharIn("a-zA-Z0-9_").repX).!)
   private def tId[$: P]: P[TTerm] = PT(id.filter(!keywords(_)))(TTerm.TId(_))
@@ -44,7 +45,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
         (":" ~/ ("<" ~/ tTerm ~ ">").? ~ ("[" ~/ tTerm ~ "]").? ~ tTerm).? ~
         "=" ~/ indented(_.tTerm) ~
         tTerm,
-    ) {
+    ):
       case (name, Some(effect, usage, ty), value, body) =>
         TTerm.TLet(
           name,
@@ -56,7 +57,6 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
         )
       case (name, None, value, body) =>
         TTerm.TLet(name, value, TTerm.TAuto(), TTerm.TAuto(), TTerm.TAuto(), body)
-    }
   private def tApp[$: P]: P[TTerm] =
     (atom ~ indented(_.atom.rep)).map((f, args) => args.foldLeft(f)(TTerm.TApp(_, _)))
 
@@ -68,37 +68,51 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
         usage.getOrElse(TTerm.TDef(Builtins.UsageAnyQn)(using SourceInfo.SiEmpty)),
       ),
     )
-  private def tFunctionType[$: P]: P[TTerm] =
+
+  private inline def xFunctionType[$: P](resultP: => P[TTerm]): P[TTerm] =
     P(
-      (NoCut((("<" ~/ tTerm ~ ">").? ~ tBinding ~ "->")).rep ~ tF).map: (effectAndBindings, ty) =>
-        effectAndBindings.foldRight(ty) { case ((effect, binding), ty) =>
-          TTerm.TFunctionType(
-            binding,
-            ty,
-            effect.getOrElse(TTerm.TDef(Builtins.TotalQn)(using SourceInfo.SiEmpty)),
-          )
-        },
+      (NoCut(("<" ~/ tTerm ~ ">").? ~ tBinding ~ "->").rep ~ resultP).map:
+        (effectAndBindings, ty) =>
+          effectAndBindings.foldRight(ty):
+            case ((effect, binding), ty) =>
+              TTerm.TFunctionType(
+                binding,
+                ty,
+                effect.getOrElse(TTerm.TDef(Builtins.TotalQn)(using SourceInfo.SiEmpty)),
+              ),
     )
+
+  private def tFunctionType[$: P]: P[TTerm] = xFunctionType(tF)
+
+  private def tDataFunctionType[$: P]: P[TTerm] = xFunctionType(
+    tApp.map(r =>
+      given SourceInfo = SiEmpty
+      TTerm.TF(r, TTerm.TDef(Builtins.TotalQn), TTerm.TDef(Builtins.UsageOneQn))(using
+        r.sourceInfo,
+      ),
+    ),
+  )
+
   private def tTerm[$: P]: P[TTerm] = P(
     tFunctionType | tThunk | tLet | tApp
       .rep(1)
-      .map(_.reduceRight { (t, body) =>
+      .map(_.reduceRight((t, body) =>
         given SourceInfo = SiEmpty
         TTerm.TLet("_", t, TTerm.TAuto(), TTerm.TAuto(), TTerm.TDef(Builtins.UsageZeroQn), body)(
           using SourceInfo.merge(t.sourceInfo, body.sourceInfo),
-        )
-      }),
+        ),
+      )),
   )
   // TODO[P1]: Add handler parser here
   private def indented[$: P, R](f: Parser => Whitespace ?=> P[R]): P[R] =
     NoCut(
       Index
-        .map { index => indexToColumn(index, text) }
+        .map(index => indexToColumn(index, text))
         .filter(newIndent => newIndent > indent)
-        .flatMapX(newIndent => {
+        .flatMapX(newIndent =>
           val parser = new Parser(text, path, newIndent)
-          f(parser)(using parser.whitespace)
-        }),
+          f(parser)(using parser.whitespace),
+        ),
     )
 
   private def tTermEnd[$: P]: P[TTerm] = P(tTerm ~ End)
@@ -112,11 +126,11 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   )
 
   private def tConstructor[$: P]: P[TConstructor] = P(
-    (id ~ ":" ~/ indented(_.tFunctionType)).map(TConstructor.apply),
+    (id ~ ":" ~/ indented(_.tDataFunctionType)).map(TConstructor.apply),
   )
 
   private def tData[$: P]: P[TDeclaration] = P(
-    ("data" ~/ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tFunctionType) ~ tConstructor.rep)
+    ("data" ~/ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tDataFunctionType) ~ tConstructor.rep)
       .map(TData.apply),
   )
 
