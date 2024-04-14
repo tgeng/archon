@@ -28,7 +28,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tU[$: P]: P[TTerm] = PT("U" ~/ atom)(TTerm.TU(_))
   private def tForce[$: P]: P[TTerm] = PT("force" ~/ atom)(TTerm.TForce(_))
   private def atom[$: P]: P[TTerm] = P(
-    tAuto | tId | tDef | tLevelLiteral | tForce | tU | "(" ~/ tTerm ~ ")",
+    "(" ~/ tTerm ~ ")" | tAuto | tDef | tLevelLiteral | tForce | tU | tId,
   )
   private def tThunk[$: P]: P[TTerm] = PT("thunk" ~/ tTerm)(TTerm.TThunk(_))
   private def tF[$: P]: P[TTerm] =
@@ -82,7 +82,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
               ),
     )
 
-  private def tFunctionType[$: P]: P[TTerm] = xFunctionType(tF)
+  private def tFunctionType[$: P]: P[TTerm] = xFunctionType(tF | tApp)
 
   private def tDataFunctionType[$: P]: P[TTerm] = xFunctionType(
     tApp.map(r =>
@@ -130,7 +130,9 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   )
 
   private def tData[$: P]: P[TDeclaration] = P(
-    ("data" ~/ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tDataFunctionType) ~ tConstructor.rep)
+    ("data" ~/ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(
+      _.tDataFunctionType,
+    ) ~ tConstructor.rep)
       .map(TData.apply),
   )
 
@@ -150,8 +152,8 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tpXConstructor[$: P]: P[TPattern] =
     PT(".".!.?.map(_.isDefined) ~ id ~ "{" ~/ tPattern.rep ~ "}")(TPattern.TpXConstructor.apply)
   private def tpForced[$: P]: P[TPattern] = PT("." ~ "(" ~/ tTerm ~ ")")(TPattern.TpForced.apply)
-  private def tpAbsurd[$: P]: P[TPattern] = PT("(" ~/ ")")(_ => TPattern.TPAbsurd())
-  private def tPattern[$: P]: P[TPattern] = P(tpVar | tpXConstructor | tpForced | tpAbsurd)
+  private def tpAbsurd[$: P]: P[TPattern] = PT("()")(_ => TPattern.TPAbsurd())
+  private def tPattern[$: P]: P[TPattern] = P(tpAbsurd | tpForced | tpXConstructor | tpVar)
 
   private def tCoPattern[$: P]: P[TCoPattern] = P(
     tProjection | tPattern.map(TCoPattern.TcPattern.apply),

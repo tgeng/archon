@@ -1,0 +1,2 @@
+data Eq (l: Level)(A: Type l)(x: A): A -> Type l
+Refl: Eq l A x x

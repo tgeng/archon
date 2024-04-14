@@ -1,0 +1,3 @@
+def plus: Nat -> Nat -> <> Nat
+Zero{} n = n
+Succ{m} n = Succ (plus m n)

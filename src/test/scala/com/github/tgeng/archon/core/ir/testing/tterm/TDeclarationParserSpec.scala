@@ -19,3 +19,16 @@ class TDeclarationParserSpec extends FileBasedFreeSpec:
 
   "def_trivial" in:
     runTest()
+
+  "data_vec" in:
+    runTest()
+          
+  "data_eq" in:
+    runTest()
+          
+  "def_plus" in:
+    runTest()
+          
+  "record_stream" in:
+    runTest()
+          
