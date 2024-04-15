@@ -80,7 +80,3 @@ class TTermParserSpec extends FileBasedFreeSpec:
           
   "statements_1" in:
     runTest()
-          
-  "app_3" in:
-    runTest()
-          

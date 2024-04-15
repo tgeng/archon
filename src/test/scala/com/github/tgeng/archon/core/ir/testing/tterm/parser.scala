@@ -94,7 +94,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   )
 
   private def tTerm[$: P]: P[TTerm] = P(
-    tFunctionType | tThunk | tLet | tApp
+    (tFunctionType | tThunk | tLet)
       .rep(1)
       .map(_.reduceRight((t, body) =>
         given SourceInfo = SiEmpty
