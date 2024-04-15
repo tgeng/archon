@@ -172,18 +172,16 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
 
   private def tDeclarationEnd[$: P]: P[TDeclaration] = P(tDeclaration ~ End)
 
-object Parser:
-  def parseTTerm(path: Path): TTerm =
-    val text = os.read(path)
-    val parser = new Parser(text, Some(path), 0)
-    fastparse.parse(text, parser.tTermEnd(using _)) match
-      case Parsed.Success(value, _)    => value
-      case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)
+  private def tDeclarationsEnd[$: P]: P[Seq[TDeclaration]] = P(tDeclaration.rep ~ End)
 
-  def parseDeclaration(path: Path): TDeclaration =
+object Parser:
+  def parseTTerm(path: Path): TTerm = runParser(_.tTermEnd, path)
+  def parseDeclaration(path: Path): TDeclaration = runParser(_.tDeclarationEnd, path)
+  def parseDeclarations(path: Path): Seq[TDeclaration] = runParser(_.tDeclarationsEnd, path)
+
+  private def runParser[T](p: Parser => P[?] ?=> P[T], path: Path): T =
     val text = os.read(path)
-    val parser = new Parser(text, Some(path), 0)
-    fastparse
-      .parse(text, parser.tDeclarationEnd(using _)) match
+    def parser[$: P] = p(new Parser(text, Some(path), 0))
+    fastparse.parse(text, parser(using _)) match
       case Parsed.Success(value, _)    => value
       case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)

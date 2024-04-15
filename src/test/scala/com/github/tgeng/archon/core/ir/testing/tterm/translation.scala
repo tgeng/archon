@@ -25,6 +25,7 @@ case class TranslationContext
     globalDefs: Map[String, QualifiedName] = Map.empty,
     dataDecls: Map[String, QualifiedName] = Map.empty,
     constructorDecls: Set[String] = Set.empty,
+    ignoreUnresolvableGlobalName: Boolean = false,
   ):
   def bindLocal(names: String*): TranslationContext =
     this.copy(
@@ -50,17 +51,16 @@ case class TranslationContext
   def lookup(name: String): Either[Nat, QualifiedName] =
     localVars.get(name) match
       case Some(index) => Left(localVarCount - 1 - index)
-      case None =>
-        globalDefs.get(name) match
-          case Some(qualifiedName) => Right(qualifiedName)
-          case None                => throw UnresolvedSymbol(name)
+      case None        => Right(lookupGlobal(name))
+
   def lookupLocal(name: String): Nat = localVars.get(name) match
     case Some(index) => localVarCount - 1 - index
     case None        => throw UnresolvedSymbol(name)
 
   def lookupGlobal(name: String): QualifiedName = globalDefs.get(name) match
-    case Some(qn) => qn
-    case None     => throw UnresolvedSymbol(name)
+    case Some(qn)                             => qn
+    case None if ignoreUnresolvableGlobalName => QualifiedName.Root / "__unresolved__" / name
+    case None                                 => throw UnresolvedSymbol(name)
 
 extension (tTerm: TTerm)
   def toCTerm(using context: TranslationContext): CTerm =

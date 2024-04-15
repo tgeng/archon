@@ -2,29 +2,29 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.core.ir.{SourceInfo, Variance}
 
-enum TDeclaration:
+enum TDeclaration(val name: String):
   case TData
     (
-      name: String,
+      override val name: String,
       tParamTys: Seq[(TBinding, Variance)],
       ty: TTerm,
       constructors: Seq[TConstructor],
-    )
+    ) extends TDeclaration(name)
   case TRecord
     (
       selfName: String,
-      name: String,
+      override val name: String,
       tParamTys: Seq[(TBinding, Variance)],
       ty: TTerm,
       fields: Seq[TField],
-    )
+    ) extends TDeclaration(name)
   case TDefinition
     (
-      name: String,
+      override val name: String,
       tParamTys: Seq[TBinding],
       ty: TTerm,
       clauses: Seq[TClause],
-    )
+    ) extends TDeclaration(name)
   // TODO: add TEffect
 
 case class TConstructor
@@ -51,8 +51,8 @@ enum TCoPattern(val sourceInfo: SourceInfo):
 
 enum TPattern(val sourceInfo: SourceInfo):
   case TpVar(name: String)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
-  case TpXConstructor(forced: Boolean, name: String, args: Seq[TPattern])(using sourceInfo: SourceInfo)
-    extends TPattern(sourceInfo)
+  case TpXConstructor
+    (forced: Boolean, name: String, args: Seq[TPattern])
+    (using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
   case TpForced(tTerm: TTerm)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
   case TPAbsurd()(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
-
