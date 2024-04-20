@@ -8,13 +8,17 @@ import os.{Path, RelPath}
 import scala.annotation.tailrec
 import scala.language.unsafeNulls
 
-abstract class FileBasedFreeSpec extends AnyFreeSpec:
+abstract class FileBasedFreeSpec(testResourceDirName: String | Null = null) extends AnyFreeSpec:
   private val currentTestNameStorage = new ThreadLocal[String]
   private val testResourceDir =
     TestDataConstants.testResourcesRoot / RelPath(
-      this.getClass.getCanonicalName
+      this.getClass.getPackageName
         .split('.')
         .map(camelToSnake)
+        .concat(
+          if testResourceDirName != null then Seq(testResourceDirName)
+          else Seq(camelToSnake(this.getClass.getSimpleName)),
+        )
         .mkString("/"),
     )
 

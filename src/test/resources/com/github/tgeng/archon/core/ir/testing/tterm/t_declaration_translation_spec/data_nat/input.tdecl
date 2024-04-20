@@ -1,3 +1,0 @@
-data Nat: Type 0L
-Zero: Nat
-Succ: Nat -> Nat

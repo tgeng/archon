@@ -25,12 +25,12 @@ object TTermParserSpec:
     )
     p
 
-class TTermParserSpec extends FileBasedFreeSpec:
+class TTermParserSpec extends FileBasedFreeSpec("t_term_spec"):
 
   override protected def runTestImpl(testDir: Path): Unit =
     val inputPath = testDir / "input.tterm"
     val actual = TTermParserSpec.tTermPprint.apply(Parser.parseTTerm(inputPath)).plainText
-    val outputPath = testDir / "output.txt"
+    val outputPath = testDir / "parse_output.scala"
     val expected = if os.exists(outputPath) then os.read(outputPath) else ""
     if actual != expected then
       os.write.over(outputPath, actual)

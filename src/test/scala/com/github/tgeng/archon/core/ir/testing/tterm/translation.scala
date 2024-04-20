@@ -209,6 +209,10 @@ extension (tp: TPattern)
             if ctx.constructorDecls(name) then
               if forced then Pattern.PForcedConstructor(Name.Normal(name), argPatterns)
               else Pattern.PConstructor(Name.Normal(name), argPatterns)
+            else if ctx.ignoreUnresolvableGlobalName then
+              val qn = QualifiedName.Root / "__unresolved__" / name
+              if forced then Pattern.PForcedDataType(qn, argPatterns)
+              else Pattern.PDataType(qn, argPatterns)
             else throw UnresolvedSymbol(name)
       case TpForced(tTerm) => Pattern.PForced(Collapse(tTerm.toCTerm))
       case TPAbsurd()      => Pattern.PAbsurd()
