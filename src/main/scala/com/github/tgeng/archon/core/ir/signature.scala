@@ -17,25 +17,25 @@ given SourceInfo = SiEmpty
 
 enum Declaration:
   case Data
-    (qn: QualifiedName)
     (
-      val context: TContext,
+      qn: QualifiedName,
+      context: TContext,
       /* binding: + context */
-      val tIndexTys: Telescope,
+      tIndexTys: Telescope,
       /* binding: + context + tIndexTys */
-      val level: VTerm,
+      level: VTerm,
       /* binding: + context + tIndexTys */
-      val inherentEqDecidability: VTerm,
+      inherentEqDecidability: VTerm,
     )
   case Record
-    (qn: QualifiedName)
     (
-      val context: TContext = IndexedSeq(),
-      val level: VTerm, // binding + tParamTys
-      val selfBinding: Binding[VTerm],
+      qn: QualifiedName,
+      context: TContext,
+      level: VTerm, // binding + tParamTys
+      selfBinding: Binding[VTerm],
     )
 
-  case Definition(qn: QualifiedName)(val context: Context, val ty: CTerm /* binding += context */ )
+  case Definition(qn: QualifiedName, context: Context, ty: CTerm /* binding += context */ )
 
   /** Note: `tParamTys` can only contain eqDecidable value terms. That is, `U` or types that nest
     * `U` are not allowed. This is necessary because type-based handler matching needs a "simple"
@@ -46,11 +46,11 @@ enum Declaration:
     * out any data type that wraps non-eqDecidable computation inside.
     */
   case Effect
-    (qn: QualifiedName)
     (
-      val context: Context = IndexedSeq(),
-      val continuationUsage: VTerm, // binding += tParamTys
-      val handlerType: VTerm, // binding += tParamTys
+      qn: QualifiedName,
+      context: Context,
+      continuationUsage: VTerm, // binding += tParamTys
+      handlerType: VTerm, // binding += tParamTys
     )
 
   def qn: QualifiedName
@@ -218,10 +218,7 @@ trait Signature:
   def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     getDataOption(qn).map { data =>
       val context = data.context.map(_._1) ++ data.tIndexTys
-      Definition(qn)(
-        context,
-        F(Type(DataType(qn, vars(context.size - 1)))),
-      )
+      Definition(qn, context, F(Type(DataType(qn, vars(context.size - 1)))))
     }
 
   def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
@@ -257,7 +254,8 @@ trait Signature:
                   UsageProd(b.usage.weakened, Var(i)),
                 )(b.name),
               )
-          Definition(qn / conName)(
+          Definition(
+            qn / conName,
             conContext,
             F(
               DataType(
@@ -318,7 +316,8 @@ trait Signature:
   def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     getRecordOption(qn)
       .map(record =>
-        Definition(qn)(
+        Definition(
+          qn,
           record.context.map(_._1) :+ Binding(EffectsType(), uAny)(gn"effects"),
           // The effect should be parametrically polymorphic so that one is able to construct record
           // type with different effects.
@@ -346,10 +345,7 @@ trait Signature:
         for
           record <- getRecordOption(qn)
           field <- getFieldOption(qn, fieldName)
-        yield Definition(qn)(
-          record.context.map(_._1) :+ record.selfBinding,
-          field.ty,
-        )
+        yield Definition(qn, record.context.map(_._1) :+ record.selfBinding, field.ty)
       case _ => None
 
   def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
@@ -370,12 +366,7 @@ trait Signature:
 
   def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     getEffectOption(qn)
-      .map(effect =>
-        Definition(qn)(
-          effect.context,
-          F(EffectsType()),
-        ),
-      )
+      .map(effect => Definition(qn, effect.context, F(EffectsType())))
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for effect <- getEffectOption(qn)
@@ -396,7 +387,8 @@ trait Signature:
           op <- getOperationOption(effectQn, opName)
         yield
           val context = eff.context ++ op.paramTys
-          Definition(qn)(
+          Definition(
+            qn,
             context,
             F(
               op.resultTy,

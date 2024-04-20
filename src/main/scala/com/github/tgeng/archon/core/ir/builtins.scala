@@ -137,12 +137,14 @@ object Builtins:
   private val L0 = LevelLiteral(0)
 
   private val builtins: Seq[PreDeclaration] = Seq(
-    PreData(UnitQn)(
+    PreData(
+      UnitQn,
       tParamTys = Nil,
       ty = F(Type(Top(L0))),
       constructors = List(PreConstructor(n"MkUnit", F(DataType(UnitQn, Nil)))),
     ),
-    PreData(EqualityQn)(
+    PreData(
+      EqualityQn,
       // Invariance of level is OK because user should almost never provide this. Instead, this is
       // inferred by compiler for each compilation unit to be some large enough level.
       tParamTys = List(
@@ -155,7 +157,8 @@ object Builtins:
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
       ),
     ),
-    PreData(PairQn)(
+    PreData(
+      PairQn,
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
@@ -175,7 +178,8 @@ object Builtins:
         ),
       ),
     ),
-    PreData(EitherQn)(
+    PreData(
+      EitherQn,
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
@@ -196,7 +200,8 @@ object Builtins:
         ),
       ),
     ),
-    PreData(IsDisposableQn)(
+    PreData(
+      IsDisposableQn,
       tParamTys = Nil,
       ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
       constructors = List(
@@ -207,7 +212,8 @@ object Builtins:
         ),
       ),
     ),
-    PreData(IsReplicableQn)(
+    PreData(
+      IsReplicableQn,
       tParamTys = Nil,
       ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
       constructors = List(
@@ -221,7 +227,8 @@ object Builtins:
         ),
       ),
     ),
-    PreData(IsResumableQn)(
+    PreData(
+      IsResumableQn,
       tParamTys = Nil,
       ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
       constructors = List(
@@ -243,7 +250,8 @@ object Builtins:
         ),
       ),
     ),
-    PreRecord(ContinuationQn)(
+    PreRecord(
+      ContinuationQn,
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
@@ -295,7 +303,8 @@ object Builtins:
       *
       * {} |- := .return Type(Top(level))
       */
-    PreDefinition(TypeQn)(
+    PreDefinition(
+      TypeQn,
       paramTys = List(binding(n"level", LevelType())),
       ty = F(Type(Type(Top(Var(0))))),
       clauses = List(
@@ -311,7 +320,8 @@ object Builtins:
       *
       * {} |- := .return Type(upperBound)
       */
-    PreDefinition(SubtypeOfQn)(
+    PreDefinition(
+      SubtypeOfQn,
       paramTys = List(
         binding(n"level", LevelType()),
         binding(n"upperBound", Type(Type(Top(Var(0))))),
@@ -329,7 +339,8 @@ object Builtins:
       *
       * {} |- level := .return Top(level)
       */
-    PreDefinition(TypeQn)(
+    PreDefinition(
+      TypeQn,
       paramTys = List(binding(n"level", LevelType())),
       ty = F(Type(Top(Var(0)))),
       clauses = List(
@@ -345,7 +356,8 @@ object Builtins:
       *
       * {} |- := Effects
       */
-    PreDefinition(EffectsQn)(
+    PreDefinition(
+      EffectsQn,
       paramTys = Nil,
       ty = F(Type(EffectsType())),
       clauses = List(
@@ -361,7 +373,8 @@ object Builtins:
       *
       * {} |- := Level
       */
-    PreDefinition(LevelQn)(
+    PreDefinition(
+      LevelQn,
       paramTys = Nil,
       ty = F(Type(LevelType())),
       clauses = List(
@@ -372,7 +385,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(UsageQn)(
+    PreDefinition(
+      UsageQn,
       paramTys = Nil,
       ty = F(Type(UsageType())),
       clauses = List(
@@ -387,7 +401,8 @@ object Builtins:
       *
       * {} |- := UsageProd(usage1, usage2)
       */
-    PreDefinition(UsageProdQn)(
+    PreDefinition(
+      UsageProdQn,
       paramTys = List(
         binding(n"usage1", UsageType()),
         binding(n"usage2", UsageType()),
@@ -405,7 +420,8 @@ object Builtins:
       *
       * {} |- := UsageSum(usage1, usage2)
       */
-    PreDefinition(UsageSumQn)(
+    PreDefinition(
+      UsageSumQn,
       paramTys = List(
         binding(n"usage1", UsageType()),
         binding(n"usage2", UsageType()),
@@ -423,7 +439,8 @@ object Builtins:
       *
       * {} |- := UsageJoin(usage1, usage2)
       */
-    PreDefinition(UsageJoinQn)(
+    PreDefinition(
+      UsageJoinQn,
       paramTys = List(
         binding(n"usage1", UsageType()),
         binding(n"usage2", UsageType()),
@@ -437,7 +454,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(UsageAnyQn)(
+    PreDefinition(
+      UsageAnyQn,
       paramTys = Nil,
       ty = F(UsageType()),
       clauses = List(
@@ -448,7 +466,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(UsageAffQn)(
+    PreDefinition(
+      UsageAffQn,
       paramTys = Nil,
       ty = F(UsageType()),
       clauses = List(
@@ -459,7 +478,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(UsageRelQn)(
+    PreDefinition(
+      UsageRelQn,
       paramTys = Nil,
       ty = F(UsageType()),
       clauses = List(
@@ -470,7 +490,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(UsageOneQn)(
+    PreDefinition(
+      UsageOneQn,
       paramTys = Nil,
       ty = F(UsageType()),
       clauses = List(
@@ -481,7 +502,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(UsageZeroQn)(
+    PreDefinition(
+      UsageZeroQn,
       paramTys = Nil,
       ty = F(UsageType()),
       clauses = List(
@@ -497,7 +519,8 @@ object Builtins:
       *
       * {} |- := CType(CTop(level, effects))
       */
-    PreDefinition(CTypeQn)(
+    PreDefinition(
+      CTypeQn,
       paramTys = List(
         binding(n"level", LevelType()),
         binding(n"effects", EffectsType()),
@@ -517,7 +540,8 @@ object Builtins:
       *
       * {} |- := CType(.force upperBound, effects)
       */
-    PreDefinition(CSubtypeOfQn)(
+    PreDefinition(
+      CSubtypeOfQn,
       paramTys = List(
         binding(n"level", LevelType()),
         binding(n"effects", EffectsType()),
@@ -538,7 +562,8 @@ object Builtins:
       * {} |- level effects := CTop(level, effects)
       */
 
-    PreDefinition(CTopQn)(
+    PreDefinition(
+      CTopQn,
       paramTys = List(
         binding(n"level", LevelType()),
         binding(n"effects", EffectsType()),
@@ -557,7 +582,8 @@ object Builtins:
       *
       * {} |- := EffectsUnion(eff1, eff2)
       */
-    PreDefinition(EffectsUnionQn)(
+    PreDefinition(
+      EffectsUnionQn,
       paramTys = List(
         binding(n"eff1", EffectsType()),
         binding(n"eff2", EffectsType()),
@@ -575,7 +601,8 @@ object Builtins:
       *
       * {} |- := EffectsRetainSimpleLinear(eff1, eff2)
       */
-    PreDefinition(EffectsRetainSimpleLinearQn)(
+    PreDefinition(
+      EffectsRetainSimpleLinearQn,
       paramTys = List(
         binding(n"eff", EffectsType()),
       ),
@@ -592,7 +619,8 @@ object Builtins:
       *
       * {} |- := level + 1
       */
-    PreDefinition(LevelSucQn)(
+    PreDefinition(
+      LevelSucQn,
       paramTys = List(
         binding(n"level", LevelType()),
       ),
@@ -610,7 +638,8 @@ object Builtins:
       *
       * {} |- := LevelMax(level1, level2)
       */
-    PreDefinition(LevelMaxQn)(
+    PreDefinition(
+      LevelMaxQn,
       paramTys = List(
         binding(n"level1", LevelType()),
         binding(n"level2", LevelType()),
@@ -624,7 +653,8 @@ object Builtins:
         ),
       ),
     ),
-    PreDefinition(TotalQn)(
+    PreDefinition(
+      TotalQn,
       paramTys = Nil,
       ty = F(EffectsType()),
       clauses = List(

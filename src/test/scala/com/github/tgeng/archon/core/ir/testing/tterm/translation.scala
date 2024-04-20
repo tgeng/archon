@@ -237,7 +237,8 @@ extension (td: TDeclaration)
             (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
         val tyCTerm = ty.toCTerm
         val constructorCTerms = constructors.map(_.toPreConstructor)
-        PreDeclaration.PreData(ctx.moduleQn / name)(
+        PreDeclaration.PreData(
+          ctx.moduleQn / name,
           tParamTysCTerm.toList,
           tyCTerm,
           constructorCTerms.toList,
@@ -248,7 +249,8 @@ extension (td: TDeclaration)
             (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
         val tyCTerm = ty.toCTerm
         val fieldCTerms = fields.map(_.toPreField)
-        PreDeclaration.PreRecord(ctx.moduleQn / name)(
+        PreDeclaration.PreRecord(
+          ctx.moduleQn / name,
           tParamTysCTerm.toList,
           tyCTerm,
           fieldCTerms.toList,
@@ -259,7 +261,8 @@ extension (td: TDeclaration)
             Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name))
         val tyCTerm = ty.toCTerm
         val clauseCTerms = clauses.map(_.toPreClause)
-        PreDeclaration.PreDefinition(ctx.moduleQn / name)(
+        PreDeclaration.PreDefinition(
+          ctx.moduleQn / name,
           tParamTysCTerm.toList,
           tyCTerm,
           clauseCTerms.toList,

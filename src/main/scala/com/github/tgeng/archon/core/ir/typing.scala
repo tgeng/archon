@@ -510,12 +510,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
     val (inherentEqDecidability, _) =
       checkType(data.inherentEqDecidability, EqDecidabilityType())(using tContext)
     checkTParamsAreUnrestricted(tContext.toTelescope)
-    Data(data.qn)(
-      tParamTys.zip(data.context.map(_._2)),
-      tIndexTys,
-      level,
-      inherentEqDecidability,
-    )
+    Data(data.qn, tParamTys.zip(data.context.map(_._2)), tIndexTys, level, inherentEqDecidability)
 
 @throws(classOf[IrError])
 def checkDataConstructor
@@ -549,7 +544,8 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
     val (selfUsage, _) =
       checkType(record.selfBinding.usage, UsageType())(using tParams.toIndexedSeq)
     val (selfTy, _) = checkIsType(record.selfBinding.ty)(using tParams.toIndexedSeq)
-    Record(record.qn)(
+    Record(
+      record.qn,
       tParamTys.zip(record.context.map(_._2)),
       level,
       Binding(selfTy, selfUsage)(record.selfBinding.name),
@@ -698,7 +694,7 @@ def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext):
   given Context = definition.context
   ctx.trace(s"checking def signature ${definition.qn}"):
     val (ty, _) = checkIsCType(definition.ty)
-    Definition(definition.qn)(definition.context, ty)
+    Definition(definition.qn, definition.context, ty)
 
 @throws(classOf[IrError])
 def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effect =
@@ -711,7 +707,7 @@ def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effe
     val Γ = telescope.reverse.toIndexedSeq
     val (continuationUsage, _) = checkType(effect.continuationUsage, UsageType())(using Γ)
     val (handlerType, _) = checkType(effect.handlerType, HandlerTypeType())(using Γ)
-    Effect(effect.qn)(Γ, continuationUsage, handlerType)
+    Effect(effect.qn, Γ, continuationUsage, handlerType)
 
 @throws(classOf[IrError])
 def checkOperation
@@ -1113,7 +1109,7 @@ def inferType
           (checkedElims: List[Elimination[VTerm]], cty: CTerm, elims: List[Elimination[VTerm]])
           : (List[Elimination[VTerm]], CTerm, Usages) =
           elims match
-            case Nil => (Nil, cty, Usages.zero)
+            case Nil                                        => (Nil, cty, Usages.zero)
             case (e @ ETerm(uncheckedArg)) :: uncheckedRest =>
               // Note that this `cty` is created by `inferType` so it's already checked.
               cty match
@@ -1136,7 +1132,7 @@ def inferType
               cty match
                 case RecordType(qn, args, effects) =>
                   Σ.getFieldOption(qn, name) match
-                    case None => throw MissingField(name, qn)
+                    case None    => throw MissingField(name, qn)
                     case Some(f) =>
                       // `self` of record is only used in type checking. Hence usages of variables
                       // in the record are not counted.

@@ -188,7 +188,8 @@ private def elaborateDataHead
 
     val (tIndices, level, eqDecidability) = elaborateTy(preData.ty)
     val data = checkData(
-      Data(preData.qn)(
+      Data(
+        preData.qn,
         Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
         tIndices,
         level,
@@ -256,7 +257,8 @@ private def elaborateRecordHead
     val r: Record =
       checkIsCType(record.ty)._1.normalized(None) match
         case CType(CTop(level, _), _) =>
-          Record(record.qn)(
+          Record(
+            record.qn,
             Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
             level,
             // Self usage is always `uAny` because
@@ -307,7 +309,8 @@ private def elaborateDefHead
     val paramTys = elaborateTelescope(definition.paramTys)(using Γ)
     given Context = Γ ++ paramTys
     val ty = checkIsCType(definition.ty)._1.normalized(None)
-    val d: Definition = Definition(definition.qn)(
+    val d: Definition = Definition(
+      definition.qn,
       Γ,
       paramTys.foldRight(ty) { (binding, bodyTy) =>
         FunctionType(binding, bodyTy)
@@ -755,11 +758,7 @@ private def elaborateEffectHead
       case Return(handlerType, _) => handlerType
       case c                      => throw ExpectReturnAValue(c)
 
-    val e: Effect = Effect(effect.qn)(
-      Γ2,
-      continuationUsage,
-      handlerType,
-    )
+    val e: Effect = Effect(effect.qn, Γ2, continuationUsage, handlerType)
     Σ.addDeclaration(checkEffect(e))
 
 @throws(classOf[IrError])
