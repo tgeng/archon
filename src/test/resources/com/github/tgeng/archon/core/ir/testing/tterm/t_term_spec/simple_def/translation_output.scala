@@ -1,0 +1,1 @@
+Def(qn = qn"a.b.c") @ ".a.b.c"
