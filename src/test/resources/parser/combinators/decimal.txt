@@ -1,9 +1,0 @@
-123.45
-----
-6 | 123.45
-
-abc
-----
-when parsing decimal:
-[1:1] abc
-      ^ expect <decimal>
