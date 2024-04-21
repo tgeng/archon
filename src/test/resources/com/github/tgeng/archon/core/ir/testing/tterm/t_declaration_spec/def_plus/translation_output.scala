@@ -3,79 +3,41 @@ List(
     qn = qn"test.plus",
     paramTys = List(),
     ty = Let(
-      t = Def(qn = qn"archon.builtin.effects.total") @ "ε",
-      ty = Auto() @ "ε",
-      eff = Auto(),
-      usage = Auto(),
-      body = Let(
-        t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
-        ty = Auto(),
-        eff = Auto(),
-        usage = Auto(),
-        body = Let(
-          t = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε",
+      t = FunctionType(
+        binding = Binding(
+          ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+        ) @ "_",
+        bodyTy = Let(
+          t = FunctionType(
+            binding = Binding(
+              ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+            ) @ "_",
+            bodyTy = Let(
+              t = F(
+                vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+                effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
+                usage = Auto() @ "ε"
+              ) @ "<> Nat",
+              ty = Auto(),
+              eff = Auto(),
+              usage = Auto(),
+              body = Return(v = Var(idx = 0) @ "ε", usage = Auto()) @ "ε"
+            ) @ "ε",
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+          ) @ "Nat -> <> Nat",
           ty = Auto(),
           eff = Auto(),
           usage = Auto(),
-          body = Let(
-            t = FunctionType(
-              binding = Binding(ty = Var(idx = 0) @ "ε", usage = Var(idx = 0)) @ "_",
-              bodyTy = Let(
-                t = Def(qn = qn"archon.builtin.effects.total"),
-                ty = Auto(),
-                eff = Auto(),
-                usage = Auto(),
-                body = Let(
-                  t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Let(
-                    t = Def(qn = qn"archon.builtin.type.Usage.any"),
-                    ty = Auto(),
-                    eff = Auto(),
-                    usage = Auto(),
-                    body = Let(
-                      t = FunctionType(
-                        binding = Binding(ty = Var(idx = 0), usage = Var(idx = 0)) @ "_",
-                        bodyTy = Let(
-                          t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Let(
-                            t = Def(qn = qn"archon.builtin.effects.total"),
-                            ty = Auto(),
-                            eff = Auto(),
-                            usage = Auto(),
-                            body = Let(
-                              t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Auto()) @ "<> Nat",
-                              ty = Auto(),
-                              eff = Auto(),
-                              usage = Auto(),
-                              body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                            ) @ "ε"
-                          ) @ "ε"
-                        ) @ "ε",
-                        effects = Var(idx = 0)
-                      ) @ "Nat -> <> Nat",
-                      ty = Auto(),
-                      eff = Auto(),
-                      usage = Auto(),
-                      body = Return(v = Var(idx = 0), usage = Auto())
-                    ) @ "ε"
-                  ) @ "ε"
-                ) @ "ε"
-              ) @ "ε",
-              effects = Var(idx = 0)
-            ) @ "Nat -> Nat -> <> Nat",
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Return(v = Var(idx = 0), usage = Auto())
-          ) @ "ε"
-        ) @ "ε"
-      ) @ "ε"
+          body = Return(v = Var(idx = 0), usage = Auto())
+        ) @ "ε",
+        effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+      ) @ "Nat -> Nat -> <> Nat",
+      ty = Auto(),
+      eff = Auto(),
+      usage = Auto(),
+      body = Return(v = Var(idx = 0), usage = Auto())
     ) @ "ε",
     clauses = List(
       PreClause(

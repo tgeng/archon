@@ -1,75 +1,37 @@
 Let(
-  t = Def(qn = qn"archon.builtin.effects.total") @ "ε",
-  ty = Auto() @ "ε",
-  eff = Auto(),
-  usage = Auto(),
-  body = Let(
-    t = Def(qn = qn"__unresolved__.A") @ "A",
-    ty = Auto(),
-    eff = Auto(),
-    usage = Auto(),
-    body = Let(
-      t = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε",
+  t = FunctionType(
+    binding = Binding(
+      ty = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "ε",
+      usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+    ) @ "_",
+    bodyTy = Let(
+      t = FunctionType(
+        binding = Binding(
+          ty = Collapse(cTm = Def(qn = qn"__unresolved__.B") @ "B") @ "ε",
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+        ) @ "_",
+        bodyTy = Let(
+          t = F(
+            vTy = Collapse(cTm = Def(qn = qn"__unresolved__.C") @ "C") @ "ε",
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
+            usage = Auto() @ "ε"
+          ) @ "<> C",
+          ty = Auto(),
+          eff = Auto(),
+          usage = Auto(),
+          body = Return(v = Var(idx = 0) @ "ε", usage = Auto()) @ "ε"
+        ) @ "ε",
+        effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+      ) @ "B -> <> C",
       ty = Auto(),
       eff = Auto(),
       usage = Auto(),
-      body = Let(
-        t = FunctionType(
-          binding = Binding(ty = Var(idx = 0) @ "ε", usage = Var(idx = 0)) @ "_",
-          bodyTy = Let(
-            t = Def(qn = qn"archon.builtin.effects.total"),
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Let(
-              t = Def(qn = qn"__unresolved__.B") @ "B",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Let(
-                t = Def(qn = qn"archon.builtin.type.Usage.any"),
-                ty = Auto(),
-                eff = Auto(),
-                usage = Auto(),
-                body = Let(
-                  t = FunctionType(
-                    binding = Binding(ty = Var(idx = 0), usage = Var(idx = 0)) @ "_",
-                    bodyTy = Let(
-                      t = Def(qn = qn"__unresolved__.C") @ "C",
-                      ty = Auto(),
-                      eff = Auto(),
-                      usage = Auto(),
-                      body = Let(
-                        t = Def(qn = qn"archon.builtin.effects.total"),
-                        ty = Auto(),
-                        eff = Auto(),
-                        usage = Auto(),
-                        body = Let(
-                          t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Auto()) @ "<> C",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                        ) @ "ε"
-                      ) @ "ε"
-                    ) @ "ε",
-                    effects = Var(idx = 0)
-                  ) @ "B -> <> C",
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Return(v = Var(idx = 0), usage = Auto())
-                ) @ "ε"
-              ) @ "ε"
-            ) @ "ε"
-          ) @ "ε",
-          effects = Var(idx = 0)
-        ) @ "A -> B -> <> C",
-        ty = Auto(),
-        eff = Auto(),
-        usage = Auto(),
-        body = Return(v = Var(idx = 0), usage = Auto())
-      ) @ "ε"
-    ) @ "ε"
-  ) @ "ε"
+      body = Return(v = Var(idx = 0), usage = Auto())
+    ) @ "ε",
+    effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+  ) @ "A -> B -> <> C",
+  ty = Auto(),
+  eff = Auto(),
+  usage = Auto(),
+  body = Return(v = Var(idx = 0), usage = Auto())
 ) @ "ε"

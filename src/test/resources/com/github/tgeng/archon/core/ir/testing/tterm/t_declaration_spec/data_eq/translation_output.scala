@@ -40,160 +40,99 @@ List(
       )
     ),
     ty = Let(
-      t = Def(qn = qn"archon.builtin.effects.total") @ "ε",
-      ty = Auto(),
-      eff = Auto(),
-      usage = Auto(),
-      body = Let(
-        t = Def(qn = qn"__unresolved__.A") @ "A",
-        ty = Auto(),
-        eff = Auto(),
-        usage = Auto(),
-        body = Let(
-          t = Def(qn = qn"archon.builtin.type.Usage.any"),
-          ty = Auto(),
-          eff = Auto(),
-          usage = Auto(),
-          body = Let(
-            t = FunctionType(
-              binding = Binding(ty = Var(idx = 0), usage = Var(idx = 0)) @ "_",
-              bodyTy = Let(
-                t = Let(
-                  t = Def(qn = qn"__unresolved__.l") @ "l",
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Let(
-                    t = Redex(
-                      t = Def(qn = qn"__unresolved__.Type") @ "Type",
-                      elims = List(ETerm(v = Var(idx = 0)))
-                    ) @ "Type l",
-                    ty = Auto(),
-                    eff = Auto(),
-                    usage = Auto(),
-                    body = Return(v = Var(idx = 0), usage = Auto())
+      t = FunctionType(
+        binding = Binding(
+          ty = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "ε",
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any")) @ "ε"
+        ) @ "_",
+        bodyTy = Let(
+          t = F(
+            vTy = Collapse(
+              cTm = Let(
+                t = Redex(
+                  t = Def(qn = qn"__unresolved__.Type") @ "Type",
+                  elims = List(
+                    ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "ε")
                   )
-                ),
+                ) @ "Type l",
                 ty = Auto(),
                 eff = Auto(),
                 usage = Auto(),
-                body = Let(
-                  t = Def(qn = qn"archon.builtin.effects.total"),
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Let(
-                    t = Def(qn = qn"archon.builtin.type.Usage.one") @ "ε",
-                    ty = Auto(),
-                    eff = Auto(),
-                    usage = Auto(),
-                    body = Let(
-                      t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Var(idx = 0)) @ "Type l",
-                      ty = Auto(),
-                      eff = Auto(),
-                      usage = Auto(),
-                      body = Return(v = Var(idx = 0), usage = Auto())
-                    ) @ "ε"
-                  ) @ "ε"
-                ) @ "ε"
-              ) @ "ε",
-              effects = Var(idx = 0)
-            ) @ "A -> Type l",
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Return(v = Var(idx = 0), usage = Auto())
-          ) @ "ε"
-        ) @ "ε"
-      ) @ "ε"
+                body = Return(v = Var(idx = 0), usage = Auto())
+              ) @ "ε"
+            ) @ "ε",
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
+            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one") @ "ε") @ "ε"
+          ) @ "Type l",
+          ty = Auto(),
+          eff = Auto(),
+          usage = Auto(),
+          body = Return(v = Var(idx = 0), usage = Auto())
+        ) @ "ε",
+        effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+      ) @ "A -> Type l",
+      ty = Auto(),
+      eff = Auto(),
+      usage = Auto(),
+      body = Return(v = Var(idx = 0), usage = Auto())
     ) @ "ε",
     constructors = List(
       PreConstructor(
         name = n"Refl",
         ty = Let(
-          t = Let(
-            t = Def(qn = qn"__unresolved__.x") @ "x",
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Let(
-              t = Redex(
-                t = Let(
-                  t = Def(qn = qn"__unresolved__.x") @ "x",
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Let(
+          t = F(
+            vTy = Collapse(
+              cTm = Let(
+                t = Redex(
+                  t = Let(
                     t = Redex(
                       t = Let(
-                        t = Def(qn = qn"__unresolved__.A") @ "A",
+                        t = Redex(
+                          t = Let(
+                            t = Redex(
+                              t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
+                              elims = List(
+                                ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l"))
+                              )
+                            ) @ "Eq l",
+                            ty = Auto(),
+                            eff = Auto(),
+                            usage = Auto(),
+                            body = Return(v = Var(idx = 0), usage = Auto())
+                          ) @ "ε",
+                          elims = List(
+                            ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A"))
+                          )
+                        ) @ "Eq l A",
                         ty = Auto(),
                         eff = Auto(),
                         usage = Auto(),
-                        body = Let(
-                          t = Redex(
-                            t = Let(
-                              t = Def(qn = qn"__unresolved__.l") @ "l",
-                              ty = Auto(),
-                              eff = Auto(),
-                              usage = Auto(),
-                              body = Let(
-                                t = Redex(
-                                  t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
-                                  elims = List(ETerm(v = Var(idx = 0)))
-                                ) @ "Eq l",
-                                ty = Auto(),
-                                eff = Auto(),
-                                usage = Auto(),
-                                body = Return(v = Var(idx = 0), usage = Auto())
-                              ) @ "ε"
-                            ) @ "ε",
-                            elims = List(ETerm(v = Var(idx = 0)))
-                          ) @ "Eq l A",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Return(v = Var(idx = 0), usage = Auto())
-                        ) @ "ε"
+                        body = Return(v = Var(idx = 0), usage = Auto())
                       ) @ "ε",
-                      elims = List(ETerm(v = Var(idx = 0)))
+                      elims = List(
+                        ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.x") @ "x") @ "ε")
+                      )
                     ) @ "Eq l A x",
                     ty = Auto(),
                     eff = Auto(),
                     usage = Auto(),
                     body = Return(v = Var(idx = 0), usage = Auto())
-                  ) @ "ε"
-                ) @ "ε",
-                elims = List(ETerm(v = Var(idx = 0)))
-              ) @ "Eq l A x x",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Return(v = Var(idx = 0), usage = Auto())
-            ) @ "ε"
-          ) @ "ε",
-          ty = Auto(),
-          eff = Auto(),
-          usage = Auto(),
-          body = Let(
-            t = Def(qn = qn"archon.builtin.effects.total"),
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Let(
-              t = Def(qn = qn"archon.builtin.type.Usage.one"),
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Let(
-                t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Var(idx = 0)) @ "Eq l A x x",
+                  ) @ "ε",
+                  elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.x") @ "x")))
+                ) @ "Eq l A x x",
                 ty = Auto(),
                 eff = Auto(),
                 usage = Auto(),
                 body = Return(v = Var(idx = 0), usage = Auto())
-              )
-            )
-          )
+              ) @ "ε"
+            ) @ "ε",
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one"))
+          ) @ "Eq l A x x",
+          ty = Auto(),
+          eff = Auto(),
+          usage = Auto(),
+          body = Return(v = Var(idx = 0), usage = Auto())
         ) @ "ε"
       )
     )

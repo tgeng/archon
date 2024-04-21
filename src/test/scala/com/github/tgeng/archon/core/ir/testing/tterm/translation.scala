@@ -2,7 +2,7 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.{MutableRef, Nat}
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
-import com.github.tgeng.archon.core.ir.*
+import com.github.tgeng.archon.core.ir.{VTerm, *}
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TCoPattern.*
@@ -26,6 +26,7 @@ case class TranslationContext
     dataDecls: Map[String, QualifiedName] = Map.empty,
     constructorDecls: Set[String] = Set.empty,
     ignoreUnresolvableGlobalName: Boolean = false,
+    isTypeLevel: Boolean = false,
   ):
   def bindLocal(names: String*): TranslationContext =
     this.copy(
@@ -63,20 +64,21 @@ case class TranslationContext
     case None                                 => throw UnresolvedSymbol(name)
 
 extension (tTerm: TTerm)
-  def toCTerm(using context: TranslationContext): CTerm =
+  def toCTerm(using ctx: TranslationContext): CTerm =
     given SourceInfo = tTerm.sourceInfo
     tTerm match
       case TAuto()              => Return(Auto())
-      case TU(t)                => Return(U(t.toCTerm))
+      case TU(t)                => Return(U(t.toCTerm(using ctx.copy(isTypeLevel = true))))
       case TThunk(t)            => Return(Thunk(t.toCTerm))
       case TLevelLiteral(level) => Return(LevelLiteral(level))
       case TId(id) =>
-        context.lookup(id) match
+        ctx.lookup(id) match
           case Left(index) => Return(Var(index))
           case Right(qn)   => Def(qn)
       case TDef(qn)  => Def(qn)
       case TForce(t) => t.toCTerm.flatMap(Force(_))
       case TF(ty, effects, usage) =>
+        given TranslationContext = ctx.copy(isTypeLevel = true)
         for
           ty <- ty.toCTerm
           effects <- effects.toCTerm
@@ -102,6 +104,7 @@ extension (tTerm: TTerm)
           r <- redex(f.toCTerm, arg)
         yield r
       case TFunctionType(arg, bodyType, effects) =>
+        given TranslationContext = ctx.copy(isTypeLevel = true)
         for
           effects <- effects.toCTerm
           argTy <- arg.ty.toCTerm
@@ -182,6 +185,7 @@ extension (self: CTerm)
 
     self match
       case Return(v, Auto()) => f(using newCtx)(v)
+      case _ if ctx.isTypeLevel => f(using newCtx)(VTerm.Collapse(self))
       case _ =>
         Let(
           self,

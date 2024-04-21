@@ -23,115 +23,83 @@ List(
       Field(
         name = n"tail",
         ty = Let(
-          t = Def(qn = qn"archon.builtin.effects.total") @ "ε",
-          ty = Auto(),
-          eff = Auto(),
-          usage = Auto(),
-          body = Let(
-            t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Let(
-              t = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Let(
-                t = FunctionType(
-                  binding = Binding(ty = Var(idx = 0), usage = Var(idx = 0)) @ "m",
-                  bodyTy = Let(
-                    t = Def(qn = qn"archon.builtin.effects.total"),
-                    ty = Auto(),
-                    eff = Auto(),
-                    usage = Auto(),
-                    body = Let(
-                      t = Let(
+          t = FunctionType(
+            binding = Binding(
+              ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
+              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+            ) @ "m",
+            bodyTy = Let(
+              t = FunctionType(
+                binding = Binding(
+                  ty = Collapse(
+                    cTm = Let(
+                      t = Redex(
                         t = Let(
-                          t = Def(qn = qn"__unresolved__.self") @ "self",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Let(
-                            t = Redex(
-                              t = Def(qn = qn"__unresolved__.head") @ "head",
-                              elims = List(ETerm(v = Var(idx = 0)))
-                            ) @ "head self",
-                            ty = Auto(),
-                            eff = Auto(),
-                            usage = Auto(),
-                            body = Return(v = Var(idx = 0), usage = Auto())
-                          ) @ "ε"
-                        ) @ "ε",
-                        ty = Auto(),
-                        eff = Auto(),
-                        usage = Auto(),
-                        body = Let(
                           t = Redex(
                             t = Let(
                               t = Redex(
-                                t = Let(
-                                  t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
-                                  ty = Auto(),
-                                  eff = Auto(),
-                                  usage = Auto(),
-                                  body = Let(
-                                    t = Redex(
-                                      t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
-                                      elims = List(ETerm(v = Var(idx = 0)))
-                                    ) @ "Eq Nat",
-                                    ty = Auto(),
-                                    eff = Auto(),
-                                    usage = Auto(),
-                                    body = Return(v = Var(idx = 0), usage = Auto())
-                                  ) @ "ε"
-                                ) @ "ε",
-                                elims = List(ETerm(v = Var(idx = 2) @ "m"))
-                              ) @ "Eq Nat m",
+                                t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
+                                elims = List(
+                                  ETerm(
+                                    v = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat")
+                                  )
+                                )
+                              ) @ "Eq Nat",
                               ty = Auto(),
                               eff = Auto(),
                               usage = Auto(),
                               body = Return(v = Var(idx = 0), usage = Auto())
                             ) @ "ε",
-                            elims = List(ETerm(v = Var(idx = 0)))
-                          ) @ "Eq Nat m (head self",
+                            elims = List(ETerm(v = Var(idx = 2) @ "m"))
+                          ) @ "Eq Nat m",
                           ty = Auto(),
                           eff = Auto(),
                           usage = Auto(),
                           body = Return(v = Var(idx = 0), usage = Auto())
-                        ) @ "ε"
-                      ) @ "ε",
+                        ) @ "ε",
+                        elims = List(
+                          ETerm(
+                            v = Collapse(
+                              cTm = Let(
+                                t = Redex(
+                                  t = Def(qn = qn"__unresolved__.head") @ "head",
+                                  elims = List(
+                                    ETerm(
+                                      v = Collapse(cTm = Def(qn = qn"__unresolved__.self") @ "self") @ "ε"
+                                    )
+                                  )
+                                ) @ "head self",
+                                ty = Auto(),
+                                eff = Auto(),
+                                usage = Auto(),
+                                body = Return(v = Var(idx = 0), usage = Auto())
+                              ) @ "ε"
+                            ) @ "ε"
+                          )
+                        )
+                      ) @ "Eq Nat m (head self",
                       ty = Auto(),
                       eff = Auto(),
                       usage = Auto(),
-                      body = Let(
-                        t = Def(qn = qn"archon.builtin.type.Usage.any"),
-                        ty = Auto(),
-                        eff = Auto(),
-                        usage = Auto(),
-                        body = Let(
-                          t = FunctionType(
-                            binding = Binding(ty = Var(idx = 0), usage = Var(idx = 0)) @ "_",
-                            bodyTy = Def(qn = qn"__unresolved__.CStream") @ "CStream",
-                            effects = Var(idx = 0)
-                          ) @ "Eq Nat m (head self) -> CStream",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Return(v = Var(idx = 0), usage = Auto())
-                        ) @ "ε"
-                      ) @ "ε"
+                      body = Return(v = Var(idx = 0), usage = Auto())
                     ) @ "ε"
                   ) @ "ε",
-                  effects = Var(idx = 0)
-                ) @ "m: Nat -> Eq Nat m (head self) -> CStream",
-                ty = Auto(),
-                eff = Auto(),
-                usage = Auto(),
-                body = Return(v = Var(idx = 0), usage = Auto())
-              ) @ "ε"
-            ) @ "ε"
-          ) @ "ε"
+                  usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+                ) @ "_",
+                bodyTy = Def(qn = qn"__unresolved__.CStream") @ "CStream",
+                effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε"
+              ) @ "Eq Nat m (head self) -> CStream",
+              ty = Auto(),
+              eff = Auto(),
+              usage = Auto(),
+              body = Return(v = Var(idx = 0), usage = Auto())
+            ) @ "ε",
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+          ) @ "m: Nat -> Eq Nat m (head self) -> CStream",
+          ty = Auto(),
+          eff = Auto(),
+          usage = Auto(),
+          body = Return(v = Var(idx = 0), usage = Auto())
         ) @ "ε"
       )
     ),
