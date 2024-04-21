@@ -179,13 +179,17 @@ extension (self: CTerm)
   def flatMap(f: TranslationContext ?=> VTerm => CTerm)(using ctx: TranslationContext): CTerm =
     val newCtx = ctx.bindLocal("")
     given SourceInfo = SourceInfo.SiEmpty
-    Let(
-      self,
-      Auto(),
-      Auto(),
-      Auto(),
-      f(using newCtx)(Var(0)),
-    )(gn"v")
+
+    self match
+      case Return(v, Auto()) => f(using newCtx)(v)
+      case _ =>
+        Let(
+          self,
+          Auto(),
+          Auto(),
+          Auto(),
+          f(using newCtx)(Var(0)),
+        )(gn"v")
 
 extension (tp: TCoPattern)
   def toCoPattern(using TranslationContext): CoPattern =

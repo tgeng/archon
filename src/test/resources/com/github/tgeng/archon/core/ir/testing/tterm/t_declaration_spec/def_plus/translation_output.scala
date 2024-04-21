@@ -49,21 +49,11 @@ List(
                             eff = Auto(),
                             usage = Auto(),
                             body = Let(
-                              t = Return(v = Auto(), usage = Auto()) @ "ε",
+                              t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Auto()) @ "<> Nat",
                               ty = Auto(),
                               eff = Auto(),
                               usage = Auto(),
-                              body = Let(
-                                t = F(
-                                  vTy = Var(idx = 0),
-                                  effects = Var(idx = 0),
-                                  usage = Var(idx = 0)
-                                ) @ "<> Nat",
-                                ty = Auto(),
-                                eff = Auto(),
-                                usage = Auto(),
-                                body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                              ) @ "ε"
+                              body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
                             ) @ "ε"
                           ) @ "ε"
                         ) @ "ε",
@@ -105,35 +95,23 @@ List(
         rhs = Some(
           value = Let(
             t = Let(
-              t = Return(v = Var(idx = 0) @ "n", usage = Auto()) @ "n",
+              t = Redex(
+                t = Let(
+                  t = Redex(
+                    t = Def(qn = qn"__unresolved__.plus") @ "plus",
+                    elims = List(ETerm(v = Var(idx = 2) @ "m"))
+                  ) @ "plus m",
+                  ty = Auto(),
+                  eff = Auto(),
+                  usage = Auto(),
+                  body = Return(v = Var(idx = 0), usage = Auto())
+                ) @ "ε",
+                elims = List(ETerm(v = Var(idx = 0) @ "n"))
+              ) @ "plus m n",
               ty = Auto(),
               eff = Auto(),
               usage = Auto(),
-              body = Let(
-                t = Redex(
-                  t = Let(
-                    t = Return(v = Var(idx = 2) @ "m", usage = Auto()) @ "m",
-                    ty = Auto(),
-                    eff = Auto(),
-                    usage = Auto(),
-                    body = Let(
-                      t = Redex(
-                        t = Def(qn = qn"__unresolved__.plus") @ "plus",
-                        elims = List(ETerm(v = Var(idx = 0)))
-                      ) @ "plus m",
-                      ty = Auto(),
-                      eff = Auto(),
-                      usage = Auto(),
-                      body = Return(v = Var(idx = 0), usage = Auto())
-                    ) @ "ε"
-                  ) @ "ε",
-                  elims = List(ETerm(v = Var(idx = 0)))
-                ) @ "plus m n",
-                ty = Auto(),
-                eff = Auto(),
-                usage = Auto(),
-                body = Return(v = Var(idx = 0), usage = Auto())
-              ) @ "ε"
+              body = Return(v = Var(idx = 0), usage = Auto())
             ) @ "ε",
             ty = Auto(),
             eff = Auto(),

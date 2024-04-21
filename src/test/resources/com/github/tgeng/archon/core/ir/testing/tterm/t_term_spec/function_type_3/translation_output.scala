@@ -36,35 +36,23 @@ Let(
                     binding = Binding(ty = Var(idx = 0), usage = Var(idx = 0)) @ "b",
                     bodyTy = Let(
                       t = Let(
-                        t = Return(v = Var(idx = 0) @ "b", usage = Auto()) @ "b",
+                        t = Redex(
+                          t = Let(
+                            t = Redex(
+                              t = Def(qn = qn"__unresolved__.C") @ "C",
+                              elims = List(ETerm(v = Var(idx = 5) @ "a"))
+                            ) @ "C a",
+                            ty = Auto(),
+                            eff = Auto(),
+                            usage = Auto(),
+                            body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
+                          ) @ "ε",
+                          elims = List(ETerm(v = Var(idx = 0) @ "b"))
+                        ) @ "C a b",
                         ty = Auto(),
                         eff = Auto(),
                         usage = Auto(),
-                        body = Let(
-                          t = Redex(
-                            t = Let(
-                              t = Return(v = Var(idx = 5) @ "a", usage = Auto()) @ "a",
-                              ty = Auto(),
-                              eff = Auto(),
-                              usage = Auto(),
-                              body = Let(
-                                t = Redex(
-                                  t = Def(qn = qn"__unresolved__.C") @ "C",
-                                  elims = List(ETerm(v = Var(idx = 0)))
-                                ) @ "C a",
-                                ty = Auto(),
-                                eff = Auto(),
-                                usage = Auto(),
-                                body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                              ) @ "ε"
-                            ) @ "ε",
-                            elims = List(ETerm(v = Var(idx = 0)))
-                          ) @ "C a b",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Return(v = Var(idx = 0), usage = Auto())
-                        ) @ "ε"
+                        body = Return(v = Var(idx = 0), usage = Auto())
                       ) @ "ε",
                       ty = Auto(),
                       eff = Auto(),

@@ -4,23 +4,16 @@ List(
     tParamTys = List(),
     ty = Let(
       t = Let(
-        t = Return(
-          v = Level(literal = LevelOrder(m = 0, n = 0), maxOperands = SeqMap()) @ "0L",
-          usage = Auto() @ "ε"
-        ) @ "0L",
-        ty = Auto(),
+        t = Redex(
+          t = Def(qn = qn"__unresolved__.Type") @ "Type",
+          elims = List(
+            ETerm(v = Level(literal = LevelOrder(m = 0, n = 0), maxOperands = SeqMap()) @ "0L")
+          )
+        ) @ "Type 0L",
+        ty = Auto() @ "ε",
         eff = Auto(),
         usage = Auto(),
-        body = Let(
-          t = Redex(
-            t = Def(qn = qn"__unresolved__.Type") @ "Type",
-            elims = List(ETerm(v = Var(idx = 0) @ "ε"))
-          ) @ "Type 0L",
-          ty = Auto(),
-          eff = Auto(),
-          usage = Auto(),
-          body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-        ) @ "ε"
+        body = Return(v = Var(idx = 0) @ "ε", usage = Auto()) @ "ε"
       ) @ "ε",
       ty = Auto(),
       eff = Auto(),

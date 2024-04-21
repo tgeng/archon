@@ -219,50 +219,44 @@ List(
                               usage = Auto(),
                               body = Let(
                                 t = Let(
-                                  t = Return(v = Var(idx = 5) @ "n", usage = Auto()) @ "n",
-                                  ty = Auto(),
-                                  eff = Auto(),
-                                  usage = Auto(),
-                                  body = Let(
-                                    t = Redex(
-                                      t = Let(
-                                        t = Def(qn = qn"__unresolved__.t") @ "t",
-                                        ty = Auto(),
-                                        eff = Auto(),
-                                        usage = Auto(),
-                                        body = Let(
-                                          t = Redex(
-                                            t = Let(
-                                              t = Def(qn = qn"__unresolved__.l") @ "l",
+                                  t = Redex(
+                                    t = Let(
+                                      t = Def(qn = qn"__unresolved__.t") @ "t",
+                                      ty = Auto(),
+                                      eff = Auto(),
+                                      usage = Auto(),
+                                      body = Let(
+                                        t = Redex(
+                                          t = Let(
+                                            t = Def(qn = qn"__unresolved__.l") @ "l",
+                                            ty = Auto(),
+                                            eff = Auto(),
+                                            usage = Auto(),
+                                            body = Let(
+                                              t = Redex(
+                                                t = Def(qn = qn"__unresolved__.Vec") @ "Vec",
+                                                elims = List(ETerm(v = Var(idx = 0)))
+                                              ) @ "Vec l",
                                               ty = Auto(),
                                               eff = Auto(),
                                               usage = Auto(),
-                                              body = Let(
-                                                t = Redex(
-                                                  t = Def(qn = qn"__unresolved__.Vec") @ "Vec",
-                                                  elims = List(ETerm(v = Var(idx = 0)))
-                                                ) @ "Vec l",
-                                                ty = Auto(),
-                                                eff = Auto(),
-                                                usage = Auto(),
-                                                body = Return(v = Var(idx = 0), usage = Auto())
-                                              )
-                                            ),
-                                            elims = List(ETerm(v = Var(idx = 0)))
-                                          ) @ "Vec l t",
-                                          ty = Auto(),
-                                          eff = Auto(),
-                                          usage = Auto(),
-                                          body = Return(v = Var(idx = 0), usage = Auto())
-                                        )
-                                      ),
-                                      elims = List(ETerm(v = Var(idx = 0)))
-                                    ) @ "Vec l t n",
-                                    ty = Auto(),
-                                    eff = Auto(),
-                                    usage = Auto(),
-                                    body = Return(v = Var(idx = 0), usage = Auto())
-                                  )
+                                              body = Return(v = Var(idx = 0), usage = Auto())
+                                            )
+                                          ),
+                                          elims = List(ETerm(v = Var(idx = 0)))
+                                        ) @ "Vec l t",
+                                        ty = Auto(),
+                                        eff = Auto(),
+                                        usage = Auto(),
+                                        body = Return(v = Var(idx = 0), usage = Auto())
+                                      )
+                                    ),
+                                    elims = List(ETerm(v = Var(idx = 5) @ "n"))
+                                  ) @ "Vec l t n",
+                                  ty = Auto(),
+                                  eff = Auto(),
+                                  usage = Auto(),
+                                  body = Return(v = Var(idx = 0), usage = Auto())
                                 ) @ "ε",
                                 ty = Auto(),
                                 eff = Auto(),
@@ -278,20 +272,14 @@ List(
                                       bodyTy = Let(
                                         t = Let(
                                           t = Let(
-                                            t = Return(v = Var(idx = 8) @ "n", usage = Auto()) @ "n",
+                                            t = Redex(
+                                              t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
+                                              elims = List(ETerm(v = Var(idx = 8) @ "n"))
+                                            ) @ "Succ n",
                                             ty = Auto(),
                                             eff = Auto(),
                                             usage = Auto(),
-                                            body = Let(
-                                              t = Redex(
-                                                t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
-                                                elims = List(ETerm(v = Var(idx = 0)))
-                                              ) @ "Succ n",
-                                              ty = Auto(),
-                                              eff = Auto(),
-                                              usage = Auto(),
-                                              body = Return(v = Var(idx = 0), usage = Auto())
-                                            ) @ "ε"
+                                            body = Return(v = Var(idx = 0), usage = Auto())
                                           ) @ "ε",
                                           ty = Auto(),
                                           eff = Auto(),

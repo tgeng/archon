@@ -41,35 +41,23 @@ Let(
                     eff = Var(idx = 0),
                     usage = Var(idx = 0),
                     body = Let(
-                      t = Return(v = Var(idx = 0) @ "b", usage = Auto()) @ "b",
+                      t = Redex(
+                        t = Let(
+                          t = Redex(
+                            t = Def(qn = qn"__unresolved__.plus") @ "plus",
+                            elims = List(ETerm(v = Var(idx = 5) @ "a"))
+                          ) @ "plus a",
+                          ty = Auto(),
+                          eff = Auto(),
+                          usage = Auto(),
+                          body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
+                        ) @ "ε",
+                        elims = List(ETerm(v = Var(idx = 0) @ "b"))
+                      ) @ "plus a b",
                       ty = Auto(),
                       eff = Auto(),
                       usage = Auto(),
-                      body = Let(
-                        t = Redex(
-                          t = Let(
-                            t = Return(v = Var(idx = 5) @ "a", usage = Auto()) @ "a",
-                            ty = Auto(),
-                            eff = Auto(),
-                            usage = Auto(),
-                            body = Let(
-                              t = Redex(
-                                t = Def(qn = qn"__unresolved__.plus") @ "plus",
-                                elims = List(ETerm(v = Var(idx = 0)))
-                              ) @ "plus a",
-                              ty = Auto(),
-                              eff = Auto(),
-                              usage = Auto(),
-                              body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                            ) @ "ε"
-                          ) @ "ε",
-                          elims = List(ETerm(v = Var(idx = 0)))
-                        ) @ "plus a b",
-                        ty = Auto(),
-                        eff = Auto(),
-                        usage = Auto(),
-                        body = Return(v = Var(idx = 0), usage = Auto())
-                      ) @ "ε"
+                      body = Return(v = Var(idx = 0), usage = Auto())
                     ) @ "ε"
                   ) @ """let b: <effB> [uB] B = getB
 plus a b""",

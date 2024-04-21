@@ -69,35 +69,29 @@ List(
                         body = Let(
                           t = Redex(
                             t = Let(
-                              t = Return(v = Var(idx = 2) @ "m", usage = Auto()) @ "m",
-                              ty = Auto(),
-                              eff = Auto(),
-                              usage = Auto(),
-                              body = Let(
-                                t = Redex(
-                                  t = Let(
-                                    t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
+                              t = Redex(
+                                t = Let(
+                                  t = Def(qn = qn"__unresolved__.Nat") @ "Nat",
+                                  ty = Auto(),
+                                  eff = Auto(),
+                                  usage = Auto(),
+                                  body = Let(
+                                    t = Redex(
+                                      t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
+                                      elims = List(ETerm(v = Var(idx = 0)))
+                                    ) @ "Eq Nat",
                                     ty = Auto(),
                                     eff = Auto(),
                                     usage = Auto(),
-                                    body = Let(
-                                      t = Redex(
-                                        t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
-                                        elims = List(ETerm(v = Var(idx = 0)))
-                                      ) @ "Eq Nat",
-                                      ty = Auto(),
-                                      eff = Auto(),
-                                      usage = Auto(),
-                                      body = Return(v = Var(idx = 0), usage = Auto())
-                                    ) @ "ε"
-                                  ) @ "ε",
-                                  elims = List(ETerm(v = Var(idx = 0)))
-                                ) @ "Eq Nat m",
-                                ty = Auto(),
-                                eff = Auto(),
-                                usage = Auto(),
-                                body = Return(v = Var(idx = 0), usage = Auto())
-                              ) @ "ε"
+                                    body = Return(v = Var(idx = 0), usage = Auto())
+                                  ) @ "ε"
+                                ) @ "ε",
+                                elims = List(ETerm(v = Var(idx = 2) @ "m"))
+                              ) @ "Eq Nat m",
+                              ty = Auto(),
+                              eff = Auto(),
+                              usage = Auto(),
+                              body = Return(v = Var(idx = 0), usage = Auto())
                             ) @ "ε",
                             elims = List(ETerm(v = Var(idx = 0)))
                           ) @ "Eq Nat m (head self",

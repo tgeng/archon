@@ -45,17 +45,11 @@ Let(
                         eff = Auto(),
                         usage = Auto(),
                         body = Let(
-                          t = Return(v = Auto(), usage = Auto()) @ "ε",
+                          t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Auto()) @ "<> C",
                           ty = Auto(),
                           eff = Auto(),
                           usage = Auto(),
-                          body = Let(
-                            t = F(vTy = Var(idx = 0), effects = Var(idx = 0), usage = Var(idx = 0)) @ "<> C",
-                            ty = Auto(),
-                            eff = Auto(),
-                            usage = Auto(),
-                            body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                          ) @ "ε"
+                          body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
                         ) @ "ε"
                       ) @ "ε"
                     ) @ "ε",
