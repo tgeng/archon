@@ -2,6 +2,9 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.core.ir.*
 
+import scala.jdk.CollectionConverters.*
+import scala.language.unsafeNulls
+
 extension (ctx: StringContext)
   def ct(args: Any*)(using TranslationContext): CTerm =
     val tTerm = Parser.parseTTerm(ctx.s(args*))
@@ -13,19 +16,20 @@ extension (ctx: StringContext)
       case CTerm.Return(v, VTerm.Auto()) => v
       case ct                            => VTerm.Collapse(ct)(using ct.sourceInfo)
 
-  def decls
+  def decls[T]
     (args: Any*)
     (using tCtx: TranslationContext)
     (using Context)
     (using Signature)
     (using TypingContext)
-    : (TranslationContext, Signature) =
-    val decls = Parser.parseDeclarations(ctx.s(args*))
+    (f: (TranslationContext, Signature) ?=> T)
+    : T =
+    val str = ctx.s(args*)
+    val lastLine = str.lines().iterator().asScala.toSeq.last
+    val indent = lastLine.size
+    val newStr = str.lines().map(_.drop(indent)).toList.asScala.drop(1).dropRight(1).mkString("\n")
+    val decls = Parser.parseDeclarations(newStr)
     given newTranslationCtx: TranslationContext = tCtx.bindDecls(decls)
     val preDecls = decls.map(_.toPreDeclaration)
     val newSignature = elaborateAll(preDecls)
-    (newTranslationCtx, newSignature)
-
-extension (newContexts: (TranslationContext, Signature))
-  def apply[T](f: (TranslationContext, Signature) ?=> T): T =
-    f(using newContexts._1, newContexts._2)
+    f(using newTranslationCtx, newSignature)
