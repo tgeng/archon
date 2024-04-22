@@ -185,3 +185,14 @@ object Parser:
     fastparse.parse(text, parser(using _)) match
       case Parsed.Success(value, _)    => value
       case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)
+
+  def parseTTerm(text: String): TTerm = runParserString(_.tTermEnd, text)
+  def parseDeclaration(text: String): TDeclaration = runParserString(_.tDeclarationEnd, text)
+  def parseDeclarations(text: String): Seq[TDeclaration] = runParserString(_.tDeclarationsEnd, text)
+
+  private def runParserString[T](p: Parser => P[?] ?=> P[T], text: String): T =
+    def parser[$: P] = p(new Parser(text, None, 0))
+
+    fastparse.parse(text, parser(using _)) match
+      case Parsed.Success(value, _)    => value
+      case Parsed.Failure(_, _, extra) => throw new RuntimeException(extra.trace().longAggregateMsg)

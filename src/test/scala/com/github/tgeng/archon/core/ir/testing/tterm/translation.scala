@@ -2,7 +2,7 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.{MutableRef, Nat}
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
-import com.github.tgeng.archon.core.ir.{VTerm, *}
+import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TCoPattern.*
@@ -34,11 +34,11 @@ case class TranslationContext
       localVars = localVars ++ names.zipWithIndex.map((n, i) => n -> (localVarCount + i)),
     )
 
-  def bindDef(name: String, qn: QualifiedName): TranslationContext =
+  def bindDecl(name: String, qn: QualifiedName): TranslationContext =
     this.copy(globalDefs = globalDefs + (name -> qn))
 
-  def bindDef(name: String): TranslationContext =
-    bindDef(name, moduleQn / name)
+  def bindDecl(name: String): TranslationContext =
+    bindDecl(name, moduleQn / name)
 
   def bindDataDecl(data: TData): TranslationContext =
     this.copy(
@@ -48,6 +48,21 @@ case class TranslationContext
         c.name -> (moduleQn / data.name / c.name),
       ),
     )
+
+  def bindRecordDecl(record: TRecord): TranslationContext =
+    this.copy(
+      globalDefs = (globalDefs + (record.name -> moduleQn / record.name)) ++ record.fields.map(f =>
+        f.name -> (moduleQn / record.name / f.name),
+      ),
+    )
+
+  def bindDecls(decls: Seq[TDeclaration]): TranslationContext =
+    decls.foldLeft(this) { (ctx, decl) =>
+      decl match
+        case data: TData     => ctx.bindDataDecl(data)
+        case record: TRecord => ctx.bindRecordDecl(record)
+        case _               => ctx.bindDecl(decl.name)
+    }
 
   def lookup(name: String): Either[Nat, QualifiedName] =
     localVars.get(name) match
@@ -184,7 +199,7 @@ extension (self: CTerm)
     given SourceInfo = SourceInfo.SiEmpty
 
     self match
-      case Return(v, Auto()) => f(using newCtx)(v)
+      case Return(v, Auto())    => f(using newCtx)(v)
       case _ if ctx.isTypeLevel => f(using newCtx)(VTerm.Collapse(self))
       case _ =>
         Let(
