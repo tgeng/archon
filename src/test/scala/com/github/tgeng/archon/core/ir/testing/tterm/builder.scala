@@ -22,8 +22,7 @@ extension (ctx: StringContext)
     (using Context)
     (using Signature)
     (using TypingContext)
-    (f: (TranslationContext, Signature) ?=> T)
-    : T =
+    : (TranslationContext, Signature) =
     val str = ctx.s(args*)
     val lastLine = str.lines().iterator().asScala.toSeq.last
     val indent = lastLine.size
@@ -32,4 +31,8 @@ extension (ctx: StringContext)
     given newTranslationCtx: TranslationContext = tCtx.bindDecls(decls)
     val preDecls = decls.map(_.toPreDeclaration)
     val newSignature = elaborateAll(preDecls)
-    f(using newTranslationCtx, newSignature)
+    (newTranslationCtx, newSignature)
+
+extension (newContexts: (TranslationContext, Signature))
+  def inUse(f: (TranslationContext, Signature) ?=> Unit) =
+    f(using newContexts._1, newContexts._2)
