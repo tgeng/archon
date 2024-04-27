@@ -67,3 +67,6 @@ enum IrError extends Exception:
   case UnmatchedPattern(p: Pattern, ty: VTerm, unsolvedConstraints: Set[Constraint])
   case UnsatisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnsolvedElaboration(clause: PreClause)
+  case ElaborationFailure(part: DeclarationPart, decl: PreDeclaration, cause: IrError)
+
+  override def getMessage: String = verbosePPrinter.apply(this).plainText

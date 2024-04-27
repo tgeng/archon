@@ -29,39 +29,3 @@ def timed[T](description: String)(action: => T): T =
   println(s"$description took $duration")
   result
 
-def cTermPprint: pprint.PPrinter =
-  val visited = mutable.Set.empty[Any]
-
-  def p: pprint.PPrinter = pprint.copy(
-    additionalHandlers = {
-      case qn: QualifiedName => pprint.Tree.Literal(s"qn\"${qn.toString}\"")
-      case n: Name           => pprint.Tree.Literal(s"n\"${n.toString}\"")
-      case r: Ref[?]         => pprint.Tree.Literal(s"\"${r.value.toString}\"")
-      case b: Binding[?] if !visited.contains((b, b.name)) =>
-        visited.add((b, b.name))
-        pprint.Tree
-          .Infix(
-            p.treeify(b, false, true),
-            "@",
-            pprint.Tree.Literal(pprint.apply(b.name.value.toString).toString),
-          )
-      case t: VTerm if !visited.contains((t, t.sourceInfo)) =>
-        visited.add((t, t.sourceInfo))
-        pprint.Tree
-          .Infix(
-            p.treeify(t, false, true),
-            "@",
-            pprint.Tree.Literal(pprint.apply(t.sourceInfo.toString).toString),
-          )
-      case t: CTerm if !visited.contains((t, t.sourceInfo)) =>
-        visited.add((t, t.sourceInfo))
-        pprint.Tree
-          .Infix(
-            p.treeify(t, false, true),
-            "@",
-            pprint.Tree.Literal(pprint.apply(t.sourceInfo.toString).toString),
-          )
-    },
-  )
-
-  p

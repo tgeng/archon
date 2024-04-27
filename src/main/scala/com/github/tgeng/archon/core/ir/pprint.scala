@@ -79,6 +79,8 @@ object Renamer extends Visitor[RenamerContext, Unit]:
 
   override def visitVar(v: VTerm.Var)(using ctx: RenamerContext)(using Σ: Signature): Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
+    if stackIndex < 0 then
+      throw IllegalStateException(s"Variable index out of bound: ${v.idx}")
     val refName = ctx.nameStack(stackIndex)
     ctx.allReferencedNames.add(refName)
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
@@ -168,6 +170,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
 
   given (using PPrintContext)(using Signature): Conversion[QualifiedName, Block] =
     visitQualifiedName(_)
+
+  override def visitAuto(auto: Auto)(using ctx: PPrintContext)(using Σ: Signature): Block =
+    Block("<auto>")
 
   override def combine(blocks: Block*)(using ctx: PPrintContext)(using Σ: Signature): Block =
     if blocks.isEmpty then throw IllegalStateException()
@@ -820,3 +825,40 @@ extension (o: LevelOrder)
     mString + nString
 
 private def subNat(i: Nat): String = i.toString.map(i => (i - '0' + '₀').toChar)
+
+def verbosePPrinter: pprint.PPrinter =
+  val visited = mutable.Set.empty[Any]
+
+  def p: pprint.PPrinter = pprint.copy(
+    additionalHandlers = {
+      case qn: QualifiedName => pprint.Tree.Literal(s"qn\"${qn.toString}\"")
+      case n: Name           => pprint.Tree.Literal(s"n\"${n.toString}\"")
+      case r: Ref[?]         => pprint.Tree.Literal(s"\"${r.value.toString}\"")
+      case b: Binding[?] if !visited.contains((b, b.name)) =>
+        visited.add((b, b.name))
+        pprint.Tree
+          .Infix(
+            p.treeify(b, false, true),
+            "@",
+            pprint.Tree.Literal(pprint.apply(b.name.value.toString).toString),
+          )
+      case t: VTerm if !visited.contains((t, t.sourceInfo)) =>
+        visited.add((t, t.sourceInfo))
+        pprint.Tree
+          .Infix(
+            p.treeify(t, false, true),
+            "@",
+            pprint.Tree.Literal(pprint.apply(t.sourceInfo.toString).toString),
+          )
+      case t: CTerm if !visited.contains((t, t.sourceInfo)) =>
+        visited.add((t, t.sourceInfo))
+        pprint.Tree
+          .Infix(
+            p.treeify(t, false, true),
+            "@",
+            pprint.Tree.Literal(pprint.apply(t.sourceInfo.toString).toString),
+          )
+    },
+  )
+
+  p

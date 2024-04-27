@@ -24,7 +24,7 @@ enum Name extends Comparable[Name]:
       val prefixEnd = n.lastIndexWhere(c => !c.isDigit) + 1
       val prefix = n.substring(0, prefixEnd).nn
       var suffix = n.substring(prefixEnd, n.length).nn.toIntOption.getOrElse(1)
-      var name = prefix
+      var name = n
       while namesToAvoid(Normal(name)) do
         name = prefix + suffix
         suffix += 1
@@ -39,7 +39,7 @@ enum Name extends Comparable[Name]:
         suffix += 1
       Generated(name)
 
-import Name.{Generated, *}
+import com.github.tgeng.archon.core.common.Name.*
 
 enum QualifiedName extends Comparable[QualifiedName]:
   case Root
@@ -71,7 +71,7 @@ enum QualifiedName extends Comparable[QualifiedName]:
 
   def parent: QualifiedName = throw IllegalArgumentException()
 
-import QualifiedName.*
+import com.github.tgeng.archon.core.common.QualifiedName.*
 
 object QualifiedName:
   def from(string: String): QualifiedName =

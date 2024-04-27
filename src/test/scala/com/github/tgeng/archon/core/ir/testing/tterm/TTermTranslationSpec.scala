@@ -1,7 +1,8 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
-import com.github.tgeng.archon.common.{FileBasedFreeSpec, cTermPprint}
+import com.github.tgeng.archon.common.FileBasedFreeSpec
 import com.github.tgeng.archon.core.common.qn
+import com.github.tgeng.archon.core.ir.verbosePPrinter
 import os.Path
 
 class TTermTranslationSpec extends FileBasedFreeSpec("t_term_spec"):
@@ -11,7 +12,7 @@ class TTermTranslationSpec extends FileBasedFreeSpec("t_term_spec"):
     val tTerm = Parser.parseTTerm(inputPath)
     val ctx = TranslationContext(qn"test", ignoreUnresolvableGlobalName = true)
     val cTerm = tTerm.toCTerm(using ctx)
-    val actual = cTermPprint.apply(cTerm).plainText
+    val actual = verbosePPrinter.apply(cTerm).plainText
     val outputPath = testDir / "translation_output.scala"
     val expected = if os.exists(outputPath) then os.read(outputPath) else ""
     if actual != expected then

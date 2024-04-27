@@ -131,7 +131,7 @@ object Builtins:
   import Usage.*
   import VTerm.*
 
-  private def binding(name: Name, ty: VTerm, usage: VTerm = UsageLiteral(U1)): Binding[CTerm] =
+  private def binding(name: Name, ty: VTerm, usage: VTerm = uAny): Binding[CTerm] =
     Binding(Return(ty, uAny), Return(usage, uAny))(name)
 
   private val L0 = LevelLiteral(0)
@@ -152,7 +152,7 @@ object Builtins:
         (binding(n"A", Type(Top(Var(0)))), Variance.COVARIANT),
         (binding(n"x", Var(0), UsageLiteral(UAny)), Variance.INVARIANT),
       ),
-      ty = FunctionType(Binding(Var(1))(n"y"), F(Type(Top(Var(2))))),
+      ty = FunctionType(Binding(Var(1))(n"y"), F(Type(Top(Var(3))))),
       constructors = List(
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
       ),
@@ -164,7 +164,7 @@ object Builtins:
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
         (binding(n"usage1", UsageType()), Variance.INVARIANT),
         (binding(n"A1", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
-        (binding(n"usage2", EqDecidabilityType()), Variance.INVARIANT),
+        (binding(n"usage2", UsageType()), Variance.INVARIANT),
         (binding(n"A2", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
       ty = F(Type(Top(Var(5), Var(4)))),
@@ -173,7 +173,7 @@ object Builtins:
           n"MkPair",
           FunctionType(
             Binding(Var(2), Var(3))(n"x"),
-            FunctionType(Binding(Var(1), Var(2))(n"y"), F(DataType(PairQn, vars(4, 2)))),
+            FunctionType(Binding(Var(1), Var(2))(n"y"), F(DataType(PairQn, vars(7, 2)))),
           ),
         ),
       ),

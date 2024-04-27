@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon.iml" filepath="$PROJECT_DIR$/.idea/modules/archon.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon-build.iml" filepath="$PROJECT_DIR$/.idea/modules/archon-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon.archon-build.iml" filepath="$PROJECT_DIR$/.idea/modules/archon.archon-build.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/dev.archon.iml" filepath="$PROJECT_DIR$/.idea/modules/dev.archon.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/project.archon-build.iml" filepath="$PROJECT_DIR$/.idea/modules/project.archon-build.iml" />
     </modules>

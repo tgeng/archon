@@ -26,7 +26,11 @@ def elaborateAll
   : Signature =
   val decls = sortPreDeclarations(declarations)
   decls.foldLeft[Signature](Σ) { case (_Σ, (part, decl)) =>
-    elaborate(part, decl)(using Γ)(using _Σ)
+    try elaborate(part, decl)(using Γ)(using _Σ)
+    catch
+      case e: IrError =>
+        ctx.enableDebugging = true
+        elaborate(part, decl)(using Γ)(using _Σ)
   }
 
 @throws(classOf[IrError])
@@ -36,15 +40,17 @@ def elaborate
   (using Σ: Signature)
   (using TypingContext)
   : Signature =
-  (part, decl) match
-    case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
-    case (DeclarationPart.HEAD, d: PreRecord)     => elaborateRecordHead(d)
-    case (DeclarationPart.HEAD, d: PreDefinition) => elaborateDefHead(d)
-    case (DeclarationPart.HEAD, d: PreEffect)     => elaborateEffectHead(d)
-    case (DeclarationPart.BODY, d: PreData)       => elaborateDataBody(d)
-    case (DeclarationPart.BODY, d: PreRecord)     => elaborateRecordBody(d)
-    case (DeclarationPart.BODY, d: PreDefinition) => elaborateDefBody(d)
-    case (DeclarationPart.BODY, d: PreEffect)     => elaborateEffectBody(d)
+  try
+    (part, decl) match
+      case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
+      case (DeclarationPart.HEAD, d: PreRecord)     => elaborateRecordHead(d)
+      case (DeclarationPart.HEAD, d: PreDefinition) => elaborateDefHead(d)
+      case (DeclarationPart.HEAD, d: PreEffect)     => elaborateEffectHead(d)
+      case (DeclarationPart.BODY, d: PreData)       => elaborateDataBody(d)
+      case (DeclarationPart.BODY, d: PreRecord)     => elaborateRecordBody(d)
+      case (DeclarationPart.BODY, d: PreDefinition) => elaborateDefBody(d)
+      case (DeclarationPart.BODY, d: PreEffect)     => elaborateEffectBody(d)
+  catch case e: IrError => throw ElaborationFailure(part, decl, e)
 
 enum DeclarationPart:
   case HEAD, BODY

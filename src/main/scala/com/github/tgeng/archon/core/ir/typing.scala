@@ -737,8 +737,10 @@ private def checkTParamsAreUnrestricted
   : Unit = tParamTys match
   case Nil =>
   case binding :: rest =>
-    val constarints = ctx.solve(checkUsageSubsumption(binding.usage, UsageLiteral(UAny)))
-    if constarints.nonEmpty then throw ExpectUnrestrictedTypeParameterBinding(binding)
+    ctx.checkSolved(
+      checkUsageSubsumption(binding.usage, UsageLiteral(UAny)),
+      ExpectUnrestrictedTypeParameterBinding(binding),
+    )
     checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
 
 @throws(classOf[IrError])
@@ -949,6 +951,7 @@ def checkType
     case Auto() =>
       (
         Collapse(ctx.addUnsolved(F(ty))),
+        // TODO[P0]: this is wrong. Usage checking will have to be delayed as a separate pass
         Usages.zero,
       )
     case _ =>
@@ -1287,10 +1290,8 @@ private def checkInherentEqDecidable
       case Nil =>
       case binding :: rest =>
         val eqD = inferEqDecidability(binding.ty)
-        ctx.checkSolved(
-          checkEqDecidabilitySubsumption(eqD, dataEqD),
-          NotEqDecidableType(binding.ty),
-        )
+        val constraints = checkEqDecidabilitySubsumption(eqD, dataEqD)
+        ctx.checkSolved(constraints, NotEqDecidableType(binding.ty))
         checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
 
   // 2. check that each zero-usage component is referenced in the constructed data type. This is necessary because
@@ -1323,10 +1324,7 @@ private def checkInherentEqDecidable
   then ()
   // Call 1, 2
   else
-    checkComponentTypes(
-      (data.context.map(_._1) ++ data.tIndexTys ++ constructor.paramTys).toList,
-      data.inherentEqDecidability,
-    )(using IndexedSeq())
+    checkComponentTypes(constructor.paramTys, data.inherentEqDecidability)
     checkComponentUsage(constructor)
 
 private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
@@ -1822,15 +1820,27 @@ def checkIsType
   (using ctx: TypingContext)
   : (VTerm, Usages) =
   ctx.trace("checking is type"):
-    val (vTy, vTyTy, usages) =
-      inferType(uncheckedVTy) // inferType also checks term is correctly constructed
-    vTyTy match
-      case Type(_) =>
-        levelBound match
-          case Some(bound) => checkLevelSubsumption(inferLevel(vTy), bound)
-          case _           =>
-      case _ => throw NotTypeError(vTy)
-    (vTy, usages)
+    uncheckedVTy match
+      case Auto() =>
+        val l = levelBound match
+          case Some(bound) => bound
+          case None        => LevelUpperBound()
+        (
+          Collapse(ctx.addUnsolved(F(Type(Top(l, EqDecidabilityLiteral(EqUnknown)))))),
+          // TODO[P0]: this is wrong. Usage checking will have to be delayed as a separate pass
+          Usages.zero,
+        )
+      case _ =>
+        val (vTy, vTyTy, usages) =
+          inferType(uncheckedVTy) // inferType also checks term is correctly constructed
+        vTyTy match
+          case Type(_) =>
+            levelBound match
+              case Some(bound) =>
+                ctx.checkSolved(checkLevelSubsumption(inferLevel(vTy), bound), NotTypeError(vTy))
+              case _ =>
+          case _ => throw NotTypeError(vTy)
+        (vTy, usages)
 
 @throws(classOf[IrError])
 def checkIsCType

@@ -1,7 +1,7 @@
 package com.github.tgeng.archon.core.ir.typing
 
 import com.github.tgeng.archon.common.Ref.given
-import com.github.tgeng.archon.core.common.n
+import com.github.tgeng.archon.core.common.{n, qn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.EqDecidability.{EqDecidable, EqUnknown}
@@ -9,12 +9,14 @@ import com.github.tgeng.archon.core.ir.HandlerType.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.*
+import com.github.tgeng.archon.core.ir.testing.tterm.{TranslationContext, decls, inUse, vt}
 import org.scalatest.freespec.AnyFreeSpec
 
 class BasicTypeCheckSpec extends AnyFreeSpec:
+  given TranslationContext = TranslationContext(qn"test")
+  given ctx: TypingContext = TypingContext()
   given Context = Context.empty
-  given Signature = SimpleSignature()
-  given TypingContext = TypingContext()
+  given Signature = Builtins.Σ
   given SourceInfo = SourceInfo.SiEmpty
   "in empty context and signature" - {
     "check level literals" in:
@@ -76,3 +78,12 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         CType(CTop(LevelLiteral(0, 2))),
       )
   }
+  "with nat" in:
+    // TODO: handle builtin-type import
+    decls"""
+      data Nat: .archon.builtin.type.Type 0L
+      Zero: Nat
+      Succ: Nat -> Nat
+      """.inUse:
+      // TODO: fix this
+      assertVType(vt"Nat", Type(Top(LevelLiteral(0))))

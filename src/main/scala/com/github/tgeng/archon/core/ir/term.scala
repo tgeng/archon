@@ -23,7 +23,7 @@ object Binding:
   def apply[T](ty: T, usage: T)(name: Ref[Name]): Binding[T] =
     new Binding(ty, usage)(name)
 
-  def apply(ty: VTerm, usage: Usage = Usage.U1)(name: Ref[Name]): Binding[VTerm] =
+  def apply(ty: VTerm, usage: Usage = Usage.UAny)(name: Ref[Name]): Binding[VTerm] =
     new Binding(ty, VTerm.UsageLiteral(usage))(name)
 
 /** Head is on the left, e.g. Z :: S Z :: []
