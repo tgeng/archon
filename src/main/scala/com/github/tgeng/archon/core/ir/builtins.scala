@@ -152,7 +152,7 @@ object Builtins:
         (binding(n"A", Type(Top(Var(0)))), Variance.COVARIANT),
         (binding(n"x", Var(0), UsageLiteral(UAny)), Variance.INVARIANT),
       ),
-      ty = FunctionType(Binding(Var(1))(n"y"), F(Type(Top(Var(3))))),
+      ty = FunctionType(Binding(Var(1))(n"y"), F(Type(Auto()))),
       constructors = List(
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
       ),
@@ -167,7 +167,7 @@ object Builtins:
         (binding(n"usage2", UsageType()), Variance.INVARIANT),
         (binding(n"A2", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
-      ty = F(Type(Top(Var(5), Var(4)))),
+      ty = F(Type(Top(Auto()))),
       constructors = List(
         PreConstructor(
           n"MkPair",
@@ -188,7 +188,7 @@ object Builtins:
         (binding(n"usageR", EqDecidabilityType()), Variance.INVARIANT),
         (binding(n"AR", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
-      ty = F(Type(Top(Var(5), Var(4)))),
+      ty = F(Type(Auto())),
       constructors = List(
         PreConstructor(
           n"Left",
@@ -203,7 +203,7 @@ object Builtins:
     PreData(
       IsDisposableQn,
       tParamTys = Nil,
-      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Auto()))),
       constructors = List(
         PreConstructor(n"ZeroIsDisposable", F(DataType(IsDisposableQn, List(UsageLiteral(U0))))),
         PreConstructor(
@@ -215,7 +215,7 @@ object Builtins:
     PreData(
       IsReplicableQn,
       tParamTys = Nil,
-      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Auto()))),
       constructors = List(
         PreConstructor(
           n"RelevantIsReplicable",
@@ -230,7 +230,7 @@ object Builtins:
     PreData(
       IsResumableQn,
       tParamTys = Nil,
-      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(LevelLiteral(0))))),
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Auto()))),
       constructors = List(
         PreConstructor(
           n"LinearIsResumable",
@@ -263,7 +263,6 @@ object Builtins:
         (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
         (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
       ),
-      ty = CTop(Var(9)),
       fields = List(
         Field(
           n"resume",

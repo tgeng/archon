@@ -23,11 +23,6 @@ enum PreDeclaration:
     (
       qn: QualifiedName,
       tParamTys: PreTTelescope,
-      // Unlike data, for record, this `ty` is expected to be a simple computation type in
-      // indicating the computation type of this record type.
-      // Note that this type is not the type of `self`. It's the type of the record type! Hence this
-      // cannot be simplified to a `Binding[CTerm` as in `PreData`.
-      ty: CTerm,
       // There is no difference for field
       fields: List[Field],
       selfName: Name = n"self",

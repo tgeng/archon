@@ -506,11 +506,8 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
     val tParamTys = Context.fromTelescope(tParamsTysTelescope)
     val tIndexTys = checkParameterTyDeclarations(data.tIndexTys)(using tParamTys)
     val tContext = tParamTys ++ tIndexTys
-    val (level, _) = checkLevel(data.level)(using tContext)
-    val (inherentEqDecidability, _) =
-      checkType(data.inherentEqDecidability, EqDecidabilityType())(using tContext)
     checkTParamsAreUnrestricted(tContext.toTelescope)
-    Data(data.qn, tParamTys.zip(data.context.map(_._2)), tIndexTys, level, inherentEqDecidability)
+    Data(data.qn, tParamTys.zip(data.context.map(_._2)), tIndexTys)
 
 @throws(classOf[IrError])
 def checkDataConstructor
@@ -523,10 +520,9 @@ def checkDataConstructor
     case Some(data) =>
       given Γ: Context = data.context.map(_._1)
       ctx.trace(s"checking data constructor $qn.${con.name}"):
-        val paramTys = checkParameterTyDeclarations(con.paramTys, Some(data.level))
+        val paramTys = checkParameterTyDeclarations(con.paramTys)
         val (tArgs, _) =
           checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
-        checkInherentEqDecidable(Σ.getData(qn), con)
         val violatingVars =
           VarianceChecker.visitTelescope(con.paramTys)(using data.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars)
@@ -540,14 +536,12 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
     val tParamTysTelescope = checkParameterTyDeclarations(tParams.toList)
     val tParamTys = Context.fromTelescope(tParamTysTelescope)
     checkTParamsAreUnrestricted(tParams.toList)
-    val (level, _) = checkLevel(record.level)(using tParams.toIndexedSeq)
     val (selfUsage, _) =
       checkType(record.selfBinding.usage, UsageType())(using tParams.toIndexedSeq)
     val (selfTy, _) = checkIsType(record.selfBinding.ty)(using tParams.toIndexedSeq)
     Record(
       record.qn,
       tParamTys.zip(record.context.map(_._2)),
-      level,
       Binding(selfTy, selfUsage)(record.selfBinding.name),
     )
 
@@ -563,7 +557,7 @@ def checkRecordField
       given Context = record.context.map(_._1).toIndexedSeq :+ record.selfBinding
 
       ctx.trace(s"checking record field $qn.${field.name}"):
-        val (ty, _) = checkIsCType(field.ty, Some(record.level.weakened))
+        val (ty, _) = checkIsCType(field.ty)
         val violatingVars =
           VarianceChecker.visitCTerm(field.ty)(using record.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInRecord(record.qn, violatingVars)
@@ -745,14 +739,14 @@ private def checkTParamsAreUnrestricted
 
 @throws(classOf[IrError])
 private def checkParameterTyDeclarations
-  (tParamTys: Telescope, levelBound: Option[VTerm] = None)
+  (tParamTys: Telescope)
   (using Γ: Context)
   (using Σ: Signature)
   (using TypingContext)
   : Telescope = tParamTys match
   case Nil => Nil
   case binding :: rest =>
-    val (ty, _) = checkIsType(binding.ty, levelBound)
+    val (ty, _) = checkIsType(binding.ty)
     val (usage, _) = checkType(binding.usage, UsageType(None))
     Binding(ty, usage)(binding.name) :: checkParameterTyDeclarations(rest)(using Γ :+ binding)
 
@@ -767,33 +761,48 @@ private def checkLevel
 
 // Precondition: tm is already type-checked and is normalized
 @throws(classOf[IrError])
-private def inferLevel
-  (tm: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm =
-  ctx.withMetaResolved(tm):
+def inferLevel(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
+  ctx.withMetaResolved(ty):
     case u: ResolvedMetaVariable =>
       u.ty match
         case F(Type(upperBound), _, _) => inferLevel(upperBound)
-        case _                         => throw NotTypeError(tm)
+        case _                         => throw NotTypeError(ty)
     case Type(upperBound) => LevelSuc(inferLevel(upperBound))
     case Top(level, _)    => level
     case r: Var =>
       Γ.resolve(r).ty match
         case Type(upperBound) => inferLevel(upperBound)
-        case _                => throw NotTypeError(tm)
+        case _                => throw NotTypeError(ty)
     case t: Collapse =>
       val (_, ty, _) = inferType(t)
       ty match
         case Type(upperBound) => inferLevel(upperBound)
-        case _                => throw NotTypeError(tm)
-    case U(cty)             => inferLevel(cty)
-    case DataType(qn, args) => Σ.getData(qn).level.substLowers(args*)
+        case _                => throw NotTypeError(ty)
+    case U(cty) => inferLevel(cty)
+    case DataType(qn, args) =>
+      val contextArgs = args.take(Σ.getData(qn).context.size)
+      Σ.getConstructors(qn).foldLeft(LevelLiteral(0)) { (acc, con) =>
+        val conLevel = inferLevel(con.paramTys.substLowers(contextArgs*))
+        LevelMax(acc, conLevel)
+      }
     case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
     case LevelType(strictUpperBound)                           => checkLevel(strictUpperBound)._1
-    case _ => throw IllegalArgumentException(s"should have been checked to be a type: $tm")
+    case _ => throw IllegalArgumentException(s"should have been checked to be a type: $ty")
+
+// Precondition: tm is already type-checked and is normalized
+@throws(classOf[IrError])
+private def inferLevel
+  (telescope: Telescope)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : VTerm =
+  telescope match
+    case Nil             => LevelLiteral(0)
+    case binding :: rest =>
+      // strengthen is always safe because the only case that rest-level would reference 0 is when
+      // arg is of type Level. But in that case the overall level would be ω.
+      LevelMax(binding.ty.weakened, inferLevel(rest)(using Γ :+ binding)).normalized.strengthened
 
 @throws(classOf[IrError])
 def inferType
@@ -962,7 +971,7 @@ def checkType
 
 // Precondition: tm is already type-checked
 @throws(classOf[IrError])
-private def inferLevel
+def inferLevel
   (uncheckedTm: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -978,8 +987,12 @@ private def inferLevel
       val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
       // strengthen is always safe because the only case that bodyLevel would reference 0 is when
       // arg is of type Level. But in that case the overall level would be ω.
-      LevelMax(argLevel.weakened, bodyLevel).strengthened
-    case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args*)
+      LevelMax(argLevel.weakened, bodyLevel).normalized.strengthened
+    case RecordType(qn, args, _) =>
+      Σ.getFields(qn).foldLeft(LevelLiteral(0)) { (acc, field) =>
+        val fieldLevel = inferLevel(field.ty)
+        LevelMax(acc, fieldLevel)
+      }
     case tm =>
       ctx.resolveMetaVariableType(tm) match
         case Some(ty) =>
@@ -1274,63 +1287,6 @@ private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]():
       case Solved(_, _, value)     => visitCTerm(value)
     )
 
-@throws(classOf[IrError])
-private def checkInherentEqDecidable
-  (data: Data, constructor: Constructor)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Unit =
-  given Context = data.context.map(_._1) ++ data.tIndexTys
-
-  // 1. check that a the component types are all eq-decidable if the data is eq-decidable
-  @tailrec
-  @throws(classOf[IrError])
-  def checkComponentTypes(tys: Telescope, dataEqD: VTerm)(using Γ: Context): Unit =
-    tys match
-      case Nil =>
-      case binding :: rest =>
-        val eqD = inferEqDecidability(binding.ty)
-        val constraints = checkEqDecidabilitySubsumption(eqD, dataEqD)
-        ctx.checkSolved(constraints, NotEqDecidableType(binding.ty))
-        checkComponentTypes(rest, dataEqD.weakened)(using Γ :+ binding)
-
-  // 2. check that each zero-usage component is referenced in the constructed data type. This is necessary because
-  //    zero usage components won't be available at runtime. Hence, checking components values of passed to a
-  //    constructor won't be sufficient. But if a component is referenced in the constructed data type, then the
-  //    equality follows from the equality of the types, which is checked in 1.
-  //    Note that this assumes the constructed data type must be collapse-free, because otherwise the constructed type
-  //    is not a free algebra, and hence the equality of the values at runtime does not imply equality of the values
-  //    at compile time.
-  def checkComponentUsage(constructor: Constructor): Unit =
-    val allReferencedVarsInType =
-      constructor.tArgs
-        .flatMap(IgnoreCollapseFreeVarsVisitor.visitVTerm(_)(using 0))
-        .map(_.idx)
-        .toSet
-    val badComponents = constructor.paramTys.zipWithIndex
-      .filter:
-        case (binding, i) =>
-          val index = constructor.paramTys.size - i - 1
-          binding.usage match
-            case UsageLiteral(u) if u >= Usage.U1    => false
-            case _ if allReferencedVarsInType(index) => false
-            case _                                   => true
-
-    if badComponents.nonEmpty then
-      throw NotEqDecidableDueToConstructor(data.qn, constructor.name, badComponents.map(_._1))
-
-  if data.inherentEqDecidability == EqDecidabilityLiteral(EqUnknown)
-    // short circuit since there is no need to do any check
-  then ()
-  // Call 1, 2
-  else
-    checkComponentTypes(constructor.paramTys, data.inherentEqDecidability)
-    checkComponentUsage(constructor)
-
-private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
-  override def visitCollapse(collapse: Collapse)(using ctx: Nat)(using Σ: Signature): Seq[Var] =
-    Seq.empty
-
 @tailrec
 @throws(classOf[IrError])
 def inferEqDecidability
@@ -1348,12 +1304,83 @@ def inferEqDecidability
       case Type(upperBound) => inferEqDecidability(upperBound)
       case _                => throw ExpectVType(ty)
   case _: U => EqDecidabilityLiteral(EqUnknown)
-  case d: DataType =>
-    Σ.getDataOption(d.qn) match
-      case Some(data) =>
-        data.inherentEqDecidability.substLowers(d.args*)
-      case _ => throw MissingDeclaration(d.qn)
+  case DataType(qn, args) =>
+    val data = Σ.getData(qn)
+    val constructors = Σ.getConstructors(qn)
+    constructors.foldLeft[VTerm](EqDecidabilityLiteral(EqDecidable)) { (acc, con) =>
+      val conEqD = inferEqDecidability(con, args.take(data.context.size))
+      joinEqDecidability(acc, conEqD)
+    }
+
   case _ => throw ExpectVType(ty)
+
+@throws(classOf[IrError])
+private def inferEqDecidability
+  (constructor: Constructor, dataArgs: List[VTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : VTerm =
+  val telescope = constructor.paramTys.substLowers(dataArgs*)
+  // 1. check that a the component types are all eq-decidable if the data is eq-decidable
+  @throws(classOf[IrError])
+  def checkComponentTypes(tys: Telescope)(using Γ: Context): VTerm =
+    tys match
+      case Nil => EqDecidabilityLiteral(EqDecidable)
+      case binding :: rest =>
+        val bindingEqD = inferEqDecidability(binding.ty)
+        val restEqD = checkComponentTypes(rest)(using Γ :+ binding)
+        try joinEqDecidability(bindingEqD, restEqD.strengthened)
+        catch case _: StrengthenException => EqDecidabilityLiteral(EqUnknown)
+
+  // 2. check that each zero-usage component is referenced in the constructed data type. This is necessary because
+  //    zero usage components won't be available at runtime. Hence, checking components values of passed to a
+  //    constructor won't be sufficient. But if a component is referenced in the constructed data type, then the
+  //    equality follows from the equality of the types, which is checked in 1.
+  //    Note that this assumes the constructed data type must be collapse-free, because otherwise the constructed type
+  //    is not a free algebra, and hence the equality of the values at runtime does not imply equality of the values
+  //    at compile time.
+  def checkComponentUsage(constructor: Constructor): VTerm =
+    val allReferencedVarsInType =
+      constructor.tArgs
+        .map(_.substLowers(dataArgs*))
+        .flatMap(IgnoreCollapseFreeVarsVisitor.visitVTerm(_)(using 0))
+        .map(_.idx)
+        .toSet
+    val badComponents = constructor.paramTys.zipWithIndex
+      .filter:
+        case (binding, i) =>
+          val index = constructor.paramTys.size - i - 1
+          binding.usage match
+            case UsageLiteral(u) if u >= Usage.U1    => false
+            case _ if allReferencedVarsInType(index) => false
+            case _                                   => true
+
+    if badComponents.isEmpty then EqDecidabilityLiteral(EqDecidable)
+    else EqDecidabilityLiteral(EqUnknown)
+
+  joinEqDecidability(
+    checkComponentTypes(telescope),
+    checkComponentUsage(constructor),
+  )
+
+private def joinEqDecidability
+  (t1: VTerm, t2: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : VTerm =
+  (t1.normalized, t2.normalized) match
+    case (EqDecidabilityLiteral(EqDecidable), _) => t2
+    case (_, EqDecidabilityLiteral(EqDecidable)) => t1
+    case (EqDecidabilityLiteral(EqUnknown), _)   => EqDecidabilityLiteral(EqUnknown)
+    case (_, EqDecidabilityLiteral(EqUnknown))   => EqDecidabilityLiteral(EqUnknown)
+    case _ if t1 == t2                           => t1
+    case _                                       => EqDecidabilityLiteral(EqUnknown)
+
+private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
+  override def visitCollapse(collapse: Collapse)(using ctx: Nat)(using Σ: Signature): Seq[Var] =
+    Seq.empty
 
 @throws(classOf[IrError])
 private def checkIsEqDecidableTypes
@@ -1814,7 +1841,7 @@ private def checkEffectsAreSimple
 
 @throws(classOf[IrError])
 def checkIsType
-  (uncheckedVTy: VTerm, levelBound: Option[VTerm] = None)
+  (uncheckedVTy: VTerm)
   (using Γ: Context)
   (using Signature)
   (using ctx: TypingContext)
@@ -1822,29 +1849,23 @@ def checkIsType
   ctx.trace("checking is type"):
     uncheckedVTy match
       case Auto() =>
-        val l = levelBound match
-          case Some(bound) => bound
-          case None        => LevelUpperBound()
         (
-          Collapse(ctx.addUnsolved(F(Type(Top(l, EqDecidabilityLiteral(EqUnknown)))))),
+          Collapse(
+            ctx.addUnsolved(F(Type(Top(LevelUpperBound(), EqDecidabilityLiteral(EqUnknown))))),
+          ),
           // TODO[P0]: this is wrong. Usage checking will have to be delayed as a separate pass
           Usages.zero,
         )
       case _ =>
-        val (vTy, vTyTy, usages) =
-          inferType(uncheckedVTy) // inferType also checks term is correctly constructed
+        // inferType also checks term is correctly constructed
+        val (vTy, vTyTy, usages) = inferType(uncheckedVTy)
         vTyTy match
-          case Type(_) =>
-            levelBound match
-              case Some(bound) =>
-                ctx.checkSolved(checkLevelSubsumption(inferLevel(vTy), bound), NotTypeError(vTy))
-              case _ =>
-          case _ => throw NotTypeError(vTy)
-        (vTy, usages)
+          case Type(_) => (vTy, usages)
+          case _       => throw NotTypeError(vTy)
 
 @throws(classOf[IrError])
 def checkIsCType
-  (uncheckedCTy: CTerm, levelBound: Option[VTerm] = None)
+  (uncheckedCTy: CTerm)
   (using Γ: Context)
   (using Signature)
   (using ctx: TypingContext)
@@ -1852,13 +1873,9 @@ def checkIsCType
   ctx.trace("checking is C type"):
     val (cty, cTyTy, usages) = inferType(uncheckedCTy)
     cTyTy match
-      case CType(_, _) if isTotal(cty, Some(cTyTy)) =>
-        levelBound match
-          case Some(bound) => checkLevelSubsumption(inferLevel(uncheckedCTy), bound)
-          case _           =>
-      case _: CType => throw EffectfulCTermAsType(uncheckedCTy)
-      case _        => throw NotCTypeError(uncheckedCTy)
-    (cty.normalized(None), usages)
+      case CType(_, _) if isTotal(cty, Some(cTyTy)) => (cty.normalized(None), usages)
+      case _: CType                                 => throw EffectfulCTermAsType(uncheckedCTy)
+      case _                                        => throw NotCTypeError(uncheckedCTy)
 
 @throws(classOf[IrError])
 def reduceUsage(usage: CTerm)(using Context)(using Signature)(using ctx: TypingContext): VTerm =

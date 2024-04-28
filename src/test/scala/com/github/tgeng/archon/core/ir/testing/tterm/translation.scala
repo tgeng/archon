@@ -270,16 +270,14 @@ extension (td: TDeclaration)
           tyCTerm,
           constructorCTerms.toList,
         )
-      case TRecord(selfName, name, tParamTys, ty, fields) =>
+      case TRecord(selfName, name, tParamTys, fields) =>
         val tParamTysCTerm = tParamTys.map:
           case (TBinding(name, ty, usage), variance) =>
             (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
-        val tyCTerm = ty.toCTerm
         val fieldCTerms = fields.map(_.toPreField)
         PreDeclaration.PreRecord(
           ctx.moduleQn / name,
           tParamTysCTerm.toList,
-          tyCTerm,
           fieldCTerms.toList,
         )
       case TDefinition(name, tParamTys, ty, clauses) =>

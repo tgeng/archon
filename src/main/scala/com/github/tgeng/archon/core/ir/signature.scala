@@ -22,16 +22,11 @@ enum Declaration:
       context: TContext,
       /* binding: + context */
       tIndexTys: Telescope,
-      /* binding: + context + tIndexTys */
-      level: VTerm,
-      /* binding: + context + tIndexTys */
-      inherentEqDecidability: VTerm,
     )
   case Record
     (
       qn: QualifiedName,
       context: TContext,
-      level: VTerm, // binding + tParamTys
       selfBinding: Binding[VTerm],
     )
 
@@ -60,13 +55,13 @@ import com.github.tgeng.archon.core.ir.Declaration.*
 case class Constructor
   (
     name: Name,
-    paramTys: Telescope = Nil, /* + tParamTys */
+    paramTys: Telescope = Nil, /* binding += context */
     /** Arguments passed to the data type constructor. The length should be identical with
       * `tIndexTys`. Hence, for non-indexed type this should just be `Nil`. For indexed families,
       * the argument here can be any expressions. For example, for `Vec (A: Type) : (n: Nat) ->
       * Type`, this would be [0] for constructor `Nil` and `[n + 1]` for constructor `Cons`.
       */
-    tArgs: Arguments = Nil, /* + tParamTys + paramTys */
+    tArgs: Arguments = Nil, /* binding += context + paramTys */
   )
 
 case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
