@@ -12,11 +12,16 @@ import com.github.tgeng.archon.core.ir.VTerm.*
   *   present it must be normalized.
   * @return
   */
-def isTotal(tm: CTerm, ty: Option[CTerm]): Boolean =
+def isTotal
+  (tm: CTerm, ty: Option[CTerm])
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Boolean =
   ty match
     case None => true
     case Some(ty) =>
-      val effects = ty.asInstanceOf[IType].effects
+      val effects = ty.asInstanceOf[IType].effects.normalized
       if effects == Total()(using SourceInfo.SiEmpty) then true
       // TODO: use heuristics to determine if a term is total
       else if effects == MaybeDiv()(using SourceInfo.SiEmpty) then true

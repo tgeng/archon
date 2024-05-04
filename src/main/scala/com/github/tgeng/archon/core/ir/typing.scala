@@ -426,6 +426,8 @@ class TypingContext
       description: => Block | String = "",
       successMsg: R => Block | String = (_: R) => "",
       failureMsg: (Context, Signature) ?=> IrError => Block | String = (e: IrError) =>
+        // TODO[P2]: error context may differ and hence pprint(e) can fail when resolving local var
+        //  name
         PrettyPrinter.pprint(e),
     )
     (action: => R)
@@ -461,7 +463,14 @@ class TypingContext
           val message = "❌ " + (ANSI_RED + failureMsg(l))
             .replaceAll("\n", "\n" + indent + "     ")
           traceLevel -= 1
-          println(indent + "└─ " + message + ANSI_RESET)
+          println(
+            indent + "└─ " + message + ANSI_RESET + " @ " + l.getStackTrace
+              .nn(1)
+              .toString
+              .split('(')
+              .last
+              .stripSuffix(")"),
+          )
           throw l
     else action
 
@@ -1166,8 +1175,8 @@ def inferType
                       )
                 case _ => throw ExpectRecord(redex(c, checkedElims.reverse))
         val (checkedC, cty, usages) = inferType(c)
-        val (_, _, argUsages) = checkElims(Nil, cty, elims)
-        (redex(checkedC, elims), cty, usages + argUsages)
+        val (_, resultCty, argUsages) = checkElims(Nil, cty, elims)
+        (redex(checkedC, elims), resultCty, usages + argUsages)
       case RecordType(qn, uncheckedArgs, uncheckedEffects) =>
         Σ.getRecordOption(qn) match
           case None => throw MissingDeclaration(qn)
@@ -1846,7 +1855,10 @@ def checkIsType
   (using Signature)
   (using ctx: TypingContext)
   : (VTerm, Usages) =
-  ctx.trace("checking is type"):
+  ctx.trace(
+    "checking is type",
+    Block(ChopDown, Aligned, yellow(uncheckedVTy.sourceInfo), pprint(uncheckedVTy)),
+  ):
     uncheckedVTy match
       case Auto() =>
         (

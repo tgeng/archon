@@ -242,7 +242,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Top
     (
       level: VTerm,
-      eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable),
+      eqDecidability: VTerm = EqDecidabilityLiteral(EqUnknown),
     )
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
 
@@ -445,6 +445,9 @@ object VTerm:
 
   def LevelLiteral(m: Nat, n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(m, n), SeqMap())
+
+  def LevelLiteral(l: LevelOrder)(using sourceInfo: SourceInfo): Level =
+    Level(l, SeqMap())
 
   def LevelUpperBound(): Level = Level(LevelOrder.upperBound, SeqMap())
 

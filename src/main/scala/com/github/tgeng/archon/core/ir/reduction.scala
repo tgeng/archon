@@ -171,8 +171,8 @@ private final class StackMachine
                 case ETerm(arg) => arg.normalized
                 case _          => throw IllegalStateException("bad meta variable application")
             stack.dropRightInPlace(context.size)
-            Some(value.substLowers(args.toSeq*)) // stuck for unresolved meta variables
-          case _ => None
+            Some(value.substLowers(args.toSeq*))
+          case _ => None // stuck for unresolved meta variables
         t match
           case Some(t) => run(t)
           case None    => reconstructTermFromStack(pc)
@@ -430,7 +430,10 @@ private final class StackMachine
           preConstructedTerm match
             case Some(t) => return t
             case _       => throw IllegalStateException("type error")
-    current
+    if elims.nonEmpty then
+      Redex(current, elims.toList)
+    else
+      current
 
   @tailrec
   private def expandTermToStack
