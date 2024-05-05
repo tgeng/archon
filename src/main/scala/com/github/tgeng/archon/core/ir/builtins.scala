@@ -190,18 +190,18 @@ object Builtins:
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
         (binding(n"usageL", UsageType()), Variance.INVARIANT),
         (binding(n"AL", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
-        (binding(n"usageR", EqDecidabilityType()), Variance.INVARIANT),
+        (binding(n"usageR", UsageType()), Variance.INVARIANT),
         (binding(n"AR", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
       ty = F(universalDataType),
       constructors = List(
         PreConstructor(
           n"Left",
-          FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(4, 2)))),
+          FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(6, 1)))),
         ),
         PreConstructor(
           n"Right",
-          FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(4, 2)))),
+          FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(6, 1)))),
         ),
       ),
     ),
@@ -261,44 +261,44 @@ object Builtins:
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
         (binding(n"paramUsage", UsageType()), Variance.INVARIANT),
-        (binding(n"paramType", Type(Top(Var(1)))), Variance.INVARIANT),
+        (binding(n"paramType", Type(Top(Var(2)))), Variance.INVARIANT),
         (binding(n"resultUsage", UsageType()), Variance.INVARIANT),
-        (binding(n"resultType", Type(Top(Var(2)))), Variance.CONTRAVARIANT),
+        (binding(n"resultType", Type(Top(Var(4)))), Variance.CONTRAVARIANT),
         (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
-        (binding(n"outputUsage", UsageType()), Variance.INVARIANT),
-        (binding(n"outputType", Type(Top(Var(5)))), Variance.COVARIANT),
+        (binding(n"outputUsage", UsageType(Some(u1))), Variance.INVARIANT),
+        (binding(n"outputType", Type(Top(Var(7)))), Variance.COVARIANT),
       ),
       fields = List(
         Field(
           n"resume",
           Binding(DataType(IsResumableQn, List(Var(5))))(n"isResumable") ->:
-            Binding(Var(6), Var(7))(n"param") ->:
-            Binding(Var(5), Var(6))(n"result") ->:
-            F(Var(3), Var(5), Var(4)),
+            Binding(Var(7), Var(8))(n"param") ->:
+            Binding(Var(6), Var(7))(n"result") ->:
+            F(Var(4), Var(6), Var(5)),
         ),
         Field(
           n"dispose",
           Binding(DataType(IsDisposableQn, List(Var(5))))(n"isDisposable") ->:
-            Binding(Var(6), Var(7))(n"param") ->:
-            F(DataType(UnitQn, Nil), EffectsRetainSimpleLinear(Var(4))),
+            Binding(Var(7), Var(8))(n"param") ->:
+            F(DataType(UnitQn, Nil), EffectsRetainSimpleLinear(Var(5))),
         ),
         Field(
           n"replicate",
-          Binding(DataType(IsReplicableQn, List(Var(6))))(n"isReplicable") ->:
-            Binding(Var(6), Var(7))(n"param") ->:
+          Binding(DataType(IsReplicableQn, List(Var(5))))(n"isReplicable") ->:
+            Binding(Var(7), Var(8))(n"param") ->:
             F(
               DataType(
                 PairQn,
                 List(
-                  Var(10),
+                  Var(11),
                   EqDecidabilityLiteral(EqUnknown),
-                  Var(8),
-                  U(RecordType(ContinuationQn, vars(10, 2))),
-                  Var(8),
-                  U(RecordType(ContinuationQn, vars(10, 2))),
+                  Var(9),
+                  U(RecordType(ContinuationQn, vars(11, 3))),
+                  Var(9),
+                  U(RecordType(ContinuationQn, vars(11, 3))),
                 ),
               ),
-              EffectsRetainSimpleLinear(Var(4)),
+              EffectsRetainSimpleLinear(Var(5)),
             ),
         ),
       ),

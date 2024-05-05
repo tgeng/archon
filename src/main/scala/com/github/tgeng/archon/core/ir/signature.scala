@@ -99,12 +99,16 @@ trait Signature:
 
   def getDataOption(qn: QualifiedName): Option[Data]
 
-  def getData(qn: QualifiedName): Data = getDataOption(qn).get
+  def getData(qn: QualifiedName): Data = getDataOption(qn).getOrElse(
+    throw IllegalArgumentException(s"Missing data for '$qn'"),
+  )
 
   def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
 
   def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] =
-    getConstructorsOption(qn).get
+    getConstructorsOption(qn).getOrElse(
+      throw IllegalArgumentException(s"Missing constructors for '$qn'"),
+    )
 
   def getConstructorOption(qn: QualifiedName, conName: Name): Option[Constructor] =
     for
@@ -115,20 +119,22 @@ trait Signature:
 
   def getConstructor(qn: QualifiedName, conName: Name): Constructor =
     getConstructorOption(qn, conName).getOrElse(
-      throw IllegalArgumentException(s"missing constructor $conName"),
+      throw IllegalArgumentException(s"Missing constructor $conName"),
     )
 
   def getConstructorOption(constructorQn: QualifiedName): Option[Constructor] = constructorQn match
     case QualifiedName.Node(dataQn, conName) => getConstructorOption(dataQn, conName)
-    case _ => throw IllegalArgumentException(s"not a constructor $constructorQn")
+    case _ => throw IllegalArgumentException(s"Not a constructor $constructorQn")
 
   def getRecordOption(qn: QualifiedName): Option[Record]
 
-  def getRecord(qn: QualifiedName): Record = getRecordOption(qn).get
+  def getRecord(qn: QualifiedName): Record =
+    getRecordOption(qn).getOrElse(throw IllegalArgumentException(s"Missing record for '$qn'"))
 
   def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
 
-  def getFields(qn: QualifiedName): IndexedSeq[Field] = getFieldsOption(qn).get
+  def getFields(qn: QualifiedName): IndexedSeq[Field] =
+    getFieldsOption(qn).getOrElse(throw IllegalArgumentException(s"Missing fields for '$qn'"))
 
   def getFieldOption(qn: QualifiedName, fieldName: Name): Option[Field] =
     for
@@ -139,19 +145,21 @@ trait Signature:
 
   def getField(qn: QualifiedName, fieldName: Name): Field =
     getFieldOption(qn, fieldName).getOrElse(
-      throw IllegalArgumentException(s"missing field $fieldName"),
+      throw IllegalArgumentException(s"Missing field '$fieldName' for '$qn'"),
     )
 
   def getFieldOption(fieldQn: QualifiedName): Option[Field] = fieldQn match
     case QualifiedName.Node(recordQn, fieldName) => getFieldOption(recordQn, fieldName)
-    case _ => throw IllegalArgumentException(s"not a field $fieldQn")
+    case _ => throw IllegalArgumentException(s"Not a field '$fieldQn'")
 
   def getDefinitionOption(qn: QualifiedName): Option[Definition] =
     getDefinitionOptionImpl(qn).orElse(getDerivedDefinitionOption(qn))
 
   def getDefinitionOptionImpl(qn: QualifiedName): Option[Definition]
 
-  def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).get
+  def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).getOrElse(
+    throw IllegalArgumentException(s"Missing definition for '$qn'"),
+  )
 
   def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     getClausesOptionImpl(qn).orElse(getDerivedClausesOption(qn))
@@ -160,20 +168,26 @@ trait Signature:
 
   def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(
     qn,
-  ).get
+  ).getOrElse(throw IllegalArgumentException(s"Missing clauses for '$qn'"))
 
   def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
 
-  def getCaseTree(qn: QualifiedName): CaseTree = getCaseTreeOption(qn).get
+  def getCaseTree(qn: QualifiedName): CaseTree = getCaseTreeOption(qn).getOrElse(
+    throw IllegalArgumentException(s"Missing case tree for '$qn'"),
+  )
 
   def getEffectOption(qn: QualifiedName): Option[Effect]
 
-  def getEffect(qn: QualifiedName): Effect = getEffectOption(qn).get
+  def getEffect(qn: QualifiedName): Effect = getEffectOption(qn).getOrElse(
+    throw IllegalArgumentException(s"Missing effect for '$qn'"),
+  )
 
   def getOperationsOption(qn: QualifiedName): Option[IndexedSeq[Operation]]
 
   def getOperations(qn: QualifiedName): IndexedSeq[Operation] =
-    getOperationsOption(qn).get
+    getOperationsOption(qn).getOrElse(
+      throw IllegalArgumentException(s"Missing operations for '$qn'"),
+    )
 
   def getOperationOption(qn: QualifiedName, opName: Name): Option[Operation] =
     for

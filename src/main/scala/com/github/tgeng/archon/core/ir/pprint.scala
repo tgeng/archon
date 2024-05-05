@@ -312,7 +312,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case Type(Top(l, EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
       app("Type?", l)
     case Type(Top(l, eqD)) => app("Type", l, "withEqDecidability", eqD)
-    case Type(upperBound)  => app("SubtypeOf", upperBound)
+    case Type(upperBound)  => app("TypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
     top.level match
@@ -387,7 +387,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case CType(CTop(l, tEff), eff) if tEff == Total() =>
       ctype(eff, "CType", l)
     case CType(upperBound, eff) =>
-      ctype(eff, "CSubtypeOf", upperBound)
+      ctype(eff, "CTypeOf", upperBound)
 
   override def visitCTop
     (cTop: CTop)
