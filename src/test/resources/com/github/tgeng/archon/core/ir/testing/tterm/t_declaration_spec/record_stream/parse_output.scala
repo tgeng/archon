@@ -2,6 +2,7 @@ TRecord(
   selfName = "self",
   name = "CStream",
   tParamTys = List(),
+  ty = TApp(f = TId(id = "CType") @ "CType", arg = TId(id = "l") @ "l") @ "CType l",
   fields = List(
     TField(name = "head", ty = TId(id = "Nat") @ "Nat"),
     TField(

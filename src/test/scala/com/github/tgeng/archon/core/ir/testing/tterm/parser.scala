@@ -143,7 +143,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tRecord[$: P]: P[TDeclaration] = P(
     ("record" ~/ (id ~ ":").?.map(
       _.getOrElse("self"),
-    ) ~ id ~ tBindingAndVariance.rep ~ tField.rep).map(TRecord.apply),
+    ) ~ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tApp) ~ tField.rep).map(TRecord.apply),
   )
 
   private def tProjection[$: P]: P[TCoPattern] = PT("#" ~/ id)(TCoPattern.TcProjection.apply)

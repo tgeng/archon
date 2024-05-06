@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
+import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
@@ -50,7 +51,7 @@ enum IrError extends Exception:
   case NotEqDecidabilitySubsumption(sub: VTerm, sup: VTerm)
   case NotHandlerTypeSubsumption(sub: VTerm, sup: VTerm)
   case NotEqDecidableDueToConstructor
-    (qn: QualifiedName, conName: Name, badBindings: Seq[Binding[VTerm]])
+    (qn: QualifiedName, conName: Name, badComponentIndex: Nat)
   case NotEqDecidableType(ty: VTerm)
   case NotLevelSubsumption(sub: VTerm, sup: VTerm)
   case NotTypeError(tm: VTerm)
@@ -68,5 +69,7 @@ enum IrError extends Exception:
   case UnsatisfiedUsageRequirements(unsolvedConstraints: Set[Constraint])
   case UnsolvedElaboration(clause: PreClause)
   case ElaborationFailure(part: DeclarationPart, decl: PreDeclaration, cause: IrError)
+  case DataLevelCannotDependOnIndexArgument(preData: PreDeclaration.PreData)
+  case DataEqDecidabilityCannotDependOnIndexArgument(preData: PreDeclaration.PreData)
 
   override def getMessage: String = verbosePPrinter.apply(this).plainText

@@ -2,6 +2,22 @@ List(
   PreRecord(
     qn = qn"test.CStream",
     tParamTys = List(),
+    ty = Let(
+      t = Def(qn = qn"__unresolved__.l") @ "l",
+      ty = Auto() @ "ε",
+      eff = Auto(),
+      usage = Auto(),
+      body = Let(
+        t = Redex(
+          t = Def(qn = qn"__unresolved__.CType") @ "CType",
+          elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+        ) @ "CType l",
+        ty = Auto(),
+        eff = Auto(),
+        usage = Auto(),
+        body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
+      ) @ "ε"
+    ) @ "ε",
     fields = List(
       Field(name = n"head", ty = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
       Field(
@@ -29,10 +45,10 @@ List(
                                   )
                                 )
                               ) @ "Eq Nat",
-                              ty = Auto() @ "ε",
+                              ty = Auto(),
                               eff = Auto(),
                               usage = Auto(),
-                              body = Return(v = Var(idx = 0) @ "ε", usage = Auto()) @ "ε"
+                              body = Return(v = Var(idx = 0), usage = Auto())
                             ) @ "ε",
                             elims = List(ETerm(v = Var(idx = 2) @ "m"))
                           ) @ "Eq Nat m",

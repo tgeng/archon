@@ -15,6 +15,7 @@ enum TDeclaration(val name: String):
       selfName: String,
       override val name: String,
       tParamTys: Seq[(TBinding, Variance)],
+      ty: TTerm,
       fields: Seq[TField],
     ) extends TDeclaration(name)
   case TDefinition

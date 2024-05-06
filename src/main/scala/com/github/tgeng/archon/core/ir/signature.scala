@@ -22,11 +22,17 @@ enum Declaration:
       context: TContext,
       /* binding: + context */
       tIndexTys: Telescope,
+      /* binding: + context */
+      level: VTerm,
+      /* binding: + context */
+      inherentEqDecidability: VTerm,
     )
   case Record
     (
       qn: QualifiedName,
       context: TContext,
+      /* binding: + context + tIndexTys */
+      level: VTerm,
       selfBinding: Binding[VTerm],
     )
 

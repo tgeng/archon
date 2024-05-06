@@ -75,7 +75,11 @@ def sortPreDeclarations
             QualifiedNameVisitor.visitPreTContext(data.tParamTys),
             data.ty.visitWith(QualifiedNameVisitor),
           )
-        case record: PreRecord => QualifiedNameVisitor.visitPreTContext(record.tParamTys)
+        case record: PreRecord =>
+          QualifiedNameVisitor.combine(
+            QualifiedNameVisitor.visitPreTContext(record.tParamTys),
+            record.ty.visitWith(QualifiedNameVisitor),
+          )
         case definition: PreDefinition =>
           definition.ty.visitWith(QualifiedNameVisitor)
         case effect: PreEffect =>
@@ -170,25 +174,39 @@ private def elaborateDataHead
     val tParamTys = elaborateTTelescope(preData.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
 
-    @throws(classOf[IrError])
-    def elaborateTy(ty: CTerm)(using Γ: Context)(using Signature)(using TypingContext): Telescope =
+    def elaborateTy
+      (ty: CTerm)
+      (using Γ: Context)
+      (using Signature)
+      (using TypingContext)
+      : (Telescope, VTerm, VTerm) =
       checkIsCType(ty)._1.normalized(None) match
         // Here and below we do not care about the declared effect types because data type
         // constructors are always total. Declaring non-total signature is not necessary (nor
         // desirable) but acceptable.
-        case F(Type(_), _, _) => Nil
-        case F(t, _, _)       => throw ExpectVType(t)
+        case F(Type(Top(level, eqDecidability)), _, _) => (Nil, level, eqDecidability)
+        case F(t, _, _)                                => throw ExpectVType(t)
         case FunctionType(binding, bodyTy, _) =>
-          val telescope = elaborateTy(bodyTy)(using Γ :+ binding)
-          binding +: telescope
+          val (telescope, level, eqDecidability) = elaborateTy(bodyTy)(using Γ :+ binding)
+          (binding +: telescope, level, eqDecidability)
         case _ => throw NotDataTypeType(ty)
 
-    val tIndices = elaborateTy(preData.ty)
+    val (tIndices, level, eqDecidability) = elaborateTy(preData.ty)
+    // level and eqDecidability should not depend on index arguments
+    val strengthenedLevel =
+      try level.strengthen(tIndices.size, 0)
+      catch case e: StrengthenException => throw DataLevelCannotDependOnIndexArgument(preData)
+    val strengthenedEqDecidability =
+      try eqDecidability.strengthen(tIndices.size, 0)
+      catch
+        case e: StrengthenException => throw DataEqDecidabilityCannotDependOnIndexArgument(preData)
     val data = checkData(
       Data(
         preData.qn,
         Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
         tIndices,
+        strengthenedLevel,
+        strengthenedEqDecidability,
       ),
     )
     Σ.addDeclaration(data)
@@ -249,18 +267,23 @@ private def elaborateRecordHead
   ctx.trace(s"elaborating record signature ${record.qn}"):
     val tParamTys = elaborateTTelescope(record.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
-    val r: Record = Record(
-      record.qn,
-      Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
-      // Self usage is always `uAny` because
-      // 1. it's only used in field type declarations so `uAny` is handy
-      // 2. having `uAny` here does not put any restrictions because any references of `self`
-      //    are always in field types and all such usages will multiple by `u0` when type
-      //    checking field implementations.
-      Binding(U(RecordType(record.qn, vars(tParamTys.size - 1))), uAny)(
-        record.selfName,
-      ),
-    )
+    val r: Record =
+      checkIsCType(record.ty)._1.normalized(None) match
+        case CType(CTop(level, _), _) =>
+          Record(
+            record.qn,
+            Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
+            level,
+            // Self usage is always `uAny` because
+            // 1. it's only used in field type declarations so `uAny` is handy
+            // 2. having `uAny` here does not put any restrictions because any references of `self`
+            //    are always in field types and all such usages will multiple by `u0` when type
+            //    checking field implementations.
+            Binding(U(RecordType(record.qn, vars(tParamTys.size - 1))), uAny)(
+              record.selfName,
+            ),
+          )
+        case t => throw ExpectCType(t)
     Σ.addDeclaration(checkRecord(r))
 
 @throws(classOf[IrError])

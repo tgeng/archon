@@ -135,11 +135,6 @@ object Builtins:
     Binding(Return(ty, uAny), Return(usage, uAny))(name)
 
   private val L0 = LevelLiteral(0)
-  /**
-   * One do not need to declare the level for a data type because it's always inferred at the use
-   * site. However, we need a placeholder in order to make type checker work.
-   */
-  private val universalDataType = Type(Auto())
 
   private val builtins: Seq[PreDeclaration] = Seq(
     PreData(
@@ -157,7 +152,10 @@ object Builtins:
         (binding(n"A", Type(Top(Var(0)))), Variance.COVARIANT),
         (binding(n"x", Var(0), UsageLiteral(UAny)), Variance.INVARIANT),
       ),
-      ty = FunctionType(Binding(Var(1))(n"y"), F(universalDataType)),
+      ty = FunctionType(
+        Binding(Var(1))(n"y"),
+        F(Type(Top(Var(3), EqDecidabilityLiteral(EqDecidable)))),
+      ),
       constructors = List(
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
       ),
@@ -167,12 +165,12 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
-        (binding(n"usage1", UsageType()), Variance.INVARIANT),
+        (binding(n"usage1", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"A1", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
-        (binding(n"usage2", UsageType()), Variance.INVARIANT),
+        (binding(n"usage2", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"A2", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
-      ty = F(Type(Top(Auto()))),
+      ty = F(Type(Top(Var(5), Var(4)))),
       constructors = List(
         PreConstructor(
           n"MkPair",
@@ -188,12 +186,12 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
-        (binding(n"usageL", UsageType()), Variance.INVARIANT),
+        (binding(n"usageL", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"AL", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
-        (binding(n"usageR", UsageType()), Variance.INVARIANT),
+        (binding(n"usageR", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"AR", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
       ),
-      ty = F(universalDataType),
+      ty = F(Type(Top(Var(5), Var(4)))),
       constructors = List(
         PreConstructor(
           n"Left",
@@ -208,7 +206,7 @@ object Builtins:
     PreData(
       IsDisposableQn,
       tParamTys = Nil,
-      ty = FunctionType(Binding(UsageType())(n"usage"), F(universalDataType)),
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(l0)))),
       constructors = List(
         PreConstructor(n"ZeroIsDisposable", F(DataType(IsDisposableQn, List(UsageLiteral(U0))))),
         PreConstructor(
@@ -220,7 +218,7 @@ object Builtins:
     PreData(
       IsReplicableQn,
       tParamTys = Nil,
-      ty = FunctionType(Binding(UsageType())(n"usage"), F(universalDataType)),
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(l0)))),
       constructors = List(
         PreConstructor(
           n"RelevantIsReplicable",
@@ -235,7 +233,7 @@ object Builtins:
     PreData(
       IsResumableQn,
       tParamTys = Nil,
-      ty = FunctionType(Binding(UsageType())(n"usage"), F(universalDataType)),
+      ty = FunctionType(Binding(UsageType())(n"usage"), F(Type(Top(l0)))),
       constructors = List(
         PreConstructor(
           n"LinearIsResumable",
@@ -268,6 +266,7 @@ object Builtins:
         (binding(n"outputUsage", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"outputType", Type(Top(Var(7)))), Variance.COVARIANT),
       ),
+      ty = CTop(Var(8)),
       fields = List(
         Field(
           n"resume",

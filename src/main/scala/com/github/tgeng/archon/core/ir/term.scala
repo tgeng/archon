@@ -442,6 +442,7 @@ object VTerm:
 
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(0, n), SeqMap())
+  val l0 = LevelLiteral(0)
 
   def LevelLiteral(m: Nat, n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(m, n), SeqMap())
