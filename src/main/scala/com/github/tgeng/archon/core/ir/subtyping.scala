@@ -29,7 +29,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkIsSubtype", sub, sup):
   check2(sub, sup):
-    case (_, _) if sub == sup => Set.empty
+    case (sub, sup) if sub == sup => Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
       ctx.adaptForMetaVariable(u, sub) match
         case None => Set(Constraint.VSubType(Γ, sub, sup))
@@ -114,7 +114,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkIsSubtype", sub, sup):
   check2(sub, sup):
-    case (_, _) if sub == sup => Set.empty[Constraint]
+    case (sub, sup) if sub == sup => Set.empty
     case (sub: CTerm, (u @ RUnsolved(_, _, constraint, _, _), Nil)) =>
       ctx.adaptForMetaVariable(u, sub) match
         case None => Set(Constraint.CSubType(Γ, sub, sup))
@@ -356,6 +356,7 @@ private def checkHandlerTypeSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkHandlerTypeSubsumption", handlerType1, handlerType2):
   check2(handlerType1, handlerType2):
+    case (sub, sup) if sub == sup => Set.empty
     case (HandlerTypeLiteral(Simple), _) | (_, HandlerTypeLiteral(Complex)) =>
       Set.empty
     case (u: RUnsolved, HandlerTypeLiteral(Simple)) =>
@@ -374,6 +375,7 @@ private def checkEqDecidabilitySubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkEqDecidabilitySubsumption", eqD1, eqD2):
   check2(eqD1, eqD2):
+    case (sub, sup) if sub == sup => Set.empty
     case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) |
       (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
       Set.empty
@@ -417,6 +419,7 @@ def checkUsageSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkUsageSubsumption", sub, sup):
   check2(sub, sup):
+    case (sub, sup) if sub == sup => Set.empty
     // Note on direction of usage comparison: UAny > U1 but UAny subsumes U1 when counting usage
     case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Set.empty
     case (UsageLiteral(UAny), _)                          => Set.empty
@@ -481,6 +484,7 @@ private def checkEffSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkEffSubsumption", sub, sup):
   check2(sub, sup):
+    case (sub, sup) if sub == sup => Set.empty
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
     case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) =>
       Set.empty
@@ -572,6 +576,7 @@ private def checkLevelSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkLevelSubsumption", sub, sup):
   check2(sub, sup):
+    case (sub, sup) if sub == l0 || sub == sup => Set.empty
     case (sub: VTerm, sup @ Level(literal2, operands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
       val (literal1, operands1) = sub match

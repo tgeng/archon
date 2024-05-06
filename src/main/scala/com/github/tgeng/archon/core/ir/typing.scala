@@ -1859,7 +1859,7 @@ def checkIsCType
   (using Signature)
   (using ctx: TypingContext)
   : (CTerm, Usages) =
-  ctx.trace("checking is C type"):
+  ctx.trace("checking is C type", Block(yellow(uncheckedCTy.sourceInfo), pprint(uncheckedCTy))):
     val (cty, cTyTy, usages) = inferType(uncheckedCTy)
     cTyTy match
       case CType(_, _) if isTotal(cty, Some(cTyTy)) =>

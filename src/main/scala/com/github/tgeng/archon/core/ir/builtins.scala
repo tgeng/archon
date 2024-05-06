@@ -266,7 +266,7 @@ object Builtins:
         (binding(n"outputUsage", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"outputType", Type(Top(Var(7)))), Variance.COVARIANT),
       ),
-      ty = CTop(Var(8)),
+      ty = CType(CTop(Var(8))),
       fields = List(
         Field(
           n"resume",
