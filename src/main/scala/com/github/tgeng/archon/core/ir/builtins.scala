@@ -56,11 +56,11 @@ object Builtins:
   val BuiltinType: QualifiedName = Builtin / "type"
 
   val TypeQn: QualifiedName = BuiltinType / "Type"
-  val SubtypeOfQn: QualifiedName = BuiltinType / "SubtypeOf"
+  val TypeOfQn: QualifiedName = BuiltinType / "TypeOf"
   val TopQn: QualifiedName = BuiltinType / "Top"
 
   val CTypeQn: QualifiedName = BuiltinType / "CType"
-  val CSubtypeOfQn: QualifiedName = BuiltinType / "CSubtypeOf"
+  val CTypeOfQn: QualifiedName = BuiltinType / "CTypeOf"
   val CTopQn: QualifiedName = BuiltinType / "CTop"
 
   val EqDecidabilityQn: QualifiedName = BuiltinType / "EqDecidability"
@@ -319,12 +319,12 @@ object Builtins:
       ),
     ),
 
-    /** SubtypeOf (level : LevelType) (upperBound : Type(Top(level))) -> Type(Type(upperBound))
+    /** TypeOf (level : LevelType) (upperBound : Type(Top(level))) -> Type(Type(upperBound))
       *
       * {} |- := .return Type(upperBound)
       */
     PreDefinition(
-      SubtypeOfQn,
+      TypeOfQn,
       paramTys = List(
         binding(n"level", LevelType()),
         binding(n"upperBound", Type(Type(Top(Var(0))))),
@@ -538,13 +538,13 @@ object Builtins:
       ),
     ),
 
-    /** CSubtypeOf (level : LevelType) (effects: EffectsType) (upperBound : U(CType(CTop(level,
+    /** CTypeOf (level : LevelType) (effects: EffectsType) (upperBound : U(CType(CTop(level,
       * effects)))) : CType(CType(.force upperBound, effects))
       *
       * {} |- := CType(.force upperBound, effects)
       */
     PreDefinition(
-      CSubtypeOfQn,
+      CTypeOfQn,
       paramTys = List(
         binding(n"level", LevelType()),
         binding(n"effects", EffectsType()),
