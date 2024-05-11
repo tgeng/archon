@@ -340,10 +340,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block =
-    bracketAndSpace(dataType.qn, dataType.args.map(visitVTerm))
+    Block(Concat, NoWrap, dataType.qn, bracketAndComma(dataType.args.map(visitVTerm)))
 
   override def visitCon(con: Con)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    bracketAndSpace(con.name, con.args.map(visitVTerm))
+    Block(Concat, NoWrap, con.name, bracketAndComma(con.args.map(visitVTerm)))
 
   override def visitEffects(effects: Effects)(using ctx: PPrintContext)(using Σ: Signature): Block =
     if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
@@ -492,7 +492,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block = ctype(
     recordType.effects,
-    bracketAndSpace(recordType.qn, recordType.args.map(visitVTerm)),
+    Block(Concat, NoWrap, recordType.qn, bracketAndComma(recordType.args.map(visitVTerm))),
   )
 
   override def visitOperationCall

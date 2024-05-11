@@ -16,6 +16,7 @@ import com.github.tgeng.archon.core.ir.Reducible.reduce
 import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
+import _root_.pprint.Tree
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{SeqMap, Set}
@@ -425,16 +426,20 @@ class TypingContext
       title: => String,
       description: => Block | String = "",
       successMsg: R => Block | String = (_: R) => "",
-      failureMsg: (Context, Signature) ?=> IrError => Block | String = (e: IrError) =>
-        // TODO[P2]: error context may differ and hence pprint(e) can fail when resolving local var
-        //  name
+      failureMsg: Signature ?=> IrError => Block | String = (e: IrError) =>
         val exceptionFileAndLine = e.getStackTrace
           .nn(1)
           .toString
           .split('(')
           .last
           .stripSuffix(")")
-        verbosePPrinter.apply(e).toString + "[" + exceptionFileAndLine + "]",
+        verbosePPrinter.copy(
+          additionalHandlers = {
+            case t: (VTerm | CTerm) =>
+              Tree.Literal(PrettyPrinter.pprint(t)(using e.Γ).toString)
+            case x: (QualifiedName | Name | Ref[?]) => verbosePPrinter.additionalHandlers(x)
+          }
+        ).apply(e).toString + "[" + exceptionFileAndLine + "]",
     )
     (action: => R)
     (using Γ: Context)
@@ -536,7 +541,7 @@ def checkDataConstructor
           checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using Γ ++ paramTys)
         val violatingVars =
           VarianceChecker.visitTelescope(con.paramTys)(using data.context, Variance.COVARIANT, 0)
-        if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars)
+        if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars.toSet)
         checkConstructorEqDecidability(data.qn, con, data.inherentEqDecidability)
         Constructor(con.name, paramTys, tArgs)
 
@@ -617,7 +622,7 @@ def checkRecordField
         val violatingVars =
           // 1 is to offset self binding.
           VarianceChecker.visitCTerm(field.ty)(using record.context, Variance.COVARIANT, 1)
-        if violatingVars.nonEmpty then throw IllegalVarianceInRecord(record.qn, violatingVars)
+        if violatingVars.nonEmpty then throw IllegalVarianceInRecord(record.qn, violatingVars.toSet)
         Field(field.name, ty)
 
 private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Var]]:
@@ -645,7 +650,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
     val (tContext, variance, offset) = ctx
     val index = v.idx - offset
     if index < 0 then return Nil
-    tContext(index)._2 match
+    tContext.resolve(index)._2 match
       case Variance.INVARIANT => Nil
       case declaredVariance =>
         if declaredVariance == variance then Nil

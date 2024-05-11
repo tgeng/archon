@@ -2,6 +2,8 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.Nat
 
+import scala.annotation.targetName
+
 /** First element is the outermost binding, e.g. [x: Nat, y: Vector String x] is represented as `x:
   * Nat :: y: Vector String x :: []`
   */
@@ -24,6 +26,18 @@ extension (ctx: collection.IndexedSeq[Binding[VTerm]])
     (ctx.take(index), ctx(index), ctx.drop(index + 1).toList)
 
   def toTelescope = ctx.toList
+
+type TContext = collection.IndexedSeq[(Binding[VTerm], Variance)]
+
+extension (ctx: collection.IndexedSeq[(Binding[VTerm], Variance)])
+  @targetName("resolveT")
+  def resolve(ref: VTerm.Var)(using Signature): (Binding[VTerm], Variance) = resolve(ref.idx)
+
+  @targetName("resolveT")
+  def resolve(idx: Nat)(using Signature): (Binding[VTerm], Variance) =
+    val offset = idx + 1
+    val (b, v) = ctx(ctx.size - offset)
+    (b.map(RaisableVTerm.raise(_, offset)), v)
 
 object Context:
   def fromTelescope(telescope: Telescope) = telescope.toIndexedSeq

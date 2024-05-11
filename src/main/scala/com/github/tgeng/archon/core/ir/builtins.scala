@@ -258,9 +258,9 @@ object Builtins:
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
         (binding(n"continuationUsage", UsageType()), Variance.INVARIANT),
-        (binding(n"paramUsage", UsageType()), Variance.INVARIANT),
+        (binding(n"paramUsage", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"paramType", Type(Top(Var(2)))), Variance.INVARIANT),
-        (binding(n"resultUsage", UsageType()), Variance.INVARIANT),
+        (binding(n"resultUsage", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"resultType", Type(Top(Var(4)))), Variance.CONTRAVARIANT),
         (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputUsage", UsageType(Some(u1))), Variance.INVARIANT),

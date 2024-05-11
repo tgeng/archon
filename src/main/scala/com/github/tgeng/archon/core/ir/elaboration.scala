@@ -380,7 +380,7 @@ private def elaborateDefBody
   /** New var index is `Γ.size`. New var type is `_A`.
     */
   @throws(classOf[IrError])
-  def shift(problem: Problem, _A: VTerm): Problem = problem match
+  def shift(problem: Problem, _A: VTerm)(using Γ: Context): Problem = problem match
     case Nil => Nil
     case ElabClause(_E, CPattern(p) :: q̅, rhs, source) :: problem =>
       ElabClause((Var(0), p, _A.weakened) :: _E.map(weaken), q̅, rhs, source) :: shift(problem, _A)
@@ -388,7 +388,7 @@ private def elaborateDefBody
     case ElabClause(_, _, _, source) :: _ => throw MissingUserCoPattern(source)
 
   @throws(classOf[IrError])
-  def filter(problem: Problem, π: Name): Problem = problem match
+  def filter(problem: Problem, π: Name)(using Γ: Context): Problem = problem match
     case Nil => Nil
     case ElabClause(_E, CProjection(π2) :: q̅, rhs, source) :: problem =>
       if π == π2 then ElabClause(_E, q̅, rhs, source) :: filter(problem, π)

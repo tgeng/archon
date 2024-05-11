@@ -244,7 +244,9 @@ trait Visitor[C, R]:
     )
 
   def visitUsageType(usageType: UsageType)(using ctx: C)(using Σ: Signature): R =
-    visitQualifiedName(Builtins.UsageQn)
+    combine(
+      (visitQualifiedName(Builtins.UsageQn) +: usageType.upperBound.map(visitVTerm).toSeq)*,
+    )
 
   def visitUsageLiteral(usageLiteral: UsageLiteral)(using ctx: C)(using Σ: Signature): R =
     combine()

@@ -11,8 +11,6 @@ enum Variance:
     case COVARIANT     => CONTRAVARIANT
     case CONTRAVARIANT => COVARIANT
 
-type TContext = collection.IndexedSeq[(Binding[VTerm], Variance)]
-
 given SourceInfo = SiEmpty
 
 enum Declaration:
