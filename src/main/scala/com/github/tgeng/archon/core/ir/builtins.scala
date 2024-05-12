@@ -123,6 +123,12 @@ object Builtins:
   val IsResumableQn: QualifiedName = UsagePredicateQn / "IsResumable"
 
   def Σ(using ctx: TypingContext): Signature =
+    val conflictingDefs = builtins
+      .groupBy(_.qn)
+      .filter:
+        case (qn, values) => values.size > 1
+    if conflictingDefs.nonEmpty then
+      throw new IllegalArgumentException(s"Conflicting definitions: $conflictingDefs")
     elaborateAll(builtins)(using Context.empty)(using SimpleSignature())
 
   import CTerm.*
@@ -343,7 +349,7 @@ object Builtins:
       * {} |- level := .return Top(level)
       */
     PreDefinition(
-      TypeQn,
+      TopQn,
       paramTys = List(binding(n"level", LevelType())),
       ty = F(Type(Top(Var(0)))),
       clauses = List(

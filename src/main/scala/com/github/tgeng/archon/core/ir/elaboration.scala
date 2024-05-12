@@ -170,6 +170,7 @@ private def elaborateDataHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
+  if Σ.getDataOption(preData.qn).isDefined then throw DuplicatedDeclaration(preData.qn)
   ctx.trace(s"elaborating data signature ${preData.qn}"):
     val tParamTys = elaborateTTelescope(preData.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
@@ -264,6 +265,7 @@ private def elaborateRecordHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
+  if Σ.getRecordOption(record.qn).isDefined then throw DuplicatedDeclaration(record.qn)
   ctx.trace(s"elaborating record signature ${record.qn}"):
     val tParamTys = elaborateTTelescope(record.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
@@ -316,19 +318,14 @@ private def elaborateDefHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
+  if Σ.getDefinitionOption(definition.qn).isDefined then throw DuplicatedDeclaration(definition.qn)
   given SourceInfo = SiEmpty
 
   ctx.trace(s"elaborating def signature ${definition.qn}"):
     val paramTys = elaborateTelescope(definition.paramTys)(using Γ)
-    given Context = Γ ++ paramTys
+    given newΓ: Context = Γ ++ paramTys
     val ty = checkIsCType(definition.ty)._1.normalized(None)
-    val d: Definition = Definition(
-      definition.qn,
-      Γ,
-      paramTys.foldRight(ty) { (binding, bodyTy) =>
-        FunctionType(binding, bodyTy)
-      },
-    )
+    val d: Definition = Definition(definition.qn, newΓ, ty)
     Σ.addDeclaration(checkDef(d))
 
 @throws(classOf[IrError])
@@ -759,6 +756,7 @@ private def elaborateEffectHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
+  if Σ.getEffectOption(effect.qn).isDefined then throw DuplicatedDeclaration(effect.qn)
   ctx.trace(s"elaborating effect signature ${effect.qn}"):
     val tParamTys = elaborateTelescope(effect.tParamTys)(using Γ)
     given Γ2: Context = Γ ++ tParamTys

@@ -93,5 +93,5 @@ enum IrError(val Γ: Context) extends Exception:
   case DataEqDecidabilityCannotDependOnIndexArgument
     (preData: PreDeclaration.PreData)
     (using Γ: Context) extends IrError(Γ)
-
+  case DuplicatedDeclaration(qn: QualifiedName) extends IrError(Context.empty)
   override def getMessage: String = verbosePPrinter.apply(this).plainText
