@@ -16,15 +16,30 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
   given TranslationContext = TranslationContext(qn"test")
   given ctx: TypingContext = TypingContext()
   given Context = Context.empty
-  given Signature = Builtins.Σ
   given SourceInfo = SourceInfo.SiEmpty
   "in empty context and signature" - {
+    given Signature = SimpleSignature()
+
     "check level literals" in:
       assertVType(LevelLiteral(0), LevelType())
       assertVType(LevelLiteral(1), LevelType())
       assertNotVType(LevelLiteral(1, 1), LevelType())
       assertVType(LevelLiteral(1, 0), LevelType(LevelLiteral(1, 1)))
       assertNotVType(UsageLiteral(U0), LevelType())
+
+    "check level convertible" in:
+      given Context =
+        IndexedSeq(Binding(LevelType(), uAny)(n"level1"), Binding(LevelType(), uAny)(n"level2"))
+      assertConvertible(LevelMax(Var(0), Var(1)), LevelMax(Var(1), Var(0)))
+      // TODO: fix this
+      assertConvertible(
+        LevelSuc(LevelMax(Var(0), Var(1))),
+        LevelMax(LevelSuc(Var(1)), LevelSuc(Var(0))),
+      )
+      assertConvertible(
+        LevelMax(LevelLiteral(0), LevelSuc(LevelMax(LevelLiteral(0), LevelSuc(Var(0))))),
+        LevelSuc(LevelSuc(Var(0))),
+      )
 
     "check usage literals" in:
       assertVType(UsageLiteral(U0), UsageType())
@@ -78,12 +93,17 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         CType(CTop(LevelLiteral(0, 2))),
       )
   }
-  "with nat" in:
-    // TODO: handle builtin-type import
-    decls"""
-      data Nat: .archon.builtin.type.Type 0L
-      Zero: Nat
-      Succ: Nat -> Nat
-      """.inUse:
-      // TODO: fix this
-      assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
+
+  "in builtin context" - {
+    given Signature = Builtins.Σ
+
+    "with nat" in:
+      // TODO: handle builtin-type import
+      decls"""
+        data Nat: .archon.builtin.type.Type 0L
+        Zero: Nat
+        Succ: Nat -> Nat
+        """.inUse:
+        // TODO: fix this
+        assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
+  }

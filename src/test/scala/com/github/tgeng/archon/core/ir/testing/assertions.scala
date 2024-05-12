@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.ir.testing
 
-import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.ir.*
 import org.scalatest.Assertions.*
 
@@ -71,6 +70,29 @@ def assertNotCType
     checkType(t, ty)
     fail(s"Expected type mismatch.")
   catch case _: IrError => ()
+
+def assertSubtype
+  (sub: VTerm, sup: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Unit =
+  if ctx.solve(checkIsSubtype(sub, sup)).nonEmpty then
+    fail(s"Expect\n${PrettyPrinter.pprint(sub)}\n⊆\n${PrettyPrinter.pprint(sup)}")
+
+def assertConvertible
+  (a: VTerm, b: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Unit =
+  try
+    if ctx.solve(checkIsSubtype(a, b)).nonEmpty then
+      fail(s"Expect\n${PrettyPrinter.pprint(a)}\n≡\n${PrettyPrinter.pprint(b)}")
+  catch
+    case e: IrError =>
+      enableDebugging
+      ctx.solve(checkIsSubtype(a, b))
 
 inline def enableDebugging(using ctx: TypingContext): Unit =
   val stacktrace = Thread.currentThread().nn.getStackTrace.nn
