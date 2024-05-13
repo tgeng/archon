@@ -191,6 +191,15 @@ case class LevelOrder(m: Nat, n: Nat) extends Ordered[LevelOrder]:
     else if this.m > that.m then 1
     else this.n.compare(that.n)
 
+  def suc(offset: Nat = 1): LevelOrder = LevelOrder(m, n + offset)
+
+  /** There is no need to succ the level if `n==0` because the upperbound is strict and `0` means
+    * any levels must be in a lower universe and any number of succ would still be in the same lower
+    * universe.
+    */
+  def sucAsStrictUpperbound(offset: Nat = 1): LevelOrder =
+    if n == 0 then this else suc(offset)
+
 object LevelOrder:
   def orderMax(a: LevelOrder, b: LevelOrder): LevelOrder =
     if a.m > b.m then a else if a.m < b.m then b else LevelOrder(a.m, a.n max b.n)
@@ -333,9 +342,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     *   the upper bound of the level. It's called strict because only levels that are strictly less
     *   than this level are inhabitants.
     */
-  case LevelType
-    (strictUpperBound: VTerm = Level(LevelOrder.ω, SeqMap()))
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(LevelQn)
+  case LevelType(strictUpperBound: LevelOrder = LevelOrder.ω)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    QualifiedNameOwner(LevelQn)
 
   case Level
     (literal: LevelOrder, maxOperands: SeqMap[VTerm, /* level offset */ Nat])

@@ -4,7 +4,6 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.DelimitPolicy.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
-import com.github.tgeng.archon.common.eitherFilter.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.CoPattern.*
@@ -303,7 +302,8 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
+                h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)
@@ -430,10 +430,8 @@ private final class StackMachine
           preConstructedTerm match
             case Some(t) => return t
             case _       => throw IllegalStateException("type error")
-    if elims.nonEmpty then
-      Redex(current, elims.toList)
-    else
-      current
+    if elims.nonEmpty then Redex(current, elims.toList)
+    else current
 
   @tailrec
   private def expandTermToStack
@@ -590,25 +588,34 @@ extension (v: VTerm)
       else Effects(eff, operands)
     case l: Level =>
       @throws(classOf[IrError])
-      def dfs(tm: VTerm): (LevelOrder, SeqMap[VTerm, Nat]) = ctx.withMetaResolved(tm):
-        case Level(literal, operands) =>
-          val literalsAndOperands: Seq[(LevelOrder, SeqMap[VTerm, Nat])] =
-            operands.map { (tm, offset) =>
-              val (l, m) = dfs(tm.normalized)
-              (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
-            }.toList
-          (
-            (literalsAndOperands.map(_._1) ++ Seq(literal)).max,
-            groupMap(literalsAndOperands.flatMap[(VTerm, Nat)](_._2))(_._1)(_._2)
-              .map { (tm, offsets) => (tm, offsets.max) },
-          )
-        case _: ResolvedMetaVariable | _: Var | _: Collapse => (LevelOrder.zero, SeqMap((tm, 0)))
-        case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
-
+      def dfs(tm: VTerm): (LevelOrder, SeqMap[VTerm, Nat]) =
+        val r = ctx.withMetaResolved(tm):
+          case Level(literal, operands) =>
+            val literalsAndOperands: Seq[(LevelOrder, SeqMap[VTerm, Nat])] =
+              // `toSeq` is needed because `operands` is a Map and withoaut `toSeq`, result from
+              // `map` would be collapsed if the literal part is identical.
+              operands.toSeq.map { (tm, offset) =>
+                val (l, m) = dfs(tm)
+                (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
+              }.toList
+            val levelOrder = (literalsAndOperands.map(_._1) ++ Seq(literal)).max
+            val vars = groupMap(literalsAndOperands.flatMap[(VTerm, Nat)](_._2))(_._1)(_._2)
+              .map { (tm, offsets) => (tm, offsets.max) }
+            (levelOrder, vars)
+          case v: Var                  => (LevelOrder.zero, SeqMap((v, 0)))
+          case c: Collapse             => (LevelOrder.zero, SeqMap((c.normalized, 0)))
+          case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
+        r
       val (literal, m) = dfs(l)
-      if literal == LevelOrder.zero && m.size == 1 && m.head._2 == 0
-      then m.head._1
-      else Level(literal, m)
+      if literal == LevelOrder.zero && m.size == 1 && m.head._2 == 0 then m.head._1
+      else
+        val upperbound = m.map {
+          case (t, offset) => inferType(t)._2 match
+            case LevelType(upperbound) => upperbound.sucAsStrictUpperbound(offset)
+            case t => throw IllegalStateException(s"expect level type but got $t")
+        }.foldLeft(LevelOrder.zero)(LevelOrder.orderMax)
+        if literal >= upperbound then LevelLiteral(literal)
+        else Level(upperbound, m)
     case _ => v
 
 extension (vs: List[VTerm])

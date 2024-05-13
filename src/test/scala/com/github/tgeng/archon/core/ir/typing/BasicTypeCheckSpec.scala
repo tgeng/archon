@@ -24,14 +24,13 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
       assertVType(LevelLiteral(0), LevelType())
       assertVType(LevelLiteral(1), LevelType())
       assertNotVType(LevelLiteral(1, 1), LevelType())
-      assertVType(LevelLiteral(1, 0), LevelType(LevelLiteral(1, 1)))
+      assertVType(LevelLiteral(1, 0), LevelType(LevelOrder(1, 1)))
       assertNotVType(UsageLiteral(U0), LevelType())
 
     "check level convertible" in:
       given Context =
         IndexedSeq(Binding(LevelType(), uAny)(n"level1"), Binding(LevelType(), uAny)(n"level2"))
       assertConvertible(LevelMax(Var(0), Var(1)), LevelMax(Var(1), Var(0)))
-      // TODO: fix this
       assertConvertible(
         LevelSuc(LevelMax(Var(0), Var(1))),
         LevelMax(LevelSuc(Var(1)), LevelSuc(Var(0))),
@@ -39,6 +38,22 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
       assertConvertible(
         LevelMax(LevelLiteral(0), LevelSuc(LevelMax(LevelLiteral(0), LevelSuc(Var(0))))),
         LevelSuc(LevelSuc(Var(0))),
+      )
+      assertConvertible(
+        LevelMax(LevelSuc(LevelMax(l0, LevelSuc(Var(0))))),
+        LevelSuc(LevelSuc(Var(0))),
+      )
+      assertConvertible(
+        LevelMax(LevelLiteral(1, 2), Var(0)),
+        LevelLiteral(1, 2),
+      )
+      assertConvertible(
+        LevelMax(LevelLiteral(0, 2), Var(0)),
+        LevelMax(LevelLiteral(0, 2), Var(0)),
+      )
+      assertConvertible(
+        LevelMax(LevelLiteral(0, 0), LevelSuc(Var(0))),
+        LevelMax(LevelLiteral(0, 1), LevelSuc(Var(0))),
       )
 
     "check usage literals" in:

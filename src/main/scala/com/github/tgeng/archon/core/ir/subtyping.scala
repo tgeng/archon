@@ -101,8 +101,9 @@ def checkIsSubtype
       Γ.resolve(v).ty match
         case Type(upperBound) => checkIsSubtype(upperBound, ty2)
         case _                => throw NotVSubtype(sub, sup)
-    case (LevelType(ub1), LevelType(ub2)) => checkLevelSubsumption(ub1, ub2)
-    case _                                => checkIsConvertible(sub, sup, None)
+    case (LevelType(ub1), LevelType(ub2)) =>
+      if ub1 <= ub2 then Set.empty else throw NotVSubtype(sub, sup)
+    case _ => checkIsConvertible(sub, sup, None)
 
 /** Preconditions: sub and sup are both types
   */
@@ -326,7 +327,7 @@ private def typeUnion
         else HandlerTypeLiteral(Complex)
       EffectsType(continuationUsage, handlerType)
     case (LevelType(level1), LevelType(level2)) =>
-      LevelType(LevelMax(level1, level2).normalized)
+      LevelType(LevelOrder.orderMax(level1, level2))
     case _ => throw IllegalStateException("type error")
 
 @throws(classOf[IrError])
@@ -576,7 +577,7 @@ private def checkLevelSubsumption
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkLevelSubsumption", sub, sup):
   check2(sub, sup):
-    case (sub, sup) if sub == l0 || sub == sup => Set.empty
+    case (sub, sup) if sub == l0 || sub == sup          => Set.empty
     case (sub: VTerm, sup @ Level(literal2, operands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
       val (literal1, operands1) = sub match

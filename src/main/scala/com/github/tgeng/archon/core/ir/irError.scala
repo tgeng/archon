@@ -58,6 +58,7 @@ enum IrError(val Γ: Context) extends Exception:
   case NotCTypeError(tm: CTerm)(using Γ: Context) extends IrError(Γ)
   case NotCollapsable(ctm: CTerm)(using Γ: Context) extends IrError(Γ)
   case NotDataTypeType(tm: CTerm)(using Γ: Context) extends IrError(Γ)
+  case NotLevelType(tm: VTerm)(using Γ: Context) extends IrError(Γ)
   case NotEffectSubsumption(sub: VTerm, sup: VTerm)(using Γ: Context) extends IrError(Γ)
   case NotEqDecidabilitySubsumption(sub: VTerm, sup: VTerm)(using Γ: Context) extends IrError(Γ)
   case NotHandlerTypeSubsumption(sub: VTerm, sup: VTerm)(using Γ: Context) extends IrError(Γ)

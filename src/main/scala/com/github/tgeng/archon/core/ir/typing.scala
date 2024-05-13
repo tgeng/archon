@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
+import _root_.pprint.Tree
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
@@ -16,7 +17,6 @@ import com.github.tgeng.archon.core.ir.Reducible.reduce
 import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
-import _root_.pprint.Tree
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{SeqMap, Set}
@@ -433,13 +433,16 @@ class TypingContext
           .split('(')
           .last
           .stripSuffix(")")
-        verbosePPrinter.copy(
-          additionalHandlers = {
-            case t: (VTerm | CTerm) =>
-              Tree.Literal(PrettyPrinter.pprint(t)(using e.Γ).toString)
-            case x: (QualifiedName | Name | Ref[?]) => verbosePPrinter.additionalHandlers(x)
-          }
-        ).apply(e).toString + "[" + exceptionFileAndLine + "]",
+        verbosePPrinter
+          .copy(
+            additionalHandlers = {
+              case t: (VTerm | CTerm) =>
+                Tree.Literal(PrettyPrinter.pprint(t)(using e.Γ).toString)
+              case x: (QualifiedName | Name | Ref[?]) => verbosePPrinter.additionalHandlers(x)
+            },
+          )
+          .apply(e)
+          .toString + "[" + exceptionFileAndLine + "]",
     )
     (action: => R)
     (using Γ: Context)
@@ -582,7 +585,6 @@ private def checkConstructorEqDecidability
             )
           checkComponents(rest, i + 1)(using Γ :+ binding)
     checkComponents(constructor.paramTys, 0)
-
 
 private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
   override def visitCollapse(collapse: Collapse)(using ctx: Nat)(using Σ: Signature): Seq[Var] =
@@ -819,7 +821,7 @@ private def checkLevel
   (using Signature)
   (using TypingContext)
   : (VTerm, Usages) =
-  checkType(level, LevelType(LevelUpperBound()))
+  checkType(level, LevelType(LevelOrder.upperBound))
 
 // Precondition: tm is already type-checked and is normalized
 @throws(classOf[IrError])
@@ -845,7 +847,7 @@ def inferLevel(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
       val data = Σ.getData(qn)
       data.level.substLowers(args.take(data.context.size)*)
     case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
-    case LevelType(strictUpperBound)                           => checkLevel(strictUpperBound)._1
+    case LevelType(strictUpperBound)                           => LevelLiteral(strictUpperBound)
     case _ => throw IllegalArgumentException(s"should have been checked to be a type: $ty")
 
 // Precondition: tm is already type-checked and is normalized
@@ -970,12 +972,26 @@ def inferType
       )
     case LevelType(strictUpperBound) =>
       (LevelType(strictUpperBound), Type(LevelType(strictUpperBound)), Usages.zero)
-    case Level(op, maxOperands) =>
-      val (operands, usages) = transposeCheckTypeResults(maxOperands.map { (ref, _) =>
-        checkLevel(ref)
-      })
-      val newTm = Level(op, operands.toMultiset)(using tm.sourceInfo)
-      (newTm, LevelType(LevelSuc(newTm)), usages)
+    case Level(literal, maxOperands) =>
+      val operandsResults = maxOperands.toSeq.map((v, offset) => (inferType(v), offset))
+      val newMaxOperands = operandsResults
+        .map { case ((t, _, _), offset) =>
+          t -> offset
+        }
+        .to(SeqMap)
+      val upperbound = operandsResults
+        .map {
+          case ((_, LevelType(upperbound), _), offset) => upperbound.sucAsStrictUpperbound(offset)
+          case ((_, t, _), _) =>
+            ctx.checkSolved(
+              checkIsConvertible(t, LevelType(LevelOrder.ω), None),
+              NotLevelType(t),
+            )
+            LevelOrder.ω
+        }
+        .foldLeft(literal.suc())(LevelOrder.orderMax)
+      val usages = operandsResults.map(_._1._3).foldLeft(Usages.zero)(_ + _)
+      (Level(literal, newMaxOperands), LevelType(upperbound), usages)
     case Auto() => throw IllegalArgumentException("cannot infer type")
 
 @throws(classOf[IrError])
@@ -1056,7 +1072,7 @@ def inferLevel
             // stub term when expecting the meta variable to match certain structure.
             case CType(upperBound, _) => inferLevel(upperBound)
             case cty =>
-              val level = ctx.addUnsolved(F(LevelType(LevelUpperBound())))
+              val level = ctx.addUnsolved(F(LevelType(LevelOrder.ω)))
               val usage = ctx.addUnsolved(F(UsageType()))
               val constraints = ctx.solve(
                 checkIsConvertible(

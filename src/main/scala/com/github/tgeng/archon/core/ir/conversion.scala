@@ -66,7 +66,7 @@ def checkIsConvertible
         val levelConstraints = checkIsConvertible(
           level1,
           level2,
-          Some(LevelType(LevelUpperBound())),
+          Some(LevelType(LevelOrder.upperBound)),
         )
         val eqD1 = inferEqDecidability(ty)
         val eqDecidabilityConstraints = checkIsConvertible(eqD1, eqD2, Some(EqDecidabilityType()))
@@ -190,7 +190,7 @@ def checkIsConvertible
             checkIsConvertible(
               inferLevel(ty),
               level2,
-              Some(LevelType(LevelUpperBound())),
+              Some(LevelType(LevelOrder.upperBound)),
             ) ++ checkIsConvertible(ty.effects, eff2, Some(EffectsType()))
           case (F(vTy1, eff1, u1), F(vTy2, eff2, u2)) =>
             checkIsConvertible(eff1, eff2, Some(EffectsType())) ++ checkIsConvertible(

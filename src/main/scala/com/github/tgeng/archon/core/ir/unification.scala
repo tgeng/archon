@@ -87,7 +87,7 @@ def unify
       unifyAll(
         List(l1, eqDecidability1),
         List(l2, eqDecidability2),
-        telescope(LevelType(LevelUpperBound()), EqDecidabilityType()),
+        telescope(LevelType(LevelOrder.ω), EqDecidabilityType()),
       )
     // We do not unify any computation types since it does not seem to be very
     // useful. If someday we would add such support, we will need to extend
