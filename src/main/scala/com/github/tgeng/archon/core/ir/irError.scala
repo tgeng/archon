@@ -78,6 +78,9 @@ enum IrError(val Γ: Context) extends Exception:
   case UnexpectedCProjection(q: CoPattern)(using Γ: Context) extends IrError(Γ)
   case UnexpectedUserCoPattern(clause: PreClause, q: CoPattern)(using Γ: Context) extends IrError(Γ)
   case UnificationFailure(uRes: UnificationResult)(using Γ: Context) extends IrError(Γ)
+  case ConstraintUnificationFailure
+    (unsolvedConstraints: Set[Constraint], cause: IrError)
+    (using Γ: Context) extends IrError(Γ)
   case UnmatchedDataIndex(con: VTerm.Con, dataType: VTerm.DataType)(using Γ: Context)
     extends IrError(Γ)
   case UnmatchedPattern

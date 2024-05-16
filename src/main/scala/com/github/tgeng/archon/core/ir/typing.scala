@@ -269,6 +269,7 @@ class TypingContext
 
   private def addMetaVar(mv: MetaVariable): Meta =
     val index = metaVars.size
+    version += 1
     metaVars += mv
     Meta(index)
 
@@ -322,20 +323,25 @@ class TypingContext
   def updateConstraint(u: RUnsolved, constraint: UnsolvedMetaVariableConstraint): Unit =
     metaVars(u.index) match
       case Unsolved(context, ty, _) =>
+        version += 1
         metaVars(u.index) = Unsolved(context, ty, constraint)
       case _ => throw IllegalStateException("updateConstraint called on non-unsolved meta variable")
 
   private def assignValue(index: Nat, value: CTerm): Unit =
-    version += 1
     val existing = metaVars(index)
+    version += 1
     metaVars(index) = Solved(existing.context, existing.ty, value)
 
   private def updateGuarded(index: Nat, guarded: Guarded): Unit =
+    version += 1
     metaVars(index) = guarded
 
   @throws(classOf[IrError])
-  def checkSolved(constraints: Set[Constraint], error: => IrError)(using Σ: Signature): Unit =
-    if solve(constraints).nonEmpty then throw error
+  def checkSolved(constraints: Set[Constraint], error: => IrError)(using Context)(using Σ: Signature): Unit = {
+    val unsolvedConstraints = solve(constraints)
+    if unsolvedConstraints.nonEmpty then
+      throw ConstraintUnificationFailure(unsolvedConstraints, error)
+  }
 
   @throws(classOf[IrError])
   def solve(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
