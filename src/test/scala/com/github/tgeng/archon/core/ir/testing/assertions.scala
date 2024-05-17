@@ -2,7 +2,6 @@ package com.github.tgeng.archon.core.ir.testing
 
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
-import com.github.tgeng.archon.core.ir.VTerm.*
 import org.scalatest.Assertions.*
 
 def assertVType
@@ -88,26 +87,22 @@ def assertConvertible
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Unit =
-  val replacedA = replaceAuto(a, ty)
-  val replacedB = replaceAuto(b, ty)
+  val (checkedA, checkedB) = ty match
+    case None =>
+      val (checkedA, _, _) = inferType(a)
+      val (checkedB, _, _) = inferType(b)
+      (checkedA, checkedB)
+    case Some(ty) =>
+      val (checkedA, _) = checkType(a, ty)
+      val (checkedB, _) = checkType(b, ty)
+      (checkedA, checkedB)
   try
-    if ctx.solve(checkIsConvertible(replacedA, replacedB, ty)).nonEmpty then
+    if ctx.solve(checkIsConvertible(checkedA, checkedB, ty)).nonEmpty then
       fail(s"Expect\n${PrettyPrinter.pprint(a)}\n≡\n${PrettyPrinter.pprint(b)}")
   catch
     case e: IrError =>
       enableDebugging
-      ctx.solve(checkIsConvertible(replacedA, replacedB, ty))
-
-private def replaceAuto
-  (t: VTerm, ty: Option[VTerm])
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm =
-  given SourceInfo = SourceInfo.SiEmpty
-  t match
-    case Auto() => Collapse(ctx.addUnsolved(F(ty.get)))
-    case _      => t
+      ctx.solve(checkIsConvertible(checkedA, checkedB, ty))
 
 inline def enableDebugging(using ctx: TypingContext): Unit =
   val stacktrace = Thread.currentThread().nn.getStackTrace.nn

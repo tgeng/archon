@@ -49,7 +49,7 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
       assertConvertible(
         LevelMax(LevelLiteral(1, 2), Var(0)),
         LevelLiteral(1, 2),
-        Some(LevelType()),
+        Some(LevelType(LevelOrder.upperBound)),
       )
       assertConvertible(
         LevelMax(LevelLiteral(0, 2), Var(0)),
