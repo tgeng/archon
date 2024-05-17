@@ -30,7 +30,7 @@ def checkIsConvertible
   if left == right then Set.empty
   else
     (left.normalized, right.normalized, ty) match
-      case (_, _, _) if left == right                                     => Set.empty
+      case (left, right, _) if left == right                                     => Set.empty
       case (Level(_, operands1), Level(_, operands2), Some(LevelType(_))) =>
         // If meta some component is not reduced yet, we can't check subsumption
         if operands1.exists((v, _) => isMeta(v)) || operands2.exists((v, _) => isMeta(v))
@@ -148,7 +148,7 @@ def checkIsConvertible
           // convertible terms.
           case ((m1, _), (m2, _)) if m1 == m2 =>
             Set(Constraint.CConversion(Γ, left, right, ty))
-          // However, elim checks on var is approprieate.
+          // However, elim checks on var is appropriate.
           case (Redex(t1 @ Force(v1: Var), elims1), Redex(Force(v2: Var), elims2)) if v1 == v2 =>
             Γ.resolve(v1).ty match
               case U(headTy) => checkElimIsConvertible(t1, elims1, elims2, headTy, ty)

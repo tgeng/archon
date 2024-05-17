@@ -465,7 +465,8 @@ def checkUsageSubsumption
               Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, UmcUsageSubsumption(existingUpperBound), _, _)) =>
       ctx.adaptForMetaVariable(u, sub) match
-        case Some(value) if value == existingUpperBound => ctx.assignUnsolved(u, Return(value, u1))
+        case Some(value) if value == existingUpperBound =>
+          ctx.assignUnsolved(u, Return(value, u1))
         case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) =>
           ctx.assignUnsolved(u, Return(value, u1))
         case _ => Set(Constraint.UsageSubsumption(Γ, sub, sup))

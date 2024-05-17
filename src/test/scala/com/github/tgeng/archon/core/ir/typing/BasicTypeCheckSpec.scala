@@ -30,30 +30,36 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
     "check level convertible" in:
       given Context =
         IndexedSeq(Binding(LevelType(), uAny)(n"level1"), Binding(LevelType(), uAny)(n"level2"))
-      assertConvertible(LevelMax(Var(0), Var(1)), LevelMax(Var(1), Var(0)))
+      assertConvertible(LevelMax(Var(0), Var(1)), LevelMax(Var(1), Var(0)), Some(LevelType()))
       assertConvertible(
         LevelSuc(LevelMax(Var(0), Var(1))),
         LevelMax(LevelSuc(Var(1)), LevelSuc(Var(0))),
+        Some(LevelType()),
       )
       assertConvertible(
         LevelMax(LevelLiteral(0), LevelSuc(LevelMax(LevelLiteral(0), LevelSuc(Var(0))))),
         LevelSuc(LevelSuc(Var(0))),
+        Some(LevelType()),
       )
       assertConvertible(
         LevelMax(LevelSuc(LevelMax(l0, LevelSuc(Var(0))))),
         LevelSuc(LevelSuc(Var(0))),
+        Some(LevelType()),
       )
       assertConvertible(
         LevelMax(LevelLiteral(1, 2), Var(0)),
         LevelLiteral(1, 2),
+        Some(LevelType()),
       )
       assertConvertible(
         LevelMax(LevelLiteral(0, 2), Var(0)),
         LevelMax(LevelLiteral(0, 2), Var(0)),
+        Some(LevelType()),
       )
       assertConvertible(
         LevelMax(LevelLiteral(0, 0), LevelSuc(Var(0))),
         LevelMax(LevelLiteral(0, 1), LevelSuc(Var(0))),
+        Some(LevelType()),
       )
 
     "check usage literals" in:
@@ -107,6 +113,9 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         FunctionType(Binding(LevelType(), UsageLiteral(U0))(n"a"), F(UsageType())),
         CType(CTop(LevelLiteral(0, 2))),
       )
+
+    "auto should work" in:
+      assertConvertible(Auto(), LevelLiteral(0), Some(LevelType()))
   }
 
   "in builtin context" - {

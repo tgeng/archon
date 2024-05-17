@@ -337,7 +337,11 @@ class TypingContext
     metaVars(index) = guarded
 
   @throws(classOf[IrError])
-  def checkSolved(constraints: Set[Constraint], error: => IrError)(using Context)(using Σ: Signature): Unit = {
+  def checkSolved
+    (constraints: Set[Constraint], error: => IrError)
+    (using Context)
+    (using Σ: Signature)
+    : Unit = {
     val unsolvedConstraints = solve(constraints)
     if unsolvedConstraints.nonEmpty then
       throw ConstraintUnificationFailure(unsolvedConstraints, error)
@@ -401,30 +405,27 @@ class TypingContext
 
   @throws(classOf[IrError])
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
-    val result = mutable.Set[Constraint]()
-    for constraint <- constraints do
-      constraint match
-        case Constraint.Conversions(context, lhs, rhs, tys) =>
-          result ++= checkAreConvertible(lhs, rhs, tys)(using context)
-        case Constraint.VConversion(context, lhs, rhs, ty) =>
-          result ++= checkIsConvertible(lhs, rhs, ty)(using context)
-        case Constraint.CConversion(context, lhs, rhs, ty) =>
-          result ++= checkIsConvertible(lhs, rhs, ty)(using context)
-        case Constraint.VSubType(context, sub, sup) =>
-          result ++= checkIsSubtype(sub, sup)(using context)
-        case Constraint.CSubType(context, sub, sup) =>
-          result ++= checkIsSubtype(sub, sup)(using context)
-        case Constraint.EffSubsumption(context, sub, sup) =>
-          result ++= checkEffSubsumption(sub, sup)(using context)
-        case Constraint.LevelSubsumption(context, sub, sup) =>
-          result ++= checkLevelSubsumption(sub, sup)(using context)
-        case Constraint.UsageSubsumption(context, sub, sup) =>
-          result ++= checkUsageSubsumption(sub, sup)(using context)
-        case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
-          result ++= checkEqDecidabilitySubsumption(sub, sup)(using context)
-        case Constraint.HandlerTypeSubsumption(context, sub, sup) =>
-          result ++= checkHandlerTypeSubsumption(sub, sup)(using context)
-    result.toSet
+    constraints.flatMap:
+      case Constraint.Conversions(context, lhs, rhs, tys) =>
+        checkAreConvertible(lhs, rhs, tys)(using context)
+      case Constraint.VConversion(context, lhs, rhs, ty) =>
+        checkIsConvertible(lhs, rhs, ty)(using context)
+      case Constraint.CConversion(context, lhs, rhs, ty) =>
+        checkIsConvertible(lhs, rhs, ty)(using context)
+      case Constraint.VSubType(context, sub, sup) =>
+        checkIsSubtype(sub, sup)(using context)
+      case Constraint.CSubType(context, sub, sup) =>
+        checkIsSubtype(sub, sup)(using context)
+      case Constraint.EffSubsumption(context, sub, sup) =>
+        checkEffSubsumption(sub, sup)(using context)
+      case Constraint.LevelSubsumption(context, sub, sup) =>
+        checkLevelSubsumption(sub, sup)(using context)
+      case Constraint.UsageSubsumption(context, sub, sup) =>
+        checkUsageSubsumption(sub, sup)(using context)
+      case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
+        checkEqDecidabilitySubsumption(sub, sup)(using context)
+      case Constraint.HandlerTypeSubsumption(context, sub, sup) =>
+        checkHandlerTypeSubsumption(sub, sup)(using context)
 
   @throws(classOf[IrError])
   inline def trace[R]
@@ -1475,16 +1476,18 @@ private def checkLet
   (using TypingContext)
   : (CTerm, CTerm, Usages) =
   val (ty, _) = checkIsType(tm.ty)
-  // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages in body can all
-  // be trivialized by multiple U0 since they won't execute. But inhabitability is not decidable. Even if we only
-  // do some converative checking, it's hard to check polymorphic type `A` for any `A` passed by the caller. An
-  // alternative is to designate a bottom type and just check that. But to make this ergonomic we need to tweak the
-  // type checker to make this designated type a subtype of everything else. But type inference becomes impossible
-  // with `force t` where `t` has type bottom. If we raise a type error for `force t`, this would violate substitution
-  // principle of subtypes.
-  // On the other hand, if we don't check inhabitability, the usages in body would simply be multipled with UAff
-  // instead of U0, which seems to be a reasonable approximation. The primary reason for such a check is just to flag
-  // phantom usages of terms, but I think it's not worth all these complexity.
+  // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages
+  // in body can all be trivialized by multiple U0 since they won't execute. But inhabit-ability is
+  // not decidable. Even if we only do some conservative checking, it's hard to check polymorphic
+  // type `A` for any `A` passed by the caller. An alternative is to designate a bottom type and
+  // just check that. But to make this ergonomic we need to tweak the type checker to make this
+  // designated type a subtype of everything else. But type inference becomes impossible with `force
+  // t` where `t` has type bottom. If we raise a type error for `force t`, this would violate
+  // substitution principle of subtypes.
+  // On the other hand, if we don't check inhabit-ability, the usages in body would simply be
+  // multiplied with UAff instead of U0, which seems to be a reasonable approximation. The primary
+  // reason for such a check is just to flag phantom usages of terms, but I think it's not worth all
+  // these complexity.
   val (unnormalizedEffects, _) = checkType(tm.eff, EffectsType())
   val effects = unnormalizedEffects.normalized
   val (usage, _) = checkType(tm.usage, UsageType())
