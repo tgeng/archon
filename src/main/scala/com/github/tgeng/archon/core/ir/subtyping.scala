@@ -213,7 +213,7 @@ def checkIsSubtype
 private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler
 
 @throws(classOf[IrError])
-private def typeUnion
+def typeUnion
   (a: CTerm, b: CTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -281,7 +281,7 @@ private def getCTop
 private type StuckValueType = Var | Collapse
 
 @throws(classOf[IrError])
-private def typeUnion
+def typeUnion
   (a: VTerm, b: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -364,6 +364,8 @@ private def checkHandlerTypeSubsumption
       ctx.assignUnsolved(u, Return(handlerType2, u1))
     case (HandlerTypeLiteral(Complex), u: RUnsolved) =>
       ctx.assignUnsolved(u, Return(handlerType1, u1))
+    case (_: ResolvedMetaVariable, handlerType2: VTerm) =>
+      Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
     case _ => throw NotHandlerTypeSubsumption(handlerType1, handlerType2)
@@ -384,6 +386,8 @@ private def checkEqDecidabilitySubsumption
       ctx.assignUnsolved(u, Return(eqD2, u1))
     case (EqDecidabilityLiteral(EqDecidability.EqUnknown), u: RUnsolved) =>
       ctx.assignUnsolved(u, Return(eqD1, u1))
+    case (_: ResolvedMetaVariable, eqD2: VTerm) =>
+      Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2))
     case _ => throw NotEqDecidabilitySubsumption(eqD1, eqD2)
@@ -414,12 +418,12 @@ private def checkUsagesSubsumption
 
 @throws(classOf[IrError])
 def checkUsageSubsumption
-  (sub: VTerm, sup: VTerm)
+  (rawSub: VTerm, rawSup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Set[Constraint] = debugSubsumption("checkUsageSubsumption", sub, sup):
-  check2(sub, sup):
+  : Set[Constraint] = debugSubsumption("checkUsageSubsumption", rawSub, rawSup):
+  check2(rawSub, rawSup):
     case (sub, sup) if sub == sup => Set.empty
     // Note on direction of usage comparison: UAny > U1 but UAny subsumes U1 when counting usage
     case (UsageLiteral(u1), UsageLiteral(u2)) if u1 >= u2 => Set.empty
@@ -447,10 +451,10 @@ def checkUsageSubsumption
         case UsageType(Some(UsageLiteral(Usage.UAny))) if u2 == Usage.UAny => Set.empty
         case UsageType(Some(u1Bound)) =>
           checkUsageSubsumption(u1Bound, UsageLiteral(u2))
-        case _ => throw NotUsageSubsumption(sub, sup)
+        case _ => throw NotUsageSubsumption(rawSub, rawSup)
     case (u @ RUnsolved(_, _, constraint, _, _), sup: VTerm) =>
       ctx.adaptForMetaVariable(u, sup) match
-        case None => Set(Constraint.UsageSubsumption(Γ, sub, sup))
+        case None => Set(Constraint.UsageSubsumption(Γ, rawSub, sup))
         case Some(value) =>
           val newUpperBound = constraint match
             case UmcNothing => value
@@ -469,23 +473,25 @@ def checkUsageSubsumption
           ctx.assignUnsolved(u, Return(value, u1))
         case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) =>
           ctx.assignUnsolved(u, Return(value, u1))
-        case _ => Set(Constraint.UsageSubsumption(Γ, sub, sup))
+        case _ => Set(Constraint.UsageSubsumption(Γ, sub, rawSup))
+    case (_: ResolvedMetaVariable, sup: VTerm) =>
+      Set(Constraint.UsageSubsumption(Γ, rawSub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
-      Set(Constraint.UsageSubsumption(Γ, sub, sup))
+      Set(Constraint.UsageSubsumption(Γ, rawSub, rawSup))
     case _ =>
-      if isMeta(sub) || isMeta(sup) then
+      if isMeta(rawSub) || isMeta(rawSup) then
         // We can't decide if the terms are unsolved.
-        Set(Constraint.UsageSubsumption(Γ, sub, sup))
-      else throw NotUsageSubsumption(sub, sup)
+        Set(Constraint.UsageSubsumption(Γ, rawSub, rawSup))
+      else throw NotUsageSubsumption(rawSub, rawSup)
 
 @throws(classOf[IrError])
 private def checkEffSubsumption
-  (sub: VTerm, sup: VTerm)
+  (rawSub: VTerm, rawSup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Set[Constraint] = debugSubsumption("checkEffSubsumption", sub, sup):
-  check2(sub, sup):
+  : Set[Constraint] = debugSubsumption("checkEffSubsumption", rawSub, rawSup):
+  check2(rawSub, rawSup):
     case (sub, sup) if sub == sup => Set.empty
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
     case (RUnsolved(_, _, _, tm, _), Effects(_, operands)) if operands.contains(Collapse(tm)) =>
@@ -507,7 +513,7 @@ private def checkEffSubsumption
       Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
       ctx.adaptForMetaVariable(u, sub) match
-        case None => Set(Constraint.EffSubsumption(Γ, sub, sup))
+        case None => Set(Constraint.EffSubsumption(Γ, sub, rawSup))
         case Some(value) =>
           val newLowerBound = constraint match
             case UmcNothing => value
@@ -523,11 +529,13 @@ private def checkEffSubsumption
       ) if literals.isEmpty && operands.isEmpty =>
       ctx.assignUnsolved(u, Return(Total(), u1))
     case (u @ RUnsolved(_, _, UmcEffSubsumption(existingLowerBound), _, _), sup: VTerm) =>
-      ctx.adaptForMetaVariable(u, sub) match
+      ctx.adaptForMetaVariable(u, rawSub) match
         case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
-        case _ => Set(Constraint.EffSubsumption(Γ, sub, sup))
+        case _ => Set(Constraint.EffSubsumption(Γ, rawSub, sup))
+    case (_: ResolvedMetaVariable, sup: VTerm) =>
+      Set(Constraint.EffSubsumption(Γ, rawSub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
-      Set(Constraint.EffSubsumption(Γ, sub, sup))
+      Set(Constraint.EffSubsumption(Γ, rawSub, rawSup))
     case (sub: VTerm, sup @ Effects(literals2, unionOperands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
       val (literals1, unionOperands1) = sub match
@@ -566,18 +574,18 @@ private def checkEffSubsumption
       else if spuriousOperands.keys.forall(isMeta) || unionOperands2.keys.exists(isMeta) then
         Set(Constraint.EffSubsumption(Γ, sub, sup))
       else throw NotEffectSubsumption(sub, sup)
-    case _ => throw NotEffectSubsumption(sub, sup)
+    case _ => throw NotEffectSubsumption(rawSub, rawSup)
 
 /** Checks if l1 is smaller than l2.
   */
 @throws(classOf[IrError])
 private def checkLevelSubsumption
-  (sub: VTerm, sup: VTerm)
+  (rawSub: VTerm, rawSup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Set[Constraint] = debugSubsumption("checkLevelSubsumption", sub, sup):
-  check2(sub, sup):
+  : Set[Constraint] = debugSubsumption("checkLevelSubsumption", rawSub, rawSup):
+  check2(rawSub, rawSup):
     case (sub, sup) if sub == l0 || sub == sup          => Set.empty
     case (sub: VTerm, sup @ Level(literal2, operands2)) =>
       // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
@@ -601,7 +609,7 @@ private def checkLevelSubsumption
       Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
       ctx.adaptForMetaVariable(u, sub) match
-        case None => Set(Constraint.LevelSubsumption(Γ, sub, sup))
+        case None => Set(Constraint.LevelSubsumption(Γ, sub, rawSup))
         case Some(value) =>
           val newLowerBound = constraint match
             case UmcNothing => value
@@ -617,12 +625,15 @@ private def checkLevelSubsumption
       ) if operands.isEmpty =>
       ctx.assignUnsolved(u, Return(Level(LevelOrder.zero, SeqMap()), u1))
     case (u @ RUnsolved(_, _, UmcLevelSubsumption(existingLowerBound), _, _), sup: VTerm) =>
-      ctx.adaptForMetaVariable(u, sub) match
+      ctx.adaptForMetaVariable(u, sup) match
         case Some(value) if value == existingLowerBound => ctx.assignUnsolved(u, Return(value, u1))
-        case _ => Set(Constraint.LevelSubsumption(Γ, sub, sup))
+        case _ => Set(Constraint.LevelSubsumption(Γ, rawSub, sup))
+    case (_: ResolvedMetaVariable, sup: VTerm) =>
+      Set(Constraint.LevelSubsumption(Γ, rawSub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
-      Set(Constraint.LevelSubsumption(Γ, sub, sup))
-    case _ => throw NotLevelSubsumption(sub, sup)
+      Set(Constraint.LevelSubsumption(Γ, rawSub, rawSup))
+    case (sub, sup) =>
+      throw NotLevelSubsumption(rawSub, rawSup)
 
 private def getSpurious[T, E: PartialOrdering](sub: SeqMap[T, E], sup: SeqMap[T, E]): SeqMap[T, E] =
   sub.filter { case (operand1, e1) =>

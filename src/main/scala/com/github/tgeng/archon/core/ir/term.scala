@@ -452,6 +452,7 @@ object VTerm:
   def LevelLiteral(n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(0, n), SeqMap())
   val l0 = LevelLiteral(0)
+  val lω = LevelLiteral(1, 0)
 
   def LevelLiteral(m: Nat, n: Nat)(using sourceInfo: SourceInfo): Level =
     Level(LevelOrder(m, n), SeqMap())
@@ -466,11 +467,16 @@ object VTerm:
   def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, SeqMap(ts.map(_ -> 0)*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
+  val eqDecidable: VTerm = EqDecidabilityLiteral(EqDecidable)
+  val eqUnknown: VTerm = EqDecidabilityLiteral(EqUnknown)
+  val total: Effects = EffectsLiteral(Set.empty)(using SourceInfo.SiEmpty)
   val u0: VTerm = VTerm.UsageLiteral(Usage.U0)
   val u1: VTerm = VTerm.UsageLiteral(Usage.U1)
   val uAff: VTerm = VTerm.UsageLiteral(Usage.UAff)
   val uRel: VTerm = VTerm.UsageLiteral(Usage.URel)
   val uAny: VTerm = VTerm.UsageLiteral(Usage.UAny)
+  val handlerSimple: VTerm = HandlerTypeLiteral(HandlerType.Simple)
+  val handlerComplex: VTerm = HandlerTypeLiteral(HandlerType.Complex)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
     * executed by the type checker.

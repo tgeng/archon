@@ -58,6 +58,11 @@ enum UnsolvedMetaVariableConstraint:
   case UmcLevelSubsumption(lowerBound: VTerm)
   case UmcUsageSubsumption(upperBound: VTerm)
 
+  this match
+    case UmcCSubtype(lowerBounds) => assert(lowerBounds.nonEmpty)
+    case UmcVSubtype(lowerBounds) => assert(lowerBounds.nonEmpty)
+    case _                        =>
+
   def substLowers(args: VTerm*)(using Signature): UnsolvedMetaVariableConstraint = this match
     case UmcNothing => UmcNothing
     case UmcCSubtype(lowerBounds) =>
@@ -278,9 +283,13 @@ class TypingContext
     *   `adaptForMetaVariable`
     */
   @throws(classOf[IrError])
-  def assignUnsolved(m: RUnsolved, value: CTerm)(using Context)(using Signature): Set[Constraint] =
-    assignValue(m.index, value)
-    m.constraint match
+  def assignUnsolved
+    (index: Nat, constraint: UnsolvedMetaVariableConstraint, value: CTerm)
+    (using Context)
+    (using Signature)
+    : Set[Constraint] =
+    assignValue(index, value)
+    constraint match
       case UmcNothing               => Set.empty
       case UmcCSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, value)).flatten
       case UmcVSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, Collapse(value))).flatten
@@ -289,6 +298,14 @@ class TypingContext
         checkLevelSubsumption(lowerBound, Collapse(value))
       case UmcUsageSubsumption(upperBound) =>
         checkUsageSubsumption(Collapse(value), upperBound)
+
+  /** @param value:
+    *   value must be in the context of the meta variable. That is, value must be from a call of
+    *   `adaptForMetaVariable`
+    */
+  @throws(classOf[IrError])
+  def assignUnsolved(m: RUnsolved, value: CTerm)(using Context)(using Signature): Set[Constraint] =
+    assignUnsolved(m.index, m.constraint, value)
 
   def alignElims(t: CTerm, elims: List[Elimination[VTerm]])(using Signature): Option[CTerm] =
     elims match
@@ -342,21 +359,32 @@ class TypingContext
     (using Context)
     (using Σ: Signature)
     : Unit = {
-    val unsolvedConstraints = solve(constraints)
+    val unsolvedConstraints = solve(constraints, aggressivelySolveConstraints = true)
     if unsolvedConstraints.nonEmpty then
       throw ConstraintUnificationFailure(unsolvedConstraints, error)
   }
 
   @throws(classOf[IrError])
-  def solve(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
+  def solve
+    (constraints: Set[Constraint], aggressivelySolveConstraints: Boolean = false)
+    (using Σ: Signature)
+    : Set[Constraint] =
     var currentConstraints = constraints
     while solvedVersion != version do
       solvedVersion = version
-      currentConstraints = solveOnce(currentConstraints)
+      currentConstraints = solveOnce(currentConstraints, false)
+    if currentConstraints.nonEmpty && aggressivelySolveConstraints then
+      currentConstraints = solveOnce(currentConstraints, true)
+      while solvedVersion != version do
+        solvedVersion = version
+        currentConstraints = solveOnce(currentConstraints, true)
     currentConstraints
 
   @throws(classOf[IrError])
-  private def solveOnce(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
+  private def solveOnce
+    (constraints: Set[Constraint], proactivelySolveBoundedMetaVars: Boolean)
+    (using Σ: Signature)
+    : Set[Constraint] =
     val metaVarIndexes = MetaVarCollector.visitConstraints(constraints)
     for index <- metaVarIndexes.toSeq.sorted do
       metaVars(index) match
@@ -364,9 +392,27 @@ class TypingContext
           val newConstraints = solveConstraints(constraints)
           if newConstraints.isEmpty then assignValue(index, value)
           else updateGuarded(index, Guarded(context, ty, value, newConstraints))
-        // TODO[P0]: we probably want to also assign values to bounded unsolved meta variables. Also, it may make sense
-        // to pass in a variable that controls when to solve those to allow more fined-grained controls.
-        case _ => // do nothing
+        case Unsolved(context, ty, constraint) if proactivelySolveBoundedMetaVars =>
+          given Context = context
+          val solution: CTerm | Unit = constraint match
+            case UmcNothing =>
+              ty match
+                case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
+                case F(UsageType(_), _, u)                        => Return(uAny, u)
+                case F(EffectsType(_, _), _, u)                   => Return(total, u)
+                case F(EqDecidabilityType(), _, u)                => Return(eqDecidable, u)
+                case F(HandlerTypeType(), _, u)                   => Return(handlerSimple, u)
+                // TODO[P2]: implement proof/instance search here.
+                case _ => ()
+            case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
+            case UmcVSubtype(lowerBounds)        => Return(lowerBounds.reduce(typeUnion), uAny)
+            case UmcEffSubsumption(lowerBound)   => Return(lowerBound, uAny)
+            case UmcLevelSubsumption(lowerBound) => Return(lowerBound, uAny)
+            case UmcUsageSubsumption(upperBound) => Return(upperBound, uAny)
+          solution match
+            case ()       =>
+            case c: CTerm => assignUnsolved(index, constraint, c)
+        case _ =>
     solveConstraints(constraints)
 
   private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
@@ -1029,14 +1075,14 @@ def checkType
               val tIndexArgs = tArgs.drop(data.context.size)
               val (args, usages) =
                 checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs*))
-              val constraints = ctx.solve(
+              ctx.checkSolved(
                 checkAreConvertible(
                   con.tArgs.map(_.substLowers(tParamArgs ++ args*)),
                   tIndexArgs,
                   data.tIndexTys.substLowers(tParamArgs*),
                 ),
+                UnmatchedDataIndex(c, dataType),
               )
-              if constraints.nonEmpty then throw UnmatchedDataIndex(c, dataType)
               (DataType(qn, args), usages)
         case _ => throw ExpectDataType(ty)
     case Auto() =>
@@ -1081,14 +1127,15 @@ def inferLevel
             case cty =>
               val level = ctx.addUnsolved(F(LevelType(LevelOrder.ω)))
               val usage = ctx.addUnsolved(F(UsageType()))
-              val constraints = ctx.solve(
+              ctx.checkSolved(
                 checkIsConvertible(
                   cty,
                   CType(CTop(Collapse(level)), Collapse(usage)),
                   None,
                 ),
+                NotCTypeError(tm),
               )
-              if constraints.isEmpty then Collapse(level).normalized else throw NotCTypeError(tm)
+              Collapse(level).normalized
         case _ => throw NotCTypeError(tm)
 
 @throws(classOf[IrError])
@@ -1151,13 +1198,15 @@ def inferType
           checkUsageSubsumption(usage, UsageLiteral(Usage.U1)),
           NotUsageSubsumption(usage, UsageLiteral(Usage.U1)),
         )
-        val (unnormalizedVTy, vTyTy, vTyUsages) = inferType(uncheckedVTy)
+        val (unnormalizedVTy, vTyUsages) = checkType(
+          uncheckedVTy,
+          Type(
+            Collapse(ctx.addUnsolved(F(Top(LevelType(LevelOrder.upperBound)), eqUnknown))),
+          ),
+        )
         val vTy = unnormalizedVTy.normalized
         val newTm = F(vTy, effects, usage)(using tm.sourceInfo)
-        val cTyTy = vTyTy match
-          case Type(_) => CType(newTm, Total())
-          case _       => throw NotTypeError(vTy)
-        (newTm, cTyTy, effUsages + uUsages + vTyUsages)
+        (newTm, CType(newTm, Total()), effUsages + uUsages + vTyUsages)
       case Return(uncheckedV, usage) =>
         val (v, vTy, vUsages) = inferType(uncheckedV)
         (Return(v, usage), F(vTy, Total(), usage), vUsages * usage)

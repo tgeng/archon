@@ -30,7 +30,7 @@ def checkIsConvertible
   if left == right then Set.empty
   else
     (left.normalized, right.normalized, ty) match
-      case (left, right, _) if left == right                                     => Set.empty
+      case (left, right, _) if left == right                              => Set.empty
       case (Level(_, operands1), Level(_, operands2), Some(LevelType(_))) =>
         // If meta some component is not reduced yet, we can't check subsumption
         if operands1.exists((v, _) => isMeta(v)) || operands2.exists((v, _) => isMeta(v))
@@ -41,20 +41,12 @@ def checkIsConvertible
         if operands1.keys.exists(isMeta) || operands2.keys.exists(isMeta)
         then Set(Constraint.VConversion(Γ, left, right, ty))
         else throw NotVConvertible(left, right, ty)
-      case (
-          u: UsageCompound,
-          _,
-          Some(UsageType(_)),
-        ) =>
+      case (u: UsageCompound, _, Some(UsageType(_))) =>
         // If meta some component is not reduced yet, we can't check subsumption
         if u.distinctOperands.exists(isMeta)
         then Set(Constraint.VConversion(Γ, left, right, ty))
         else throw NotVConvertible(left, right, ty)
-      case (
-          _,
-          u: UsageCompound,
-          Some(UsageType(_)),
-        ) =>
+      case (_, u: UsageCompound, Some(UsageType(_))) =>
         // If meta some component is not reduced yet, we can't check subsumption
         if u.distinctOperands.exists(isMeta)
         then Set(Constraint.VConversion(Γ, left, right, ty))
@@ -103,6 +95,8 @@ def checkIsConvertible
       case (UsageType(Some(u1)), UsageType(Some(u2)), _) =>
         checkIsConvertible(u1, u2, Some(UsageType()))
       case (Collapse(c1), Collapse(c2), ty) => checkIsConvertible(c1, c2, ty.map(F(_, u1)))
+      case (Collapse(c1), v2, ty)           => checkIsConvertible(c1, Return(v2), ty.map(F(_, u1)))
+      case (v1, Collapse(c2), ty)           => checkIsConvertible(Return(v1), c2, ty.map(F(_, u1)))
       case _                                => throw NotVConvertible(left, right, ty)
 
 /** Preconditions: rawLeft and rawRight are already type checked against ty, which is normalized.
@@ -157,12 +151,12 @@ def checkIsConvertible
             Set(Constraint.CConversion(Γ, left, right, ty))
           case ((u: RUnsolved, elims), t: CTerm) => checkRedexIsConvertible(u, elims, t, ty)
           case (t: CTerm, (u: RUnsolved, elims)) => checkRedexIsConvertible(u, elims, t, ty)
-          case ((u1: RUnsolved, elims1), (u2: RUnsolved, elims2)) =>
+          case ((u1: RUnsolved, elims1), (u2: RUnsolved, elims2)) if elims1 == elims2 =>
             // This step is to make meta variable delegation deterministic
-            val (uSmall, _, uBig, _) =
+            val (uSmall, uBig) =
               if u1.index < u2.index
-              then (u1, elims1, u2, elims2)
-              else (u2, elims2, u1, elims1)
+              then (u1, u2)
+              else (u2, u1)
             ctx.adaptForMetaVariable(uSmall, uBig.tm) match
               case Some(bigTm) => ctx.assignUnsolved(uSmall, bigTm)
               case None =>

@@ -72,7 +72,7 @@ def assertNotCType
     fail(s"Expected type mismatch.")
   catch case _: IrError => ()
 
-def assertSubtype
+def assertVSubtype
   (sub: VTerm, sup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
@@ -81,7 +81,7 @@ def assertSubtype
   if ctx.solve(checkIsSubtype(sub, sup)).nonEmpty then
     fail(s"Expect\n${PrettyPrinter.pprint(sub)}\n⊆\n${PrettyPrinter.pprint(sup)}")
 
-def assertConvertible
+def assertVConvertible
   (a: VTerm, b: VTerm, ty: Option[VTerm] = None)
   (using Γ: Context)
   (using Σ: Signature)
@@ -89,12 +89,12 @@ def assertConvertible
   : Unit =
   val (checkedA, checkedB) = ty match
     case None =>
-      val (checkedA, _, _) = inferType(a)
-      val (checkedB, _, _) = inferType(b)
+      val (checkedA, _, _) = inferTypeWithDebugging(a)
+      val (checkedB, _, _) = inferTypeWithDebugging(b)
       (checkedA, checkedB)
     case Some(ty) =>
-      val (checkedA, _) = checkType(a, ty)
-      val (checkedB, _) = checkType(b, ty)
+      val (checkedA, _) = checkTypeWithDebugging(a, ty)
+      val (checkedB, _) = checkTypeWithDebugging(b, ty)
       (checkedA, checkedB)
   try
     if ctx.solve(checkIsConvertible(checkedA, checkedB, ty)).nonEmpty then
@@ -103,6 +103,86 @@ def assertConvertible
     case e: IrError =>
       enableDebugging
       ctx.solve(checkIsConvertible(checkedA, checkedB, ty))
+
+def assertCSubtype
+  (sub: CTerm, sup: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Unit =
+  if ctx.solve(checkIsSubtype(sub, sup)).nonEmpty then
+    fail(s"Expect\n${PrettyPrinter.pprint(sub)}\n⊆\n${PrettyPrinter.pprint(sup)}")
+
+def assertCConvertible
+  (a: CTerm, b: CTerm, ty: Option[CTerm] = None)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Unit =
+  val (checkedA, checkedB) = ty match
+    case None =>
+      val (checkedA, _, _) = inferTypeWithDebugging(a)
+      val (checkedB, _, _) = inferTypeWithDebugging(b)
+      (checkedA, checkedB)
+    case Some(ty) =>
+      val (checkedA, _) = checkTypeWithDebugging(a, ty)
+      val (checkedB, _) = checkTypeWithDebugging(b, ty)
+      (checkedA, checkedB)
+  try
+    if ctx.solve(checkIsConvertible(checkedA, checkedB, ty)).nonEmpty then
+      fail(s"Expect\n${PrettyPrinter.pprint(a)}\n≡\n${PrettyPrinter.pprint(b)}")
+  catch
+    case e: IrError =>
+      enableDebugging
+      ctx.solve(checkIsConvertible(checkedA, checkedB, ty))
+
+def checkTypeWithDebugging
+  (tm: CTerm, ty: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : (CTerm, Usages) =
+  try checkType(tm, ty)
+  catch
+    case e: IrError =>
+      enableDebugging
+      checkType(tm, ty)
+
+def checkTypeWithDebugging
+  (tm: VTerm, ty: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : (VTerm, Usages) =
+  try checkType(tm, ty)
+  catch
+    case e: IrError =>
+      enableDebugging
+      checkType(tm, ty)
+
+def inferTypeWithDebugging
+  (tm: CTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : (CTerm, CTerm, Usages) =
+  try inferType(tm)
+  catch
+    case e: IrError =>
+      enableDebugging
+      inferType(tm)
+
+def inferTypeWithDebugging
+  (tm: VTerm)
+  (using Γ: Context)
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : (VTerm, VTerm, Usages) =
+  try inferType(tm)
+  catch
+    case e: IrError =>
+      enableDebugging
+      inferType(tm)
 
 inline def enableDebugging(using ctx: TypingContext): Unit =
   val stacktrace = Thread.currentThread().nn.getStackTrace.nn
