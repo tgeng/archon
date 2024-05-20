@@ -98,4 +98,6 @@ enum IrError(val Γ: Context) extends Exception:
     (preData: PreDeclaration.PreData)
     (using Γ: Context) extends IrError(Γ)
   case DuplicatedDeclaration(qn: QualifiedName) extends IrError(Context.empty)
+  case UnableToFindUsageMeetDuringUnification(lowerBounds: Set[VTerm])(using Γ: Context)
+    extends IrError(Γ)
   override def getMessage: String = verbosePPrinter.apply(this).plainText

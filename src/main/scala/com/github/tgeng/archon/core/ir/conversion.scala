@@ -157,10 +157,10 @@ def checkIsConvertible
               if u1.index < u2.index
               then (u1, u2)
               else (u2, u1)
-            ctx.adaptForMetaVariable(uSmall, uBig.tm) match
+            ctx.adaptForMetaVariable(uSmall, uBig.tm):
               case Some(bigTm) => ctx.assignUnsolved(uSmall, bigTm)
               case None =>
-                ctx.adaptForMetaVariable(uBig, uSmall.tm) match
+                ctx.adaptForMetaVariable(uBig, uSmall.tm):
                   case Some(smallTm) => ctx.assignUnsolved(uBig, smallTm)
                   case None          => Set(Constraint.CConversion(Γ, left, right, ty))
           case (CapturedContinuationTip(ty1), CapturedContinuationTip(ty2)) =>
@@ -355,7 +355,7 @@ private def checkRedexIsConvertible
   ctx.alignElims(target, extraElims) match
     case None => Set(Constraint.CConversion(Γ, redex(r.tm, extraElims), target, ty))
     case Some(target) =>
-      ctx.adaptForMetaVariable(r, target) match
+      ctx.adaptForMetaVariable(r, target):
         case Some(value) => ctx.assignUnsolved(r, value)
         case None        => Set(Constraint.CConversion(Γ, r.tm, target, ty))
 

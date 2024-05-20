@@ -54,9 +54,20 @@ enum UnsolvedMetaVariableConstraint:
   case UmcNothing
   case UmcCSubtype(lowerBounds: Set[CTerm])
   case UmcVSubtype(lowerBounds: Set[VTerm])
+  // union is used to combine multiple lower bounds
   case UmcEffSubsumption(lowerBound: VTerm)
+  // level max is used to combine multiple level bounds
   case UmcLevelSubsumption(lowerBound: VTerm)
-  case UmcUsageSubsumption(upperBound: VTerm)
+  // note that lower and upper is in the sense of usage subsumption, aka reverse of usage lattice.
+  // - usage join is used to combine multiple upper bounds
+  // - usage meet (&) is used to combine multiple lower bounds at the end when deriving the solution
+  // Note: when picking the solution proactively, we should pick the upperbound if available, then
+  // fallback to meet of the lowerBounds (when possible, or just fail if there are multiple complex
+  // terms), and then fallback to uAny. This is because we want to pick the least necessary usage
+  // when possible. For example, if u1 is sufficient, the solution should not be uRel, uAff, or
+  // uAny. This is different from the other cases where the lower bound is usually preferred. This
+  // asymmetry is due to the fact that usages are usually used contravariantly.
+  case UmcUsageSubsumption(lowerBounds: Set[VTerm], upperBound: Option[VTerm])
 
   this match
     case UmcCSubtype(lowerBounds) => assert(lowerBounds.nonEmpty)
@@ -73,8 +84,11 @@ enum UnsolvedMetaVariableConstraint:
       UmcEffSubsumption(lowerBound.substLowers(args*))
     case UmcLevelSubsumption(lowerBound) =>
       UmcLevelSubsumption(lowerBound.substLowers(args*))
-    case UmcUsageSubsumption(upperBound) =>
-      UmcUsageSubsumption(upperBound.substLowers(args*))
+    case UmcUsageSubsumption(lowerBound, upperBound) =>
+      UmcUsageSubsumption(
+        lowerBound.map(_.substLowers(args*)),
+        upperBound.map(_.substLowers(args*)),
+      )
 
 /** @param context:
   *   context of this meta-variable
@@ -285,26 +299,27 @@ class TypingContext
   @throws(classOf[IrError])
   def assignUnsolved
     (index: Nat, constraint: UnsolvedMetaVariableConstraint, value: CTerm)
-    (using Context)
     (using Signature)
+    (using ctx: TypingContext)
     : Set[Constraint] =
+    given Context = ctx.metaVars(index).context
     assignValue(index, value)
     constraint match
       case UmcNothing               => Set.empty
       case UmcCSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, value)).flatten
       case UmcVSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, Collapse(value))).flatten
-      case UmcEffSubsumption(lowerBound) => checkEffSubsumption(lowerBound, Collapse(value))
-      case UmcLevelSubsumption(lowerBound) =>
-        checkLevelSubsumption(lowerBound, Collapse(value))
-      case UmcUsageSubsumption(upperBound) =>
-        checkUsageSubsumption(Collapse(value), upperBound)
+      case UmcEffSubsumption(lowerBound)   => checkEffSubsumption(lowerBound, Collapse(value))
+      case UmcLevelSubsumption(lowerBound) => checkLevelSubsumption(lowerBound, Collapse(value))
+      case UmcUsageSubsumption(lowerBounds, upperBound) =>
+        lowerBounds.flatMap(lb => checkUsageSubsumption(Collapse(value), lb)) ++
+          upperBound.toSet.flatMap(ub => checkUsageSubsumption(Collapse(value), ub))
 
   /** @param value:
     *   value must be in the context of the meta variable. That is, value must be from a call of
     *   `adaptForMetaVariable`
     */
   @throws(classOf[IrError])
-  def assignUnsolved(m: RUnsolved, value: CTerm)(using Context)(using Signature): Set[Constraint] =
+  def assignUnsolved(m: RUnsolved, value: CTerm)(using Signature)(using ctx: TypingContext): Set[Constraint] =
     assignUnsolved(m.index, m.constraint, value)
 
   def alignElims(t: CTerm, elims: List[Elimination[VTerm]])(using Signature): Option[CTerm] =
@@ -316,26 +331,28 @@ class TypingContext
             Some(redex(t, elims2.dropRight(elims.size)))
           case _ => None
 
-  def adaptForMetaVariable(m: RUnsolved, value: CTerm)(using Signature): Option[CTerm] =
+  def adaptForMetaVariable[T](m: RUnsolved, value: CTerm)(using Signature)(using ctx: TypingContext)(f: Context ?=> Option[CTerm] => T): T =
+    given Context = metaVars(m.index).context
     // Make sure meta variable assignment won't cause cyclic meta variable references.
-    if MetaVarVisitor.visitCTerm(value)(m.index) then return None
+    if MetaVarVisitor.visitCTerm(value)(m.index) then return f(None)
 
     if (FreeVarsVisitor
         .visitCTerm(value)(using 0)
         .map(_.idx)
         .toSet -- m.substitution.keySet).nonEmpty
-    then return None
-    Some(value.subst(m.substitution.lift))
+    then f(None)
+    else f(Some(value.subst(m.substitution.lift)))
 
-  def adaptForMetaVariable(m: RUnsolved, value: VTerm)(using Signature): Option[VTerm] =
+  def adaptForMetaVariable[T](m: RUnsolved, value: VTerm)(using Signature)(using ctx: TypingContext)(f: Context ?=> Option[VTerm] => T): T =
+    given Context = metaVars(m.index).context
     // Make sure meta variable assignment won't cause cyclic meta variable references.
-    if MetaVarVisitor.visitVTerm(value)(m.index) then return None
+    if MetaVarVisitor.visitVTerm(value)(m.index) then return f(None)
     if (FreeVarsVisitor
         .visitVTerm(value)(using 0)
         .map(_.idx)
         .toSet -- m.substitution.keySet).nonEmpty
-    then return None
-    Some(value.subst(m.substitution.lift))
+    then f(None)
+    else f(Some(value.subst(m.substitution.lift)))
 
   def updateConstraint(u: RUnsolved, constraint: UnsolvedMetaVariableConstraint): Unit =
     metaVars(u.index) match
@@ -344,10 +361,11 @@ class TypingContext
         metaVars(u.index) = Unsolved(context, ty, constraint)
       case _ => throw IllegalStateException("updateConstraint called on non-unsolved meta variable")
 
-  private def assignValue(index: Nat, value: CTerm): Unit =
+  private def assignValue(index: Nat, value: CTerm)(using Context)(using Signature): Unit =
     val existing = metaVars(index)
     version += 1
     metaVars(index) = Solved(existing.context, existing.ty, value)
+    debugPrint(s"#$index := ${pprint(value)}")
 
   private def updateGuarded(index: Nat, guarded: Guarded): Unit =
     version += 1
@@ -367,6 +385,7 @@ class TypingContext
   @throws(classOf[IrError])
   def solve
     (constraints: Set[Constraint], aggressivelySolveConstraints: Boolean = false)
+    (using Context)
     (using Σ: Signature)
     : Set[Constraint] =
     var currentConstraints = constraints
@@ -382,8 +401,9 @@ class TypingContext
 
   @throws(classOf[IrError])
   private def solveOnce
-    (constraints: Set[Constraint], proactivelySolveBoundedMetaVars: Boolean)
-    (using Σ: Signature)
+    (constraints: Set[Constraint], proactivelySolveAmbiguousMetaVars: Boolean)
+    (using Context)
+    (using Signature)
     : Set[Constraint] =
     val metaVarIndexes = MetaVarCollector.visitConstraints(constraints)
     for index <- metaVarIndexes.toSeq.sorted do
@@ -392,28 +412,52 @@ class TypingContext
           val newConstraints = solveConstraints(constraints)
           if newConstraints.isEmpty then assignValue(index, value)
           else updateGuarded(index, Guarded(context, ty, value, newConstraints))
-        case Unsolved(context, ty, constraint) if proactivelySolveBoundedMetaVars =>
-          given Context = context
-          val solution: CTerm | Unit = constraint match
-            case UmcNothing =>
-              ty match
-                case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
-                case F(UsageType(_), _, u)                        => Return(uAny, u)
-                case F(EffectsType(_, _), _, u)                   => Return(total, u)
-                case F(EqDecidabilityType(), _, u)                => Return(eqDecidable, u)
-                case F(HandlerTypeType(), _, u)                   => Return(handlerSimple, u)
-                // TODO[P2]: implement proof/instance search here.
-                case _ => ()
-            case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
-            case UmcVSubtype(lowerBounds)        => Return(lowerBounds.reduce(typeUnion), uAny)
-            case UmcEffSubsumption(lowerBound)   => Return(lowerBound, uAny)
-            case UmcLevelSubsumption(lowerBound) => Return(lowerBound, uAny)
-            case UmcUsageSubsumption(upperBound) => Return(upperBound, uAny)
-          solution match
-            case ()       =>
-            case c: CTerm => assignUnsolved(index, constraint, c)
         case _ =>
-    solveConstraints(constraints)
+    val newConstraints = solveConstraints(constraints)
+    if proactivelySolveAmbiguousMetaVars then
+      val metaVarIndexes = MetaVarCollector.visitConstraints(newConstraints)
+      for index <- metaVarIndexes.toSeq.sorted do
+        metaVars(index) match
+          case Unsolved(context, ty, constraint) =>
+            given Context = context
+            val solution: CTerm | Unit = constraint match
+              case UmcNothing =>
+                ty match
+                  case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
+                  case F(UsageType(_), _, u)                        => Return(uAny, u)
+                  case F(EffectsType(_, _), _, u)                   => Return(total, u)
+                  case F(EqDecidabilityType(), _, u)                => Return(eqDecidable, u)
+                  case F(HandlerTypeType(), _, u)                   => Return(handlerSimple, u)
+                  // TODO[P2]: implement proof/instance search here.
+                  case _ => ()
+              case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
+              case UmcVSubtype(lowerBounds)        => Return(lowerBounds.reduce(typeUnion), uAny)
+              case UmcEffSubsumption(lowerBound)   => Return(lowerBound, uAny)
+              case UmcLevelSubsumption(lowerBound) => Return(lowerBound, uAny)
+              case UmcUsageSubsumption(lowerBounds, upperBound) =>
+                Return(
+                  upperBound.getOrElse {
+                    lowerBounds
+                      .map(_.normalized)
+                      .map:
+                        case UsageLiteral(u) => Some(u)
+                        case _               => None
+                      .foldLeft[Option[Usage]](Some(UAny)):
+                        case (Some(u1), Some(u2)) => u1 & u2
+                        case (Some(uAny), o)      => o
+                        case (o, Some(uAny))      => o
+                        case _                    => None
+                      .map(UsageLiteral(_))
+                      .getOrElse(throw UnableToFindUsageMeetDuringUnification(lowerBounds))
+                  },
+                  uAny,
+                )
+            solution match
+              case ()       =>
+              case c: CTerm => assignUnsolved(index, constraint, c)
+          case _ =>
+      solveConstraints(newConstraints)
+    else newConstraints
 
   private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
     override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
@@ -536,8 +580,19 @@ class TypingContext
 
   inline def debug[T](inline t: T): T =
     if enableDebugging then
+      val indent = "│ " * traceLevel + " "
+      println(
+        indent + ANSI_CYAN + stringify(t) + " = " + verbosePPrinter
+          .apply(t)
+          .toString
+          .replace("\n", "\n" + indent) + ANSI_RESET,
+      )
+    t
+
+  inline def debugPrint[T](inline t: T): T =
+    if enableDebugging then
       val indent = "│ " * traceLevel
-      println(indent + " " + ANSI_CYAN + stringify(t) + " = " + t + ANSI_RESET)
+      println(indent + " " + ANSI_CYAN + t + ANSI_RESET)
     t
 
   def breakpoint(): Unit =
