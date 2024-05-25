@@ -658,7 +658,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using
       Σ: Signature,
     )
-    : Block = Block(qn.shortName.toString)
+    : Block = Block(qn.toString)
 
   override def visitName
     (name: Name)

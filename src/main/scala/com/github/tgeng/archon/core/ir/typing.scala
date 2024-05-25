@@ -319,7 +319,11 @@ class TypingContext
     *   `adaptForMetaVariable`
     */
   @throws(classOf[IrError])
-  def assignUnsolved(m: RUnsolved, value: CTerm)(using Signature)(using ctx: TypingContext): Set[Constraint] =
+  def assignUnsolved
+    (m: RUnsolved, value: CTerm)
+    (using Signature)
+    (using ctx: TypingContext)
+    : Set[Constraint] =
     assignUnsolved(m.index, m.constraint, value)
 
   def alignElims(t: CTerm, elims: List[Elimination[VTerm]])(using Signature): Option[CTerm] =
@@ -331,7 +335,12 @@ class TypingContext
             Some(redex(t, elims2.dropRight(elims.size)))
           case _ => None
 
-  def adaptForMetaVariable[T](m: RUnsolved, value: CTerm)(using Signature)(using ctx: TypingContext)(f: Context ?=> Option[CTerm] => T): T =
+  def adaptForMetaVariable[T]
+    (m: RUnsolved, value: CTerm)
+    (using Signature)
+    (using ctx: TypingContext)
+    (f: Context ?=> Option[CTerm] => T)
+    : T =
     given Context = metaVars(m.index).context
     // Make sure meta variable assignment won't cause cyclic meta variable references.
     if MetaVarVisitor.visitCTerm(value)(m.index) then return f(None)
@@ -343,7 +352,12 @@ class TypingContext
     then f(None)
     else f(Some(value.subst(m.substitution.lift)))
 
-  def adaptForMetaVariable[T](m: RUnsolved, value: VTerm)(using Signature)(using ctx: TypingContext)(f: Context ?=> Option[VTerm] => T): T =
+  def adaptForMetaVariable[T]
+    (m: RUnsolved, value: VTerm)
+    (using Signature)
+    (using ctx: TypingContext)
+    (f: Context ?=> Option[VTerm] => T)
+    : T =
     given Context = metaVars(m.index).context
     // Make sure meta variable assignment won't cause cyclic meta variable references.
     if MetaVarVisitor.visitVTerm(value)(m.index) then return f(None)
@@ -934,29 +948,56 @@ private def checkLevel
 // Precondition: tm is already type-checked and is normalized
 @throws(classOf[IrError])
 def inferLevel(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
-  ctx.withMetaResolved(ty):
-    case u: ResolvedMetaVariable =>
-      u.ty match
-        case F(Type(upperBound), _, _) => inferLevel(upperBound)
-        case _                         => throw NotTypeError(ty)
-    case Type(upperBound) => LevelSuc(inferLevel(upperBound))
-    case Top(level, _)    => level
-    case r: Var =>
-      Γ.resolve(r).ty match
-        case Type(upperBound) => inferLevel(upperBound)
-        case _                => throw NotTypeError(ty)
-    case t: Collapse =>
-      val (_, ty, _) = inferType(t)
-      ty match
-        case Type(upperBound) => inferLevel(upperBound)
-        case _                => throw NotTypeError(ty)
-    case U(cty) => inferLevel(cty)
-    case DataType(qn, args) =>
-      val data = Σ.getData(qn)
-      data.level.substLowers(args.take(data.context.size)*)
-    case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
-    case LevelType(strictUpperBound)                           => LevelLiteral(strictUpperBound)
-    case _ => throw IllegalArgumentException(s"should have been checked to be a type: $ty")
+  ctx.trace[VTerm](
+    "inferLevel",
+    Block(ChopDown, Aligned, yellow(ty.sourceInfo), pprint(ty)),
+    level => Block(ChopDown, Aligned, yellow(level.sourceInfo), green(pprint(level))),
+  ):
+    ctx.withMetaResolved(ty):
+      case u: ResolvedMetaVariable =>
+        val levelBound =
+          Collapse(ctx.addUnsolved(F(LevelType(LevelOrder.upperBound))))
+        val typeBound =
+          Collapse(ctx.addUnsolved(F(Type(Top(levelBound)))))
+        val effects =
+          Collapse(ctx.addUnsolved(F(EffectsType())))
+        val usage =
+          Collapse(ctx.addUnsolved(F(UsageType())))
+        ctx.checkSolved(
+          checkIsConvertible(u.ty, F(Type(typeBound), effects, usage), None),
+          NotTypeError(ty),
+        )
+        inferLevel(typeBound.normalized)
+      case Type(upperBound) => LevelSuc(inferLevel(upperBound))
+      case Top(level, _)    => level
+      case r: Var =>
+        val levelBound =
+          Collapse(ctx.addUnsolved(F(LevelType(LevelOrder.upperBound))))
+        val typeBound =
+          Collapse(ctx.addUnsolved(F(Type(Top(levelBound)))))
+        ctx.checkSolved(
+          checkIsConvertible(Γ.resolve(r).ty, Type(typeBound), None),
+          NotTypeError(ty),
+        )
+        inferLevel(typeBound.normalized)
+      case t: Collapse =>
+        val (_, ty, _) = inferType(t)
+        val levelBound =
+          Collapse(ctx.addUnsolved(F(LevelType(LevelOrder.upperBound))))
+        val typeBound =
+          Collapse(ctx.addUnsolved(F(Type(Top(levelBound)))))
+        ctx.checkSolved(
+          checkIsConvertible(ty, Type(typeBound), None),
+          NotTypeError(ty),
+        )
+        inferLevel(typeBound.normalized)
+      case U(cty) => inferLevel(cty)
+      case DataType(qn, args) =>
+        val data = Σ.getData(qn)
+        data.level.substLowers(args.take(data.context.size)*)
+      case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
+      case LevelType(strictUpperBound)                           => LevelLiteral(strictUpperBound)
+      case _ => throw IllegalArgumentException(s"should have been checked to be a type: $ty")
 
 // Precondition: tm is already type-checked and is normalized
 @throws(classOf[IrError])
@@ -1154,44 +1195,43 @@ def checkType
 
 // Precondition: tm is already type-checked
 @throws(classOf[IrError])
-def inferLevel
-  (uncheckedTm: CTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm =
-  val tm = Reducible.reduce(uncheckedTm)
-  tm match
-    case CType(upperBound, _) => LevelSuc(inferLevel(upperBound))
-    case CTop(level, _)       => level
-    case F(vTy, _, _)         => inferLevel(vTy)
-    case FunctionType(binding, bodyTy, _) =>
-      val argLevel = inferLevel(binding.ty)
-      val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
-      // strengthen is always safe because the only case that bodyLevel would reference 0 is when
-      // arg is of type Level. But in that case the overall level would be ω.
-      LevelMax(argLevel.weakened, bodyLevel).normalized.strengthened
-    case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args*)
-    case tm =>
-      ctx.resolveMetaVariableType(tm) match
-        case Some(ty) =>
-          ty match
-            // TODO[P1]: consider refactor this to use some helper function for such common patterns where we create a
-            // stub term when expecting the meta variable to match certain structure.
-            case CType(upperBound, _) => inferLevel(upperBound)
-            case cty =>
-              val level = ctx.addUnsolved(F(LevelType(LevelOrder.ω)))
-              val usage = ctx.addUnsolved(F(UsageType()))
-              ctx.checkSolved(
-                checkIsConvertible(
-                  cty,
-                  CType(CTop(Collapse(level)), Collapse(usage)),
-                  None,
-                ),
-                NotCTypeError(tm),
-              )
-              Collapse(level).normalized
-        case _ => throw NotCTypeError(tm)
+def inferLevel(ty: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
+  ctx.trace[VTerm](
+    "inferLevel",
+    Block(ChopDown, Aligned, yellow(ty.sourceInfo), pprint(ty)),
+    level => Block(ChopDown, Aligned, yellow(level.sourceInfo), green(pprint(level))),
+  ):
+    Reducible.reduce(ty) match
+      case CType(upperBound, _) => LevelSuc(inferLevel(upperBound))
+      case CTop(level, _)       => level
+      case F(vTy, _, _)         => inferLevel(vTy)
+      case FunctionType(binding, bodyTy, _) =>
+        val argLevel = inferLevel(binding.ty)
+        val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
+        // strengthen is always safe because the only case that bodyLevel would reference 0 is when
+        // arg is of type Level. But in that case the overall level would be ω.
+        LevelMax(argLevel.weakened, bodyLevel).normalized.strengthened
+      case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args*)
+      case tm =>
+        ctx.resolveMetaVariableType(tm) match
+          case Some(ty) =>
+            ty match
+              // TODO[P1]: consider refactor this to use some helper function for such common patterns where we create a
+              // stub term when expecting the meta variable to match certain structure.
+              case CType(upperBound, _) => inferLevel(upperBound)
+              case cty =>
+                val level = ctx.addUnsolved(F(LevelType(LevelOrder.ω)))
+                val usage = ctx.addUnsolved(F(UsageType()))
+                ctx.checkSolved(
+                  checkIsConvertible(
+                    cty,
+                    CType(CTop(Collapse(level)), Collapse(usage)),
+                    None,
+                  ),
+                  NotCTypeError(tm),
+                )
+                Collapse(level).normalized
+          case _ => throw NotCTypeError(tm)
 
 @throws(classOf[IrError])
 def inferType

@@ -187,11 +187,9 @@ def checkIsConvertible
               Some(LevelType(LevelOrder.upperBound)),
             ) ++ checkIsConvertible(ty.effects, eff2, Some(EffectsType()))
           case (F(vTy1, eff1, u1), F(vTy2, eff2, u2)) =>
-            checkIsConvertible(eff1, eff2, Some(EffectsType())) ++ checkIsConvertible(
-              u1,
-              u2,
-              Some(UsageType()),
-            ) ++ checkIsConvertible(vTy1, vTy2, None)
+            checkIsConvertible(eff1, eff2, Some(EffectsType())) ++
+              checkIsConvertible(u1, u2, Some(UsageType())) ++
+              checkIsConvertible(vTy1, vTy2, None)
           case (Let(t1, ty1, eff1, usage1, ctx1), Let(t2, ty2, eff2, usage2, ctx2)) =>
             val tyConstraint = checkIsConvertible(ty1, ty2, None)
             val effConstraint = ctx.solve(checkIsConvertible(eff1, eff2, Some(EffectsType())))
