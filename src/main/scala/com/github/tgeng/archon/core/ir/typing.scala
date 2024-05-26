@@ -1581,22 +1581,24 @@ private def verifyUsages
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Usages =
-  val Γ2 = Γ ++ telescope
-  val count = telescope.size
-  inputUsages.takeRight(count).reverse.zipWithIndex.foreach { (v, i) =>
-    ctx.checkSolved(
-      checkUsageSubsumption(v, Γ2.resolve(i).usage),
-      NotUsageSubsumption(v, Γ2.resolve(i).usage),
-    )
-  }
-  inputUsages.drop(count).map { v =>
-    try v.strengthen(count, 0)
-    catch
-      // It's possible for a term's usage to reference a usage term after it. For example consider
-      // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
-      // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UAny.
-      case _: StrengthenException => UsageLiteral(Usage.UAny)
-  }
+  ctx.trace("verifyUsages"):
+    given Γ2: Context = Γ ++ telescope
+    val count = telescope.size
+    inputUsages.takeRight(count).reverse.zipWithIndex.foreach { (v, i) =>
+      // TODO[P1]: refactor usages verification to happen after other checks.
+//      ctx.checkSolved(
+//        checkUsageSubsumption(v, Γ2.resolve(i).usage),
+//        NotUsageSubsumption(v, Γ2.resolve(i).usage),
+//      )
+    }
+    inputUsages.drop(count).map { v =>
+      try v.strengthen(count, 0)
+      catch
+        // It's possible for a term's usage to reference a usage term after it. For example consider
+        // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
+        // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UAny.
+        case _: StrengthenException => UsageLiteral(Usage.UAny)
+    }
 
 @throws(classOf[IrError])
 def checkTypes

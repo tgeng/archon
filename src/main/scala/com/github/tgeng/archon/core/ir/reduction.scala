@@ -12,7 +12,7 @@ import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
-import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.{RGuarded, RSolved}
+import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.RSolved
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
@@ -305,7 +305,8 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
+                h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)
@@ -517,118 +518,127 @@ extension (c: CTerm)
 
 extension (v: VTerm)
   @throws(classOf[IrError])
-  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm = v match
-    case Collapse(cTm) =>
-      val reduced = Reducible.reduce(cTm)
-      reduced match
-        case Return(v, _) => v
-        case stuckC       => Collapse(stuckC)(using v.sourceInfo)
-    case u: UsageCompound =>
-      @throws(classOf[IrError])
-      def dfs(tm: VTerm): ULub[VTerm] = ctx.withMetaResolved(tm):
-        case UsageLiteral(u)                  => uLubFromLiteral(u)
-        case UsageSum(operands)               => uLubSum(operands.multiToSeq.map(dfs))
-        case UsageProd(operands)              => uLubProd(operands.map(dfs))
-        case UsageJoin(operands)              => uLubJoin(operands.map(dfs))
-        case c: Collapse                      => dfs(c.normalized)
-        case r: RSolved                      => dfs(Collapse(r.value).normalized)
-        case _: ResolvedMetaVariable | _: Var => uLubFromT(tm)
-        case _ =>
-          throw IllegalStateException(s"expect to be of Usage type: $tm")
-
-      def lubToTerm(lub: ULub[VTerm]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq*)
-
-      def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm)*)
-
-      def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq*)
-
-      def varOrUsageToTerm(t: VTerm | Usage): VTerm = t match
-        case v: VTerm => v
-        case u: Usage => UsageLiteral(u)
-
-      lubToTerm(dfs(u))
-    case e: Effects =>
-      @throws(classOf[IrError])
-      def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], SeqMap[VTerm, Boolean]) =
-        ctx.withMetaResolved(tm):
-          case Effects(literal, operands) =>
-            val literalsAndOperands: Seq[(Set[Eff], SeqMap[VTerm, Boolean])] =
-              operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
-            (
-              (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
-                .filter((qn, args) =>
-                  if retainSimpleLinearOnly then {
-                    val effect = Σ.getEffect(qn)
-                    effect.continuationUsage
-                      .substLowers(args*)
-                      .normalized == UsageLiteral(U1) && effect.handlerType
-                      .substLowers(args*)
-                      .normalized == HandlerTypeLiteral(HandlerType.Simple)
-                  } else true,
-                )
-                .toSet,
-              groupMapReduce(
-                literalsAndOperands
-                  .flatMap { case (_, o) => o },
-              )(_._1)(_._2)(_ && _),
-            )
-          case _: Collapse => (Set.empty, SeqMap(tm -> false))
-          case v: Var =>
-            Γ.resolve(v).ty match
-              case EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)) =>
-                (Set.empty, SeqMap(tm -> true))
-              case _ => (Set.empty, SeqMap(tm -> false))
-          case r: RSolved =>
-            r.ty match
-              case F(EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)), _, _) =>
-                (Set.empty, SeqMap(Collapse(r.value).normalized -> true))
-              case _ => (Set.empty, SeqMap(Collapse(r.value).normalized -> false))
-          case r: ResolvedMetaVariable =>
-            r.ty match
-              case F(EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)), _, _) =>
-                (Set.empty, SeqMap(tm -> true))
-              case _ => (Set.empty, SeqMap(tm -> false))
+  def normalized(using Γ: Context)(using Σ: Signature)(using ctx: TypingContext): VTerm =
+    v match
+      case Collapse(cTm) =>
+        val reduced = Reducible.reduce(cTm)
+        reduced match
+          case Return(v, _) => v
+          case stuckC       => Collapse(stuckC)(using v.sourceInfo)
+      case u: UsageCompound =>
+        @throws(classOf[IrError])
+        def dfs(tm: VTerm): ULub[VTerm] = ctx.withMetaResolved(tm):
+          case UsageLiteral(u)                  => uLubFromLiteral(u)
+          case UsageSum(operands)               => uLubSum(operands.multiToSeq.map(dfs))
+          case UsageProd(operands)              => uLubProd(operands.map(dfs))
+          case UsageJoin(operands)              => uLubJoin(operands.map(dfs))
+          case c: Collapse                      => dfs(c.normalized)
+          case r: RSolved                       => dfs(Collapse(r.value).normalized)
+          case _: ResolvedMetaVariable | _: Var => uLubFromT(tm)
           case _ =>
-            throw IllegalStateException(s"expect to be of Effects type: $tm")
+            throw IllegalStateException(s"expect to be of Usage type: $tm")
 
-      val (eff, operands) = dfs(e, false)
-      if eff.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
-      else Effects(eff, operands)
-    case l: Level =>
-      @throws(classOf[IrError])
-      def dfs(tm: VTerm): (LevelOrder, SeqMap[VTerm, Nat]) =
-        val r = ctx.withMetaResolved(tm):
-          case Level(literal, operands) =>
-            val literalsAndOperands: Seq[(LevelOrder, SeqMap[VTerm, Nat])] =
-              // `toSeq` is needed because `operands` is a Map and withoaut `toSeq`, result from
-              // `map` would be collapsed if the literal part is identical.
-              operands.toSeq.map { (tm, offset) =>
-                val (l, m) = dfs(tm)
-                (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
-              }.toList
-            val levelOrder = (literalsAndOperands.map(_._1) ++ Seq(literal)).max
-            val vars = groupMap(literalsAndOperands.flatMap[(VTerm, Nat)](_._2))(_._1)(_._2)
-              .map { (tm, offsets) => (tm, offsets.max) }
-            (levelOrder, vars)
-          case v: Var      => (LevelOrder.zero, SeqMap((v, 0)))
-          case c: Collapse => (LevelOrder.zero, SeqMap((c.normalized, 0)))
-          case r: RSolved  => (LevelOrder.zero, SeqMap((Collapse(r.value).normalized, 0)))
-          case _: ResolvedMetaVariable  => (LevelOrder.zero, SeqMap((tm, 0)))
-          case tm          => throw IllegalStateException(s"expect to be of Level type: $tm")
-        r
-      val (literal, m) = dfs(l)
-      if literal == LevelOrder.zero && m.size == 1 && m.head._2 == 0 then m.head._1
-      else
-        val upperbound = m
-          .map { case (t, offset) =>
-            inferType(t)._2 match
-              case LevelType(upperbound) => upperbound.sucAsStrictUpperbound(offset)
-              case t => throw IllegalStateException(s"expect level type but got $t")
-          }
-          .foldLeft(LevelOrder.zero)(LevelOrder.orderMax)
-        if literal >= upperbound then LevelLiteral(literal)
-        else Level(upperbound, m)
-    case _ => v
+        def lubToTerm(lub: ULub[VTerm]): VTerm = UsageJoin(lub.map(sumToTerm).toSeq*)
+
+        def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm)*)
+
+        def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq*)
+
+        def varOrUsageToTerm(t: VTerm | Usage): VTerm = t match
+          case v: VTerm => v
+          case u: Usage => UsageLiteral(u)
+
+        lubToTerm(dfs(u))
+      case e: Effects =>
+        @throws(classOf[IrError])
+        def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], SeqMap[VTerm, Boolean]) =
+          ctx.withMetaResolved(tm):
+            case Effects(literal, operands) =>
+              val literalsAndOperands: Seq[(Set[Eff], SeqMap[VTerm, Boolean])] =
+                operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
+              (
+                (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
+                  .filter((qn, args) =>
+                    if retainSimpleLinearOnly then {
+                      val effect = Σ.getEffect(qn)
+                      effect.continuationUsage
+                        .substLowers(args*)
+                        .normalized == UsageLiteral(U1) && effect.handlerType
+                        .substLowers(args*)
+                        .normalized == HandlerTypeLiteral(HandlerType.Simple)
+                    } else true,
+                  )
+                  .toSet,
+                groupMapReduce(
+                  literalsAndOperands
+                    .flatMap { case (_, o) => o },
+                )(_._1)(_._2)(_ && _),
+              )
+            case _: Collapse => (Set.empty, SeqMap(tm -> false))
+            case v: Var =>
+              Γ.resolve(v).ty match
+                case EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)) =>
+                  (Set.empty, SeqMap(tm -> true))
+                case _ => (Set.empty, SeqMap(tm -> false))
+            case r: RSolved =>
+              r.ty match
+                case F(
+                    EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)),
+                    _,
+                    _,
+                  ) =>
+                  (Set.empty, SeqMap(Collapse(r.value).normalized -> true))
+                case _ => (Set.empty, SeqMap(Collapse(r.value).normalized -> false))
+            case r: ResolvedMetaVariable =>
+              r.ty match
+                case F(
+                    EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)),
+                    _,
+                    _,
+                  ) =>
+                  (Set.empty, SeqMap(tm -> true))
+                case _ => (Set.empty, SeqMap(tm -> false))
+            case _ =>
+              throw IllegalStateException(s"expect to be of Effects type: $tm")
+
+        val (eff, operands) = dfs(e, false)
+        if eff.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
+        else Effects(eff, operands)
+      case l: Level =>
+        @throws(classOf[IrError])
+        def dfs(tm: VTerm): (LevelOrder, SeqMap[VTerm, Nat]) =
+          val r = ctx.withMetaResolved(tm):
+            case Level(literal, operands) =>
+              val literalsAndOperands: Seq[(LevelOrder, SeqMap[VTerm, Nat])] =
+                // `toSeq` is needed because `operands` is a Map and withoaut `toSeq`, result from
+                // `map` would be collapsed if the literal part is identical.
+                operands.toSeq.map { (tm, offset) =>
+                  val (l, m) = dfs(tm)
+                  (l.suc(offset), m.map((tm, l) => (tm, l + offset)))
+                }.toList
+              val levelOrder = (literalsAndOperands.map(_._1) ++ Seq(literal)).max
+              val vars = groupMap(literalsAndOperands.flatMap[(VTerm, Nat)](_._2))(_._1)(_._2)
+                .map { (tm, offsets) => (tm, offsets.max) }
+              (levelOrder, vars)
+            case v: Var      => (LevelOrder.zero, SeqMap((v, 0)))
+            case c: Collapse => (LevelOrder.zero, SeqMap((c.normalized, 0)))
+            case r: RSolved  => (LevelOrder.zero, SeqMap((Collapse(r.value).normalized, 0)))
+            case _: ResolvedMetaVariable => (LevelOrder.zero, SeqMap((tm, 0)))
+            case tm => throw IllegalStateException(s"expect to be of Level type: $tm")
+          r
+        val (literal, m) = dfs(l)
+        if literal == LevelOrder.zero && m.size == 1 && m.head._2 == 0 then m.head._1
+        else
+          val upperbound = m
+            .map { case (t, offset) =>
+              inferType(t)._2 match
+                case LevelType(upperbound) => upperbound.sucAsStrictUpperbound(offset)
+                case t => throw IllegalStateException(s"expect level type but got $t")
+            }
+            .foldLeft(LevelOrder.zero)(LevelOrder.orderMax)
+          if literal >= upperbound then LevelLiteral(literal)
+          else Level(upperbound, m)
+      case _ => v
 
 extension (vs: List[VTerm])
   @throws(classOf[IrError])

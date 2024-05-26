@@ -79,7 +79,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
 
   override def visitVar(v: VTerm.Var)(using ctx: RenamerContext)(using Σ: Signature): Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
-    if stackIndex < 0 then throw IllegalStateException(s"Variable index out of bound: ${v.idx}")
+    if stackIndex < 0 then throw IndexOutOfBoundsException(s"Variable index out of bound: ${v.idx}")
     val refName = ctx.nameStack(stackIndex)
     ctx.allReferencedNames.add(refName)
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
@@ -132,13 +132,20 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     Renamer.rename(telescope)
     visitTelescope(telescope)(using PPrintContext(Γ))
 
-  def pprint(tm: VTerm | CTerm)(using Γ: Context)(using Σ: Signature): Block = tm match
-    case tm: VTerm =>
-      Renamer.rename(tm)
-      visitVTerm(tm)(using PPrintContext(Γ))
-    case tm: CTerm =>
-      Renamer.rename(tm)
-      visitCTerm(tm)(using PPrintContext(Γ))
+  def pprint(tm: VTerm | CTerm)(using Γ: Context)(using Σ: Signature): Block =
+    try
+      tm match
+        case tm: VTerm =>
+          Renamer.rename(tm)
+          visitVTerm(tm)(using PPrintContext(Γ))
+        case tm: CTerm =>
+          Renamer.rename(tm)
+          visitCTerm(tm)(using PPrintContext(Γ))
+    catch
+      case _: IndexOutOfBoundsException =>
+        throw IllegalArgumentException(
+          s"Failed to pretty print:\n${genericPprint.apply(tm)}\nwith context:\n${genericPprint(Γ)}",
+        )
 
   def pprint(any: Any)(using Γ: Context)(using Σ: Signature): Block =
     Block(
