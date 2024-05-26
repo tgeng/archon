@@ -79,8 +79,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
 
   override def visitVar(v: VTerm.Var)(using ctx: RenamerContext)(using Σ: Signature): Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
-    if stackIndex < 0 then
-      throw IllegalStateException(s"Variable index out of bound: ${v.idx}")
+    if stackIndex < 0 then throw IllegalStateException(s"Variable index out of bound: ${v.idx}")
     val refName = ctx.nameStack(stackIndex)
     ctx.allReferencedNames.add(refName)
     for name <- ctx.nameStack.view.slice(stackIndex + 1, ctx.nameStack.size) do
@@ -409,7 +408,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature,
     )
     : Block =
-    Block(Concat, NoWrap, "𝑓 ", d.qn.shortName)
+    Block(Concat, NoWrap, ".", d.qn.toString)
 
   override def visitForce
     (force: Force)

@@ -164,7 +164,7 @@ enum ResolvedMetaVariable:
       ty: CTerm,
     )
   case RGuarded(ty: CTerm)
-  case RSolved(ty: CTerm)
+  case RSolved(ty: CTerm, value: CTerm)
 import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
 
 class TypingContext
@@ -255,9 +255,9 @@ class TypingContext
           ),
           extraElims,
         )
-      case Solved(context, ty, _) =>
+      case Solved(context, ty, value) =>
         val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
-        Some(RSolved(ty.substLowers(args*)), elims.drop(context.size))
+        Some(RSolved(ty.substLowers(args*), value.substLowers(args*)), elims.drop(context.size))
       case Guarded(context, ty, _, _) =>
         val args = elims.take(context.size).collect { case Elimination.ETerm(t) => t }
         Some(RGuarded(ty.substLowers(args*)), elims.drop(context.size))
@@ -402,16 +402,21 @@ class TypingContext
     (using Context)
     (using Σ: Signature)
     : Set[Constraint] =
-    var currentConstraints = constraints
-    while solvedVersion != version do
-      solvedVersion = version
-      currentConstraints = solveOnce(currentConstraints, false)
-    if currentConstraints.nonEmpty && aggressivelySolveConstraints then
-      currentConstraints = solveOnce(currentConstraints, true)
+    trace[Set[Constraint]](
+      "solve",
+      Block(ChopDown, Aligned, pprint(constraints)),
+      constraints => Block(ChopDown, Aligned, pprint(constraints)),
+    ):
+      var currentConstraints = constraints
       while solvedVersion != version do
         solvedVersion = version
+        currentConstraints = solveOnce(currentConstraints, false)
+      if currentConstraints.nonEmpty && aggressivelySolveConstraints then
         currentConstraints = solveOnce(currentConstraints, true)
-    currentConstraints
+        while solvedVersion != version do
+          solvedVersion = version
+          currentConstraints = solveOnce(currentConstraints, true)
+      currentConstraints
 
   @throws(classOf[IrError])
   private def solveOnce
@@ -1210,8 +1215,11 @@ def inferLevel(ty: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
         val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
         // strengthen is always safe because the only case that bodyLevel would reference 0 is when
         // arg is of type Level. But in that case the overall level would be ω.
-        LevelMax(argLevel.weakened, bodyLevel).normalized.strengthened
+        LevelMax(argLevel.weakened, bodyLevel).normalized(using Γ :+ binding).strengthened
       case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args*)
+      case Force(ctm) =>
+        val (_, cty, _) = inferType(ctm)
+        inferLevel(cty)
       case tm =>
         ctx.resolveMetaVariableType(tm) match
           case Some(ty) =>
@@ -1293,11 +1301,10 @@ def inferType
           checkUsageSubsumption(usage, UsageLiteral(Usage.U1)),
           NotUsageSubsumption(usage, UsageLiteral(Usage.U1)),
         )
+        val levelBound = Collapse(ctx.addUnsolved(F(LevelType(LevelOrder.upperBound))))
         val (unnormalizedVTy, vTyUsages) = checkType(
           uncheckedVTy,
-          Type(
-            Collapse(ctx.addUnsolved(F(Top(LevelType(LevelOrder.upperBound)), eqUnknown))),
-          ),
+          Type(Collapse(ctx.addUnsolved(F(Type(Top(levelBound)))))),
         )
         val vTy = unnormalizedVTy.normalized
         val newTm = F(vTy, effects, usage)(using tm.sourceInfo)
@@ -1476,9 +1483,11 @@ def checkType
     case Force(v) =>
       val (checkedV, usages) = checkType(v, U(ty))
       (Force(checkedV), usages)
-    case Return(v, usage) =>
+    case Return(v, uncheckedUsage) =>
       ty match
         case F(ty, _, expectedUsage) =>
+          // Usage annotation is erased and hence its usages are ignored.
+          val (usage, _) = checkType(uncheckedUsage, UsageType())
           val (checkedV, usages) = checkType(v, ty)
           ctx.checkSolved(
             checkUsageSubsumption(usage, expectedUsage),
@@ -2002,29 +2011,10 @@ def checkIsType
     "checking is type",
     Block(ChopDown, Aligned, yellow(uncheckedVTy.sourceInfo), pprint(uncheckedVTy)),
   ):
-    uncheckedVTy match
-      case Auto() =>
-        val l = levelBound match
-          case Some(bound) => bound
-          case None        => LevelUpperBound()
-        (
-          Collapse(
-            ctx.addUnsolved(F(Type(Top(l, EqDecidabilityLiteral(EqUnknown))))),
-          ),
-          // TODO[P0]: this is wrong. Usage checking will have to be delayed as a separate pass
-          Usages.zero,
-        )
-      case _ =>
-        // inferType also checks term is correctly constructed
-        val (vTy, vTyTy, usages) = inferType(uncheckedVTy)
-        vTyTy match
-          case Type(_) =>
-            levelBound match
-              case Some(bound) =>
-                ctx.checkSolved(checkLevelSubsumption(inferLevel(vTy), bound), NotTypeError(vTy))
-              case _ =>
-            (vTy, usages)
-          case _ => throw NotTypeError(vTy)
+    checkType(
+      uncheckedVTy,
+      Type(Top(levelBound.getOrElse(LevelLiteral(LevelOrder.upperBound)))),
+    )
 
 @throws(classOf[IrError])
 def checkIsCType
@@ -2034,15 +2024,15 @@ def checkIsCType
   (using ctx: TypingContext)
   : (CTerm, Usages) =
   ctx.trace("checking is C type", Block(yellow(uncheckedCTy.sourceInfo), pprint(uncheckedCTy))):
-    val (cty, cTyTy, usages) = inferType(uncheckedCTy)
-    cTyTy match
-      case CType(_, _) if isTotal(cty, Some(cTyTy)) =>
-        levelBound match
-          case Some(bound) => checkLevelSubsumption(inferLevel(uncheckedCTy), bound)
-          case _           =>
-        (cty.normalized(None), usages)
-      case _: CType => throw EffectfulCTermAsType(uncheckedCTy)
-      case _        => throw NotCTypeError(uncheckedCTy)
+    checkType(
+      uncheckedCTy,
+      CType(
+        CTop(
+          levelBound.getOrElse(LevelLiteral(LevelOrder.upperBound)),
+          Collapse(ctx.addUnsolved(F(EffectsType()))),
+        ),
+      ),
+    )
 
 @throws(classOf[IrError])
 def reduceUsage(usage: CTerm)(using Context)(using Signature)(using ctx: TypingContext): VTerm =

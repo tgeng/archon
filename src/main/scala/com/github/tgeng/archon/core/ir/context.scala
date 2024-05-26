@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.Nat
+import com.github.tgeng.archon.core.ir.IrError.*
 
 import scala.annotation.targetName
 
@@ -19,6 +20,8 @@ extension (ctx: collection.IndexedSeq[Binding[VTerm]])
 
   def resolve(idx: Nat)(using Signature): Binding[VTerm] =
     val offset = idx + 1
+    if idx < 0 || idx >= ctx.size then
+      throw InternalIrError(s"Bad index $idx for context ${pprint(ctx)}")(using ctx)
     ctx(ctx.size - offset).map(RaisableVTerm.raise(_, offset))
 
   def split(ref: VTerm.Var): (Context, Binding[VTerm], Telescope) =

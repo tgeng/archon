@@ -5,6 +5,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.EqDecidability.*
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.Usage.*
+import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 
 import scala.annotation.targetName
 import scala.collection.immutable.SeqMap

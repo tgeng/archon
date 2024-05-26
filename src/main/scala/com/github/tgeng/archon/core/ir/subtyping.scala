@@ -485,10 +485,14 @@ def checkUsageSubsumption
               Set.empty
     case (
         sub: VTerm,
-        u @ RUnsolved(_, _, UmcUsageSubsumption(existingLowerBounds, existingUpperBound), _, _),
+        u @ RUnsolved(_, _, constraint: (UmcUsageSubsumption | UmcNothing.type), _, _),
       ) =>
+      val (existingLowerBounds, existingUpperBound) = constraint match
+        case UmcUsageSubsumption(existingLowerBounds, existingUpperBound) =>
+          (existingLowerBounds, existingUpperBound)
+        case UmcNothing => (Set(), None)
       ctx.adaptForMetaVariable(u, sub):
-        case Some(value) if value == existingUpperBound =>
+        case v@Some(value) if v == existingUpperBound =>
           ctx.assignUnsolved(u, Return(value, u1))
         case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) =>
           existingUpperBound match
@@ -619,11 +623,21 @@ private def checkLevelSubsumption
   check2(rawSub, rawSup):
     case (sub, sup) if sub == l0 || sub == sup          => Set.empty
     case (sub: VTerm, sup @ Level(literal2, operands2)) =>
-      // Normalization would unwrap any wrappers with a single operand so we need to undo that here.
+      // Normalization would unwrap any wrappers with a single operand, so we need to undo that
+      // here.
       val (literal1, operands1) = sub match
         case Level(literal1, operands1) => (literal1, operands1)
         case v: VTerm                   => (LevelOrder.zero, SeqMap(v -> 0))
-      val spuriousOperands = getSpurious[VTerm, Int](operands1, operands2)
+      val spuriousOperands = getSpurious[VTerm, Int](operands1, operands2).filter:
+        // Only keep spurious operands whose upperbound in type (after offset) is greater than the
+        // literal in sup. This is because any such operands cannot be greater than the upperbound
+        // anyway.
+        case (operand, offset) =>
+          val operandType = inferType(operand)._2
+          operandType match
+            case LevelType(upperBound) => upperBound.suc(offset) > literal2
+            case _ => false
+
       val areLiteralsSubsumed = literal1.compareTo(literal2) <= 0
       if spuriousOperands.isEmpty && areLiteralsSubsumed then Set.empty
       else if areLiteralsSubsumed && spuriousOperands.keys.forall(isMeta) ||

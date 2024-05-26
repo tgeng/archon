@@ -12,6 +12,7 @@ import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
+import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.{RGuarded, RSolved}
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
@@ -166,6 +167,7 @@ private final class StackMachine
           case Solved(context, _, value) =>
             val args = stack
               .takeRight(context.size)
+              .reverse
               .map:
                 case ETerm(arg) => arg.normalized
                 case _          => throw IllegalStateException("bad meta variable application")
@@ -201,6 +203,7 @@ private final class StackMachine
 
                   val defArgs = stack
                     .takeRight(defContext.size)
+                    .reverse
                     .map:
                       case ETerm(arg) => arg
                       case _          => throw IllegalStateException("type error")
@@ -302,8 +305,7 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
-                h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)(t.boundName)
@@ -529,6 +531,7 @@ extension (v: VTerm)
         case UsageProd(operands)              => uLubProd(operands.map(dfs))
         case UsageJoin(operands)              => uLubJoin(operands.map(dfs))
         case c: Collapse                      => dfs(c.normalized)
+        case r: RSolved                      => dfs(Collapse(r.value).normalized)
         case _: ResolvedMetaVariable | _: Var => uLubFromT(tm)
         case _ =>
           throw IllegalStateException(s"expect to be of Usage type: $tm")
@@ -575,6 +578,11 @@ extension (v: VTerm)
               case EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)) =>
                 (Set.empty, SeqMap(tm -> true))
               case _ => (Set.empty, SeqMap(tm -> false))
+          case r: RSolved =>
+            r.ty match
+              case F(EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)), _, _) =>
+                (Set.empty, SeqMap(Collapse(r.value).normalized -> true))
+              case _ => (Set.empty, SeqMap(Collapse(r.value).normalized -> false))
           case r: ResolvedMetaVariable =>
             r.ty match
               case F(EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)), _, _) =>
@@ -602,18 +610,22 @@ extension (v: VTerm)
             val vars = groupMap(literalsAndOperands.flatMap[(VTerm, Nat)](_._2))(_._1)(_._2)
               .map { (tm, offsets) => (tm, offsets.max) }
             (levelOrder, vars)
-          case v: Var                  => (LevelOrder.zero, SeqMap((v, 0)))
-          case c: Collapse             => (LevelOrder.zero, SeqMap((c.normalized, 0)))
-          case _ => throw IllegalStateException(s"expect to be of Level type: $tm")
+          case v: Var      => (LevelOrder.zero, SeqMap((v, 0)))
+          case c: Collapse => (LevelOrder.zero, SeqMap((c.normalized, 0)))
+          case r: RSolved  => (LevelOrder.zero, SeqMap((Collapse(r.value).normalized, 0)))
+          case _: ResolvedMetaVariable  => (LevelOrder.zero, SeqMap((tm, 0)))
+          case tm          => throw IllegalStateException(s"expect to be of Level type: $tm")
         r
       val (literal, m) = dfs(l)
       if literal == LevelOrder.zero && m.size == 1 && m.head._2 == 0 then m.head._1
       else
-        val upperbound = m.map {
-          case (t, offset) => inferType(t)._2 match
-            case LevelType(upperbound) => upperbound.sucAsStrictUpperbound(offset)
-            case t => throw IllegalStateException(s"expect level type but got $t")
-        }.foldLeft(LevelOrder.zero)(LevelOrder.orderMax)
+        val upperbound = m
+          .map { case (t, offset) =>
+            inferType(t)._2 match
+              case LevelType(upperbound) => upperbound.sucAsStrictUpperbound(offset)
+              case t => throw IllegalStateException(s"expect level type but got $t")
+          }
+          .foldLeft(LevelOrder.zero)(LevelOrder.orderMax)
         if literal >= upperbound then LevelLiteral(literal)
         else Level(upperbound, m)
     case _ => v
