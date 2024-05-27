@@ -1,82 +1,34 @@
 Let(
-  t = Def(qn = qn"__unresolved__.A") @ "A",
-  ty = Auto() @ "ε",
-  eff = Auto(),
-  usage = Auto(),
+  t = Def(qn = qn"__unresolved__.getA") @ "getA",
+  ty = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "ε",
+  eff = Collapse(cTm = Def(qn = qn"__unresolved__.effA") @ "effA") @ "ε",
+  usage = Collapse(cTm = Def(qn = qn"__unresolved__.uA") @ "uA") @ "ε",
   body = Let(
-    t = Def(qn = qn"__unresolved__.effA") @ "effA",
-    ty = Auto(),
-    eff = Auto(),
-    usage = Auto(),
+    t = Def(qn = qn"__unresolved__.getB") @ "getB",
+    ty = Collapse(cTm = Def(qn = qn"__unresolved__.B") @ "B") @ "ε",
+    eff = Collapse(cTm = Def(qn = qn"__unresolved__.effB") @ "effB") @ "ε",
+    usage = Collapse(cTm = Def(qn = qn"__unresolved__.uB") @ "uB") @ "ε",
     body = Let(
-      t = Def(qn = qn"__unresolved__.uA") @ "uA",
+      t = Return(v = Var(idx = 0) @ "b", usage = Auto() @ "ε") @ "b",
       ty = Auto(),
       eff = Auto(),
       usage = Auto(),
-      body = Let(
+      body = Redex(
         t = Let(
-          t = Def(qn = qn"__unresolved__.getA") @ "getA",
-          ty = Var(idx = 0) @ "ε",
-          eff = Var(idx = 0),
-          usage = Var(idx = 0),
-          body = Let(
-            t = Def(qn = qn"__unresolved__.B") @ "B",
-            ty = Auto(),
-            eff = Auto(),
-            usage = Auto(),
-            body = Let(
-              t = Def(qn = qn"__unresolved__.effB") @ "effB",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Let(
-                t = Def(qn = qn"__unresolved__.uB") @ "uB",
-                ty = Auto(),
-                eff = Auto(),
-                usage = Auto(),
-                body = Let(
-                  t = Let(
-                    t = Def(qn = qn"__unresolved__.getB") @ "getB",
-                    ty = Var(idx = 0),
-                    eff = Var(idx = 0),
-                    usage = Var(idx = 0),
-                    body = Let(
-                      t = Redex(
-                        t = Let(
-                          t = Redex(
-                            t = Def(qn = qn"__unresolved__.plus") @ "plus",
-                            elims = List(ETerm(v = Var(idx = 5) @ "a"))
-                          ) @ "plus a",
-                          ty = Auto(),
-                          eff = Auto(),
-                          usage = Auto(),
-                          body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                        ) @ "ε",
-                        elims = List(ETerm(v = Var(idx = 0) @ "b"))
-                      ) @ "plus a b",
-                      ty = Auto(),
-                      eff = Auto(),
-                      usage = Auto(),
-                      body = Return(v = Var(idx = 0), usage = Auto())
-                    ) @ "ε"
-                  ) @ """let b: <effB> [uB] B = getB
-plus a b""",
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Return(v = Var(idx = 0), usage = Auto())
-                ) @ "ε"
-              ) @ "ε"
-            ) @ "ε"
-          ) @ "ε"
-        ) @ """let a: <effA> [uA] A = getA
-let b: <effB> [uB] B = getB
-plus a b""",
-        ty = Auto(),
-        eff = Auto(),
-        usage = Auto(),
-        body = Return(v = Var(idx = 0), usage = Auto())
-      ) @ "ε"
+          t = Return(v = Var(idx = 2) @ "a", usage = Auto()) @ "a",
+          ty = Auto(),
+          eff = Auto(),
+          usage = Auto(),
+          body = Redex(
+            t = Def(qn = qn"__unresolved__.plus") @ "plus",
+            elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+          ) @ "plus a"
+        ) @ "ε",
+        elims = List(ETerm(v = Var(idx = 0)))
+      ) @ "plus a b"
     ) @ "ε"
-  ) @ "ε"
-) @ "ε"
+  ) @ """let b: <effB> [uB] B = getB
+plus a b"""
+) @ """let a: <effA> [uA] A = getA
+let b: <effB> [uB] B = getB
+plus a b"""

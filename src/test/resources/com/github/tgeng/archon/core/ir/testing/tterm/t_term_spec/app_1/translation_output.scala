@@ -3,61 +3,37 @@ Let(
   ty = Auto() @ "ε",
   eff = Auto(),
   usage = Auto(),
-  body = Let(
-    t = Redex(
-      t = Let(
-        t = Def(qn = qn"__unresolved__.c") @ "c",
-        ty = Auto(),
-        eff = Auto(),
-        usage = Auto(),
-        body = Let(
-          t = Redex(
-            t = Let(
-              t = Def(qn = qn"__unresolved__.b") @ "b",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Let(
-                t = Redex(
-                  t = Let(
-                    t = Def(qn = qn"__unresolved__.a") @ "a",
-                    ty = Auto(),
-                    eff = Auto(),
-                    usage = Auto(),
-                    body = Let(
-                      t = Redex(
-                        t = Def(qn = qn"__unresolved__.f") @ "f",
-                        elims = List(ETerm(v = Var(idx = 0) @ "ε"))
-                      ) @ "f a",
-                      ty = Auto(),
-                      eff = Auto(),
-                      usage = Auto(),
-                      body = Return(v = Var(idx = 0), usage = Auto()) @ "ε"
-                    ) @ "ε"
-                  ) @ "ε",
-                  elims = List(ETerm(v = Var(idx = 0)))
-                ) @ "f a b",
-                ty = Auto(),
-                eff = Auto(),
-                usage = Auto(),
-                body = Return(v = Var(idx = 0), usage = Auto())
-              ) @ "ε"
-            ) @ "ε",
-            elims = List(ETerm(v = Var(idx = 0)))
-          ) @ """f a b
-  c""",
+  body = Redex(
+    t = Let(
+      t = Def(qn = qn"__unresolved__.c") @ "c",
+      ty = Auto(),
+      eff = Auto(),
+      usage = Auto(),
+      body = Redex(
+        t = Let(
+          t = Def(qn = qn"__unresolved__.b") @ "b",
           ty = Auto(),
           eff = Auto(),
           usage = Auto(),
-          body = Return(v = Var(idx = 0), usage = Auto())
-        ) @ "ε"
-      ) @ "ε",
-      elims = List(ETerm(v = Var(idx = 0)))
-    ) @ """f a b
-  c d""",
-    ty = Auto(),
-    eff = Auto(),
-    usage = Auto(),
-    body = Return(v = Var(idx = 0), usage = Auto())
-  ) @ "ε"
+          body = Redex(
+            t = Let(
+              t = Def(qn = qn"__unresolved__.a") @ "a",
+              ty = Auto(),
+              eff = Auto(),
+              usage = Auto(),
+              body = Redex(
+                t = Def(qn = qn"__unresolved__.f") @ "f",
+                elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+              ) @ "f a"
+            ) @ "ε",
+            elims = List(ETerm(v = Var(idx = 0)))
+          ) @ "f a b"
+        ) @ "ε",
+        elims = List(ETerm(v = Var(idx = 0)))
+      ) @ """f a b
+  c"""
+    ) @ "ε",
+    elims = List(ETerm(v = Var(idx = 0)))
+  ) @ """f a b
+  c d"""
 ) @ "ε"

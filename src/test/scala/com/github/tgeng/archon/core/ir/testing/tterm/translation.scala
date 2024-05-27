@@ -98,38 +98,34 @@ extension (tTerm: TTerm)
           ty <- ty.toCTerm
           effects <- effects.toCTerm
           usage <- usage.toCTerm
-          r <- F(ty, effects, usage)
-        yield r
+        yield F(ty, effects, usage)
       case TLet(name, t, ty, effects, usage, body) =>
+        given TranslationContext = ctx.copy(isTypeLevel = true)
         for
           ty <- ty.toCTerm
           effects <- effects.toCTerm
           usage <- usage.toCTerm
-          r <- Let(
-            t.toCTerm,
-            ty,
-            effects,
-            usage,
-            body.toCTerm(using summon[TranslationContext].bindLocal(name)),
-          )(Name.Normal(name))
-        yield r
+        yield Let(
+          t.toCTerm(using ctx),
+          ty,
+          effects,
+          usage,
+          body.toCTerm(using ctx.bindLocal(name)),
+        )(Name.Normal(name))
       case TApp(f, arg) =>
-        for
-          arg <- arg.toCTerm
-          r <- redex(f.toCTerm, arg)
-        yield r
+        arg.toCTerm
+          .map(arg => redex(f.toCTerm, arg))
       case TFunctionType(arg, bodyType, effects) =>
         given TranslationContext = ctx.copy(isTypeLevel = true)
         for
           effects <- effects.toCTerm
           argTy <- arg.ty.toCTerm
           argUsage <- arg.usage.toCTerm
-          r <- FunctionType(
-            Binding(argTy, argUsage)(Name.Normal(arg.name)),
-            bodyType.toCTerm(using summon[TranslationContext].bindLocal(arg.name)),
-            effects,
-          )
-        yield r
+        yield FunctionType(
+          Binding(argTy, argUsage)(Name.Normal(arg.name)),
+          bodyType.toCTerm(using summon[TranslationContext].bindLocal(arg.name)),
+          effects,
+        )
       case THandler(
           eff,
           otherEffects,
@@ -156,43 +152,46 @@ extension (tTerm: TTerm)
           parameterUsage <- parameterBinding.usage.toCTerm
           inputTy <- inputBinding.ty.toCTerm
           inputUsage <- inputBinding.usage.toCTerm
-          r <- Handler(
-            eff,
-            otherEffects,
-            outputEffects,
-            outputUsage,
-            outputTy,
-            parameter,
-            Binding(parameterTy, parameterUsage)(Name.Normal(parameterBinding.name)),
-            parameterDisposer.map(_.toCTerm),
-            parameterReplicator.map(_.toCTerm),
-            transform.toCTerm,
-            handlers
-              .map { case (qn, THandlerImpl(h, body, boundNames)) =>
-                qn -> HandlerImpl(
-                  h,
-                  body.toCTerm(using
-                    summon[TranslationContext].bindLocal(parameterBinding.name +: boundNames*),
-                  ),
-                )(boundNames.map(n => Name.Normal(n)))
-              }
-              .to(SeqMap),
-            input.toCTerm,
-            Binding(inputTy, inputUsage)(Name.Normal(inputBinding.name)),
-          )
-        yield r
+        yield Handler(
+          eff,
+          otherEffects,
+          outputEffects,
+          outputUsage,
+          outputTy,
+          parameter,
+          Binding(parameterTy, parameterUsage)(Name.Normal(parameterBinding.name)),
+          parameterDisposer.map(_.toCTerm),
+          parameterReplicator.map(_.toCTerm),
+          transform.toCTerm,
+          handlers
+            .map { case (qn, THandlerImpl(h, body, boundNames)) =>
+              qn -> HandlerImpl(
+                h,
+                body.toCTerm(using
+                  summon[TranslationContext].bindLocal(parameterBinding.name +: boundNames*),
+                ),
+              )(boundNames.map(n => Name.Normal(n)))
+            }
+            .to(SeqMap),
+          input.toCTerm,
+          Binding(inputTy, inputUsage)(Name.Normal(inputBinding.name)),
+        )
 
 extension (self: CTerm)
-  def map(f: TranslationContext ?=> VTerm => VTerm)(using ctx: TranslationContext): CTerm =
+  def map
+    (f: TranslationContext ?=> VTerm => (CTerm | VTerm))
+    (using ctx: TranslationContext)
+    : CTerm =
     val newCtx = ctx.bindLocal("")
     given SourceInfo = SourceInfo.SiEmpty
-    Let(
-      self,
-      Auto(),
-      Auto(),
-      Auto(),
-      Return(f(using newCtx)(Var(0))),
-    )(gn"v")
+    if ctx.isTypeLevel then
+      f(using newCtx)(Collapse(self)) match
+        case v: VTerm => Return(v)
+        case c: CTerm => c
+    else
+      f(using newCtx)(Var(0)) match
+        case v: VTerm => Let(self, Auto(), Auto(), Auto(), Return(v))(gn"v")
+        case c: CTerm => Let(self, Auto(), Auto(), Auto(), c)(gn"v")
 
   def flatMap(f: TranslationContext ?=> VTerm => CTerm)(using ctx: TranslationContext): CTerm =
     val newCtx = ctx.bindLocal("")
@@ -207,6 +206,8 @@ extension (self: CTerm)
           Auto(),
           Auto(),
           Auto(),
+          // TODO[P2]: this doesn't work when there are multiple bindings since they will all be
+          //  bound to `Var(0)`. I probably need to refactor this without monad comprehension.
           f(using newCtx)(Var(0)),
         )(gn"v")
 

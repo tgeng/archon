@@ -2,43 +2,25 @@ List(
   PreDefinition(
     qn = qn"test.plus",
     paramTys = List(),
-    ty = Let(
-      t = FunctionType(
+    ty = FunctionType(
+      binding = Binding(
+        ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
+        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+      ) @ "_",
+      bodyTy = FunctionType(
         binding = Binding(
-          ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
-          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+          ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
         ) @ "_",
-        bodyTy = Let(
-          t = FunctionType(
-            binding = Binding(
-              ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
-              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
-            ) @ "_",
-            bodyTy = Let(
-              t = F(
-                vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
-                effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
-                usage = Auto() @ "ε"
-              ) @ "<> Nat",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Return(v = Var(idx = 0) @ "ε", usage = Auto()) @ "ε"
-            ) @ "ε",
-            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
-          ) @ "Nat -> <> Nat",
-          ty = Auto(),
-          eff = Auto(),
-          usage = Auto(),
-          body = Return(v = Var(idx = 0), usage = Auto())
-        ) @ "ε",
+        bodyTy = F(
+          vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+          effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
+          usage = Collapse(cTm = Return(v = Auto() @ "ε", usage = Auto()) @ "ε") @ "ε"
+        ) @ "<> Nat",
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
-      ) @ "Nat -> Nat -> <> Nat",
-      ty = Auto(),
-      eff = Auto(),
-      usage = Auto(),
-      body = Return(v = Var(idx = 0), usage = Auto())
-    ) @ "ε",
+      ) @ "Nat -> <> Nat",
+      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+    ) @ "Nat -> Nat -> <> Nat",
     clauses = List(
       PreClause(
         boundNames = List("n"),
@@ -57,37 +39,31 @@ List(
         rhs = Some(
           value = Let(
             t = Let(
-              t = Redex(
-                t = Let(
-                  t = Redex(
-                    t = Def(qn = qn"__unresolved__.plus") @ "plus",
-                    elims = List(ETerm(v = Var(idx = 2) @ "m"))
-                  ) @ "plus m",
-                  ty = Auto(),
-                  eff = Auto(),
-                  usage = Auto(),
-                  body = Return(v = Var(idx = 0), usage = Auto())
-                ) @ "ε",
-                elims = List(ETerm(v = Var(idx = 0) @ "n"))
-              ) @ "plus m n",
+              t = Return(v = Var(idx = 0) @ "n", usage = Auto()) @ "n",
               ty = Auto(),
               eff = Auto(),
               usage = Auto(),
-              body = Return(v = Var(idx = 0), usage = Auto())
+              body = Redex(
+                t = Let(
+                  t = Return(v = Var(idx = 2) @ "m", usage = Auto()) @ "m",
+                  ty = Auto(),
+                  eff = Auto(),
+                  usage = Auto(),
+                  body = Redex(
+                    t = Def(qn = qn"__unresolved__.plus") @ "plus",
+                    elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+                  ) @ "plus m"
+                ) @ "ε",
+                elims = List(ETerm(v = Var(idx = 0)))
+              ) @ "plus m n"
             ) @ "ε",
             ty = Auto(),
             eff = Auto(),
             usage = Auto(),
-            body = Let(
-              t = Redex(
-                t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
-                elims = List(ETerm(v = Var(idx = 0)))
-              ) @ "Succ (plus m n",
-              ty = Auto(),
-              eff = Auto(),
-              usage = Auto(),
-              body = Return(v = Var(idx = 0), usage = Auto())
-            ) @ "ε"
+            body = Redex(
+              t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
+              elims = List(ETerm(v = Var(idx = 0)))
+            ) @ "Succ (plus m n"
           ) @ "ε"
         )
       )

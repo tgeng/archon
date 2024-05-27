@@ -133,6 +133,5 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         Zero: Nat
         Succ: Nat -> Nat
         """.inUse:
-        // TODO: fix this
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
   }
