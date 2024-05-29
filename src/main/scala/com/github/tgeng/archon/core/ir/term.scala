@@ -565,6 +565,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   // the existential computation type Σx:A.C̲ in eMLTT [1]. From practical purpose it seems OK,
   // especially after graded modality is added to support linear usage of computations when needed.
   case Let
+  // TODO: consider remove ty, eff, usage here
     (t: CTerm, ty: VTerm, eff: VTerm, usage: VTerm, body: CTerm /* binding += 1 */ )
     (val boundName: Ref[Name])
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)

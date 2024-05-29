@@ -134,4 +134,5 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         Succ: Nat -> Nat
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
+        assertVType(vt"Zero .archon.builtin.type.Usage.one", vt"Nat")
   }
