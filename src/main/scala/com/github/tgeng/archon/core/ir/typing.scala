@@ -425,58 +425,64 @@ class TypingContext
     (using Signature)
     : Set[Constraint] =
     val metaVarIndexes = MetaVarCollector.visitConstraints(constraints)
+    solveAllMetaVars(metaVarIndexes, false)
+    val newConstraints = solveConstraints(constraints)
+    if proactivelySolveAmbiguousMetaVars then
+      val metaVarIndexes = MetaVarCollector.visitConstraints(newConstraints)
+      solveAllMetaVars(metaVarIndexes, true)
+      solveConstraints(newConstraints)
+    else newConstraints
+
+  private def solveAllMetaVars
+    (metaVarIndexes: Set[Nat], proactivelySolveAmbiguousMetaVars: Boolean)
+    (using Context)
+    (using Signature)
+    : Unit =
     for index <- metaVarIndexes.toSeq.sorted do
       metaVars(index) match
+        case Unsolved(context, ty, constraint) if proactivelySolveAmbiguousMetaVars =>
+          given Context = context
+
+          val solution: CTerm | Unit = constraint match
+            case UmcNothing =>
+              ty match
+                case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
+                case F(UsageType(_), _, u)                        => Return(uAny, u)
+                case F(EffectsType(_, _), _, u)                   => Return(total, u)
+                case F(EqDecidabilityType(), _, u)                => Return(eqDecidable, u)
+                case F(HandlerTypeType(), _, u)                   => Return(handlerSimple, u)
+                // TODO[P2]: implement proof/instance search here.
+                case _ => ()
+            case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
+            case UmcVSubtype(lowerBounds)        => Return(lowerBounds.reduce(typeUnion), uAny)
+            case UmcEffSubsumption(lowerBound)   => Return(lowerBound, uAny)
+            case UmcLevelSubsumption(lowerBound) => Return(lowerBound, uAny)
+            case UmcUsageSubsumption(lowerBounds, upperBound) =>
+              Return(
+                upperBound.getOrElse {
+                  lowerBounds
+                    .map(_.normalized)
+                    .map:
+                      case UsageLiteral(u) => Some(u)
+                      case _               => None
+                    .foldLeft[Option[Usage]](Some(UAny)):
+                      case (Some(u1), Some(u2)) => u1 & u2
+                      case (Some(uAny), o)      => o
+                      case (o, Some(uAny))      => o
+                      case _                    => None
+                    .map(UsageLiteral(_))
+                    .getOrElse(throw UnableToFindUsageMeetDuringUnification(lowerBounds))
+                },
+                uAny,
+              )
+          solution match
+            case ()       =>
+            case c: CTerm => assignUnsolved(index, constraint, c)
         case Guarded(context, ty, value, constraints) =>
           val newConstraints = solveConstraints(constraints)
           if newConstraints.isEmpty then assignValue(index, value)
           else updateGuarded(index, Guarded(context, ty, value, newConstraints))
         case _ =>
-    val newConstraints = solveConstraints(constraints)
-    if proactivelySolveAmbiguousMetaVars then
-      val metaVarIndexes = MetaVarCollector.visitConstraints(newConstraints)
-      for index <- metaVarIndexes.toSeq.sorted do
-        metaVars(index) match
-          case Unsolved(context, ty, constraint) =>
-            given Context = context
-            val solution: CTerm | Unit = constraint match
-              case UmcNothing =>
-                ty match
-                  case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
-                  case F(UsageType(_), _, u)                        => Return(uAny, u)
-                  case F(EffectsType(_, _), _, u)                   => Return(total, u)
-                  case F(EqDecidabilityType(), _, u)                => Return(eqDecidable, u)
-                  case F(HandlerTypeType(), _, u)                   => Return(handlerSimple, u)
-                  // TODO[P2]: implement proof/instance search here.
-                  case _ => ()
-              case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
-              case UmcVSubtype(lowerBounds)        => Return(lowerBounds.reduce(typeUnion), uAny)
-              case UmcEffSubsumption(lowerBound)   => Return(lowerBound, uAny)
-              case UmcLevelSubsumption(lowerBound) => Return(lowerBound, uAny)
-              case UmcUsageSubsumption(lowerBounds, upperBound) =>
-                Return(
-                  upperBound.getOrElse {
-                    lowerBounds
-                      .map(_.normalized)
-                      .map:
-                        case UsageLiteral(u) => Some(u)
-                        case _               => None
-                      .foldLeft[Option[Usage]](Some(UAny)):
-                        case (Some(u1), Some(u2)) => u1 & u2
-                        case (Some(uAny), o)      => o
-                        case (o, Some(uAny))      => o
-                        case _                    => None
-                      .map(UsageLiteral(_))
-                      .getOrElse(throw UnableToFindUsageMeetDuringUnification(lowerBounds))
-                  },
-                  uAny,
-                )
-            solution match
-              case ()       =>
-              case c: CTerm => assignUnsolved(index, constraint, c)
-          case _ =>
-      solveConstraints(newConstraints)
-    else newConstraints
 
   private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
     override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
