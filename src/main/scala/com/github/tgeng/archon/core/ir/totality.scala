@@ -30,7 +30,7 @@ def isTotal
     ty match
       case None => true
       case Some(ty) =>
-        val effects = ty.asInstanceOf[IType].effects.normalized
+        val effects = ctx.solveTerm(ty.asInstanceOf[IType].effects)
         if effects == Total()(using SourceInfo.SiEmpty) then true
         // TODO: use heuristics to determine if a term is total
         else if effects == MaybeDiv()(using SourceInfo.SiEmpty) then true

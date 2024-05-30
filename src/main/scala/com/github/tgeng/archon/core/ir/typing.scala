@@ -397,6 +397,28 @@ class TypingContext
   }
 
   @throws(classOf[IrError])
+  def solveTerm(term: VTerm)(using Context)(using Σ: Signature): VTerm =
+    solveTermImpl(term)(term => solveOnce(MetaVarCollector.visitVTerm, _.normalized)(term, true))
+
+  @throws(classOf[IrError])
+  def solveTerm(term: CTerm)(using Context)(using Σ: Signature): CTerm =
+    solveTermImpl(term)(term => solveOnce(MetaVarCollector.visitCTerm, _.normalized)(term, true))
+
+  @throws(classOf[IrError])
+  inline def solveTermImpl[T](term: T)(solveStep: T => T)(using Context)(using Σ: Signature): T =
+    trace[T](
+      "solveTerm",
+      Block(ChopDown, Aligned, pprint(term)),
+      term => Block(ChopDown, Aligned, pprint(term)),
+    ):
+      var previousTerm = term
+      var currentTerm = solveStep(term)
+      while previousTerm != currentTerm do
+        previousTerm = currentTerm
+        currentTerm = solveStep(currentTerm)
+      currentTerm
+
+  @throws(classOf[IrError])
   def solve
     (constraints: Set[Constraint], aggressivelySolveConstraints: Boolean = false)
     (using Context)
@@ -407,31 +429,39 @@ class TypingContext
       Block(ChopDown, Aligned, pprint(constraints)),
       constraints => Block(ChopDown, Aligned, pprint(constraints)),
     ):
+      val solveStep = solveOnce(MetaVarCollector.visitConstraints, solveConstraints)
       var currentConstraints = constraints
       while solvedVersion != version do
         solvedVersion = version
-        currentConstraints = solveOnce(currentConstraints, false)
+        currentConstraints = solveStep(currentConstraints, false)
       if currentConstraints.nonEmpty && aggressivelySolveConstraints then
-        currentConstraints = solveOnce(currentConstraints, true)
+        currentConstraints = solveStep(currentConstraints, true)
         while solvedVersion != version do
           solvedVersion = version
-          currentConstraints = solveOnce(currentConstraints, true)
+          currentConstraints = solveStep(currentConstraints, true)
       currentConstraints
 
   @throws(classOf[IrError])
-  private def solveOnce
-    (constraints: Set[Constraint], proactivelySolveAmbiguousMetaVars: Boolean)
+  private def solveOnce[T]
+    (
+      metaVarExtractor: T => Set[Nat],
+      iterator: T => T,
+    )
+    (
+      t: T,
+      proactivelySolveAmbiguousMetaVars: Boolean,
+    )
     (using Context)
     (using Signature)
-    : Set[Constraint] =
-    val metaVarIndexes = MetaVarCollector.visitConstraints(constraints)
+    : T =
+    val metaVarIndexes = metaVarExtractor(t)
     solveAllMetaVars(metaVarIndexes, false)
-    val newConstraints = solveConstraints(constraints)
+    val newT = iterator(t)
     if proactivelySolveAmbiguousMetaVars then
-      val metaVarIndexes = MetaVarCollector.visitConstraints(newConstraints)
+      val metaVarIndexes = metaVarExtractor(newT)
       solveAllMetaVars(metaVarIndexes, true)
-      solveConstraints(newConstraints)
-    else newConstraints
+      iterator(newT)
+    else newT
 
   private def solveAllMetaVars
     (metaVarIndexes: Set[Nat], proactivelySolveAmbiguousMetaVars: Boolean)
