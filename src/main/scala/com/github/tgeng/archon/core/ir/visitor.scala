@@ -351,10 +351,9 @@ trait Visitor[C, R]:
 
   def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R = combine(
     visitCTerm(let.t),
-    visitVTerm(let.ty),
+    visitBinding(let.tBinding),
     visitVTerm(let.eff),
-    visitVTerm(let.usage),
-    withBindings(Seq(let.boundName)) {
+    withBindings(Seq(let.tBinding.name)) {
       visitCTerm(let.body)
     },
   )
@@ -722,13 +721,14 @@ trait Transformer[C]:
   def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
     Let(
       transformCTerm(let.t),
-      transformVTerm(let.ty),
+      Binding(transformVTerm(let.tBinding.ty), transformVTerm(let.tBinding.usage))(
+        let.tBinding.name,
+      ),
       transformVTerm(let.eff),
-      transformVTerm(let.usage),
-      withBindings(Seq(let.boundName)) {
+      withBindings(Seq(let.tBinding.name)) {
         transformCTerm(let.body)
       },
-    )(let.boundName)(using let.sourceInfo)
+    )(using let.sourceInfo)
 
   def transformRedex(redex: Redex)(using ctx: C)(using Σ: Signature): CTerm =
     Redex(

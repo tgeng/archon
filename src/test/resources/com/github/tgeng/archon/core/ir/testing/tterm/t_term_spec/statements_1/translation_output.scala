@@ -1,15 +1,13 @@
 Let(
   t = Let(
     t = Def(qn = qn"__unresolved__.b") @ "b",
-    ty = Auto() @ "ε",
+    tBinding = Binding(ty = Auto() @ "ε", usage = Auto()) @ "$v",
     eff = Auto(),
-    usage = Auto(),
     body = Redex(
       t = Let(
         t = Def(qn = qn"__unresolved__.a") @ "a",
-        ty = Auto(),
+        tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
         eff = Auto(),
-        usage = Auto(),
         body = Redex(
           t = Def(qn = qn"__unresolved__.f") @ "f",
           elims = List(ETerm(v = Var(idx = 0) @ "ε"))
@@ -18,20 +16,20 @@ Let(
       elims = List(ETerm(v = Var(idx = 0)))
     ) @ "f a b"
   ) @ "ε",
-  ty = Auto(),
+  tBinding = Binding(
+    ty = Auto(),
+    usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.zero") @ "ε") @ "ε"
+  ) @ "_",
   eff = Auto(),
-  usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.zero") @ "ε") @ "ε",
   body = Let(
     t = Def(qn = qn"__unresolved__.d") @ "d",
-    ty = Auto(),
+    tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
     eff = Auto(),
-    usage = Auto(),
     body = Redex(
       t = Let(
         t = Def(qn = qn"__unresolved__.c") @ "c",
-        ty = Auto(),
+        tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
         eff = Auto(),
-        usage = Auto(),
         body = Redex(
           t = Def(qn = qn"__unresolved__.g") @ "g",
           elims = List(ETerm(v = Var(idx = 0)))

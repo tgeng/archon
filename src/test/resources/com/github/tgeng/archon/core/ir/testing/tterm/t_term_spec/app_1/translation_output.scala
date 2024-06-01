@@ -1,26 +1,22 @@
 Let(
   t = Def(qn = qn"__unresolved__.d") @ "d",
-  ty = Auto() @ "ε",
+  tBinding = Binding(ty = Auto() @ "ε", usage = Auto()) @ "$v",
   eff = Auto(),
-  usage = Auto(),
   body = Redex(
     t = Let(
       t = Def(qn = qn"__unresolved__.c") @ "c",
-      ty = Auto(),
+      tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
       eff = Auto(),
-      usage = Auto(),
       body = Redex(
         t = Let(
           t = Def(qn = qn"__unresolved__.b") @ "b",
-          ty = Auto(),
+          tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
           eff = Auto(),
-          usage = Auto(),
           body = Redex(
             t = Let(
               t = Def(qn = qn"__unresolved__.a") @ "a",
-              ty = Auto(),
+              tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
               eff = Auto(),
-              usage = Auto(),
               body = Redex(
                 t = Def(qn = qn"__unresolved__.f") @ "f",
                 elims = List(ETerm(v = Var(idx = 0) @ "ε"))

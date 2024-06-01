@@ -22,23 +22,20 @@ List(
           value = Let(
             t = Let(
               t = Def(qn = qn"__unresolved__.Zero") @ "Zero",
-              ty = Auto(),
+              tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
               eff = Auto(),
-              usage = Auto(),
               body = Redex(
                 t = Def(qn = qn"__unresolved__.Suc") @ "Suc",
                 elims = List(ETerm(v = Var(idx = 0) @ "ε"))
               ) @ "Suc Zero"
             ) @ "ε",
-            ty = Auto(),
+            tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
             eff = Auto(),
-            usage = Auto(),
             body = Redex(
               t = Let(
                 t = Return(v = Var(idx = 1) @ "n", usage = Auto()) @ "n",
-                ty = Auto(),
+                tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
                 eff = Auto(),
-                usage = Auto(),
                 body = Redex(
                   t = Def(qn = qn"__unresolved__.plus") @ "plus",
                   elims = List(ETerm(v = Var(idx = 0)))

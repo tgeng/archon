@@ -107,11 +107,10 @@ extension (tTerm: TTerm)
           usage <- usage.toCTerm
         yield Let(
           t.toCTerm(using ctx),
-          ty,
+          Binding(ty, usage)(Name.Normal(name)),
           effects,
-          usage,
           body.toCTerm(using ctx.bindLocal(name)),
-        )(Name.Normal(name))
+        )
       case TApp(f, arg) =>
         arg.toCTerm
           .map(arg => redex(f.toCTerm, arg))
@@ -190,8 +189,8 @@ extension (self: CTerm)
         case c: CTerm => c
     else
       f(using newCtx)(Var(0)) match
-        case v: VTerm => Let(self, Auto(), Auto(), Auto(), Return(v))(gn"v")
-        case c: CTerm => Let(self, Auto(), Auto(), Auto(), c)(gn"v")
+        case v: VTerm => Let(self, Binding(Auto(), Auto())(gn"v"), Auto(), Return(v))
+        case c: CTerm => Let(self, Binding(Auto(), Auto())(gn"v"), Auto(), c)
 
   def flatMap(f: TranslationContext ?=> VTerm => CTerm)(using ctx: TranslationContext): CTerm =
     val newCtx = ctx.bindLocal("")
@@ -203,13 +202,12 @@ extension (self: CTerm)
       case _ =>
         Let(
           self,
-          Auto(),
-          Auto(),
+          Binding(Auto(), Auto())(gn"v"),
           Auto(),
           // TODO[P2]: this doesn't work when there are multiple bindings since they will all be
           //  bound to `Var(0)`. I probably need to refactor this without monad comprehension.
           f(using newCtx)(Var(0)),
-        )(gn"v")
+        )
 
 extension (tp: TCoPattern)
   def toCoPattern(using TranslationContext): CoPattern =

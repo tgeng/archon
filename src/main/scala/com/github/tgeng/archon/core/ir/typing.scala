@@ -1666,7 +1666,7 @@ private def checkLet
   (using Σ: Signature)
   (using TypingContext)
   : (CTerm, CTerm, Usages) =
-  val (ty, _) = checkIsType(tm.ty)
+  val (ty, _) = checkIsType(tm.tBinding.ty)
   // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages
   // in body can all be trivialized by multiple U0 since they won't execute. But inhabit-ability is
   // not decidable. Even if we only do some conservative checking, it's hard to check polymorphic
@@ -1681,7 +1681,7 @@ private def checkLet
   // these complexity.
   val (unnormalizedEffects, _) = checkType(tm.eff, EffectsType())
   val effects = unnormalizedEffects.normalized
-  val (usage, _) = checkType(tm.usage, UsageType())
+  val (usage, _) = checkType(tm.tBinding.usage, UsageType())
   val (t, unnormalizedTUsages) = checkType(tm.t, F(ty, effects, usage))
   val tUsages = unnormalizedTUsages.map(_.normalized)
   val (newTm, checkedBodyTy, usages) =
@@ -1732,7 +1732,7 @@ private def checkLet
       val verifiedUsagesInBody = verifyUsages(usagesInBody, tBinding :: Nil)
       val continuationUsage = getEffectsContinuationUsage(effects)
       (
-        Let(t, ty, effects, usage, body)(tm.boundName)(using tm.sourceInfo),
+        Let(t, tBinding, effects, body)(using tm.sourceInfo),
         leakCheckedBodyTy.strengthened,
         verifiedUsagesInBody * continuationUsage,
       )

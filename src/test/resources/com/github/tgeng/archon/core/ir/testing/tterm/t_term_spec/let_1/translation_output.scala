@@ -1,34 +1,36 @@
 Let(
   t = Def(qn = qn"__unresolved__.getA") @ "getA",
-  ty = Auto() @ """let a = getA
+  tBinding = Binding(
+    ty = Auto() @ """let a = getA
 let b = getB
 plus a b""",
-  eff = Auto(),
-  usage = Collapse(
-    cTm = Return(v = Auto(), usage = Auto() @ "ε") @ """let a = getA
+    usage = Collapse(
+      cTm = Return(v = Auto(), usage = Auto() @ "ε") @ """let a = getA
 let b = getB
 plus a b"""
-  ) @ "ε",
+    ) @ "ε"
+  ) @ "a",
+  eff = Auto(),
   body = Let(
     t = Def(qn = qn"__unresolved__.getB") @ "getB",
-    ty = Auto() @ """let b = getB
+    tBinding = Binding(
+      ty = Auto() @ """let b = getB
 plus a b""",
-    eff = Auto(),
-    usage = Collapse(
-      cTm = Return(v = Auto(), usage = Auto()) @ """let b = getB
+      usage = Collapse(
+        cTm = Return(v = Auto(), usage = Auto()) @ """let b = getB
 plus a b"""
-    ),
+      )
+    ) @ "b",
+    eff = Auto(),
     body = Let(
       t = Return(v = Var(idx = 0) @ "b", usage = Auto()) @ "b",
-      ty = Auto(),
+      tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
       eff = Auto(),
-      usage = Auto(),
       body = Redex(
         t = Let(
           t = Return(v = Var(idx = 2) @ "a", usage = Auto()) @ "a",
-          ty = Auto(),
+          tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
           eff = Auto(),
-          usage = Auto(),
           body = Redex(
             t = Def(qn = qn"__unresolved__.plus") @ "plus",
             elims = List(ETerm(v = Var(idx = 0) @ "ε"))

@@ -13,9 +13,8 @@ List(
         Binding(
           ty = Let(
             t = Def(qn = qn"__unresolved__.l") @ "l",
-            ty = Auto() @ "ε",
+            tBinding = Binding(ty = Auto() @ "ε", usage = Auto()) @ "$v",
             eff = Auto(),
-            usage = Auto(),
             body = Redex(
               t = Def(qn = qn"__unresolved__.Type") @ "Type",
               elims = List(ETerm(v = Var(idx = 0) @ "ε"))

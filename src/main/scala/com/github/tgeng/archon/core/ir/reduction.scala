@@ -130,15 +130,14 @@ private final class StackMachine
                           processStackEntryForDisposerCall(term)(handler)
                         case (_, term) => term
                       ,
-                      DataType(Builtins.UnitQn, Nil),
+                      Binding(DataType(Builtins.UnitQn, Nil), UsageLiteral(UAny))(
+                        gn"disposeResult",
+                      ),
                       handler.outputEffects,
-                      UsageLiteral(UAny),
                       // The usage here may not be correct. Technically it should be the usage of the result captured in
                       // the type of the Pair. But we don't have that information here. Fortunately this information is
                       // not needed anyway because reduction would substitute the result later.
                       Return(result.weakened, uAny),
-                    )(
-                      gn"disposeResult",
                     )
                   def getU1Term(result: VTerm): CTerm =
                     // The usage here may not be correct. Technically it should be the usage of the result captured in
@@ -224,7 +223,7 @@ private final class StackMachine
           case Thunk(c)             => run(c)
           case _: Var | _: Collapse => reconstructTermFromStack(pc)
           case _                    => throw IllegalArgumentException("type error")
-      case Let(t, _, _, _, ctx) =>
+      case Let(t, _, _, ctx) =>
         t match
           case Return(v, _)    => run(ctx.substLowers(v))
           case _ if reduceDown => throw IllegalArgumentException("type error")
@@ -272,7 +271,7 @@ private final class StackMachine
                   .slice(matchingHandlerIdx, stack.size)
                   .foldRight(tip):
                     case (entry: Elimination[VTerm], term) => redex(term, entry)
-                    case (entry: Let, term)                => entry.copy(t = term)(entry.boundName)
+                    case (entry: Let, term)                => entry.copy(t = term)
                     case (HandlerEntry(_, entry, _), term) => entry.copy(input = term)
                     case _ => throw IllegalStateException("type error")
                 stack.dropRightInPlace(stack.size - matchingHandlerIdx)
@@ -309,7 +308,7 @@ private final class StackMachine
                 h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
-                case t: Let   => t.copy(t = Hole)(t.boundName)
+                case t: Let   => t.copy(t = Hole)
                 case t        => t
             stack.pushAll(stackToDuplicate)
             this.currentHandlerEntry = handlerEntry
@@ -370,8 +369,8 @@ private final class StackMachine
         case t: Let =>
           replicate(
             baseStackSize,
-            t.copy(t = continuationTerm1)(t.boundName),
-            t.copy(t = continuationTerm2)(t.boundName),
+            t.copy(t = continuationTerm1),
+            t.copy(t = continuationTerm2),
             continuationUsage,
           )
         case t: Redex =>
@@ -408,7 +407,7 @@ private final class StackMachine
     given SourceInfo = ctx.sourceInfo
 
     ctx match
-      case t: Let     => t.copy(t = c)(t.boundName)
+      case t: Let     => t.copy(t = c)
       case t: Handler => t.copy(input = c)
       case t: Redex   => t.copy(t = c)
       case _          => throw IllegalArgumentException("unexpected context")

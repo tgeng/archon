@@ -40,15 +40,13 @@ List(
           value = Let(
             t = Let(
               t = Return(v = Var(idx = 0) @ "n", usage = Auto()) @ "n",
-              ty = Auto(),
+              tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
               eff = Auto(),
-              usage = Auto(),
               body = Redex(
                 t = Let(
                   t = Return(v = Var(idx = 2) @ "m", usage = Auto()) @ "m",
-                  ty = Auto(),
+                  tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
                   eff = Auto(),
-                  usage = Auto(),
                   body = Redex(
                     t = Def(qn = qn"__unresolved__.plus") @ "plus",
                     elims = List(ETerm(v = Var(idx = 0) @ "ε"))
@@ -57,9 +55,8 @@ List(
                 elims = List(ETerm(v = Var(idx = 0)))
               ) @ "plus m n"
             ) @ "ε",
-            ty = Auto(),
+            tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
             eff = Auto(),
-            usage = Auto(),
             body = Redex(
               t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
               elims = List(ETerm(v = Var(idx = 0)))
