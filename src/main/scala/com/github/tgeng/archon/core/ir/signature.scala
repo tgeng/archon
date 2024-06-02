@@ -200,6 +200,11 @@ trait Signature:
         case op if op.name == opName => op
     yield r
 
+  def getOperation(qn: QualifiedName): Operation =
+    qn match
+      case QualifiedName.Node(qn, name) => getOperation(qn, name)
+      case _                            => throw IllegalArgumentException(s"missing operation $qn")
+
   def getOperation(qn: QualifiedName, opName: Name): Operation =
     getOperationOption(qn, opName).getOrElse(
       throw IllegalArgumentException(s"missing operation $opName"),

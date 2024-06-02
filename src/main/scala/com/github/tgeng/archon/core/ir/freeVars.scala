@@ -6,7 +6,7 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 
 trait FreeVarsVisitorTrait extends Visitor[Nat, Seq[Var]]:
 
-  override def withBindings
+  override def withBoundNames
     (bindingNames: => List[Name])
     (action: Nat ?=> Seq[Var])
     (using bar: Nat)

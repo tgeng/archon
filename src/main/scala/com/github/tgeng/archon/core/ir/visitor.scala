@@ -8,58 +8,14 @@ import com.github.tgeng.archon.core.ir.CoPattern.*
 import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
-trait Visitor[C, R]:
-
+trait TermVisitor[C, R]:
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def withBindings
-    (bindingNames: => Seq[Ref[Name]])
-    (action: C ?=> R)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
+  def withTelescope(telescope: => Telescope)(action: C ?=> R)(using ctx: C)(using Σ: Signature): R =
     action(using ctx)
 
-  def visitPreTContext
-    (tTelescope: List[(Binding[CTerm], Variance)])
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    tTelescope match
-      case Nil => combine()
-      case (binding, _) :: rest =>
-        combine(
-          visitPreBinding(binding),
-          withBindings(Seq(binding.name)) {
-            visitPreTContext(rest)
-          },
-        )
-
-  def visitTContext
-    (tTelescope: List[(Binding[VTerm], Variance)])
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    tTelescope match
-      case Nil => combine()
-      case (binding, _) :: rest =>
-        combine(
-          visitBinding(binding),
-          withBindings(Seq(binding.name)) {
-            visitTContext(rest)
-          },
-        )
-
-  def visitPreContext(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
-    telescope match
-      case Nil => combine()
-      case binding :: rest =>
-        combine(
-          visitPreBinding(binding),
-          withBindings(Seq(binding.name)) {
-            visitPreContext(rest)
-          },
-        )
+  def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
+    combine(visitVTerm(binding.ty), visitVTerm(binding.usage))
 
   def visitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
     telescope match
@@ -67,126 +23,10 @@ trait Visitor[C, R]:
       case binding :: rest =>
         combine(
           visitBinding(binding),
-          withBindings(Seq(binding.name)) {
+          withTelescope(List(binding)) {
             visitTelescope(rest)
           },
         )
-
-  def visitPreBinding(binding: Binding[CTerm])(using ctx: C)(using Σ: Signature): R =
-    combine(visitCTerm(binding.ty), visitCTerm(binding.usage))
-
-  def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
-    combine(visitVTerm(binding.ty), visitVTerm(binding.usage))
-
-  def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R =
-    pattern match
-      case pVar: PVar           => visitPVar(pVar)
-      case pDataType: PDataType => visitPDataType(pDataType)
-      case pForcedDataType: PForcedDataType =>
-        visitPForcedDataType(pForcedDataType)
-      case pConstructor: PConstructor => visitPConstructor(pConstructor)
-      case pForcedConstructor: PForcedConstructor =>
-        visitPForcedConstructor(pForcedConstructor)
-      case pForced: PForced => visitPForced(pForced)
-      case pAbsurd: PAbsurd => visitPAbsurd(pAbsurd)
-
-  def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature): R = combine()
-
-  def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitQualifiedName(pDataType.qn) +:
-        pDataType.args.map(visitPattern)*,
-    )
-
-  def visitPForcedDataType(pForcedDataType: PForcedDataType)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitQualifiedName(pForcedDataType.qn) +:
-        pForcedDataType.args.map(visitPattern)*,
-    )
-
-  def visitPConstructor(pConstructor: PConstructor)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitName(pConstructor.name) +:
-        pConstructor.args.map(visitPattern)*,
-    )
-
-  def visitPForcedConstructor
-    (pForcedConstructor: PForcedConstructor)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    combine(
-      visitName(pForcedConstructor.name) +:
-        pForcedConstructor.args.map(visitPattern)*,
-    )
-
-  def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature): R =
-    visitVTerm(pForced.term)
-
-  def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: C)(using Σ: Signature): R =
-    combine()
-
-  def visitCoPattern(coPattern: CoPattern)(using ctx: C)(using Σ: Signature): R = coPattern match
-    case p: CPattern    => visitCPattern(p)
-    case p: CProjection => visitCProjection(p)
-
-  def visitCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): R =
-    visitPattern(p.pattern)
-
-  def visitCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): R =
-    visitName(p.name)
-
-  def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
-    case t: CtTerm      => visitCtTerm(t)
-    case l: CtLambda    => visitCtLambda(l)
-    case r: CtRecord    => visitCtRecord(r)
-    case tc: CtTypeCase => visitCtTypeCase(tc)
-    case dc: CtDataCase => visitCtDataCase(dc)
-
-  def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
-
-  def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): R =
-    withBindings(Seq(l.boundName)):
-      visitCaseTree(l.body)
-
-  def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      r.fields.flatMap { (name, body) =>
-        Seq(visitName(name), visitCaseTree(body))
-      }.toSeq*,
-    )
-
-  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      visitVTerm(ct.operand) +:
-        ct.cases.flatMap { (qn, body) =>
-          Seq(
-            visitQualifiedName(qn),
-            withBindings(Σ.getData(qn).context.map(_._1.name).toList) {
-              visitCaseTree(body)
-            },
-          )
-        }.toSeq :+ visitCaseTree(ct.default)*,
-    )
-
-  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
-    val constructors = Σ.getConstructors(dt.qn)
-    combine(
-      visitVTerm(dt.operand) +:
-        visitQualifiedName(dt.qn) +: dt.cases.flatMap { (name, body) =>
-          val constructor = constructors
-            .collectFirst {
-              case con if con.name == name => con
-            }
-            .getOrElse(throw IllegalStateException(s"missing constructor $name for ${dt.qn}"))
-          Seq(
-            visitName(name),
-            withBindings(constructor.paramTys.map(_.name)) {
-              visitCaseTree(body)
-            },
-          )
-        }.toSeq*,
-    )
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
     case ty: Type                               => visitType(ty)
@@ -353,7 +193,7 @@ trait Visitor[C, R]:
     visitCTerm(let.t),
     visitBinding(let.tBinding),
     visitVTerm(let.eff),
-    withBindings(Seq(let.tBinding.name)) {
+    withTelescope(List(let.tBinding)) {
       visitCTerm(let.body)
     },
   )
@@ -369,7 +209,7 @@ trait Visitor[C, R]:
   def visitFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): R =
     combine(
       visitVTerm(functionType.binding.ty),
-      withBindings(Seq(functionType.binding.name)) {
+      withTelescope(List(functionType.binding)) {
         visitCTerm(functionType.bodyTy)
       },
       visitVTerm(functionType.effects),
@@ -399,19 +239,24 @@ trait Visitor[C, R]:
         visitVTerm(handler.parameter),
         visitBinding(handler.parameterBinding),
       ) ++ handler.parameterDisposer.map(t =>
-        withBindings(Seq(handler.parameterBinding.name)) {
+        withTelescope(List(handler.parameterBinding)) {
           visitCTerm(t)
         },
       ) ++ handler.parameterReplicator.map(t =>
-        withBindings(Seq(handler.parameterBinding.name)) {
+        withTelescope(List(handler.parameterBinding)) {
           visitCTerm(t)
         },
       ) ++ Seq(
-        withBindings(Seq(handler.parameterBinding.name, handler.inputBinding.name)) {
+        withTelescope(List(handler.parameterBinding, handler.inputBinding)) {
           visitCTerm(handler.transform)
         },
-      ) ++ handler.handlers.map { (name, handlerImpl) =>
-        withBindings(handler.parameterBinding.name +: handlerImpl.boundNames) {
+      ) ++ handler.handlers.map { (qn, handlerImpl) =>
+        val operation = Σ.getOperation(qn)
+        assert(operation.paramTys.size == handlerImpl.boundNames.size)
+        val handlerParams = operation.paramTys
+          .zip(handlerImpl.boundNames)
+          .map((binding, name) => binding.copy()(name))
+        withTelescope(handler.parameterBinding +: handlerParams) {
           visitHandlerImpl(handlerImpl)
         }
       } ++ Seq(
@@ -452,6 +297,178 @@ trait Visitor[C, R]:
     case operationCall: OperationCall => visitOperationCall(operationCall)
     case continuation: Continuation   => visitContinuation(continuation)
     case handler: Handler             => visitHandler(handler)
+
+trait Visitor[C, R] extends TermVisitor[C, R]:
+
+  override def withTelescope
+    (telescope: => Telescope)
+    (action: C ?=> R)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    withBoundNames(telescope.map(_.name))(action)
+
+  def withBoundNames
+    (bindingNames: => Seq[Ref[Name]])
+    (action: C ?=> R)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    action(using ctx)
+
+  def visitPreTContext
+    (tTelescope: List[(Binding[CTerm], Variance)])
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    tTelescope match
+      case Nil => combine()
+      case (binding, _) :: rest =>
+        combine(
+          visitPreBinding(binding),
+          withBoundNames(Seq(binding.name)) {
+            visitPreTContext(rest)
+          },
+        )
+
+  def visitTContext
+    (tTelescope: List[(Binding[VTerm], Variance)])
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    tTelescope match
+      case Nil => combine()
+      case (binding, _) :: rest =>
+        combine(
+          visitBinding(binding),
+          withBoundNames(Seq(binding.name)) {
+            visitTContext(rest)
+          },
+        )
+
+  def visitPreContext(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
+    telescope match
+      case Nil => combine()
+      case binding :: rest =>
+        combine(
+          visitPreBinding(binding),
+          withBoundNames(Seq(binding.name)) {
+            visitPreContext(rest)
+          },
+        )
+
+  def visitPreBinding(binding: Binding[CTerm])(using ctx: C)(using Σ: Signature): R =
+    combine(visitCTerm(binding.ty), visitCTerm(binding.usage))
+
+  def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R =
+    pattern match
+      case pVar: PVar           => visitPVar(pVar)
+      case pDataType: PDataType => visitPDataType(pDataType)
+      case pForcedDataType: PForcedDataType =>
+        visitPForcedDataType(pForcedDataType)
+      case pConstructor: PConstructor => visitPConstructor(pConstructor)
+      case pForcedConstructor: PForcedConstructor =>
+        visitPForcedConstructor(pForcedConstructor)
+      case pForced: PForced => visitPForced(pForced)
+      case pAbsurd: PAbsurd => visitPAbsurd(pAbsurd)
+
+  def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature): R = combine()
+
+  def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitQualifiedName(pDataType.qn) +:
+        pDataType.args.map(visitPattern)*,
+    )
+
+  def visitPForcedDataType(pForcedDataType: PForcedDataType)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitQualifiedName(pForcedDataType.qn) +:
+        pForcedDataType.args.map(visitPattern)*,
+    )
+
+  def visitPConstructor(pConstructor: PConstructor)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitName(pConstructor.name) +:
+        pConstructor.args.map(visitPattern)*,
+    )
+
+  def visitPForcedConstructor
+    (pForcedConstructor: PForcedConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    combine(
+      visitName(pForcedConstructor.name) +:
+        pForcedConstructor.args.map(visitPattern)*,
+    )
+
+  def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature): R =
+    visitVTerm(pForced.term)
+
+  def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: C)(using Σ: Signature): R =
+    combine()
+
+  def visitCoPattern(coPattern: CoPattern)(using ctx: C)(using Σ: Signature): R = coPattern match
+    case p: CPattern    => visitCPattern(p)
+    case p: CProjection => visitCProjection(p)
+
+  def visitCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): R =
+    visitPattern(p.pattern)
+
+  def visitCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): R =
+    visitName(p.name)
+
+  def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
+    case t: CtTerm      => visitCtTerm(t)
+    case l: CtLambda    => visitCtLambda(l)
+    case r: CtRecord    => visitCtRecord(r)
+    case tc: CtTypeCase => visitCtTypeCase(tc)
+    case dc: CtDataCase => visitCtDataCase(dc)
+
+  def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
+
+  def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): R =
+    withBoundNames(Seq(l.boundName)):
+      visitCaseTree(l.body)
+
+  def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      r.fields.flatMap { (name, body) =>
+        Seq(visitName(name), visitCaseTree(body))
+      }.toSeq*,
+    )
+
+  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R =
+    combine(
+      visitVTerm(ct.operand) +:
+        ct.cases.flatMap { (qn, body) =>
+          Seq(
+            visitQualifiedName(qn),
+            withBoundNames(Σ.getData(qn).context.map(_._1.name).toList) {
+              visitCaseTree(body)
+            },
+          )
+        }.toSeq :+ visitCaseTree(ct.default)*,
+    )
+
+  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
+    val constructors = Σ.getConstructors(dt.qn)
+    combine(
+      visitVTerm(dt.operand) +:
+        visitQualifiedName(dt.qn) +: dt.cases.flatMap { (name, body) =>
+          val constructor = constructors
+            .collectFirst {
+              case con if con.name == name => con
+            }
+            .getOrElse(throw IllegalStateException(s"missing constructor $name for ${dt.qn}"))
+          Seq(
+            visitName(name),
+            withBoundNames(constructor.paramTys.map(_.name)) {
+              visitCaseTree(body)
+            },
+          )
+        }.toSeq*,
+    )
 
 trait Transformer[C]:
 

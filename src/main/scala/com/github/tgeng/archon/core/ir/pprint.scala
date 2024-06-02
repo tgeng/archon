@@ -65,7 +65,7 @@ object Renamer extends Visitor[RenamerContext, Unit]:
 
   override def combine(rs: Unit*)(using ctx: RenamerContext)(using Σ: Signature): Unit = ()
 
-  override def withBindings
+  override def withBoundNames
     (bindingNames: => Seq[Ref[Name]])
     (action: RenamerContext ?=> Unit)
     (using ctx: RenamerContext)
@@ -187,7 +187,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     if blocks.isEmpty then throw IllegalStateException()
     else Block(Whitespace, Aligned, Wrap, blocks)
 
-  override def withBindings
+  override def withBoundNames
     (bindingNames: => Seq[Ref[Name]])
     (action: PPrintContext ?=> Block)
     (using ctx: PPrintContext)
@@ -569,7 +569,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                   Wrap,
                   FixedIncrement(2),
                   Block(Whitespace, NoWrap, ".return", h.inputBinding.name, "->"),
-                  withBindings(Seq(h.inputBinding.name)) {
+                  withBoundNames(Seq(h.inputBinding.name)) {
                     transform
                   },
                 ) +: (parameterDisposer
@@ -579,7 +579,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                       Wrap,
                       FixedIncrement(2),
                       Block(Whitespace, NoWrap, ".dispose", "->"),
-                      withBindings(Seq(h.parameterBinding.name)) {
+                      withBoundNames(Seq(h.parameterBinding.name)) {
                         disposer
                       },
                     ),
@@ -591,7 +591,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                       Wrap,
                       FixedIncrement(2),
                       Block(Whitespace, NoWrap, ".replicate", "->"),
-                      withBindings(Seq(h.parameterBinding.name)) {
+                      withBoundNames(Seq(h.parameterBinding.name)) {
                         replicator
                       },
                     ),
@@ -612,7 +612,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
                     Wrap,
                     FixedIncrement(2),
                     paramBlock,
-                    withBindings(allParamNames) {
+                    withBoundNames(allParamNames) {
                       handlerImpl.body
                     },
                   )

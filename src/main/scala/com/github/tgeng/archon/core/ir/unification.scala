@@ -155,7 +155,7 @@ private object CycleVisitor
   override def combine(rs: Boolean*)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
     rs.foldLeft(false)(_ || _)
 
-  override def withBindings
+  override def withBoundNames
     (bindingNames: => Seq[Ref[Name]])
     (action: ((Nat, Boolean)) ?=> Boolean)
     (using ctx: (Nat, Boolean))

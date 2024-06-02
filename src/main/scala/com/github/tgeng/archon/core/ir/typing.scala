@@ -798,7 +798,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
     : Seq[Var] =
     violatedVars.flatten
 
-  override def withBindings
+  override def withBoundNames
     (bindingNames: => Seq[Ref[Name]])
     (action: ((TContext, Variance, Nat)) ?=> Seq[Var])
     (using ctx: (TContext, Variance, Nat))
@@ -887,7 +887,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
     val contravariantCtx = (tContext, variance.flip, offset)
     combine(
       visitVTerm(functionType.binding.ty)(using contravariantCtx),
-      withBindings(Seq(functionType.binding.name)) {
+      withBoundNames(Seq(functionType.binding.name)) {
         visitCTerm(functionType.bodyTy)
       },
       visitVTerm(functionType.effects)(using invariantCtx),
