@@ -71,14 +71,14 @@ def checkIsSubtype
                   args += arg1
                   r
                 case Variance.COVARIANT =>
-                  val (checkedArg1, _) = checkIsType(arg1)
-                  val (checkedArg2, _) = checkIsType(arg2)
+                  val checkedArg1 = checkIsType(arg1)
+                  val checkedArg2 = checkIsType(arg2)
                   val r = checkIsSubtype(checkedArg1, checkedArg2)
                   args += checkedArg1
                   r
                 case Variance.CONTRAVARIANT =>
-                  val (checkedArg1, _) = checkIsType(arg1)
-                  val (checkedArg2, _) = checkIsType(arg2)
+                  val checkedArg1= checkIsType(arg1)
+                  val checkedArg2 = checkIsType(arg2)
                   val r = checkIsSubtype(checkedArg1, checkedArg2)
                   args += checkedArg2
                   r
@@ -193,14 +193,14 @@ def checkIsSubtype
                   args += arg1
                   r
                 case Variance.COVARIANT =>
-                  val (checkedArg1, _) = checkIsType(arg1)
-                  val (checkedArg2, _) = checkIsType(arg2)
+                  val checkedArg1 = checkIsType(arg1)
+                  val checkedArg2 = checkIsType(arg2)
                   val r = checkIsSubtype(checkedArg1, checkedArg2)
                   args += checkedArg1
                   r
                 case Variance.CONTRAVARIANT =>
-                  val (checkedArg1, _) = checkIsType(arg1)
-                  val (checkedArg2, _) = checkIsType(arg2)
+                  val checkedArg1 = checkIsType(arg1)
+                  val checkedArg2 = checkIsType(arg2)
                   val r = checkIsSubtype(checkedArg1, checkedArg2)
                   args += checkedArg2
                   r

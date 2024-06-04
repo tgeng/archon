@@ -11,14 +11,13 @@ def assertVType
   (using ctx: TypingContext)
   : Unit =
   try
-    val (actualNormalizedT, usages) = checkType(t, ty)
+    val (actualNormalizedT) = checkType(t, ty)
     expectedNormalizedT match
       case Some(expected) if expected != actualNormalizedT =>
         fail(
           s"Actual: ${PrettyPrinter.pprint(actualNormalizedT)}\nExpected: ${PrettyPrinter.pprint(expected)}",
         )
       case _ =>
-    verifyUsages(usages, Γ.toTelescope)(using Context.empty)
   catch
     case e: IrError => {
       enableDebugging
@@ -45,14 +44,13 @@ def assertCType
   (using ctx: TypingContext)
   : Unit =
   try
-    val (actualNormalizedT, usages) = checkType(t, ty)
+    val (actualNormalizedT) = checkType(t, ty)
     expectedNormalizedT match
       case Some(expected) if expected != actualNormalizedT =>
         fail(
           s"Actual: ${PrettyPrinter.pprint(actualNormalizedT)}\nExpected: ${PrettyPrinter.pprint(expected)}",
         )
       case _ =>
-    verifyUsages(usages, Γ.toTelescope)(using Context.empty)
   catch
     case e: IrError => {
       enableDebugging
@@ -89,12 +87,12 @@ def assertVConvertible
   : Unit =
   val (checkedA, checkedB) = ty match
     case None =>
-      val (checkedA, _, _) = inferTypeWithDebugging(a)
-      val (checkedB, _, _) = inferTypeWithDebugging(b)
+      val (checkedA, _) = inferTypeWithDebugging(a)
+      val (checkedB, _) = inferTypeWithDebugging(b)
       (checkedA, checkedB)
     case Some(ty) =>
-      val (checkedA, _) = checkTypeWithDebugging(a, ty)
-      val (checkedB, _) = checkTypeWithDebugging(b, ty)
+      val checkedA = checkTypeWithDebugging(a, ty)
+      val checkedB = checkTypeWithDebugging(b, ty)
       (checkedA, checkedB)
   try
     if ctx.solve(checkIsConvertible(checkedA, checkedB, ty)).nonEmpty then
@@ -121,12 +119,12 @@ def assertCConvertible
   : Unit =
   val (checkedA, checkedB) = ty match
     case None =>
-      val (checkedA, _, _) = inferTypeWithDebugging(a)
-      val (checkedB, _, _) = inferTypeWithDebugging(b)
+      val (checkedA, _) = inferTypeWithDebugging(a)
+      val (checkedB, _) = inferTypeWithDebugging(b)
       (checkedA, checkedB)
     case Some(ty) =>
-      val (checkedA, _) = checkTypeWithDebugging(a, ty)
-      val (checkedB, _) = checkTypeWithDebugging(b, ty)
+      val checkedA = checkTypeWithDebugging(a, ty)
+      val checkedB = checkTypeWithDebugging(b, ty)
       (checkedA, checkedB)
   try
     if ctx.solve(checkIsConvertible(checkedA, checkedB, ty)).nonEmpty then
@@ -141,7 +139,7 @@ def checkTypeWithDebugging
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (CTerm, Usages) =
+  : CTerm =
   try checkType(tm, ty)
   catch
     case e: IrError =>
@@ -153,7 +151,7 @@ def checkTypeWithDebugging
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (VTerm, Usages) =
+  : VTerm =
   try checkType(tm, ty)
   catch
     case e: IrError =>
@@ -165,7 +163,7 @@ def inferTypeWithDebugging
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (CTerm, CTerm, Usages) =
+  : (CTerm, CTerm) =
   try inferType(tm)
   catch
     case e: IrError =>
@@ -177,7 +175,7 @@ def inferTypeWithDebugging
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : (VTerm, VTerm, Usages) =
+  : (VTerm, VTerm) =
   try inferType(tm)
   catch
     case e: IrError =>

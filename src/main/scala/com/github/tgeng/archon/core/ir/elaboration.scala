@@ -181,7 +181,7 @@ private def elaborateDataHead
       (using Signature)
       (using TypingContext)
       : (Telescope, VTerm, VTerm) =
-      checkIsCType(ty)._1.normalized(None) match
+      checkIsCType(ty).normalized(None) match
         // Here and below we do not care about the declared effect types because data type
         // constructors are always total. Declaring non-total signature is not necessary (nor
         // desirable) but acceptable.
@@ -227,7 +227,7 @@ private def elaborateDataBody
     (using Signature)
     (using TypingContext)
     : (Telescope, /* constructor tArgs */ List[VTerm]) =
-    checkIsCType(ty)._1.normalized(None) match
+    checkIsCType(ty).normalized(None) match
       // Here and below we do not care the declared effect types because data type constructors
       // are always total. Declaring non-total signature is not necessary (nor desirable) but
       // acceptable.
@@ -270,7 +270,7 @@ private def elaborateRecordHead
     val tParamTys = elaborateTTelescope(record.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
     val r: Record =
-      checkIsCType(record.ty)._1.normalized(None) match
+      checkIsCType(record.ty).normalized(None) match
         case CType(CTop(level, _), _) =>
           Record(
             record.qn,
@@ -306,7 +306,7 @@ private def elaborateRecordBody
   ctx.trace(s"elaborating record body ${preRecord.qn}"):
     preRecord.fields.foldLeft[Signature](Σ) { case (_Σ, field) =>
       ctx.trace(s"elaborating field ${field.name}"):
-        val ty = checkIsCType(field.ty)._1.normalized(None)
+        val ty = checkIsCType(field.ty).normalized(None)
         val f = checkRecordField(preRecord.qn, Field(field.name, ty))
         _Σ.addField(preRecord.qn, f)
     }
@@ -324,7 +324,7 @@ private def elaborateDefHead
   ctx.trace(s"elaborating def signature ${definition.qn}"):
     val paramTys = elaborateTelescope(definition.paramTys)(using Γ)
     given newΓ: Context = Γ ++ paramTys
-    val ty = checkIsCType(definition.ty)._1.normalized(None)
+    val ty = checkIsCType(definition.ty).normalized(None)
     val d: Definition = Definition(definition.qn, newΓ, ty)
     Σ.addDeclaration(checkDef(d))
 
@@ -367,7 +367,7 @@ private def elaborateDefBody
           pattern.toTerm match
             case Some(p) =>
               val constraint =
-                checkIsConvertible(checkType(p, _A)._1.subst(σ.get), checkType(w, _A)._1, Some(_A))
+                checkIsConvertible(checkType(p, _A).subst(σ.get), checkType(w, _A), Some(_A))
               if !constraint.isEmpty then throw UnmatchedPattern(pattern, w, constraint)
             case None => throw UnexpectedAbsurdPattern(pattern)
         }
@@ -476,7 +476,7 @@ private def elaborateDefBody
     (using Γ: Context)
     (using Σ: Signature)
     : (Signature, CaseTree) =
-    (problem, checkIsCType(_C)._1.normalized(None)) match
+    (problem, checkIsCType(_C).normalized(None)) match
       // [cosplit]
       case (
           ElabClause(_, CProjection(_) :: _, _, _) :: _,
@@ -723,11 +723,11 @@ private def elaborateDefBody
                   case Some(rhs1) => Right(rhs1)
                   case None       => Left(e)
                 σOption = solve(_E1)
-                (rhs1, usages) <- σOption match
+                rhs1 <- σOption match
                   case Some(σ) => Right(checkType(rhs1.subst(σ), _C))
                   case None    => Left(e)
                 _ <-
-                  val constraints = checkUsagesSubsumption(usages)
+                  val constraints = checkUsagesSubsumption(collectUsages(rhs1))
                   if constraints.isEmpty then Right(())
                   else Left(UnsatisfiedUsageRequirements(constraints))
               yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
@@ -760,11 +760,11 @@ private def elaborateEffectHead
   ctx.trace(s"elaborating effect signature ${effect.qn}"):
     val tParamTys = elaborateTelescope(effect.tParamTys)(using Γ)
     given Γ2: Context = Γ ++ tParamTys
-    val continuationUsage = checkType(effect.continuationUsage, F(UsageType()))._1
+    val continuationUsage = checkType(effect.continuationUsage, F(UsageType()))
       .normalized(Some(F(UsageType()))) match
       case Return(continuationUsage, _) => continuationUsage
       case c                            => throw ExpectReturnAValue(c)
-    val handlerType = checkType(effect.handlerType, F(HandlerTypeType()))._1
+    val handlerType = checkType(effect.handlerType, F(HandlerTypeType()))
       .normalized(Some(F(HandlerTypeType()))) match
       case Return(handlerType, _) => handlerType
       case c                      => throw ExpectReturnAValue(c)
@@ -789,7 +789,7 @@ private def elaborateEffectBody
       (using Signature)
       (using TypingContext)
       : (Telescope, /* operation return type */ VTerm, /* operation return usage */ VTerm) =
-      checkIsCType(ty)._1.normalized(None) match
+      checkIsCType(ty).normalized(None) match
         // Here and below we do not care the declared effect types because data type constructors
         // are always total. Declaring non-total signature is not necessary (nor desirable) but
         // acceptable.
