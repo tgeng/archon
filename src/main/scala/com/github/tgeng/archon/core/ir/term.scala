@@ -664,24 +664,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     * @param handlers
     *   All handler implementations declared by the effect. Each handler is essentially a function
     *   body that takes some parameters and return a value, depending on the continuation usage of
-    *   the operation.
-    *   - simple
-    *     - parameters
-    *       - handler parameter
-    *       - all parameters declared in the operation
-    *     - returns
-    *       - (if u1) pair of handler parameter and the output type declared in the operation
-    *       - (if u0) pair of handler parameter and the output of the handler
-    *       - (if uAff) pair of handler parameter and either the output of the handler (aka abort)
-    *         or the type declared in the operation (aka resume)
-    *   - complex
-    *     - parameters
-    *       - handler parameter
-    *       - all parameters declared in the operation
-    *       - a continuation taking in a `declared operation output type -> outputType` and outputs
-    *         `outputType`
-    *     - returns
-    *       - output type matching the handler output
+    *   the operation. See [[HandlerImpl]] for details.
     */
   case Handler
     (

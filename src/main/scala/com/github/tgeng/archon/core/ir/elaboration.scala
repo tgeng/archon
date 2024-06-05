@@ -727,7 +727,7 @@ private def elaborateDefBody
                   case Some(σ) => Right(checkType(rhs1.subst(σ), _C))
                   case None    => Left(e)
                 _ <-
-                  val constraints = checkUsagesSubsumption(collectUsages(rhs1))
+                  val constraints = checkUsagesSubsumption(collectUsages(rhs1, Some(_C)))
                   if constraints.isEmpty then Right(())
                   else Left(UnsatisfiedUsageRequirements(constraints))
               yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))

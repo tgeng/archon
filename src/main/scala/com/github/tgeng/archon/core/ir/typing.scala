@@ -1566,39 +1566,6 @@ private def checkAreEqDecidableTypes
     checkIsEqDecidableTypes(binding.ty)
     checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
 
-/** @param inputUsages
-  *   input usage terms should live in Γ ++ telescope
-  * @param telescope
-  *   signifies which usages to verify
-  * @return
-  *   unverified usages
-  */
-@throws(classOf[IrError])
-private def verifyUsages
-  (inputUsages: Usages, telescope: Telescope)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Usages =
-  ctx.trace("verifyUsages"):
-    given Γ2: Context = Γ ++ telescope
-    val count = telescope.size
-    inputUsages.takeRight(count).reverse.zipWithIndex.foreach { (v, i) =>
-      // TODO[P1]: refactor usages verification to happen after other checks.
-//      ctx.checkSolved(
-//        checkUsageSubsumption(v, Γ2.resolve(i).usage),
-//        NotUsageSubsumption(v, Γ2.resolve(i).usage),
-//      )
-    }
-    inputUsages.drop(count).map { v =>
-      try v.strengthen(count, 0)
-      catch
-        // It's possible for a term's usage to reference a usage term after it. For example consider
-        // functino `f: u: Usage -> [u] Nat -> Nat` and context `{i: Nat, u: Usage}`, then `f u i`
-        // has usage `[u, U1]`. In this case, strengthen usage of `i` is approximated by UAny.
-        case _: StrengthenException => UsageLiteral(Usage.UAny)
-    }
-
 @throws(classOf[IrError])
 def checkTypes
   (tms: Seq[VTerm], tys: Telescope)
@@ -1609,9 +1576,13 @@ def checkTypes
   ctx.trace("checking multiple terms"):
     if tms.length != tys.length then throw TelescopeLengthMismatch(tms, tys)
     else
-      tms.zip(tys).zipWithIndex.map { case ((tm, binding), index) =>
-        checkType(tm, binding.ty.substLowers(tms.take(index)*))
-      }.toList
+      tms
+        .zip(tys)
+        .zipWithIndex
+        .map { case ((tm, binding), index) =>
+          checkType(tm, binding.ty.substLowers(tms.take(index)*))
+        }
+        .toList
 
 @throws(classOf[IrError])
 private def checkLet
@@ -1654,7 +1625,9 @@ private def checkLet
     def areTUsagesZeroOrUnrestricted: Boolean =
       // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
       // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
-      collectUsages(t).forall { usage => usage == uAny || usage == u0 }
+      collectUsages(t, Some(F(tm.tBinding.ty, tm.eff, tm.tBinding.usage))).forall { usage =>
+        usage == uAny || usage == u0
+      }
     val tTy = F(ty, effects, usage)
     if isTotal(t, Some(tTy)) && areTUsagesZeroOrUnrestricted then
       // Do the reduction onsite so that type checking in sub terms can leverage the
@@ -1682,7 +1655,6 @@ private def checkLet
             (body, bodyTy)
       val leakCheckedBodyTy =
         checkVar0Leak(checkedBodyTy, LeakedReferenceToEffectfulComputationResult(t))
-      val continuationUsage = getEffectsContinuationUsage(effects)
       (
         Let(t, tBinding, effects, body)(using tm.sourceInfo),
         leakCheckedBodyTy.strengthened,
@@ -1869,7 +1841,7 @@ def checkHandler
           checkEffSubsumption(effects, implOutputEffects),
           NotEffectSubsumption(effects, implOutputEffects),
         )
-        (handlerImpl.copy(body = body)(handlerImpl.boundNames))
+        handlerImpl.copy(body = body)(handlerImpl.boundNames)
       case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
         given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
         val continuationWeakenOffset = continuationΓ.size - Γ.size
@@ -1893,7 +1865,7 @@ def checkHandler
         )
         val checkedContinuationType = checkIsCType(continuationType)
         val implΓ: Context =
-          continuationΓ :+ Binding(U(checkedContinuationType), UsageLiteral(Usage.U1))(
+          continuationΓ :+ Binding(U(checkedContinuationType), u1)(
             gn"continuation",
           )
         val implOffset = implΓ.size - Γ.size

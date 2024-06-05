@@ -187,7 +187,10 @@ trait TermVisitor[C, R]:
     )
 
   def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R =
-    combine(visitVTerm(r.v))
+    combine(
+      visitVTerm(r.v),
+      visitVTerm(r.usage),
+    )
 
   def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R = combine(
     visitCTerm(let.t),
