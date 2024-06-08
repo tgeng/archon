@@ -169,6 +169,10 @@ extension (tTerm: TTerm)
                 body.toCTerm(using
                   summon[TranslationContext].bindLocal(parameterBinding.name +: boundNames*),
                 ),
+                F(Auto(), Auto(), u1),
+                h.handlerType match
+                  case HandlerType.Simple  => None
+                  case HandlerType.Complex => Some(Auto()),
               )(boundNames.map(n => Name.Normal(n)))
             }
             .to(SeqMap),

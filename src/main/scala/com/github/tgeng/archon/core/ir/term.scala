@@ -230,10 +230,22 @@ sealed trait UsageCompound(val distinctOperands: Set[VTerm])
   *   the parameter and optional continuation parameter names. Note that handler parameter name is
   *   not among the names here because it's shared across all handler implementations and stored in
   *   the parent `Handler` construct under the `parameterBinding` field.
+  * @param continuationType
+  *   type of the continuation parameter when the handler is cmpolex. This is only available when
+  *   the handler is complex.
   */
 case class HandlerImpl
-  (handlerConstraint: HandlerConstraint, body: CTerm)
-  (val boundNames: Seq[Ref[Name]])
+  (
+    handlerConstraint: HandlerConstraint,
+    body: CTerm,
+    bodyTy: CTerm,
+    continuationType: Option[VTerm],
+  )
+  (val boundNames: Seq[Ref[Name]]):
+  (handlerConstraint.handlerType, continuationType) match
+    case (HandlerType.Simple, None) | (HandlerType.Complex, Some(_)) =>
+    case _ => throw new IllegalArgumentException("mismatch between handlerConstraint and continuation type")
+
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)

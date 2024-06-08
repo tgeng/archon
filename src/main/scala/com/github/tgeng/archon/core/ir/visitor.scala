@@ -269,7 +269,10 @@ trait TermVisitor[C, R]:
     )
 
   def visitHandlerImpl(handlerImpl: HandlerImpl)(using ctx: C)(using Σ: Signature): R =
-    visitCTerm(handlerImpl.body)
+    combine(
+      (Seq(visitCTerm(handlerImpl.body), visitCTerm(handlerImpl.bodyTy)) ++
+        handlerImpl.continuationType.map(visitVTerm).toSeq)*,
+    )
 
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
     combine(

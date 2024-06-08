@@ -1763,6 +1763,7 @@ def checkHandler
     val paramTys = operation.paramTys.substLowers(effArgs*)
     val resultTy = operation.resultTy.substLowers(effArgs*)
     val resultUsage = operation.resultUsage.substLowers(effArgs*)
+    val handlerImplBodyTy = checkIsCType(handlerImpl.bodyTy)
     val newHandlerImpl = handlerImpl.handlerConstraint match
       case HandlerConstraint(continuationUsage, HandlerType.Simple) =>
         given implΓ: Context = Γ ++ (parameterBinding +: paramTys)
@@ -1828,9 +1829,13 @@ def checkHandler
             )
           case _ => throw IllegalStateException("bad continuation usage on operation")
         val implOutputEffects = outputEffects.weaken(implOffset, 0)
-        val implTy = checkIsCType(uncheckedImplTy)
-        val body = checkType(handlerImpl.body, implTy)
-        val effects = checkEffectsAreSimple(implTy.asInstanceOf[F].effects)
+        val bodyTy = checkIsCType(uncheckedImplTy)
+        ctx.checkSolved(
+          checkIsConvertible(handlerImplBodyTy, bodyTy, None),
+          NotCConvertible(handlerImplBodyTy, bodyTy, None),
+        )
+        val body = checkType(handlerImpl.body, bodyTy)
+        val effects = checkEffectsAreSimple(bodyTy.asInstanceOf[F].effects)
         // Simple operation can only perform U1 effects so that linear resources in the continuation
         // are managed correctly.
         ctx.checkSolved(
@@ -1863,21 +1868,36 @@ def checkHandler
             continuationOutputTy,
           ),
         )
-        val checkedContinuationType = checkIsCType(continuationType)
+        val checkedContinuationType = U(checkIsCType(continuationType))
+        val handlerImplContinuationType = handlerImpl.continuationType match
+          case None =>
+            throw IllegalStateException(
+              "This cannot happen since it's checked during HandlerImpl construction",
+            )
+          case Some(continuationType) => checkIsType(continuationType)
+        ctx.checkSolved(
+          checkIsConvertible(handlerImplContinuationType, checkedContinuationType, None),
+          NotVConvertible(handlerImplContinuationType, checkedContinuationType, None),
+        )
         val implΓ: Context =
-          continuationΓ :+ Binding(U(checkedContinuationType), u1)(
+          continuationΓ :+ Binding(checkedContinuationType, u1)(
             gn"continuation",
           )
         val implOffset = implΓ.size - Γ.size
+        val bodyTy = F(
+          outputTy.weaken(implOffset, 0),
+          outputEffects.weaken(implOffset, 0),
+          outputUsage.weaken(implOffset, 0),
+        )
+        ctx.checkSolved(
+          checkIsConvertible(handlerImplBodyTy, bodyTy, None),
+          NotCConvertible(handlerImplBodyTy, bodyTy, None),
+        )
         val body = checkType(
           handlerImpl.body,
-          F(
-            outputTy.weaken(implOffset, 0),
-            outputEffects.weaken(implOffset, 0),
-            outputUsage.weaken(implOffset, 0),
-          ),
+          bodyTy,
         )(using implΓ)
-        (handlerImpl.copy(body = body)(handlerImpl.boundNames))
+        handlerImpl.copy(body = body)(handlerImpl.boundNames)
     (qn, newHandlerImpl)
   }
   (

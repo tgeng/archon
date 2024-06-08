@@ -187,32 +187,10 @@ def collectUsages
               val handlerTelescope = handler.handlerConstraint match
                 case HandlerConstraint(_, HandlerType.Simple) => parameterBinding +: opTelescope
                 case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
-                  val continuationWeakenOffset = 1 /* for parameter binding */ + opTelescope.size
-                  val continuationParameterTy =
-                    parameterBinding.ty.weaken(continuationWeakenOffset, 0)
-                  val continuationOutputTy = outputTy.weaken(continuationWeakenOffset, 0)
-                  val continuationOutputEffects = outputEffects.weaken(continuationWeakenOffset, 0)
-                  val continuationOutputUsage = outputUsage.weaken(continuationWeakenOffset, 0)
-                  val continuationType = RecordType(
-                    Builtins.ContinuationQn,
-                    List(
-                      Auto(),
-                      UsageLiteral(continuationUsage),
-                      parameterBinding.usage.weaken(continuationWeakenOffset, 0),
-                      continuationParameterTy,
-                      op.resultUsage.substLowers(tArgs*).weaken(continuationWeakenOffset, 0),
-                      op.resultTy.substLowers(tArgs*),
-                      continuationOutputEffects,
-                      continuationOutputUsage,
-                      continuationOutputTy,
-                    ),
-                  )
-                  parameterBinding +: opTelescope :+ Binding(
-                    U(continuationType),
-                    u1,
-                  )(gn"continuation")
+                  parameterBinding +: opTelescope :+
+                    Binding(handler.continuationType.get, u1)(gn"continuation")
               val handlerUsages =
-                collectUsages(handler.body, Some(???))(using Γ ++ handlerTelescope)
+                collectUsages(handler.body, Some(handler.bodyTy))(using Γ ++ handlerTelescope)
               partiallyVerifyUsages(handlerUsages, handlerTelescope)
             }
           }
