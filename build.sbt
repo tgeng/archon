@@ -1,7 +1,7 @@
 Global / onChangedBuildSource := ReloadOnSourceChanges
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.4.1"
+ThisBuild / scalaVersion := "3.4.2"
 
 lazy val root = (project in file("."))
   .settings(
@@ -18,9 +18,9 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       "org.scalatest" %% "scalatest" % "3.2.18" % "test",
-      "com.lihaoyi" %% "pprint" % "0.8.1",
-      "com.lihaoyi" %% "fastparse" % "3.0.2",
-      "com.lihaoyi" %% "os-lib" % "0.9.3",
+      "com.lihaoyi" %% "pprint" % "0.9.0",
+      "com.lihaoyi" %% "fastparse" % "3.1.0",
+      "com.lihaoyi" %% "os-lib" % "0.10.2",
     ),
     Compile / unmanagedJars += {
       baseDirectory.value / "unmanaged" / "scalaz3_3-4.8.14-macos-aarch64.jar"
