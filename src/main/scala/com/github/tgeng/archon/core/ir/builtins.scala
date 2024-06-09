@@ -268,42 +268,43 @@ object Builtins:
         (binding(n"paramType", Type(Top(Var(2)))), Variance.INVARIANT),
         (binding(n"resultUsage", UsageType(Some(u1))), Variance.INVARIANT),
         (binding(n"resultType", Type(Top(Var(4)))), Variance.CONTRAVARIANT),
-        (binding(n"outputEffects", EffectsType()), Variance.INVARIANT),
+        (binding(n"otherEffects", EffectsType()), Variance.INVARIANT),
+        (binding(n"handlerEffects", EffectsType()), Variance.INVARIANT),
         (binding(n"outputUsage", UsageType(Some(u1))), Variance.INVARIANT),
-        (binding(n"outputType", Type(Top(Var(7)))), Variance.COVARIANT),
+        (binding(n"outputType", Type(Top(Var(8)))), Variance.COVARIANT),
       ),
-      ty = CType(CTop(Var(8))),
+      ty = CType(CTop(Var(9))),
       fields = List(
         Field(
           n"resume",
-          Binding(DataType(IsResumableQn, List(Var(5))))(n"isResumable") ->:
-            Binding(Var(7), Var(8))(n"param") ->:
-            Binding(Var(6), Var(7))(n"result") ->:
-            F(Var(4), Var(6), Var(5)),
+          Binding(DataType(IsResumableQn, List(Var(6))))(n"isResumable") ->:
+            Binding(Var(8), Var(9))(n"param") ->:
+            Binding(Var(7), Var(8))(n"result") ->:
+            F(Var(4), EffectsUnion(Var(6), Var(7)), Var(5)),
         ),
         Field(
           n"dispose",
-          Binding(DataType(IsDisposableQn, List(Var(5))))(n"isDisposable") ->:
-            Binding(Var(7), Var(8))(n"param") ->:
+          Binding(DataType(IsDisposableQn, List(Var(6))))(n"isDisposable") ->:
+            Binding(Var(8), Var(9))(n"param") ->:
             F(DataType(UnitQn, Nil), EffectsRetainSimpleLinear(Var(5))),
         ),
         Field(
           n"replicate",
-          Binding(DataType(IsReplicableQn, List(Var(5))))(n"isReplicable") ->:
-            Binding(Var(7), Var(8))(n"param") ->:
+          Binding(DataType(IsReplicableQn, List(Var(6))))(n"isReplicable") ->:
+            Binding(Var(8), Var(9))(n"param") ->:
             F(
               DataType(
                 PairQn,
                 List(
-                  Var(11),
+                  Var(12),
                   EqDecidabilityLiteral(EqUnknown),
-                  Var(9),
-                  U(RecordType(ContinuationQn, vars(11, 3))),
-                  Var(9),
-                  U(RecordType(ContinuationQn, vars(11, 3))),
+                  Var(10),
+                  U(RecordType(ContinuationQn, vars(12, 3))),
+                  Var(10),
+                  U(RecordType(ContinuationQn, vars(12, 3))),
                 ),
               ),
-              EffectsRetainSimpleLinear(Var(5)),
+              EffectsRetainSimpleLinear(Var(6)),
             ),
         ),
       ),

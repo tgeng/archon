@@ -18,7 +18,7 @@ def collectUsages
     tm match
       case Type(upperBound) => collectUsages(upperBound, None)
       case Top(level, eqDecidability) =>
-        collectUsages(level, Some(LevelType())) ++ collectUsages(
+        collectUsages(level, Some(LevelType())) + collectUsages(
           eqDecidability,
           Some(EqDecidabilityType()),
         )
@@ -163,7 +163,7 @@ def collectUsages
       case Handler(
           eff: VTerm,
           otherEffects: VTerm,
-          outputEffects: VTerm,
+          handlerEffects: VTerm,
           outputUsage: VTerm,
           outputTy: VTerm,
           parameter: VTerm,
@@ -186,7 +186,7 @@ def collectUsages
               val handler = handlers(opQn)
               val handlerTelescope = handler.handlerConstraint match
                 case HandlerConstraint(_, HandlerType.Simple) => parameterBinding +: opTelescope
-                case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
+                case HandlerConstraint(_, HandlerType.Complex) =>
                   parameterBinding +: opTelescope :+
                     Binding(handler.continuationType.get, u1)(gn"continuation")
               val handlerUsages =
@@ -195,8 +195,65 @@ def collectUsages
             }
           }
           .fold(Usages.zero)(_ + _)
-        // TODO: get other usages here
-        handlerUsages
+        val parameterUsages =
+          collectUsages(parameter, Some(parameterBinding.ty)) * parameterBinding.usage
+        val inputUsages = collectUsages(
+          input,
+          Some(F(inputBinding.ty, EffectsUnion(eff, otherEffects).normalized, inputBinding.usage)),
+        )
+        val transformTelescope = List(parameterBinding, inputBinding.weakened)
+        val transformUsages =
+          partiallyVerifyUsages(
+            collectUsages(
+              transform,
+              Some(F(outputTy, handlerEffects, outputUsage).weaken(2, 0)),
+            )(using Γ ++ transformTelescope),
+            transformTelescope,
+          )
+        val parameterDisposerUsages =
+          parameterDisposer match
+            case None => Usages.zero
+            case Some(parameterDisposer) =>
+              partiallyVerifyUsages(
+                collectUsages(
+                  parameterDisposer,
+                  Some(
+                    F(
+                      DataType(Builtins.UnitQn, Nil),
+                      EffectsRetainSimpleLinear(handlerEffects).weakened,
+                    ),
+                  ),
+                )(using Γ :+ parameterBinding),
+                List(parameterBinding),
+              )
+        val parameterReplicatorUsages =
+          parameterReplicator match
+            case None => Usages.zero
+            case Some(parameterReplicator) =>
+              partiallyVerifyUsages(
+                collectUsages(
+                  parameterReplicator,
+                  Some(
+                    F(
+                      DataType(
+                        Builtins.PairQn,
+                        List(
+                          LevelUpperBound(),
+                          EqDecidabilityLiteral(EqDecidability.EqUnknown),
+                          parameterBinding.usage,
+                          parameterBinding.ty,
+                          parameterBinding.usage,
+                          parameterBinding.ty,
+                        ),
+                      ),
+                      EffectsRetainSimpleLinear(handlerEffects),
+                    ),
+                  ),
+                )(using Γ :+ parameterBinding),
+                List(parameterBinding),
+              )
+
+        inputUsages + handlerUsages + parameterUsages + transformUsages + parameterDisposerUsages + parameterReplicatorUsages
 
 private def collectEffUsages
   (eff: Eff)

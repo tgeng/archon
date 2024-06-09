@@ -231,7 +231,7 @@ sealed trait UsageCompound(val distinctOperands: Set[VTerm])
   *   not among the names here because it's shared across all handler implementations and stored in
   *   the parent `Handler` construct under the `parameterBinding` field.
   * @param continuationType
-  *   type of the continuation parameter when the handler is cmpolex. This is only available when
+  *   type of the continuation parameter when the handler is complex. This is only available when
   *   the handler is complex.
   */
 case class HandlerImpl
@@ -244,8 +244,8 @@ case class HandlerImpl
   (val boundNames: Seq[Ref[Name]]):
   (handlerConstraint.handlerType, continuationType) match
     case (HandlerType.Simple, None) | (HandlerType.Complex, Some(_)) =>
-    case _ => throw new IllegalArgumentException("mismatch between handlerConstraint and continuation type")
-
+    case _ =>
+      throw new IllegalArgumentException("mismatch between handlerConstraint and continuation type")
 
 enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case Type(upperBound: VTerm)(using sourceInfo: SourceInfo)
@@ -282,11 +282,11 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // Note: simply multiply the usage of `U ...` to the usages of everything in `cTy`
   case Thunk(c: CTerm)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  // On sigma types, simulating this with inductive types requires functions for the dependent piece, which can be very
-  // unwieldy with the separation of computation from values. However, sigma type make type matching on them impossible
-  // because the second part depends on the first part. Also, it should be possible to add some user language sugar to
-  // make the inductive type version more palatable. So I'm removing sigma type for now to make the core language
-  // simpler.
+  // On sigma types, simulating this with inductive types requires functions for the dependent
+  // piece, which can be very unwieldy with the separation of computation from values. However,
+  // sigma type make type matching on them impossible because the second part depends on the first
+  // part. Also, it should be possible to add some user language sugar to make the inductive type
+  // version more palatable. So I'm removing sigma type for now to make the core language simpler.
 
   case DataType(qn: QualifiedName, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
@@ -632,21 +632,19 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Continuation(continuationTerm: Handler, continuationUsage: Usage) extends CTerm(SiEmpty)
 
   /** @param eff
-    *   Handle general term here instead of a single effect. During type checking it will fail if
-    *   this term is not convertible to a effect literal. The ability to handle multiple effects is
-    *   useful when one needs to use a linear resource (as parameter to the handler) with multiple
-    *   effects.
+    *   Handle general term here instead of some effect literals. During type checking it will fail
+    *   if this term is not convertible to some effect literals. The ability to handle multiple
+    *   effects is useful when one needs to use a linear resource (as parameter to the handler) with
+    *   multiple effects.
     * @param otherEffects
     *   the effect of the input term without effects being handled by this handler
-    * @param outputEffects
-    *   otherEffects + effects used in parameter disposer, parameter replicaor, transformer, and
-    *   operation handler implementations. This is the effect of each operation handler
-    *   implementation. This is also the effect of the resume, dispose, and replicate (strictly
-    *   speaking the latter two would never perform any complex effects but capturing this in the
-    *   type system would require adding another filtering operation on effects based on control
-    *   mode and that seems to have little benefits as far as I can see) calls on continuations
-    *   captured inside handlers implementations. This is also the effect in the type of the curret
-    *   handler being defined.
+    * @param handlerEffects
+    *   effects used in parameter disposer, parameter replicator, transformer, and (simple)
+    *   operation handler implementations. Hence, this is also the effect of the `dispose`, and the
+    *   `replicate` (after filtering out complex operations) calls on continuations captured inside
+    *   handlers implementations. `resume` calls would perform union of `handlerEffects` and
+    *   `otherEffects`. Hence, complex handlers would perform such union effects as well (since it
+    *   likely would invoke `resume`).
     * @param outputUsage
     *   the usage of the output of the handler. This is also the usage of the resume call on
     *   continuations captured inside handler implementations. This is also the usage of the final
@@ -682,7 +680,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (
       eff: VTerm,
       otherEffects: VTerm,
-      outputEffects: VTerm,
+      handlerEffects: VTerm,
       outputUsage: VTerm,
       outputTy: VTerm,
       parameter: VTerm,

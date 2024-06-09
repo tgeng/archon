@@ -1457,7 +1457,8 @@ def inferType
               handler.parameterBinding.ty,
               resultUsage,
               resultTy,
-              handler.outputEffects,
+              handler.otherEffects,
+              handler.handlerEffects,
               handler.outputUsage,
               handler.outputTy,
             ),
@@ -1678,7 +1679,8 @@ def checkHandler
   if expectedOperationNames != actualOperationNames then
     throw HandlerOperationsMismatch(h, expectedOperationNames, actualOperationNames)
   val otherEffects = checkType(h.otherEffects, EffectsType()).normalized
-  val outputEffects = checkType(h.outputEffects, EffectsType()).normalized
+  val handlerEffects = checkType(h.handlerEffects, EffectsType()).normalized
+  val outputEffects = EffectsUnion(otherEffects, handlerEffects).normalized
   val outputUsage = checkType(h.outputUsage, UsageType()).normalized
   val outputTy = checkIsType(h.outputTy)
   outputType match
@@ -1705,7 +1707,7 @@ def checkHandler
     case Some(parameterDisposer) =>
       val checkedParameterDisposer = checkType(
         parameterDisposer,
-        F(DataType(Builtins.UnitQn, Nil), EffectsRetainSimpleLinear(outputEffects).weakened),
+        F(DataType(Builtins.UnitQn, Nil), EffectsRetainSimpleLinear(handlerEffects).weakened),
       )(using Γ :+ parameterBinding)
       Some(checkedParameterDisposer)
     case None =>
@@ -1730,7 +1732,7 @@ def checkHandler
               parameterTy,
             ),
           ),
-          EffectsRetainSimpleLinear(outputEffects),
+          EffectsRetainSimpleLinear(handlerEffects),
         ).weakened,
       )(using Γ :+ parameterBinding)
       Some(checkedParameterReplicator)
@@ -1742,8 +1744,8 @@ def checkHandler
         case _ => throw ExpectParameterReplicator(h)
   val transform = checkType(
     h.transform,
-    F(outputTy, outputEffects, outputUsage).weaken(2, 0),
-  )(using Γ :+ parameterBinding :+ inputBinding)
+    F(outputTy, handlerEffects, outputUsage).weaken(2, 0),
+  )(using Γ :+ parameterBinding :+ inputBinding.weakened)
 
   val handlerAndUsages = operations.map { (qn, effArgs, operation) =>
     val effect = Σ.getEffect(qn.parent)
@@ -1828,7 +1830,7 @@ def checkHandler
               u1,
             )
           case _ => throw IllegalStateException("bad continuation usage on operation")
-        val implOutputEffects = outputEffects.weaken(implOffset, 0)
+        val implOutputEffects = handlerEffects.weaken(implOffset, 0)
         val bodyTy = checkIsCType(uncheckedImplTy)
         ctx.checkSolved(
           checkIsConvertible(handlerImplBodyTy, bodyTy, None),
@@ -1848,11 +1850,12 @@ def checkHandler
         )
         handlerImpl.copy(body = body)(handlerImpl.boundNames)
       case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
-        given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys)
+        given continuationΓ: Context = Γ ++ (parameterBinding +: paramTys.weakened)
         val continuationWeakenOffset = continuationΓ.size - Γ.size
         val continuationParameterTy = parameterTy.weaken(continuationWeakenOffset, 0)
         val continuationOutputTy = outputTy.weaken(continuationWeakenOffset, 0)
-        val continuationOutputEffects = outputEffects.weaken(continuationWeakenOffset, 0)
+        val continuationOtherEffects = otherEffects.weaken(continuationWeakenOffset, 0)
+        val continuationHandlerEffects = handlerEffects.weaken(continuationWeakenOffset, 0)
         val continuationOutputUsage = outputUsage.weaken(continuationWeakenOffset, 0)
         val continuationType = RecordType(
           Builtins.ContinuationQn,
@@ -1863,7 +1866,8 @@ def checkHandler
             continuationParameterTy,
             resultUsage.weaken(continuationWeakenOffset, 0),
             resultTy,
-            continuationOutputEffects,
+            continuationOtherEffects,
+            continuationHandlerEffects,
             continuationOutputUsage,
             continuationOutputTy,
           ),
@@ -1904,7 +1908,7 @@ def checkHandler
     Handler(
       eff,
       otherEffects,
-      outputEffects,
+      handlerEffects,
       outputUsage,
       outputTy,
       parameter,

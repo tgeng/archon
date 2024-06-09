@@ -133,7 +133,7 @@ private final class StackMachine
                       Binding(DataType(Builtins.UnitQn, Nil), UsageLiteral(UAny))(
                         gn"disposeResult",
                       ),
-                      handler.outputEffects,
+                      handler.handlerEffects,
                       // The usage here may not be correct. Technically it should be the usage of the result captured in
                       // the type of the Pair. But we don't have that information here. Fortunately this information is
                       // not needed anyway because reduction would substitute the result later.

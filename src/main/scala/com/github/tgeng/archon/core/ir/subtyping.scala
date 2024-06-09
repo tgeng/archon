@@ -77,7 +77,7 @@ def checkIsSubtype
                   args += checkedArg1
                   r
                 case Variance.CONTRAVARIANT =>
-                  val checkedArg1= checkIsType(arg1)
+                  val checkedArg1 = checkIsType(arg1)
                   val checkedArg2 = checkIsType(arg2)
                   val r = checkIsSubtype(checkedArg1, checkedArg2)
                   args += checkedArg2
@@ -403,7 +403,7 @@ private def checkUsagesSubsumption
   (using Σ: Signature)
   (using TypingContext)
   : Set[Constraint] =
-  assert(usages.size == Γ.size)
+  assert(usages.size == Γ.size, s"usages has size ${usages.size} yet Γ has size ${Γ.size}")
   Γ.indices
     .map { i =>
       given Γ2: Context = Γ.take(i)
@@ -492,7 +492,7 @@ def checkUsageSubsumption
           (existingLowerBounds, existingUpperBound)
         case UmcNothing => (Set(), None)
       ctx.adaptForMetaVariable(u, sub):
-        case v@Some(value) if v == existingUpperBound =>
+        case v @ Some(value) if v == existingUpperBound =>
           ctx.assignUnsolved(u, Return(value, u1))
         case Some(value @ (UsageLiteral(Usage.U0) | UsageLiteral(Usage.U1))) =>
           existingUpperBound match
@@ -636,7 +636,7 @@ private def checkLevelSubsumption
           val operandType = inferType(operand)._2
           operandType match
             case LevelType(upperBound) => upperBound.suc(offset) > literal2
-            case _ => false
+            case _                     => false
 
       val areLiteralsSubsumed = literal1.compareTo(literal2) <= 0
       if spuriousOperands.isEmpty && areLiteralsSubsumed then Set.empty

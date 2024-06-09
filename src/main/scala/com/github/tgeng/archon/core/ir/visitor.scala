@@ -804,7 +804,7 @@ trait Transformer[C]:
     Handler(
       transformVTerm(handler.eff),
       transformVTerm(handler.otherEffects),
-      transformVTerm(handler.outputEffects),
+      transformVTerm(handler.handlerEffects),
       transformVTerm(handler.outputUsage),
       transformVTerm(handler.outputTy),
       transformVTerm(handler.parameter),
