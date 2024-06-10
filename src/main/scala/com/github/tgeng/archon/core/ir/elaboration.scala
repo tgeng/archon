@@ -41,6 +41,7 @@ def elaborate
   (using TypingContext)
   : Signature =
   try
+    // TODO[P0]: make sure stuff added to signature contains no meta vars and are all normalized!
     (part, decl) match
       case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
       case (DeclarationPart.HEAD, d: PreRecord)     => elaborateRecordHead(d)
@@ -336,12 +337,11 @@ private def elaborateDefBody
   : Signature =
 
   // See [1] for how this part works.
-  type Constraint =
-    ( /* current split term */ VTerm, /* user pattern */ Pattern, /* type */ VTerm)
+  case class ElabConstraint(currentSplitTerm: VTerm, userPattern: Pattern, currentType: VTerm)
 
   case class ElabClause
     (
-      constraints: List[Constraint],
+      constraints: List[ElabConstraint],
       userPatterns: List[CoPattern],
       rhs: Option[CTerm],
       source: PreClause,
@@ -349,21 +349,21 @@ private def elaborateDefBody
 
   type Problem = List[ElabClause]
 
-  def weaken(c: Constraint) = c match
-    // Note: p is not weakened because p is a user pattern. It does not leave in the Γ being
+  def weaken(c: ElabConstraint): ElabConstraint = c match
+    // Note: p is not weakened because p is a user pattern. It does not live in the Γ being
     // assembled during elaboration.
-    case (w, p, _A) => (w.weakened, p, _A.weakened)
+    case ElabConstraint(w, p, _A) => ElabConstraint(w.weakened, p, _A.weakened)
 
   @throws(classOf[IrError])
   def solve
-    (constraints: List[Constraint])
+    (constraints: List[ElabConstraint])
     (using Γ: Context)
     (using Signature)
     : Option[PartialSubstitution[VTerm]] =
     val σ = mutable.SeqMap[Nat, VTerm]()
-    matchPattern(constraints.map { case (w, p, _) => (p, w) }, σ) match
+    matchPattern(constraints.map { case ElabConstraint(w, p, _) => (p, w) }, σ) match
       case MatchingStatus.Matched =>
-        constraints.foreach { case (w, pattern, _A) =>
+        constraints.foreach { case ElabConstraint(w, pattern, _A) =>
           pattern.toTerm match
             case Some(p) =>
               val constraint =
@@ -380,7 +380,12 @@ private def elaborateDefBody
   def shift(problem: Problem, _A: VTerm)(using Γ: Context): Problem = problem match
     case Nil => Nil
     case ElabClause(_E, CPattern(p) :: q̅, rhs, source) :: problem =>
-      ElabClause((Var(0), p, _A.weakened) :: _E.map(weaken), q̅, rhs, source) :: shift(problem, _A)
+      ElabClause(
+        ElabConstraint(Var(0), p, _A.weakened) :: _E.map(weaken),
+        q̅,
+        rhs,
+        source,
+      ) :: shift(problem, _A)
     case ElabClause(_, q :: _, _, _) :: _ => throw UnexpectedCProjection(q)
     case ElabClause(_, _, _, source) :: _ => throw MissingUserCoPattern(source)
 
@@ -394,8 +399,15 @@ private def elaborateDefBody
     case ElabClause(_, _, _, source) :: _ => throw MissingUserCoPattern(source)
 
   @throws(classOf[IrError])
-  def subst(problem: Problem, σ: PartialSubstitution[VTerm])(using Σ: Signature): Problem =
-    def simplify(v: VTerm, p: Pattern, _A: VTerm)(using Σ: Signature): Option[List[Constraint]] =
+  def subst
+    (problem: Problem, σ: PartialSubstitution[VTerm])
+    (using Γ: Context)
+    (using Σ: Signature)
+    : Problem =
+    def simplify
+      (v: VTerm, p: Pattern, ty: VTerm)
+      (using Σ: Signature)
+      : Option[List[ElabConstraint]] =
       // It's assumed that v is already normalized. The only place un-normalized term may appear
       // during elaboration is through unification. But unification pre-normalizes terms so in
       // here all terms are already normalized.
@@ -411,6 +423,7 @@ private def elaborateDefBody
             args
               .lazyZip(pArgs)
               .lazyZip(data.context.map(_._1.ty) ++ data.tIndexTys.map(_.ty))
+              .map(ElabConstraint.apply)
               .toList,
           )
         case (DataType(_, _), PDataType(_, _))                 => None
@@ -428,40 +441,46 @@ private def elaborateDefBody
             args
               .lazyZip(pArgs)
               .lazyZip(data.context.map(_._1.ty) ++ data.tIndexTys.map(_.ty))
+              .map(ElabConstraint.apply)
               .toList,
           )
         case (Con(name, args), PConstructor(pName, pArgs)) if name == pName =>
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
-          val dataType = _A.asInstanceOf[DataType]
+          val dataType = ty.asInstanceOf[DataType]
           val constructor = Σ.getConstructor(dataType.qn, name)
           val _As = constructor.paramTys.substLowers(dataType.args*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
-          simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
+          simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).map(ElabConstraint.apply).toList)
         case (Con(_, _), PConstructor(_, _))                     => None
         case (Con(name, args), PForcedConstructor(pName, pArgs)) =>
           // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
           // because such a mismatch means the provided forced pattern is not correct.
           assert(name == pName)
-          val dataType = _A.asInstanceOf[DataType]
+          val dataType = ty.asInstanceOf[DataType]
           val constructor = Σ.getConstructor(dataType.qn, name)
           val _As = constructor.paramTys.substLowers(dataType.args*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
-          simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).toList)
-        case _ => Some(List((v, p, _A)))
+          simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).map(ElabConstraint.apply).toList)
+        case (v, p) => Some(List(ElabConstraint(v, p, ty)))
 
     @throws(classOf[IrError])
-    def simplifyAll(constraints: List[Constraint])(using Σ: Signature): Option[List[Constraint]] =
+    def simplifyAll
+      (constraints: List[ElabConstraint])
+      (using Σ: Signature)
+      : Option[List[ElabConstraint]] =
       constraints match
         case Nil => Some(Nil)
-        case (v, p, _A) :: constraints =>
+        case ElabConstraint(v, p, _A) :: constraints =>
           val _E1 = simplify(v, p, _A)
           val _E2 = simplifyAll(constraints)
           _E1.zip(_E2).map(_ ++ _)
     problem match
       case Nil => Nil
       case ElabClause(_E, q̅, rhs, source) :: problem =>
-        val optionE = simplifyAll(_E.map { case (v, p, _A) => (v.subst(σ), p, _A) })
+        val optionE = simplifyAll(_E.map { case ElabConstraint(v, p, _A) =>
+          ElabConstraint(v.subst(σ), p, _A)
+        })
         optionE match
           case Some(_E) =>
             ElabClause(_E, q̅, rhs, source) :: subst(problem, σ)
@@ -505,14 +524,15 @@ private def elaborateDefBody
       // [intro]
       case (
           ElabClause(_, CPattern(_) :: _, _, _) :: _,
-          FunctionType(binding, bodyTy, _),
+          FunctionType(unsolvedBinding, bodyTy, _),
         ) =>
+        val binding = unsolvedBinding.map(ctx.solveTerm)
         val _A = shift(problem, binding.ty)
         val (_Σ1, _Q) = elaborate(
           q̅.map(_.weakened) :+ CPattern(PVar(0)),
           bodyTy,
           _A,
-        )
+        )(using Γ :+ binding)
         (_Σ1, CtLambda(_Q)(binding.name))
       // mismatch between copattern and _C
       case (ElabClause(_, q :: _, _, source) :: _, _) =>
@@ -536,7 +556,7 @@ private def elaborateDefBody
 
           // Find something to split.
           _E1.foldLeft[Either[IrError, (Signature, CaseTree)]](
-            // Start with a very generic error in case no split actions can be taken at all.
+            // Start with a very generic error in case no split actions cannot be taken at all.
             Left(UnsolvedElaboration(source1)),
           ):
             // If a split action was successful, skip any further actions on the remaining
@@ -544,7 +564,7 @@ private def elaborateDefBody
             case (Right(r), _) => Right(r)
 
             // split data type
-            case (_, (x: Var, PDataType(_, _), _A)) =>
+            case (_, ElabConstraint(x: Var, PDataType(_, _), _A)) =>
               if !providedAtLeastU1Usage(x) then Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
               else
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -557,7 +577,7 @@ private def elaborateDefBody
                 val qns: List[Option[QualifiedName]] = None ::
                   (for
                     case ElabClause(constraints, _, _, _) <- problem
-                    case (y: Var, PDataType(qn, _), _) <- constraints
+                    case ElabConstraint(y: Var, PDataType(qn, _), _) <- constraints
                     if x == y
                   yield Some(qn))
 
@@ -592,21 +612,22 @@ private def elaborateDefBody
                       val ρ2t = ρ2.toTermSubstitutor
                       given Context = _Γ1 ++ Δ ++ _Γ2.subst(ρ1t)
 
-                      if subst(problem, ρ2t).isEmpty then
+                      val newProblem = subst(problem, ρ2t)
+                      if newProblem.isEmpty then
                         throw IllegalStateException(
                           "impossible because the type qualified names are collected from clauses in the problem",
                         )
                       for case (_Σ, branch) <- split(
                           q̅.map(_.subst(ρ2)),
                           _C.subst(ρ2t),
-                          problem,
+                          newProblem,
                         )
                       yield (_Σ, branches + (qn -> branch), defaultCase)
                     // Default `x` catch-all case
                     case (Right(_, branches, _), None) =>
-                      if subst(problem, Substitutor.id(Γ.size)).isEmpty then
-                        throw MissingDefaultTypeCase()
-                      for case (_Σ, branch) <- split(q̅, _C, problem)
+                      val newProblem = subst(problem, Substitutor.id(Γ.size))
+                      if newProblem.isEmpty then throw MissingDefaultTypeCase()
+                      for case (_Σ, branch) <- split(q̅, _C, newProblem)
                       yield (_Σ, branches, Some(branch))
                     case (Left(e), _) => Left(e)
                   .map:
@@ -620,7 +641,7 @@ private def elaborateDefBody
                       )
 
             // split constructor
-            case (_, (x: Var, PConstructor(_, _), _A @ DataType(qn, _))) =>
+            case (_, ElabConstraint(x: Var, PConstructor(_, _), _A @ DataType(qn, _))) =>
               if !providedAtLeastU1Usage(x) then Left(InsufficientResourceForSplit(x, Γ.resolve(x)))
               else
                 val (_Γ1, binding, _Γ2) = Γ.split(x)
@@ -662,15 +683,17 @@ private def elaborateDefBody
                           val ρ2 = ρ1 ⊎ Substitutor.id[Pattern](_Γ2.size)
 
                           val ρ2t = ρ2.toTermSubstitutor
-                          given Context =
+                          given ΓSplit: Context =
                             _Γ1 ++ Δ.subst(ρ.toTermSubstitutor) ++ _Γ2.subst(ρ1t)
+                          ctx.debug(ΓSplit)
 
-                          if subst(problem, ρ2t).isEmpty then
+                          val newProblem = subst(problem, ρ2t)
+                          if newProblem.isEmpty then
                             throw MissingConstructorCase(qn, constructor.name)
                           for case (_Σ, branch) <- split(
                               q̅.map(_.subst(ρ2)),
                               _C.subst(ρ2t),
-                              problem,
+                              newProblem,
                             )
                           yield (
                             _Σ,
@@ -684,7 +707,7 @@ private def elaborateDefBody
                   .map { case (_Σ, branches) => (_Σ, CtDataCase(x, qn, branches)) }
 
             // split empty
-            case (_, (x: Var, PAbsurd(), _A)) =>
+            case (_, ElabConstraint(x: Var, PAbsurd(), _A)) =>
               _A match
                 case DataType(qn, args) =>
                   val data = Σ.getData(qn)

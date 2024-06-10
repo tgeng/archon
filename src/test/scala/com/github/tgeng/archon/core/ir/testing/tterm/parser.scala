@@ -24,7 +24,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tLevelLiteral[$: P]: P[TTerm] =
     PT(CharIn("0-9").rep(1).! ~~ "L")(s => TTerm.TLevelLiteral(s.toInt))
   private def tDef[$: P]: P[TTerm] =
-    PT(("." ~~ id).rep(1).!)(s => TTerm.TDef(QualifiedName.from(s.drop(1))))
+    PT(("." ~~ id).repX(1).!)(s => TTerm.TDef(QualifiedName.from(s.drop(1))))
   private def tU[$: P]: P[TTerm] = PT("U" ~/ atom)(TTerm.TU(_))
   private def tForce[$: P]: P[TTerm] = PT("force" ~/ atom)(TTerm.TForce(_))
   private def atom[$: P]: P[TTerm] = P(

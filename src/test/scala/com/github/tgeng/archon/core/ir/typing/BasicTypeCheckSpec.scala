@@ -9,7 +9,7 @@ import com.github.tgeng.archon.core.ir.HandlerType.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.*
-import com.github.tgeng.archon.core.ir.testing.tterm.{TranslationContext, decls, inUse, vt}
+import com.github.tgeng.archon.core.ir.testing.tterm.*
 import org.scalatest.freespec.AnyFreeSpec
 
 class BasicTypeCheckSpec extends AnyFreeSpec:
@@ -132,7 +132,15 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         data Nat: .archon.builtin.type.Type 0L
         Zero: Nat
         Succ: Nat -> Nat
+
+        def prec: .test.Nat -> <> .test.Nat
+        Zero{} = .test.Nat.Zero .archon.builtin.type.Usage.any
+        Succ{m} = m
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
         assertVType(vt"Zero .archon.builtin.type.Usage.one", vt"Nat")
+        assertCType(
+          ct"prec (.test.Nat.Succ .archon.builtin.type.Usage.any (.test.Nat.Zero .archon.builtin.type.Usage.any))",
+          ct"<> .test.Nat",
+        )
   }

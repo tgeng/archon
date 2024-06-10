@@ -236,7 +236,7 @@ trait Signature:
   def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     getDataOption(qn).map { data =>
       val context = data.context.map(_._1) ++ data.tIndexTys
-      Definition(qn, context, F(Type(DataType(qn, vars(context.size - 1)))))
+      Definition(qn, context, F(Type(DataType(qn, vars(context.size - 1))), total, uAny))
     }
 
   def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
@@ -249,7 +249,7 @@ trait Signature:
             context,
             Nil,
             Return(dataType, uAny),
-            F(Type(dataType), uAny),
+            F(Type(dataType), total, uAny),
           ),
         )
       })
@@ -282,7 +282,7 @@ trait Signature:
                   // weaken due to the synthesized usage parameter
                   constructor.tArgs.map(_.weaken(1, constructor.paramTys.size)),
               ),
-              Total(),
+              total,
               Var(constructor.paramTys.size), // reference the synthesized usage parameter
             ),
           )
@@ -324,7 +324,7 @@ trait Signature:
                     // weaken due to the synthesized usage parameter
                     constructor.tArgs.map(_.weaken(1, constructor.paramTys.size)),
                 ),
-                Total(),
+                total,
                 Var(constructor.paramTys.size), // reference the synthesized usage parameter
               ),
             ),
@@ -384,7 +384,7 @@ trait Signature:
 
   def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
     getEffectOption(qn)
-      .map(effect => Definition(qn, effect.context, F(EffectsType())))
+      .map(effect => Definition(qn, effect.context, F(EffectsType(), total, uAny)))
 
   def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     for effect <- getEffectOption(qn)
@@ -393,7 +393,7 @@ trait Signature:
         effect.context,
         Nil,
         Return(EffectsLiteral(Set((qn, vars(effect.context.size - 1)))), uAny),
-        F(EffectsType()),
+        F(EffectsType(), total, uAny),
       ),
     )
 

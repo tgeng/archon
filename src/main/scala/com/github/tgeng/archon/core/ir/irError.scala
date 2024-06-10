@@ -4,7 +4,7 @@ import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
-enum IrError(val Γ: Context) extends Exception:
+enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case CannotFindCTypeUnion(a: CTerm, b: CTerm)(using Γ: Context) extends IrError(Γ)
   case CannotFindVTypeUnion(a: VTerm, b: VTerm)(using Γ: Context) extends IrError(Γ)
   case CollapsingEffectfulTerm(ctm: CTerm)(using Γ: Context) extends IrError(Γ)
@@ -91,7 +91,7 @@ enum IrError(val Γ: Context) extends Exception:
   case UnsolvedElaboration(clause: PreClause)(using Γ: Context) extends IrError(Γ)
   case ElaborationFailure
     (part: DeclarationPart, decl: PreDeclaration, cause: IrError)
-    (using Γ: Context) extends IrError(Γ)
+    (using Γ: Context) extends IrError(Γ, cause)
   case DataLevelCannotDependOnIndexArgument(preData: PreDeclaration.PreData)(using Γ: Context)
     extends IrError(Γ)
   case DataEqDecidabilityCannotDependOnIndexArgument

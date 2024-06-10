@@ -21,7 +21,7 @@ extension (ctx: collection.IndexedSeq[Binding[VTerm]])
   def resolve(idx: Nat)(using Signature): Binding[VTerm] =
     val offset = idx + 1
     if idx < 0 || idx >= ctx.size then
-      throw InternalIrError(s"Bad index $idx for context ${pprint(ctx)}")(using ctx)
+      throw InternalIrError(s"Bad index $idx for context ${pprint(ctx).plainText}")(using ctx)
     ctx(ctx.size - offset).map(RaisableVTerm.raise(_, offset))
 
   def split(ref: VTerm.Var): (Context, Binding[VTerm], Telescope) =

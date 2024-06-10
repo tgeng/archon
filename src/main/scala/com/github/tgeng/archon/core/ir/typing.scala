@@ -1171,11 +1171,12 @@ def inferType
 
 @throws(classOf[IrError])
 def checkType
-  (tm: VTerm, ty: VTerm)
+  (tm: VTerm, rawTy: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : VTerm = debugCheckType(tm, ty):
+  : VTerm = debugCheckType(tm, rawTy):
+  val ty = rawTy.normalized
   tm match
     case Collapse(c) =>
       val tm = checkType(c, F(ty))
@@ -1332,13 +1333,14 @@ def inferType
         val bindingUsage = checkType(binding.usage, UsageType(None))
         val (newTm, funTyTy) = tyTy match
           case Type(_) =>
-            val (bodyTy, bodyTyTy) = inferType(uncheckedBodyTy)(using Γ :+ binding)
+            val bodyContext = Γ :+ binding
+            val (bodyTy, bodyTyTy) = inferType(uncheckedBodyTy)(using bodyContext)
             val newTm =
               FunctionType(Binding(ty, bindingUsage)(binding.name), bodyTy, effects.normalized)(
                 using tm.sourceInfo,
               )
             bodyTyTy match
-              case CType(_, _) if isTotal(bodyTy, Some(bodyTyTy)) =>
+              case CType(_, _) if isTotal(bodyTy, Some(bodyTyTy))(using bodyContext) =>
                 (
                   newTm,
                   CType(newTm, Total()),
@@ -1346,7 +1348,7 @@ def inferType
               // TODO[P3]: think about whether the following is actually desirable
               // Automatically promote Return(SomeVType) to F(SomeVType) and proceed type
               // inference.
-              case F(Type(_), _, _) if isTotal(bodyTy, Some(bodyTyTy)) =>
+              case F(Type(_), _, _) if isTotal(bodyTy, Some(bodyTyTy))(using bodyContext) =>
                 (
                   newTm,
                   CType(newTm, Total()),

@@ -406,10 +406,9 @@ private def checkUsagesSubsumption
   assert(usages.size == Γ.size, s"usages has size ${usages.size} yet Γ has size ${Γ.size}")
   Γ.indices
     .map { i =>
-      given Γ2: Context = Γ.take(i)
       val binding = Γ(i)
-      val providedUsage = binding.usage
-      val consumedUsage = usages(i).strengthen(Γ.size - i, 0)
+      val providedUsage = binding.usage.weaken(Γ.size - i, 0)
+      val consumedUsage = usages(i)
       if invert then checkUsageSubsumption(consumedUsage, providedUsage)
       else checkUsageSubsumption(providedUsage, consumedUsage)
     }
