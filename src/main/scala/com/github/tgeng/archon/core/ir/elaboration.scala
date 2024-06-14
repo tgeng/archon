@@ -41,7 +41,6 @@ def elaborate
   (using TypingContext)
   : Signature =
   try
-    // TODO[P0]: make sure stuff added to signature contains no meta vars and are all normalized!
     (part, decl) match
       case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
       case (DeclarationPart.HEAD, d: PreRecord)     => elaborateRecordHead(d)
@@ -754,7 +753,15 @@ private def elaborateDefBody
                   val constraints = checkUsagesSubsumption(rhs1Usages)
                   if constraints.isEmpty then Right(())
                   else Left(UnsatisfiedUsageRequirements(constraints))
-              yield (Σ.addClause(preDefinition.qn, Clause(Γ, q̅, rhs1, _C)), CtTerm(rhs1))
+              yield
+                val solvedRhs = ctx.solveTerm(rhs1)
+                (
+                  Σ.addClause(
+                    preDefinition.qn,
+                    Clause(ctx.solveTerm(Γ), q̅, solvedRhs, ctx.solveTerm(_C)),
+                  ),
+                  CtTerm(solvedRhs),
+                )
         split(q̅, _C, problem) match
           case Right(r) => r
           case Left(e)  => throw e

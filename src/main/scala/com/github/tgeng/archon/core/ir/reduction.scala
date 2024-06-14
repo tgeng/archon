@@ -484,12 +484,7 @@ private final class StackMachine
 extension (c: CTerm)
   @throws(classOf[IrError])
   def normalized(using Γ: Context)(using Signature)(using TypingContext): CTerm =
-    // inline meta variable, consolidate immediately nested redex
     val transformer = new Transformer[TypingContext]():
-      override def transformMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): CTerm =
-        ctx.resolveMeta(m) match
-          case Solved(_, _, t) => transformCTerm(t)
-          case _               => m
       override def transformRedex(r: Redex)(using ctx: TypingContext)(using Σ: Signature): CTerm =
         redex(
           transformCTerm(r.t),
