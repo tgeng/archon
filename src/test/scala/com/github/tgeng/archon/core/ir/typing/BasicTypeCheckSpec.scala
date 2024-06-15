@@ -133,14 +133,14 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         Zero: Nat
         Succ: Nat -> Nat
 
-        def prec: .test.Nat -> <> .test.Nat
-        Zero{} = .test.Nat.Zero .archon.builtin.type.Usage.any
+        def prec: Nat -> <> Nat
+        Zero{} = Zero .archon.builtin.type.Usage.any
         Succ{m} = m
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
         assertVType(vt"Zero .archon.builtin.type.Usage.one", vt"Nat")
         assertCType(
-          ct"prec (.test.Nat.Succ .archon.builtin.type.Usage.any (.test.Nat.Zero .archon.builtin.type.Usage.any))",
-          ct"<> .test.Nat",
+          ct"prec (Succ .archon.builtin.type.Usage.any (Zero .archon.builtin.type.Usage.any))",
+          ct"<> Nat",
         )
   }

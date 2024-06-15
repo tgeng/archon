@@ -25,11 +25,11 @@ extension (ctx: StringContext)
     : (TranslationContext, Signature) =
     val str = ctx.s(args*)
     val lastLine = str.lines().iterator().asScala.toSeq.last
-    val indent = lastLine.size
+    val indent = lastLine.length
     val newStr = str.lines().map(_.drop(indent)).toList.asScala.drop(1).dropRight(1).mkString("\n")
     val decls = Parser.parseDeclarations(newStr)
     given newTranslationCtx: TranslationContext = tCtx.bindDecls(decls)
-    val preDecls = decls.map(_.toPreDeclaration)
+    val preDecls = decls.map(_.toPreDeclaration(using newTranslationCtx))
     val newSignature = elaborateAll(preDecls)
     (newTranslationCtx, newSignature)
 
