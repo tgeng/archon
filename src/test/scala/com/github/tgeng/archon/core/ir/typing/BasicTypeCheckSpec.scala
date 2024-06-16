@@ -13,7 +13,7 @@ import com.github.tgeng.archon.core.ir.testing.tterm.*
 import org.scalatest.freespec.AnyFreeSpec
 
 class BasicTypeCheckSpec extends AnyFreeSpec:
-  given TranslationContext = TranslationContext(qn"test")
+  given TranslationContext = TranslationContext(qn"test").bindPreDecls(Builtins.builtins)
   given ctx: TypingContext = TypingContext()
   given Context = Context.empty
   given SourceInfo = SourceInfo.SiEmpty
@@ -129,18 +129,18 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
     "with nat" in:
       // TODO: handle builtin-type import
       decls"""
-        data Nat: .archon.builtin.type.Type 0L
+        data Nat: Type 0L
         Zero: Nat
         Succ: Nat -> Nat
 
         def prec: Nat -> <> Nat
-        Zero{} = Zero .archon.builtin.type.Usage.uAny
+        Zero{} = Zero uAny
         Succ{m} = m
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
-        assertVType(vt"Zero .archon.builtin.type.Usage.u1", vt"Nat")
+        assertVType(vt"Zero u1", vt"Nat")
         assertCType(
-          ct"prec (Succ .archon.builtin.type.Usage.uAny (Zero .archon.builtin.type.Usage.uAny))",
+          ct"prec (Succ uAny (Zero uAny))",
           ct"<> Nat",
         )
   }

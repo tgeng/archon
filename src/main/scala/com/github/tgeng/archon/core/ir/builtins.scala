@@ -142,7 +142,7 @@ object Builtins:
 
   private val L0 = LevelLiteral(0)
 
-  private val builtins: Seq[PreDeclaration] = Seq(
+  val builtins: Seq[PreDeclaration] = Seq(
     PreData(
       UnitQn,
       tParamTys = Nil,

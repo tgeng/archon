@@ -4,6 +4,7 @@ import com.github.tgeng.archon.common.{MutableRef, Nat}
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.PreDeclaration.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TCoPattern.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TDeclaration.*
@@ -62,6 +63,28 @@ case class TranslationContext
         case data: TData     => ctx.bindDataDecl(data)
         case record: TRecord => ctx.bindRecordDecl(record)
         case _               => ctx.bindDecl(decl.name)
+    }
+
+  def bindPreDecls(decls: Seq[PreDeclaration]): TranslationContext =
+    decls.foldLeft(this) { (ctx, decl) =>
+      decl match
+        case data: PreData =>
+          ctx.copy(
+            dataDecls = dataDecls + (data.qn.shortName.toString -> data.qn),
+            constructorDecls = constructorDecls ++ data.constructors.map(_.name.toString),
+            globalDefs =
+              (globalDefs + (data.qn.shortName.toString -> data.qn)) ++ data.constructors.map(c =>
+                c.name.toString -> (data.qn / c.name.toString),
+              ),
+          )
+        case record: PreRecord =>
+          ctx.copy(
+            globalDefs =
+              (globalDefs + (record.qn.shortName.toString -> record.qn)) ++ record.fields.map(f =>
+                f.name.toString -> (record.qn / f.name),
+              ),
+          )
+        case _ => ctx.bindDecl(decl.qn.shortName.toString, decl.qn)
     }
 
   def lookup(name: String): Either[Nat, QualifiedName] =
