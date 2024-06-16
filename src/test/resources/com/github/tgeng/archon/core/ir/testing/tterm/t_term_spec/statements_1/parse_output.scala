@@ -6,7 +6,7 @@ TLet(
   ) @ "f a b",
   ty = TAuto() @ "ε",
   effects = TAuto(),
-  usage = TDef(qn = qn"archon.builtin.type.Usage.zero") @ "ε",
+  usage = TDef(qn = qn"archon.builtin.type.Usage.u0") @ "ε",
   body = TApp(
     f = TApp(f = TId(id = "g") @ "g", arg = TId(id = "c") @ "c") @ "g c",
     arg = TId(id = "d") @ "d"

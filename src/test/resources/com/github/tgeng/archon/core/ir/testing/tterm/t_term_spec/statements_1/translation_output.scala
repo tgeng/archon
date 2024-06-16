@@ -18,7 +18,7 @@ Let(
   ) @ "ε",
   tBinding = Binding(
     ty = Auto(),
-    usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.zero") @ "ε") @ "ε"
+    usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u0") @ "ε") @ "ε"
   ) @ "_",
   eff = Auto(),
   body = Let(

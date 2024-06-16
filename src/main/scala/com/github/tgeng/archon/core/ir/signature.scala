@@ -210,6 +210,12 @@ trait Signature:
       throw IllegalArgumentException(s"missing operation $opName"),
     )
 
+  // TODO[P2]: remove all these derived defs from data, record, and effects. Instead, data type and
+  //  value constructors, record type constructors, and effect type constructors and operators
+  //  directly contribute to global names that are recognized by the global mix-fix parser. This
+  //  way, type checking is much simpler and more predictable. Also, any name conflicts are caught
+  //  during parsing. Record field will have a special syntax for projection. Type class also
+  //  contributes to the mix-fix parser and it's basically syntax sugar of records under the hood.
   private def getDerivedDefinitionOption(qn: QualifiedName): Option[Definition] =
     getDataDerivedDefinitionOption(qn)
       .orElse(getDataConDerivedDefinitionOption(qn))

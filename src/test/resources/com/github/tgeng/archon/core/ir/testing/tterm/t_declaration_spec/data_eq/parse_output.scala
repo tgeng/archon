@@ -5,7 +5,7 @@ TData(
       TBinding(
         name = "l",
         ty = TId(id = "Level") @ "Level",
-        usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
+        usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
       ),
       INVARIANT
     ),
@@ -13,7 +13,7 @@ TData(
       TBinding(
         name = "A",
         ty = TApp(f = TId(id = "Type") @ "Type", arg = TId(id = "l") @ "l") @ "Type l",
-        usage = TDef(qn = qn"archon.builtin.type.Usage.any")
+        usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
       ),
       INVARIANT
     ),
@@ -21,7 +21,7 @@ TData(
       TBinding(
         name = "x",
         ty = TId(id = "A") @ "A",
-        usage = TDef(qn = qn"archon.builtin.type.Usage.any")
+        usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
       ),
       INVARIANT
     )
@@ -30,12 +30,12 @@ TData(
     arg = TBinding(
       name = "_",
       ty = TId(id = "A"),
-      usage = TDef(qn = qn"archon.builtin.type.Usage.any")
+      usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
     ),
     bodyType = TF(
       ty = TApp(f = TId(id = "Type"), arg = TId(id = "l")),
       effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
-      usage = TDef(qn = qn"archon.builtin.type.Usage.one") @ "ε"
+      usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
     ) @ "Type l",
     effects = TDef(qn = qn"archon.builtin.effects.total")
   ) @ "A -> Type l",
@@ -54,7 +54,7 @@ TData(
           arg = TId(id = "x")
         ) @ "Eq l A x x",
         effects = TDef(qn = qn"archon.builtin.effects.total"),
-        usage = TDef(qn = qn"archon.builtin.type.Usage.one")
+        usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
       ) @ "Eq l A x x"
     )
   )

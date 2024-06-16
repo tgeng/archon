@@ -11,7 +11,7 @@ TRecord(
         arg = TBinding(
           name = "m",
           ty = TId(id = "Nat"),
-          usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
+          usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
         ),
         bodyType = TFunctionType(
           arg = TBinding(
@@ -23,7 +23,7 @@ TRecord(
               ) @ "Eq Nat m",
               arg = TApp(f = TId(id = "head") @ "head", arg = TId(id = "self") @ "self") @ "head self"
             ) @ "Eq Nat m (head self",
-            usage = TDef(qn = qn"archon.builtin.type.Usage.any")
+            usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
           ),
           bodyType = TId(id = "CStream") @ "CStream",
           effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε"

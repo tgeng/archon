@@ -4,7 +4,7 @@ TData(
   ty = TF(
     ty = TApp(f = TId(id = "Type") @ "Type", arg = TLevelLiteral(level = 0) @ "0L") @ "Type 0L",
     effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
-    usage = TDef(qn = qn"archon.builtin.type.Usage.one") @ "ε"
+    usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
   ) @ "Type 0L",
   constructors = List(
     TConstructor(
@@ -12,7 +12,7 @@ TData(
       ty = TF(
         ty = TId(id = "Nat") @ "Nat",
         effects = TDef(qn = qn"archon.builtin.effects.total"),
-        usage = TDef(qn = qn"archon.builtin.type.Usage.one")
+        usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
       ) @ "Nat"
     ),
     TConstructor(
@@ -21,12 +21,12 @@ TData(
         arg = TBinding(
           name = "_",
           ty = TId(id = "Nat"),
-          usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
+          usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
         ),
         bodyType = TF(
           ty = TId(id = "Nat"),
           effects = TDef(qn = qn"archon.builtin.effects.total"),
-          usage = TDef(qn = qn"archon.builtin.type.Usage.one")
+          usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
         ),
         effects = TDef(qn = qn"archon.builtin.effects.total")
       ) @ "Nat -> Nat"

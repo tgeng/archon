@@ -5,12 +5,12 @@ List(
     ty = FunctionType(
       binding = Binding(
         ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
-        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
       ) @ "_",
       bodyTy = FunctionType(
         binding = Binding(
           ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
-          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
         ) @ "_",
         bodyTy = F(
           vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),

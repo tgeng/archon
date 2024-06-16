@@ -5,7 +5,7 @@ TDefinition(
     arg = TBinding(
       name = "_",
       ty = TDef(qn = qn"test.Nat") @ ".test.Nat",
-      usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
+      usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
     ),
     bodyType = TF(
       ty = TDef(qn = qn"test.Nat"),

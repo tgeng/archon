@@ -5,13 +5,13 @@ TDefinition(
     arg = TBinding(
       name = "_",
       ty = TId(id = "Nat") @ "Nat",
-      usage = TDef(qn = qn"archon.builtin.type.Usage.any") @ "ε"
+      usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
     ),
     bodyType = TFunctionType(
       arg = TBinding(
         name = "_",
         ty = TId(id = "Nat"),
-        usage = TDef(qn = qn"archon.builtin.type.Usage.any")
+        usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
       ),
       bodyType = TF(
         ty = TId(id = "Nat"),

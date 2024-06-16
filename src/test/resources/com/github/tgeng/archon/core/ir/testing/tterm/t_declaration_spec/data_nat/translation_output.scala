@@ -19,7 +19,7 @@ List(
         ) @ "Type 0L"
       ) @ "ε",
       effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
-      usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one") @ "ε") @ "ε"
+      usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1") @ "ε") @ "ε"
     ) @ "Type 0L",
     constructors = List(
       PreConstructor(
@@ -27,7 +27,7 @@ List(
         ty = F(
           vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
-          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one"))
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
         ) @ "Nat"
       ),
       PreConstructor(
@@ -35,12 +35,12 @@ List(
         ty = FunctionType(
           binding = Binding(
             ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
-            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
           ) @ "_",
           bodyTy = F(
             vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
-            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one"))
+            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
           ) @ "Nat",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
         ) @ "Nat -> Nat"

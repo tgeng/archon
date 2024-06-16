@@ -5,7 +5,7 @@ List(
       (
         Binding(
           ty = Def(qn = qn"__unresolved__.Level") @ "Level",
-          usage = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε"
+          usage = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
         ) @ "l",
         INVARIANT
       ),
@@ -20,7 +20,7 @@ List(
               elims = List(ETerm(v = Var(idx = 0) @ "ε"))
             ) @ "Type l"
           ) @ "ε",
-          usage = Def(qn = qn"archon.builtin.type.Usage.any")
+          usage = Def(qn = qn"archon.builtin.type.Usage.uAny")
         ) @ "t",
         COVARIANT
       )
@@ -28,7 +28,7 @@ List(
     ty = FunctionType(
       binding = Binding(
         ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
-        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any")) @ "ε"
+        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny")) @ "ε"
       ) @ "_",
       bodyTy = F(
         vTy = Collapse(
@@ -38,7 +38,7 @@ List(
           ) @ "Type l"
         ) @ "ε",
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
-        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one") @ "ε") @ "ε"
+        usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1") @ "ε") @ "ε"
       ) @ "Type l",
       effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
     ) @ "Nat -> Type l",
@@ -61,7 +61,7 @@ List(
             ) @ "Vec l t Zero"
           ) @ "ε",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
-          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one"))
+          usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
         ) @ "Vec l t Zero"
       ),
       PreConstructor(
@@ -69,12 +69,12 @@ List(
         ty = FunctionType(
           binding = Binding(
             ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
-            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
           ) @ "n",
           bodyTy = FunctionType(
             binding = Binding(
               ty = Collapse(cTm = Def(qn = qn"__unresolved__.t") @ "t"),
-              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
             ) @ "_",
             bodyTy = FunctionType(
               binding = Binding(
@@ -96,7 +96,7 @@ List(
                     )
                   ) @ "Vec l t n"
                 ) @ "ε",
-                usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+                usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
               ) @ "_",
               bodyTy = F(
                 vTy = Collapse(
@@ -129,7 +129,7 @@ List(
                   ) @ "Vec l t (Succ n"
                 ) @ "ε",
                 effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
-                usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.one"))
+                usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
               ) @ "Vec l t (Succ n",
               effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
             ) @ "Vec l t n -> Vec l t (Succ n",

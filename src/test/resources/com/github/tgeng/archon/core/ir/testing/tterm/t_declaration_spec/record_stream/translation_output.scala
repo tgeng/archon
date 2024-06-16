@@ -18,7 +18,7 @@ List(
         ty = FunctionType(
           binding = Binding(
             ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
-            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+            usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
           ) @ "m",
           bodyTy = FunctionType(
             binding = Binding(
@@ -53,7 +53,7 @@ List(
                   )
                 ) @ "Eq Nat m (head self"
               ) @ "ε",
-              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+              usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
             ) @ "_",
             bodyTy = Def(qn = qn"__unresolved__.CStream") @ "CStream",
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε"

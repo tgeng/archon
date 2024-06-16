@@ -1,12 +1,12 @@
 FunctionType(
   binding = Binding(
     ty = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "ε",
-    usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any") @ "ε") @ "ε"
+    usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
   ) @ "a",
   bodyTy = FunctionType(
     binding = Binding(
       ty = Collapse(cTm = Def(qn = qn"__unresolved__.B") @ "B") @ "ε",
-      usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.any"))
+      usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
     ) @ "b",
     bodyTy = F(
       vTy = Collapse(

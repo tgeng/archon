@@ -5,6 +5,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
 import com.github.tgeng.archon.core.ir.Elimination.*
@@ -1626,75 +1627,81 @@ private def checkLet
   (using Σ: Signature)
   (using TypingContext)
   : (CTerm, CTerm) =
-  val ty = checkIsType(tm.tBinding.ty)
-  // I thought about adding a check on `ty` to see if it's inhabitable. And if it's not, the usages
-  // in body can all be trivialized by multiple U0 since they won't execute. But inhabit-ability is
-  // not decidable. Even if we only do some conservative checking, it's hard to check polymorphic
-  // type `A` for any `A` passed by the caller. An alternative is to designate a bottom type and
-  // just check that. But to make this ergonomic we need to tweak the type checker to make this
-  // designated type a subtype of everything else. But type inference becomes impossible with `force
-  // t` where `t` has type bottom. If we raise a type error for `force t`, this would violate
-  // substitution principle of subtypes.
-  // On the other hand, if we don't check inhabit-ability, the usages in body would simply be
-  // multiplied with UAff instead of U0, which seems to be a reasonable approximation. The primary
-  // reason for such a check is just to flag phantom usages of terms, but I think it's not worth all
-  // these complexity.
-  val unnormalizedEffects = checkType(tm.eff, EffectsType())
-  val effects = unnormalizedEffects.normalized
-  val usage = checkType(tm.tBinding.usage, UsageType())
-  val t = checkType(tm.t, F(ty, effects, usage))
-  val (newTm, checkedBodyTy) =
-    // If some usages are not zero or unres, inlining `t` would change usage checking
-    // result because
-    //
-    // * either some linear or relevant usages becomes zero because the computation
-    //   gets removed
-    //
-    // * or if the term is wrapped inside a `Collapse` and get multiplied
-    //
-    // Such changes would alter usage checking result, which can be confusing for
-    // users. Note that, it's still possible that with inlining causes usages to be
-    // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
-    // unrestricted usage. Hence, usage checking would still pass. On the other hand,
-    // it's not possible for inlining to create usage out of nowhere.
-    def areTUsagesZeroOrUnrestricted: Boolean =
-      // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
-      // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
-      collectUsages(t, Some(F(tm.tBinding.ty, tm.eff, tm.tBinding.usage))).forall { usage =>
-        usage == uAny || usage == u0
-      }
-    val tTy = F(ty, effects, usage)
-    if isTotal(t, Some(tTy)) && areTUsagesZeroOrUnrestricted then
-      // Do the reduction onsite so that type checking in sub terms can leverage the
-      // more specific type. More importantly, this way we do not need to reference
-      // the result of a computation in the inferred type.
-      val uncheckedNewBody = t.normalized(Some(tTy)) match
-        case Return(v, _) => tm.body.substLowers(v)
-        case c            => tm.body.substLowers(Collapse(c))
-      bodyTy match
-        case Some(uncheckedBodyTy) =>
-          val bodyTy = checkIsCType(uncheckedBodyTy)
-          val newBody = checkType(uncheckedNewBody, bodyTy)
-          (newBody, bodyTy)
-        case None => inferType(uncheckedNewBody)
-    // Otherwise, just add the binding to the context and continue type checking.
-    else
-      val tBinding = Binding(ty, usage)(gn"v")
-      val (body, checkedBodyTy) =
-        given Context = Γ :+ tBinding
-        bodyTy match
-          case None => inferType(tm.body)
-          case Some(uncheckedBodyTy) =>
-            val bodyTy = checkIsCType(uncheckedBodyTy)(using Γ)
-            val body = checkType(tm.body, bodyTy.weakened)
-            (body, bodyTy)
-      val leakCheckedBodyTy =
-        checkVar0Leak(checkedBodyTy, LeakedReferenceToEffectfulComputationResult(t))
-      (
-        Let(t, tBinding, effects, body)(using tm.sourceInfo),
-        leakCheckedBodyTy.strengthened,
-      )
-  (newTm, augmentEffect(effects, checkedBodyTy))
+  def checkInlinedBody(inlinedBody: CTerm, eff: VTerm) =
+    val (newBody, newBodyTy) = bodyTy match
+      case Some(bodyTy) =>
+        val checkedBodyTy = checkIsCType(bodyTy)
+        val newBody = checkType(inlinedBody, checkedBodyTy)
+        (newBody, bodyTy)
+      case None =>
+        inferType(inlinedBody)
+    (newBody, augmentEffect(eff, newBodyTy))
+
+  def isAutoOrUAny(u: VTerm): Boolean = u match
+    case Auto() | UsageLiteral(Usage.UAny) => true
+    case _                                 => false
+  def isAutoOrTotal(eff: VTerm): Boolean = eff match
+    case Auto()     => true
+    case e: Effects => e == total
+    case _          => false
+  tm match
+    // Take the shortcut to inline immediate values. This is more than just an optimization because
+    // one cannot infer type of constructors. Hence inlining constructor calls is the only way to
+    // type check them without requiring type annotations on let.
+    case Let(Return(v, u1), Binding(ty, u2), eff, body)
+      if isAutoOrUAny(u1) && isAutoOrUAny(u2) && isAutoOrTotal(eff) =>
+      ty match
+        case Auto() =>
+        case ty     => checkIsType(ty)
+      checkInlinedBody(body.substLowers(v), eff)
+    case Let(t, Binding(ty, usage), eff, body) =>
+      val checkedEff = checkType(eff, EffectsType()).normalized
+      val checkedUsage = checkType(usage, UsageType(None)).normalized
+      val checkedTy = checkIsType(ty)
+      val tTy = F(checkedTy, checkedEff, checkedUsage)
+      val checkedT = checkType(t, tTy)
+      //    // If some usages are not zero or unres, inlining `t` would change usage checking
+      //    // result because
+      //    //
+      //    // * either some linear or relevant usages becomes zero because the computation
+      //    //   gets removed
+      //    //
+      //    // * or if the term is wrapped inside a `Collapse` and get multiplied
+      //    //
+      //    // Such changes would alter usage checking result, which can be confusing for
+      //    // users. Note that, it's still possible that with inlining causes usages to be
+      //    // removed, but the `areTUsagesZeroOrUnrestricted` check ensures the var has
+      //    // unrestricted usage. Hence, usage checking would still pass. On the other hand,
+      //    // it's not possible for inlining to create usage out of nowhere.
+      def areTUsagesZeroOrUnrestricted: Boolean =
+        // Note that we can't do conversion check here because doing conversion check assumes it must be the case or
+        // type check would fail. But here the usage can very well not be convertible with U0 or UAny.
+        collectUsages(t, Some(tTy)).forall { usage =>
+          usage == uAny || usage == u0
+        }
+      if isTotal(checkedT, Some(tTy)) && areTUsagesZeroOrUnrestricted then
+        // When syntactically one cannot tell if `t` is simply a value, we do the more sophisticated
+        // totality check, so that conversion check can take more specific values into account.
+        val uncheckedNewBody = t.normalized(Some(tTy)) match
+          case Return(v, _) => body.substLowers(v)
+          case c            => body.substLowers(Collapse(c))
+        checkInlinedBody(uncheckedNewBody, checkedEff)
+      else
+        val checkedBinding = Binding(checkedTy, checkedUsage)(gn"v")
+        val (checkedBody, checkedBodyTy) =
+          given Context = Γ :+ checkedBinding
+          bodyTy match
+            case None => inferType(tm.body)
+            case Some(uncheckedBodyTy) =>
+              val bodyTy = checkIsCType(uncheckedBodyTy)(using Γ)
+              val body = checkType(tm.body, bodyTy.weakened)
+              (body, bodyTy)
+        val leakCheckedBodyTy =
+          checkVar0Leak(checkedBodyTy, LeakedReferenceToEffectfulComputationResult(t))
+        (
+          Let(checkedT, checkedBinding, checkedEff, checkedBody)(using tm.sourceInfo),
+          augmentEffect(checkedEff, leakCheckedBodyTy.strengthened),
+        )
 
 @throws(classOf[IrError])
 def checkHandler
