@@ -127,7 +127,8 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
     given Signature = Builtins.Σ
 
     "with nat" in:
-      // TODO: handle builtin-type import
+      // TODO: add special syntax for constructor, projection, and operation, and remove derived
+      //  definitions from data, record, and effect.
       decls"""
         data Nat: Type 0L
         Zero: Nat
