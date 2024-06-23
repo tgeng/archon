@@ -240,7 +240,15 @@ private final class StackMachine
               case EProj(n) => EProj(n)
             stack.pushAll(normalizedElims)
             run(t)
-      case OperationCall(effAndArgs @ (effQn, rawEffArgs), name, rawArgs) =>
+      case OperationCall(opEff, name, rawArgs) =>
+        val effAndArgs = opEff match
+          case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
+            literals.head
+          case _ =>
+            throw IllegalStateException(
+              "operation should have been type checked and verified to be simple before reduction",
+            )
+        val (effQn, rawEffArgs) = effAndArgs
         Σ.getEffectOption(effQn) match
           case None => throw MissingDeclaration(effQn)
           case Some(eff) =>

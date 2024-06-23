@@ -1444,7 +1444,15 @@ def inferType
             val effects = checkType(uncheckedEffects, EffectsType())
             val args = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
             (RecordType(qn, args, effects), CType(tm, Total()))
-      case OperationCall((qn, uncheckedTArgs), name, uncheckedArgs) =>
+      case OperationCall(eff, name, uncheckedArgs) =>
+        val (qn, uncheckedTArgs) = eff match
+          case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
+            literals.head
+          case _ =>
+            // TODO[p0]: consider adding an effect context to aid operation resolution during type checking
+            throw IllegalStateException(
+              "operation should have been type checked and verified to be simple before reduction",
+            )
         Σ.getEffectOption(qn) match
           case None => throw MissingDeclaration(qn)
           case Some(effect) =>
@@ -1454,7 +1462,7 @@ def inferType
                 val checkedTArgs = checkTypes(uncheckedTArgs, effect.context.toList)
                 val tArgs = checkedTArgs.map(_.normalized)
                 val args = checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs*))
-                val newEff = (qn, tArgs)
+                val newEff = EffectsLiteral(Set((qn, tArgs)))
                 val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
                 val ty = op.resultTy.substLowers(tArgs ++ args*).normalized
                 (
@@ -1465,7 +1473,7 @@ def inferType
                     // operations. The dynamic nature of handler dispatching makes it impossible to
                     // know at compile time whether this would lead to a cyclic reference in
                     // computations.
-                    EffectsLiteral(Set(newEff, (Builtins.MaybeDivQn, Nil))),
+                    EffectsLiteral(Set((qn, tArgs), (Builtins.MaybeDivQn, Nil))),
                   ),
                 )
       case Continuation(uncheckedHandler, continuationUsage) =>

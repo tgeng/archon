@@ -619,7 +619,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType, QualifiedNameOwner(qn)
 
-  case OperationCall(eff: Eff, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
+  case OperationCall(eff: VTerm, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
     extends CTerm(sourceInfo)
 
   /** Internal only. This is only created by reduction.

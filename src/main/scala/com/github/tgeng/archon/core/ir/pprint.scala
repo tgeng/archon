@@ -509,7 +509,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = app(
-    Block(operationCall.name, "@", visitEff(operationCall.eff)),
+    Block(operationCall.name, "@", visitVTerm(operationCall.eff)),
     operationCall.args.map(visitVTerm),
   )
 

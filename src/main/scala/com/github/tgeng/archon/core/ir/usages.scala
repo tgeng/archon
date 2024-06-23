@@ -156,7 +156,13 @@ def collectUsages
         collectArgsUsages(args, record.context.map(_._1).toList) +
           collectUsages(effects, Some(EffectsType()))
       case OperationCall(eff, name, args) =>
-        val (qn, tArgs) = eff
+        val (qn, tArgs) = eff match
+          case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
+            literals.head
+          case _ =>
+            throw IllegalStateException(
+              "operation should have been type checked and verified to be simple before reduction",
+            )
         val operation = Σ.getOperation(qn, name)
         collectArgsUsages(args, operation.paramTys.substLowers(tArgs*))
       case Continuation(_, _) => Usages.zero

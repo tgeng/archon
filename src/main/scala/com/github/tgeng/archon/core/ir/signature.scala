@@ -430,18 +430,19 @@ trait Signature:
           op <- getOperationOption(effectQn, opName)
         yield
           val context = eff.context ++ op.paramTys
+          val opEff = EffectsLiteral(Set((effectQn, vars(context.size - 1, op.paramTys.size))))
           IndexedSeq(
             Clause(
               context,
               Nil,
               OperationCall(
-                (effectQn, vars(context.size - 1, op.paramTys.size)),
+                opEff,
                 opName,
                 vars(op.paramTys.size - 1),
               ),
               F(
                 op.resultTy,
-                EffectsLiteral(Set((effectQn, vars(context.size - 1, op.paramTys.size)))),
+                opEff,
                 op.resultUsage,
               ),
             ),

@@ -283,39 +283,29 @@ def checkIsConvertible
                   .toSet
                 effConstraint ++ argConstraint
           case (
-              OperationCall((qn1, tArgs1), name1, args1),
-              OperationCall((qn2, tArgs2), name2, args2),
-            ) if qn1 == qn2 && name1 == name2 =>
-            Σ.getOperationOption(qn1, name1) match
-              case None => throw MissingOperation(name1, qn1)
-              case Some(operation) =>
-                var args = IndexedSeq[VTerm]()
-                Σ.getEffectOption(qn1) match
-                  case None => throw MissingDeclaration(qn1)
-                  case Some(effect) =>
-                    val tArgConstraint =
-                      tArgs1
-                        .zip(tArgs2)
-                        .zip(effect.context)
-                        .map { case ((tArg1, tArg2), binding) =>
-                          val r = checkIsConvertible(tArg1, tArg2, Some(binding.ty))
-                          args = args :+ tArg1
-                          r
-                        }
-                        .flatten
-                        .toSet
-                    val argConstraint =
-                      args1
-                        .zip(args2)
-                        .zip(operation.paramTys)
-                        .map { case ((arg1, arg2), binding) =>
-                          val r = checkIsConvertible(arg1, arg2, Some(binding.ty))
-                          args = args :+ arg1
-                          r
-                        }
-                        .flatten
-                        .toSet
-                    tArgConstraint ++ argConstraint
+              OperationCall(eff1, name1, args1),
+              op2@OperationCall(eff2, name2, args2),
+            ) if name1 == name2 =>
+            val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
+            val (qn, tArgs) = eff1 match
+              case Effects(literals, operands) if operands.isEmpty && literals.size == 1 => literals.head
+              case _ => eff2 match
+                case Effects(literals, operands) if operands.isEmpty && literals.size == 1 => literals.head
+                case _ => throw ComplexOperationCall(op2)
+            val operation = Σ.getOperation(qn, name1)
+            var args = IndexedSeq[VTerm]()
+            val argConstraint =
+              args1
+                .zip(args2)
+                .zip(operation.paramTys)
+                .map { case ((arg1, arg2), binding) =>
+                  val r = checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args*)))
+                  args = args :+ arg1
+                  r
+                }
+                .flatten
+                .toSet
+            effConstraint ++ argConstraint
           case (Force(v1), Force(v2)) => checkIsConvertible(v1, v2, ty.map(U(_)))
           case (Force(v1), c: CTerm)  => checkIsConvertible(v1, Thunk(c), ty.map(U(_)))
           case (c: CTerm, Force(v2))  => checkIsConvertible(Thunk(c), v2, ty.map(U(_)))

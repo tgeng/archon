@@ -227,7 +227,7 @@ trait TermVisitor[C, R]:
 
   def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitEff(operationCall.eff) +:
+      visitVTerm(operationCall.eff) +:
         visitName(operationCall.name) +:
         operationCall.args.map(visitVTerm)*,
     )
@@ -792,7 +792,7 @@ trait Transformer[C]:
     (using Σ: Signature)
     : CTerm =
     OperationCall(
-      transformEff(operationCall.eff),
+      transformVTerm(operationCall.eff),
       transformName(operationCall.name),
       operationCall.args.map(transformVTerm),
     )(using operationCall.sourceInfo)
