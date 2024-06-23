@@ -8,6 +8,28 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.collection.immutable.SeqMap
 
+type Usages = Seq[VTerm]
+
+object Usages:
+  def zero(using Γ: Context): Usages = Seq.fill(Γ.size)(UsageLiteral(Usage.U0))
+
+  def single(v: VTerm.Var, u: VTerm = VTerm.UsageLiteral(Usage.U1))(using Γ: Context): Usages =
+    (Seq.fill(Γ.size - v.idx - 1)(UsageLiteral(Usage.U0)) :+ u)
+      ++ Seq.fill(v.idx)(UsageLiteral(Usage.U0))
+
+extension (us1: Usages)
+  infix def +(us2: Usages): Usages =
+    if us1.size != us2.size then throw IllegalArgumentException("mismatched size")
+    else us1.zip(us2).map { (u1, u2) => UsageSum(u1, u2) }
+
+  infix def |(us2: Usages): Usages =
+    if us1.size != us2.size then throw IllegalArgumentException("mismatched size")
+    else us1.zip(us2).map { (u1, u2) => UsageJoin(u1, u2) }
+
+  infix def *(scalar: VTerm): Usages = us1.map(u => UsageProd(u, scalar))
+  infix def *(scalar: Usage)(using SourceInfo): Usages =
+    us1.map(u => UsageProd(u, UsageLiteral(scalar)))
+
 def collectUsages
   (tm: VTerm, ty: Option[VTerm])
   (using Γ: Context)
