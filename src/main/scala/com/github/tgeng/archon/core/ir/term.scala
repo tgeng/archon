@@ -733,29 +733,29 @@ object CTerm:
     CTop(t, effects)
 
   @targetName("redexFromElims")
-  def redex(c: CTerm, elims: Iterable[Elimination[VTerm]])(using SourceInfo): Redex =
-    Redex(c, elims.toList)
+  def redex(c: CTerm, elims: Iterable[Elimination[VTerm]])(using SourceInfo): CTerm =
+    if elims.isEmpty then c else Redex(c, elims.toList)
 
   @targetName("redexFromElimsStar")
-  def redex(c: CTerm, elims: Elimination[VTerm]*)(using SourceInfo): Redex = redex(c, elims)
+  def redex(c: CTerm, elims: Elimination[VTerm]*)(using SourceInfo): CTerm = redex(c, elims)
 
   @targetName("redexFromTerms")
-  def redex(c: CTerm, args: Seq[VTerm])(using SourceInfo): Redex =
-    Redex(c, args.map(Elimination.ETerm(_)).toList)
+  def redex(c: CTerm, args: Seq[VTerm])(using SourceInfo): CTerm =
+    redex(c, args.map(Elimination.ETerm(_)))
 
   @targetName("redexFromTermsStar")
-  def redex(c: CTerm, args: VTerm*)(using SourceInfo): Redex = redex(c, args)
+  def redex(c: CTerm, args: VTerm*)(using SourceInfo): CTerm = redex(c, args)
 
   @targetName("redexFromProjection")
-  def redex(c: CTerm, fieldName: Name)(using SourceInfo): Redex =
+  def redex(c: CTerm, fieldName: Name)(using SourceInfo): CTerm =
     redex(c, Elimination.EProj(fieldName))
 
-  def Application(fun: CTerm, arg: VTerm)(using SourceInfo): Redex =
+  def Application(fun: CTerm, arg: VTerm)(using SourceInfo): CTerm =
     fun match
       case Redex(c, elims) => Redex(c, elims :+ Elimination.ETerm(arg))
       case t               => Redex(t, List(Elimination.ETerm(arg)))
 
-  def Projection(rec: CTerm, name: Name)(using SourceInfo): Redex =
+  def Projection(rec: CTerm, name: Name)(using SourceInfo): CTerm =
     rec match
       case Redex(c, elims) => Redex(c, elims :+ Elimination.EProj(name))
       case t               => Redex(t, List(Elimination.EProj(name)))

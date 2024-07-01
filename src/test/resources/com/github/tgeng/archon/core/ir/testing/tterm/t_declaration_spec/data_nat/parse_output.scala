@@ -2,7 +2,10 @@ TData(
   name = "Nat",
   tParamTys = List(),
   ty = TF(
-    ty = TApp(f = TId(id = "Type") @ "Type", arg = TLevelLiteral(level = 0) @ "0L") @ "Type 0L",
+    ty = TRedex(
+      c = TId(id = "Type") @ "Type",
+      elims = List(ETerm(v = TLevelLiteral(level = 0) @ "0L"))
+    ) @ "Type 0L",
     effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
     usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
   ) @ "Type 0L",

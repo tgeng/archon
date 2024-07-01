@@ -12,7 +12,7 @@ TData(
     (
       TBinding(
         name = "t",
-        ty = TApp(f = TId(id = "Type") @ "Type", arg = TId(id = "l") @ "l") @ "Type l",
+        ty = TRedex(c = TId(id = "Type") @ "Type", elims = List(ETerm(v = TId(id = "l") @ "l"))) @ "Type l",
         usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
       ),
       COVARIANT
@@ -25,7 +25,7 @@ TData(
       usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
     ),
     bodyType = TF(
-      ty = TApp(f = TId(id = "Type"), arg = TId(id = "l")),
+      ty = TRedex(c = TId(id = "Type"), elims = List(ETerm(v = TId(id = "l")))),
       effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
       usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
     ) @ "Type l",
@@ -35,12 +35,13 @@ TData(
     TConstructor(
       name = "Nil",
       ty = TF(
-        ty = TApp(
-          f = TApp(
-            f = TApp(f = TId(id = "Vec") @ "Vec", arg = TId(id = "l")) @ "Vec l",
-            arg = TId(id = "t") @ "t"
-          ) @ "Vec l t",
-          arg = TId(id = "Zero") @ "Zero"
+        ty = TRedex(
+          c = TId(id = "Vec") @ "Vec",
+          elims = List(
+            ETerm(v = TId(id = "l")),
+            ETerm(v = TId(id = "t") @ "t"),
+            ETerm(v = TId(id = "Zero") @ "Zero")
+          )
         ) @ "Vec l t Zero",
         effects = TDef(qn = qn"archon.builtin.effects.total"),
         usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
@@ -63,26 +64,39 @@ TData(
           bodyType = TFunctionType(
             arg = TBinding(
               name = "_",
-              ty = TApp(
-                f = TApp(f = TApp(f = TId(id = "Vec"), arg = TId(id = "l")), arg = TId(id = "t")),
-                arg = TId(id = "n") @ "n"
+              ty = TRedex(
+                c = TId(id = "Vec"),
+                elims = List(
+                  ETerm(v = TId(id = "l")),
+                  ETerm(v = TId(id = "t")),
+                  ETerm(v = TId(id = "n") @ "n")
+                )
               ) @ "Vec l t n",
               usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
             ),
             bodyType = TF(
-              ty = TApp(
-                f = TApp(f = TApp(f = TId(id = "Vec"), arg = TId(id = "l")), arg = TId(id = "t")),
-                arg = TApp(f = TId(id = "Succ") @ "Succ", arg = TId(id = "n")) @ "Succ n"
-              ) @ "Vec l t (Succ n",
+              ty = TRedex(
+                c = TId(id = "Vec"),
+                elims = List(
+                  ETerm(v = TId(id = "l")),
+                  ETerm(v = TId(id = "t")),
+                  ETerm(
+                    v = TRedex(
+                      c = TId(id = "Succ") @ "Succ",
+                      elims = List(ETerm(v = TId(id = "n")))
+                    ) @ "Succ n"
+                  )
+                )
+              ) @ "Vec l t (Succ n)",
               effects = TDef(qn = qn"archon.builtin.effects.total"),
               usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
-            ) @ "Vec l t (Succ n",
+            ) @ "Vec l t (Succ n)",
             effects = TDef(qn = qn"archon.builtin.effects.total")
-          ) @ "Vec l t n -> Vec l t (Succ n",
+          ) @ "Vec l t n -> Vec l t (Succ n)",
           effects = TDef(qn = qn"archon.builtin.effects.total")
-        ) @ "t -> Vec l t n -> Vec l t (Succ n",
+        ) @ "t -> Vec l t n -> Vec l t (Succ n)",
         effects = TDef(qn = qn"archon.builtin.effects.total")
-      ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n"
+      ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n)"
     )
   )
 )

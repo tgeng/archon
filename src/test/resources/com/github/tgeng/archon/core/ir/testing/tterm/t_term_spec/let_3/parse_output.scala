@@ -14,9 +14,9 @@ TLet(
       ty = TAuto(),
       effects = TAuto(),
       usage = TAuto(),
-      body = TApp(
-        f = TApp(f = TId(id = "plus") @ "plus", arg = TId(id = "a1") @ "a1") @ "plus a1",
-        arg = TId(id = "a2") @ "a2"
+      body = TRedex(
+        c = TId(id = "plus") @ "plus",
+        elims = List(ETerm(v = TId(id = "a1") @ "a1"), ETerm(v = TId(id = "a2") @ "a2"))
       ) @ "plus a1 a2"
     ) @ """let a2 = getA2
         plus a1 a2"""
@@ -32,9 +32,9 @@ TLet(
     ty = TAuto(),
     effects = TAuto(),
     usage = TAuto(),
-    body = TApp(
-      f = TApp(f = TId(id = "plus"), arg = TId(id = "a") @ "a") @ "plus a",
-      arg = TId(id = "b") @ "b"
+    body = TRedex(
+      c = TId(id = "plus"),
+      elims = List(ETerm(v = TId(id = "a") @ "a"), ETerm(v = TId(id = "b") @ "b"))
     ) @ "plus a b"
   ) @ """let b = getB
 plus a b"""

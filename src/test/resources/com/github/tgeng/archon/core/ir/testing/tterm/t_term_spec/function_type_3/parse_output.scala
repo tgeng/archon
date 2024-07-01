@@ -3,9 +3,9 @@ TFunctionType(
   bodyType = TFunctionType(
     arg = TBinding(name = "b", ty = TId(id = "B") @ "B", usage = TId(id = "uB") @ "uB"),
     bodyType = TF(
-      ty = TApp(
-        f = TApp(f = TId(id = "C") @ "C", arg = TId(id = "a") @ "a") @ "C a",
-        arg = TId(id = "b") @ "b"
+      ty = TRedex(
+        c = TId(id = "C") @ "C",
+        elims = List(ETerm(v = TId(id = "a") @ "a"), ETerm(v = TId(id = "b") @ "b"))
       ) @ "C a b",
       effects = TId(id = "effC") @ "effC",
       usage = TId(id = "uC") @ "uC"

@@ -17,7 +17,7 @@ List(
             eff = Auto(),
             body = Redex(
               t = Def(qn = qn"__unresolved__.Type") @ "Type",
-              elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+              elims = List(ETerm(v = Var(idx = 0) @ "l"))
             ) @ "Type l"
           ) @ "ε",
           usage = Def(qn = qn"archon.builtin.type.Usage.uAny")
@@ -34,16 +34,16 @@ List(
     ),
     ty = FunctionType(
       binding = Binding(
-        ty = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "ε",
+        ty = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "A",
         usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny")) @ "ε"
       ) @ "_",
       bodyTy = F(
         vTy = Collapse(
           cTm = Redex(
             t = Def(qn = qn"__unresolved__.Type") @ "Type",
-            elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "ε"))
+            elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "l"))
           ) @ "Type l"
-        ) @ "ε",
+        ) @ "Type l",
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
         usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1") @ "ε") @ "ε"
       ) @ "Type l",
@@ -55,19 +55,15 @@ List(
         ty = F(
           vTy = Collapse(
             cTm = Redex(
-              t = Redex(
-                t = Redex(
-                  t = Redex(
-                    t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
-                    elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l")))
-                  ) @ "Eq l",
-                  elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A")))
-                ) @ "Eq l A",
-                elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.x") @ "x") @ "ε"))
-              ) @ "Eq l A x",
-              elims = List(ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.x") @ "x")))
+              t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
+              elims = List(
+                ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "l"),
+                ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "A"),
+                ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.x") @ "x") @ "x"),
+                ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.x") @ "x") @ "x")
+              )
             ) @ "Eq l A x x"
-          ) @ "ε",
+          ) @ "Eq l A x x",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
           usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
         ) @ "Eq l A x x"

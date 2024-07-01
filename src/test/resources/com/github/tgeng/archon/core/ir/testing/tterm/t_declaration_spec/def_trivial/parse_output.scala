@@ -18,10 +18,18 @@ TDefinition(
     TClause(
       patterns = List(TcPattern(pattern = TpVar(name = "n"))),
       body = Some(
-        value = TApp(
-          f = TApp(f = TId(id = "plus") @ "plus", arg = TId(id = "n") @ "n") @ "plus n",
-          arg = TApp(f = TId(id = "Suc") @ "Suc", arg = TId(id = "Zero") @ "Zero") @ "Suc Zero"
-        ) @ "plus n (Suc Zero"
+        value = TRedex(
+          c = TId(id = "plus") @ "plus",
+          elims = List(
+            ETerm(v = TId(id = "n") @ "n"),
+            ETerm(
+              v = TRedex(
+                c = TId(id = "Suc") @ "Suc",
+                elims = List(ETerm(v = TId(id = "Zero") @ "Zero"))
+              ) @ "Suc Zero"
+            )
+          )
+        ) @ "plus n (Suc Zero)"
       )
     )
   )

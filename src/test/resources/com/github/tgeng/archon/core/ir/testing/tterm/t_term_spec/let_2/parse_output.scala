@@ -10,9 +10,9 @@ TLet(
     ty = TId(id = "B") @ "B",
     effects = TId(id = "effB") @ "effB",
     usage = TId(id = "uB") @ "uB",
-    body = TApp(
-      f = TApp(f = TId(id = "plus") @ "plus", arg = TId(id = "a") @ "a") @ "plus a",
-      arg = TId(id = "b") @ "b"
+    body = TRedex(
+      c = TId(id = "plus") @ "plus",
+      elims = List(ETerm(v = TId(id = "a") @ "a"), ETerm(v = TId(id = "b") @ "b"))
     ) @ "plus a b"
   ) @ """let b: <effB> [uB] B = getB
 plus a b"""

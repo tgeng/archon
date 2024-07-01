@@ -15,12 +15,14 @@ enum TTerm(val sourceInfo: SourceInfo):
   case TThunk(t: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TLevelLiteral(level: Nat)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TAuto()(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
+  case TCon(name: String, args: List[TTerm])(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TF(ty: TTerm, effects: TTerm, usage: TTerm)(using sourceInfo: SourceInfo)
     extends TTerm(sourceInfo)
   case TLet
     (name: String, t: TTerm, ty: TTerm, effects: TTerm, usage: TTerm, body: TTerm)
     (using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
-  case TApp(f: TTerm, arg: TTerm) extends TTerm(SourceInfo.merge(f.sourceInfo, arg.sourceInfo))
+  case TRedex(c: TTerm, elims: List[Elimination[TTerm]])(using sourceInfo: SourceInfo)
+    extends TTerm(sourceInfo)
   case TFunctionType(arg: TBinding, bodyType: TTerm, effects: TTerm)
     extends TTerm(SourceInfo.merge(arg.sourceInfo, bodyType.sourceInfo))
   case THandler

@@ -11,7 +11,7 @@ class TDeclarationTranslationSpec extends FileBasedFreeSpec("t_declaration_spec"
     val inputPath = testDir / "input.tdecl"
     val tDecls = Parser.parseDeclarations(inputPath)
     val ctx = TranslationContext(qn"test", ignoreUnresolvableGlobalName = true)
-    tDecls.foreach(tDecl => ctx.bindDecl(tDecl.name))
+    tDecls.foreach(tDecl => ctx.bindDef(tDecl.name))
     val preDecl = tDecls.map(_.toPreDeclaration(using ctx))
     val actual = verbosePPrinter.apply(preDecl).plainText
     val outputPath = testDir / "translation_output.scala"

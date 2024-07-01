@@ -7,17 +7,10 @@ List(
         cTm = Redex(
           t = Def(qn = qn"__unresolved__.Type") @ "Type",
           elims = List(
-            ETerm(
-              v = Collapse(
-                cTm = Return(
-                  v = Level(literal = LevelOrder(m = 0, n = 0), maxOperands = SeqMap()) @ "0L",
-                  usage = Auto() @ "ε"
-                ) @ "0L"
-              ) @ "ε"
-            )
+            ETerm(v = Level(literal = LevelOrder(m = 0, n = 0), maxOperands = SeqMap()) @ "0L")
           )
         ) @ "Type 0L"
-      ) @ "ε",
+      ) @ "Type 0L",
       effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
       usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1") @ "ε") @ "ε"
     ) @ "Type 0L",
@@ -25,7 +18,7 @@ List(
       PreConstructor(
         name = n"Zero",
         ty = F(
-          vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
+          vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
           usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
         ) @ "Nat"
@@ -34,11 +27,11 @@ List(
         name = n"Succ",
         ty = FunctionType(
           binding = Binding(
-            ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+            ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
             usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
           ) @ "_",
           bodyTy = F(
-            vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+            vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
             usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
           ) @ "Nat",

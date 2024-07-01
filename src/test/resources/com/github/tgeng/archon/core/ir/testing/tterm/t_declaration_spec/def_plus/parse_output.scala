@@ -38,13 +38,17 @@ TDefinition(
         TcPattern(pattern = TpVar(name = "n"))
       ),
       body = Some(
-        value = TApp(
-          f = TId(id = "Succ") @ "Succ",
-          arg = TApp(
-            f = TApp(f = TId(id = "plus") @ "plus", arg = TId(id = "m") @ "m") @ "plus m",
-            arg = TId(id = "n")
-          ) @ "plus m n"
-        ) @ "Succ (plus m n"
+        value = TRedex(
+          c = TId(id = "Succ") @ "Succ",
+          elims = List(
+            ETerm(
+              v = TRedex(
+                c = TId(id = "plus") @ "plus",
+                elims = List(ETerm(v = TId(id = "m") @ "m"), ETerm(v = TId(id = "n")))
+              ) @ "plus m n"
+            )
+          )
+        ) @ "Succ (plus m n)"
       )
     )
   )

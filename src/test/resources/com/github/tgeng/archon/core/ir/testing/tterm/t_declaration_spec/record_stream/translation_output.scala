@@ -8,7 +8,7 @@ List(
       eff = Auto(),
       body = Redex(
         t = Def(qn = qn"__unresolved__.CType") @ "CType",
-        elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+        elims = List(ETerm(v = Var(idx = 0) @ "l"))
       ) @ "CType l"
     ) @ "ε",
     fields = List(
@@ -17,42 +17,32 @@ List(
         name = n"tail",
         ty = FunctionType(
           binding = Binding(
-            ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
+            ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
             usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
           ) @ "m",
           bodyTy = FunctionType(
             binding = Binding(
               ty = Collapse(
                 cTm = Redex(
-                  t = Redex(
-                    t = Redex(
-                      t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
-                      elims = List(
-                        ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"))
-                      )
-                    ) @ "Eq Nat",
-                    elims = List(
-                      ETerm(
-                        v = Collapse(cTm = Return(v = Var(idx = 2) @ "m", usage = Auto()) @ "m") @ "ε"
-                      )
-                    )
-                  ) @ "Eq Nat m",
+                  t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
                   elims = List(
+                    ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat"),
+                    ETerm(v = Var(idx = 0) @ "m"),
                     ETerm(
                       v = Collapse(
                         cTm = Redex(
                           t = Def(qn = qn"__unresolved__.head") @ "head",
                           elims = List(
                             ETerm(
-                              v = Collapse(cTm = Def(qn = qn"__unresolved__.self") @ "self") @ "ε"
+                              v = Collapse(cTm = Def(qn = qn"__unresolved__.self") @ "self") @ "self"
                             )
                           )
                         ) @ "head self"
-                      ) @ "ε"
+                      ) @ "head self"
                     )
                   )
-                ) @ "Eq Nat m (head self"
-              ) @ "ε",
+                ) @ "Eq Nat m (head self)"
+              ) @ "Eq Nat m (head self)",
               usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
             ) @ "_",
             bodyTy = Def(qn = qn"__unresolved__.CStream") @ "CStream",

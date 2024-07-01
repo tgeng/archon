@@ -11,9 +11,9 @@ TFunctionType(
       usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
     ),
     bodyType = TF(
-      ty = TApp(
-        f = TApp(f = TId(id = "C") @ "C", arg = TId(id = "a") @ "a") @ "C a",
-        arg = TId(id = "b") @ "b"
+      ty = TRedex(
+        c = TId(id = "C") @ "C",
+        elims = List(ETerm(v = TId(id = "a") @ "a"), ETerm(v = TId(id = "b") @ "b"))
       ) @ "C a b",
       effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
       usage = TAuto() @ "ε"

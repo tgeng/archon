@@ -12,9 +12,9 @@ plus a b""",
     ty = TAuto(),
     effects = TAuto(),
     usage = TAuto(),
-    body = TApp(
-      f = TApp(f = TId(id = "plus") @ "plus", arg = TId(id = "a") @ "a") @ "plus a",
-      arg = TId(id = "b") @ "b"
+    body = TRedex(
+      c = TId(id = "plus") @ "plus",
+      elims = List(ETerm(v = TId(id = "a") @ "a"), ETerm(v = TId(id = "b") @ "b"))
     ) @ "plus a b"
   ) @ """let b = getB
 plus a b"""

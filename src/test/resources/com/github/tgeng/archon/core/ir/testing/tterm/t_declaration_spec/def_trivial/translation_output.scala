@@ -4,13 +4,13 @@ List(
     paramTys = List(),
     ty = FunctionType(
       binding = Binding(
-        ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "ε",
+        ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
         usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
       ) @ "_",
       bodyTy = F(
-        vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+        vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
-        usage = Collapse(cTm = Return(v = Auto() @ "ε", usage = Auto()) @ "ε") @ "ε"
+        usage = Auto() @ "ε"
       ) @ "<> Nat",
       effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
     ) @ "Nat -> <> Nat",
@@ -26,23 +26,15 @@ List(
               eff = Auto(),
               body = Redex(
                 t = Def(qn = qn"__unresolved__.Suc") @ "Suc",
-                elims = List(ETerm(v = Var(idx = 0) @ "ε"))
+                elims = List(ETerm(v = Var(idx = 0) @ "Zero"))
               ) @ "Suc Zero"
             ) @ "ε",
             tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
             eff = Auto(),
             body = Redex(
-              t = Let(
-                t = Return(v = Var(idx = 1) @ "n", usage = Auto()) @ "n",
-                tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
-                eff = Auto(),
-                body = Redex(
-                  t = Def(qn = qn"__unresolved__.plus") @ "plus",
-                  elims = List(ETerm(v = Var(idx = 0)))
-                ) @ "plus n"
-              ) @ "ε",
-              elims = List(ETerm(v = Var(idx = 0)))
-            ) @ "plus n (Suc Zero"
+              t = Def(qn = qn"__unresolved__.plus") @ "plus",
+              elims = List(ETerm(v = Var(idx = 0) @ "n"), ETerm(v = Var(idx = 0) @ "ε"))
+            ) @ "plus n (Suc Zero)"
           ) @ "ε"
         )
       )

@@ -1,16 +1,19 @@
-TApp(
-  f = TApp(
-    f = TId(id = "f") @ "f",
-    arg = TApp(
-      f = TApp(f = TId(id = "g") @ "g", arg = TId(id = "a") @ "a") @ "g a",
-      arg = TId(id = "b") @ "b"
-    ) @ "g a b"
-  ) @ """f
-  (g a b""",
-  arg = TApp(
-    f = TApp(f = TId(id = "h") @ "h", arg = TId(id = "c") @ "c") @ "h c",
-    arg = TId(id = "d") @ "d"
-  ) @ "h c d"
+TRedex(
+  c = TId(id = "f") @ "f",
+  elims = List(
+    ETerm(
+      v = TRedex(
+        c = TId(id = "g") @ "g",
+        elims = List(ETerm(v = TId(id = "a") @ "a"), ETerm(v = TId(id = "b") @ "b"))
+      ) @ "g a b"
+    ),
+    ETerm(
+      v = TRedex(
+        c = TId(id = "h") @ "h",
+        elims = List(ETerm(v = TId(id = "c") @ "c"), ETerm(v = TId(id = "d") @ "d"))
+      ) @ "h c d"
+    )
+  )
 ) @ """f
   (g a b)
-  (h c d"""
+  (h c d)"""

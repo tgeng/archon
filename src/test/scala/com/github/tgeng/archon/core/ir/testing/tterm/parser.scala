@@ -1,10 +1,10 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.parsing.{SignificantWhitespace, indexToColumn}
-import com.github.tgeng.archon.core.common.QualifiedName
+import com.github.tgeng.archon.core.common.{Name, QualifiedName}
+import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.SourceInfo.SiEmpty
 import com.github.tgeng.archon.core.ir.testing.tterm.TDeclaration.*
-import com.github.tgeng.archon.core.ir.{Builtins, SourceInfo, TokenRange, Variance}
 import fastparse.{*, given}
 import os.Path
 
@@ -27,12 +27,14 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
     PT(("." ~~ id).repX(1).!)(s => TTerm.TDef(QualifiedName.from(s.drop(1))))
   private def tU[$: P]: P[TTerm] = PT("U" ~/ atom)(TTerm.TU(_))
   private def tForce[$: P]: P[TTerm] = PT("force" ~/ atom)(TTerm.TForce(_))
+  // TODO[P0]: add special syntax for constructor, projection, and operation, and remove derived
+  //  definitions from data, record, and effect.
   private def atom[$: P]: P[TTerm] = P(
     "(" ~/ tTerm ~ ")" | tAuto | tDef | tLevelLiteral | tForce | tU | tId,
   )
   private def tThunk[$: P]: P[TTerm] = PT("thunk" ~/ tTerm)(TTerm.TThunk(_))
   private def tF[$: P]: P[TTerm] =
-    PT("<" ~/ tTerm.? ~ ">" ~ ("[" ~/ tTerm ~ "]").? ~ tApp)((effect, usage, ty) =>
+    PT("<" ~/ tTerm.? ~ ">" ~ ("[" ~/ tTerm ~ "]").? ~ tRedex)((effect, usage, ty) =>
       TTerm.TF(
         ty,
         effect.getOrElse(TTerm.TDef(Builtins.TotalQn)(using SourceInfo.SiEmpty)),
@@ -57,11 +59,18 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
         )
       case (name, None, value, body) =>
         TTerm.TLet(name, value, TTerm.TAuto(), TTerm.TAuto(), TTerm.TAuto(), body)
-  private def tApp[$: P]: P[TTerm] =
-    (atom ~ indented(_.atom.rep)).map((f, args) => args.foldLeft(f)(TTerm.TApp(_, _)))
+  private def elim[$: P]: P[Elimination[TTerm]] = PT(
+    atom.map(t => Left(t)) | "#" ~~/ id.map(n => Right(n)),
+  ):
+    case Left(t)  => Elimination.ETerm(t)
+    case Right(n) => Elimination.EProj(Name.Normal(n))
+
+  private def tRedex[$: P]: P[TTerm] = PT((atom ~ indented(_.elim.rep))):
+    case (f, elims) =>
+      if elims.isEmpty then f else TTerm.TRedex(f, elims.toList)
 
   private def tBinding[$: P]: P[TBinding] =
-    PT((id ~ ":").? ~/ ("[" ~/ tTerm ~ "]").? ~ tApp)((name, usage, ty) =>
+    PT((id ~ ":").? ~/ ("[" ~/ tTerm ~ "]").? ~ tRedex)((name, usage, ty) =>
       TBinding(
         name.getOrElse("_"),
         ty,
@@ -82,10 +91,10 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
               ),
     )
 
-  private def tFunctionType[$: P]: P[TTerm] = xFunctionType(tF | tApp)
+  private def tFunctionType[$: P]: P[TTerm] = xFunctionType(tF | tRedex)
 
   private def tDataFunctionType[$: P]: P[TTerm] = xFunctionType(
-    tApp.map(r =>
+    tRedex.map(r =>
       given SourceInfo = SiEmpty
       TTerm.TF(r, TTerm.TDef(Builtins.TotalQn), TTerm.TDef(Builtins.UsageOneQn))(using
         r.sourceInfo,
@@ -143,7 +152,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tRecord[$: P]: P[TDeclaration] = P(
     ("record" ~/ (id ~ ":").?.map(
       _.getOrElse("self"),
-    ) ~ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tApp) ~ tField.rep).map(TRecord.apply),
+    ) ~ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tRedex) ~ tField.rep).map(TRecord.apply),
   )
 
   private def tProjection[$: P]: P[TCoPattern] = PT("#" ~/ id)(TCoPattern.TcProjection.apply)

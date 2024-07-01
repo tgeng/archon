@@ -12,7 +12,7 @@ TData(
     (
       TBinding(
         name = "A",
-        ty = TApp(f = TId(id = "Type") @ "Type", arg = TId(id = "l") @ "l") @ "Type l",
+        ty = TRedex(c = TId(id = "Type") @ "Type", elims = List(ETerm(v = TId(id = "l") @ "l"))) @ "Type l",
         usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
       ),
       INVARIANT
@@ -33,7 +33,7 @@ TData(
       usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
     ),
     bodyType = TF(
-      ty = TApp(f = TId(id = "Type"), arg = TId(id = "l")),
+      ty = TRedex(c = TId(id = "Type"), elims = List(ETerm(v = TId(id = "l")))),
       effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
       usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
     ) @ "Type l",
@@ -43,15 +43,14 @@ TData(
     TConstructor(
       name = "Refl",
       ty = TF(
-        ty = TApp(
-          f = TApp(
-            f = TApp(
-              f = TApp(f = TId(id = "Eq") @ "Eq", arg = TId(id = "l")) @ "Eq l",
-              arg = TId(id = "A")
-            ) @ "Eq l A",
-            arg = TId(id = "x") @ "x"
-          ) @ "Eq l A x",
-          arg = TId(id = "x")
+        ty = TRedex(
+          c = TId(id = "Eq") @ "Eq",
+          elims = List(
+            ETerm(v = TId(id = "l")),
+            ETerm(v = TId(id = "A")),
+            ETerm(v = TId(id = "x") @ "x"),
+            ETerm(v = TId(id = "x"))
+          )
         ) @ "Eq l A x x",
         effects = TDef(qn = qn"archon.builtin.effects.total"),
         usage = TDef(qn = qn"archon.builtin.type.Usage.u1")

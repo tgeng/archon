@@ -4,13 +4,13 @@ List(
     paramTys = List(),
     ty = FunctionType(
       binding = Binding(
-        ty = Collapse(cTm = Def(qn = qn"test.Nat") @ ".test.Nat") @ "ε",
+        ty = Collapse(cTm = Def(qn = qn"test.Nat") @ ".test.Nat") @ ".test.Nat",
         usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
       ) @ "_",
       bodyTy = F(
-        vTy = Collapse(cTm = Def(qn = qn"test.Nat") @ ".test.Nat"),
+        vTy = Collapse(cTm = Def(qn = qn"test.Nat") @ ".test.Nat") @ ".test.Nat",
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
-        usage = Collapse(cTm = Return(v = Auto() @ "ε", usage = Auto()) @ "ε") @ "ε"
+        usage = Auto() @ "ε"
       ) @ "<> .test.Nat",
       effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
     ) @ ".test.Nat -> <> .test.Nat",
