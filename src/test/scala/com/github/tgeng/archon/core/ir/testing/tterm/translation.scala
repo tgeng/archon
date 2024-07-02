@@ -8,7 +8,7 @@ import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.*
 import com.github.tgeng.archon.core.ir.SourceInfo.SiEmpty
 import com.github.tgeng.archon.core.ir.VTerm.*
-import com.github.tgeng.archon.core.ir.testing.tterm.ConstructorInfo.*
+import com.github.tgeng.archon.core.ir.testing.tterm.GlobalNameInfo.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TCoPattern.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TDeclaration.*
 import com.github.tgeng.archon.core.ir.testing.tterm.TPattern.*
@@ -21,19 +21,19 @@ import scala.collection.mutable
 enum TranslationError(msg: String) extends Exception(msg):
   case UnresolvedSymbol(name: String) extends TranslationError(s"Unresolved symbol: $name")
 
-enum ConstructorInfo:
-  case CiData(qn: QualifiedName)
-  case CiDataValue(n: Name)
-  case CiRecord(qn: QualifiedName)
-  case CiEffect(qn: QualifiedName)
+enum GlobalNameInfo:
+  case GDef(qn: QualifiedName)
+  case GData(qn: QualifiedName)
+  case GDataValue(n: Name)
+  case GRecord(qn: QualifiedName)
+  case GEffect(qn: QualifiedName)
 
 case class TranslationContext
   (
     moduleQn: QualifiedName,
     localVarCount: Int = 0,
     localVars: Map[String, Int] = Map.empty,
-    globalDefs: Map[String, QualifiedName] = Map.empty,
-    constructorDecls: Map[String, ConstructorInfo] = Map.empty,
+    globalDefs: Map[String, GlobalNameInfo] = Map.empty,
     ignoreUnresolvableGlobalName: Boolean = false,
     isTypeLevel: Boolean = false,
   ):
@@ -44,21 +44,21 @@ case class TranslationContext
     )
 
   def bindDef(name: String, qn: QualifiedName): TranslationContext =
-    this.copy(globalDefs = globalDefs + (name -> qn))
+    this.copy(globalDefs = globalDefs + (name -> GDef(qn)))
 
   def bindDef(name: String): TranslationContext =
     bindDef(name, moduleQn / name)
 
   def bindDataDecl(data: TData): TranslationContext =
     this.copy(
-      constructorDecls = constructorDecls +
-        (data.name -> CiData(moduleQn / data.name)) ++
-        data.constructors.map(c => c.name -> CiDataValue(Name.Normal(c.name))),
+      globalDefs = globalDefs +
+        (data.name -> GData(moduleQn / data.name)) ++
+        data.constructors.map(c => c.name -> GDataValue(Name.Normal(c.name))),
     )
 
   def bindRecordDecl(record: TRecord): TranslationContext =
     this.copy(
-      constructorDecls = constructorDecls + (record.name -> CiRecord(moduleQn / record.name)),
+      globalDefs = globalDefs + (record.name -> GRecord(moduleQn / record.name)),
     )
 
   def bindDecls(decls: Seq[TDeclaration]): TranslationContext =
@@ -74,19 +74,19 @@ case class TranslationContext
       decl match
         case data: PreData =>
           ctx.copy(
-            constructorDecls = constructorDecls +
-              (data.qn.shortName.toString -> CiData(data.qn)) ++
-              data.constructors.map(c => c.name.toString -> CiDataValue(c.name)),
+            globalDefs = globalDefs +
+              (data.qn.shortName.toString -> GData(data.qn)) ++
+              data.constructors.map(c => c.name.toString -> GDataValue(c.name)),
           )
         case record: PreRecord =>
           ctx.copy(
-            constructorDecls = constructorDecls +
-              (record.qn.shortName.toString -> CiRecord(record.qn)),
+            globalDefs = globalDefs +
+              (record.qn.shortName.toString -> GRecord(record.qn)),
           )
         case _ => ctx.bindDef(decl.qn.shortName.toString, decl.qn)
     }
 
-  def lookup(name: String): Either[Nat, QualifiedName] =
+  def lookup(name: String): Either[Nat, GlobalNameInfo] =
     localVars.get(name) match
       case Some(index) => Left(localVarCount - 1 - index)
       case None        => Right(lookupGlobal(name))
@@ -95,9 +95,9 @@ case class TranslationContext
     case Some(index) => localVarCount - 1 - index
     case None        => throw UnresolvedSymbol(name)
 
-  def lookupGlobal(name: String): QualifiedName = globalDefs.get(name) match
-    case Some(qn)                             => qn
-    case None if ignoreUnresolvableGlobalName => QualifiedName.Root / "__unresolved__" / name
+  def lookupGlobal(name: String): GlobalNameInfo = globalDefs.get(name) match
+    case Some(g)                              => g
+    case None if ignoreUnresolvableGlobalName => GDef(QualifiedName.Root / "__unresolved__" / name)
     case None                                 => throw UnresolvedSymbol(name)
 
 extension (tTerm: TTerm)
@@ -114,8 +114,12 @@ extension (tTerm: TTerm)
       case TLevelLiteral(level) => Return(LevelLiteral(level))
       case TId(id) =>
         ctx.lookup(id) match
-          case Left(index) => Return(Var(index))
-          case Right(qn)   => Def(qn)
+          case Left(index)          => Return(Var(index))
+          case Right(GDef(qn))      => Def(qn)
+          case Right(GData(qn))     => Return(DataType(qn, Nil))
+          case Right(GDataValue(n)) => Return(Con(n, Nil))
+          case Right(GRecord(qn))   => RecordType(qn, Nil)
+          case Right(GEffect(qn))   => Return(EffectsLiteral(Set((qn, Nil))))
       case TDef(qn) => Def(qn)
       case TForce(t) =>
         translate(t) { case Seq(t) =>
@@ -261,14 +265,20 @@ extension (tp: TPattern)
   def toPattern(using ctx: TranslationContext): Pattern =
     given SourceInfo = tp.sourceInfo
     tp match
-      case TpVar(name) => Pattern.PVar(ctx.lookupLocal(name))
+      case TpId(name) =>
+        ctx.lookup(name) match
+          case Left(index)          => Pattern.PVar(index)
+          case Right(GData(qn))     => Pattern.PDataType(qn, Nil)
+          case Right(GDataValue(n)) => Pattern.PConstructor(n, Nil)
+          case Right(GRecord(_)) | Right(GEffect(_)) | Right(GDef(_)) =>
+            throw UnresolvedSymbol(name)
       case TpXConstructor(forced, name, args) =>
         val argPatterns = args.map(_.toPattern).toList
-        ctx.constructorDecls.get(name) match
-          case Some(CiData(qn)) =>
+        ctx.globalDefs.get(name) match
+          case Some(GData(qn)) =>
             if forced then Pattern.PForcedDataType(qn, argPatterns)
             else Pattern.PDataType(qn, argPatterns)
-          case Some(CiDataValue(n)) =>
+          case Some(GDataValue(n)) =>
             if forced then Pattern.PForcedConstructor(n, argPatterns)
             else Pattern.PConstructor(n, argPatterns)
           case _ =>
@@ -281,11 +291,14 @@ extension (tp: TPattern)
       case TPAbsurd()      => Pattern.PAbsurd()
 
 extension (tps: Seq[TCoPattern])
-  def collectPatternNames: List[String] =
+  def collectPatternNames(using ctx: TranslationContext): List[String] =
     val names = mutable.ListBuffer.empty[String]
     def processPattern(pattern: TPattern): Unit = pattern match
-      case TpVar(name) =>
-        names += name
+      case TpId(name) =>
+        ctx.globalDefs.get(name) match
+          // skip existing data type and value constructors
+          case Some(_: GData | GDataValue) =>
+          case _                           => names += name
       case TpXConstructor(_, _, args) =>
         args.foreach(processPattern)
       case _ =>
@@ -345,7 +358,7 @@ extension (tf: TField)
 
 extension (tc: TClause)
   def toPreClause(using ctx: TranslationContext): PreClause =
-    val boundNames = tc.patterns.collectPatternNames
+    val boundNames = tc.patterns.collectPatternNames(using ctx)
     given TranslationContext = ctx.bindLocal(boundNames*)
     val lhs = tc.patterns.map(_.toCoPattern)
     val rhs = tc.body.map(_.toCTerm)

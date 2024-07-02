@@ -29,8 +29,11 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tForce[$: P]: P[TTerm] = PT("force" ~/ atom)(TTerm.TForce(_))
   // TODO[P0]: add special syntax for constructor, projection, and operation, and remove derived
   //  definitions from data, record, and effect.
+  private def tCon[$: P]: P[TTerm] = PT(id ~ "#{" ~/ atom.rep ~ "}"):
+    case (name, args) => TTerm.TCon(name, args.toList)
+
   private def atom[$: P]: P[TTerm] = P(
-    "(" ~/ tTerm ~ ")" | tAuto | tDef | tLevelLiteral | tForce | tU | tId,
+    "(" ~/ tTerm ~ ")" | tAuto | tDef | tLevelLiteral | tForce | tU | tCon | tId,
   )
   private def tThunk[$: P]: P[TTerm] = PT("thunk" ~/ tTerm)(TTerm.TThunk(_))
   private def tF[$: P]: P[TTerm] =
@@ -157,9 +160,9 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
 
   private def tProjection[$: P]: P[TCoPattern] = PT("#" ~/ id)(TCoPattern.TcProjection.apply)
 
-  private def tpVar[$: P]: P[TPattern] = PT(id)(TPattern.TpVar.apply)
+  private def tpVar[$: P]: P[TPattern] = PT(id)(TPattern.TpId.apply)
   private def tpXConstructor[$: P]: P[TPattern] =
-    PT(".".!.?.map(_.isDefined) ~ id ~ "{" ~/ tPattern.rep ~ "}")(TPattern.TpXConstructor.apply)
+    PT(".".!.?.map(_.isDefined) ~ id ~ "#{" ~/ tPattern.rep ~ "}")(TPattern.TpXConstructor.apply)
   private def tpForced[$: P]: P[TPattern] = PT("." ~ "(" ~/ tTerm ~ ")")(TPattern.TpForced.apply)
   private def tpAbsurd[$: P]: P[TPattern] = PT("()")(_ => TPattern.TPAbsurd())
   private def tPattern[$: P]: P[TPattern] = P(tpAbsurd | tpForced | tpXConstructor | tpVar)

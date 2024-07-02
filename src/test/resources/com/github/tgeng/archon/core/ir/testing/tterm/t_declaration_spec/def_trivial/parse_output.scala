@@ -16,7 +16,7 @@ TDefinition(
   ) @ "Nat -> <> Nat",
   clauses = List(
     TClause(
-      patterns = List(TcPattern(pattern = TpVar(name = "n"))),
+      patterns = List(TcPattern(pattern = TpId(name = "n"))),
       body = Some(
         value = TRedex(
           c = TId(id = "plus") @ "plus",

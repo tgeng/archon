@@ -16,15 +16,13 @@ TDefinition(
   ) @ ".test.Nat -> <> .test.Nat",
   clauses = List(
     TClause(
-      patterns = List(
-        TcPattern(pattern = TpXConstructor(forced = false, name = "Zero", args = List()))
-      ),
+      patterns = List(TcPattern(pattern = TpId(name = "Zero"))),
       body = Some(value = TDef(qn = qn"test.Nat.Zero") @ ".test.Nat.Zero")
     ),
     TClause(
       patterns = List(
         TcPattern(
-          pattern = TpXConstructor(forced = false, name = "Succ", args = List(TpVar(name = "m")))
+          pattern = TpXConstructor(forced = false, name = "Succ", args = List(TpId(name = "m")))
         )
       ),
       body = Some(value = TId(id = "m") @ "m")

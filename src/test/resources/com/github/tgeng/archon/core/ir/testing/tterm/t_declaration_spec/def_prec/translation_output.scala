@@ -16,8 +16,8 @@ List(
     ) @ ".test.Nat -> <> .test.Nat",
     clauses = List(
       PreClause(
-        boundNames = List(),
-        lhs = List(CPattern(pattern = PDataType(qn = qn"__unresolved__.Zero", args = List()))),
+        boundNames = List("Zero"),
+        lhs = List(CPattern(pattern = PVar(idx = 0))),
         rhs = Some(value = Def(qn = qn"test.Nat.Zero") @ ".test.Nat.Zero")
       ),
       PreClause(

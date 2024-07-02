@@ -135,13 +135,13 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         Succ: Nat -> Nat
 
         def prec: Nat -> <> Nat
-        Zero{} = Zero uAny
-        Succ{m} = m
+        Zero = Zero
+        Succ#{m} = m
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
         assertVType(vt"Zero u1", vt"Nat")
         assertCType(
-          ct"prec (Succ uAny (Zero uAny))",
+          ct"prec (Succ #{Zero}",
           ct"<> Nat",
         )
   }

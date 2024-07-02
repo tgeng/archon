@@ -25,17 +25,17 @@ TDefinition(
   clauses = List(
     TClause(
       patterns = List(
-        TcPattern(pattern = TpXConstructor(forced = false, name = "Zero", args = List())),
-        TcPattern(pattern = TpVar(name = "n"))
+        TcPattern(pattern = TpId(name = "Zero")),
+        TcPattern(pattern = TpId(name = "n"))
       ),
       body = Some(value = TId(id = "n") @ "n")
     ),
     TClause(
       patterns = List(
         TcPattern(
-          pattern = TpXConstructor(forced = false, name = "Succ", args = List(TpVar(name = "m")))
+          pattern = TpXConstructor(forced = false, name = "Succ", args = List(TpId(name = "m")))
         ),
-        TcPattern(pattern = TpVar(name = "n"))
+        TcPattern(pattern = TpId(name = "n"))
       ),
       body = Some(
         value = TRedex(

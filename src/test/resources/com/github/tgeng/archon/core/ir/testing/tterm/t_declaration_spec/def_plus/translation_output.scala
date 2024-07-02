@@ -23,11 +23,8 @@ List(
     ) @ "Nat -> Nat -> <> Nat",
     clauses = List(
       PreClause(
-        boundNames = List("n"),
-        lhs = List(
-          CPattern(pattern = PDataType(qn = qn"__unresolved__.Zero", args = List())),
-          CPattern(pattern = PVar(idx = 0))
-        ),
+        boundNames = List("Zero", "n"),
+        lhs = List(CPattern(pattern = PVar(idx = 1)), CPattern(pattern = PVar(idx = 0))),
         rhs = Some(value = Return(v = Var(idx = 0) @ "n", usage = Auto()) @ "n")
       ),
       PreClause(

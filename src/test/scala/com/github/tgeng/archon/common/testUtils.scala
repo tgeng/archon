@@ -1,9 +1,7 @@
 package com.github.tgeng.archon.common
 
-import com.github.tgeng.archon.core.common.{HasException, Name, QualifiedName}
-import com.github.tgeng.archon.core.ir.{Binding, CTerm, VTerm}
+import com.github.tgeng.archon.core.common.HasException
 
-import scala.collection.mutable
 import scala.concurrent.duration.Duration
 
 extension [L, R](e: Either[L, R])
@@ -28,4 +26,3 @@ def timed[T](description: String)(action: => T): T =
   val duration = Duration.fromNanos((end - start) * 1000000)
   println(s"$description took $duration")
   result
-

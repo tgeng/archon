@@ -50,7 +50,7 @@ enum TCoPattern(val sourceInfo: SourceInfo):
   case TcPattern(pattern: TPattern) extends TCoPattern(pattern.sourceInfo)
 
 enum TPattern(val sourceInfo: SourceInfo):
-  case TpVar(name: String)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
+  case TpId(name: String)(using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
   case TpXConstructor
     (forced: Boolean, name: String, args: Seq[TPattern])
     (using sourceInfo: SourceInfo) extends TPattern(sourceInfo)
