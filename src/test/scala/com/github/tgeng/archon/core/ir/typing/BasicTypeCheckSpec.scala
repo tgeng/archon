@@ -17,8 +17,8 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
   given ctx: TypingContext = TypingContext()
   given Context = Context.empty
   given SourceInfo = SourceInfo.SiEmpty
+  given Signature = Builtins.Σ
   "in empty context and signature" - {
-    given Signature = SimpleSignature()
 
     "check level literals" in:
       assertVType(LevelLiteral(0), LevelType())
@@ -124,7 +124,6 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
   }
 
   "in builtin context" - {
-    given Signature = Builtins.Σ
 
     "with nat" in:
       // TODO[P0]: add special syntax for constructor, projection, and operation, and remove derived

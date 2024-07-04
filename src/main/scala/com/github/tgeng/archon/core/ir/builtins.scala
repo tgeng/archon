@@ -675,6 +675,20 @@ object Builtins:
         ),
       ),
     ),
+    PreEffect(
+      DivQn,
+      Nil,
+      Nil,
+      Return(u0, uAny),
+      Return(HandlerTypeLiteral(HandlerType.Simple), uAny),
+    ),
+    PreEffect(
+      MaybeDivQn,
+      Nil,
+      Nil,
+      Return(uAff, uAny),
+      Return(HandlerTypeLiteral(HandlerType.Simple), uAny),
+    ),
   )
 
   private def b[T](qn: QualifiedName, f: SourceInfo ?=> T): (QualifiedName, T) =
