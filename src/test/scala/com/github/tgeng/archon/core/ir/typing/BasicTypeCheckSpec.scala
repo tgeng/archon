@@ -126,8 +126,6 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
   "in builtin context" - {
 
     "with nat" in:
-      // TODO[P0]: add special syntax for constructor, projection, and operation, and remove derived
-      //  definitions from data, record, and effect.
       decls"""
         data Nat: Type 0L
         Zero: Nat
@@ -142,5 +140,10 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         assertCType(
           ct"prec (Succ #{Zero})",
           ct"<> Nat",
+        )
+        assertCConvertible(
+          ct"prec (Succ #{Zero})",
+          ct"Zero",
+          Some(ct"<> Nat"),
         )
   }

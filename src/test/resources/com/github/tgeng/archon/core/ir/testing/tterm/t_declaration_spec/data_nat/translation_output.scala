@@ -18,7 +18,7 @@ List(
       PreConstructor(
         name = n"Zero",
         ty = F(
-          vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
+          vTy = DataType(qn = qn"test.Nat", args = List()) @ "Nat",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
           usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
         ) @ "Nat"
@@ -27,11 +27,11 @@ List(
         name = n"Succ",
         ty = FunctionType(
           binding = Binding(
-            ty = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
+            ty = DataType(qn = qn"test.Nat", args = List()) @ "Nat",
             usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny") @ "ε") @ "ε"
           ) @ "_",
           bodyTy = F(
-            vTy = Collapse(cTm = Def(qn = qn"__unresolved__.Nat") @ "Nat") @ "Nat",
+            vTy = DataType(qn = qn"test.Nat", args = List()) @ "Nat",
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
             usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
           ) @ "Nat",

@@ -55,7 +55,7 @@ List(
         ty = F(
           vTy = Collapse(
             cTm = Redex(
-              t = Def(qn = qn"__unresolved__.Eq") @ "Eq",
+              t = Return(v = DataType(qn = qn"test.Eq", args = List()) @ "Eq", usage = Auto()) @ "Eq",
               elims = List(
                 ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "l"),
                 ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.A") @ "A") @ "A"),

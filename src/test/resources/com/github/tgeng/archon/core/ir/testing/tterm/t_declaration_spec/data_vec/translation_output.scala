@@ -48,7 +48,7 @@ List(
         ty = F(
           vTy = Collapse(
             cTm = Redex(
-              t = Def(qn = qn"__unresolved__.Vec") @ "Vec",
+              t = Return(v = DataType(qn = qn"test.Vec", args = List()) @ "Vec", usage = Auto()) @ "Vec",
               elims = List(
                 ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "l"),
                 ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.t") @ "t") @ "t"),
@@ -76,7 +76,10 @@ List(
               binding = Binding(
                 ty = Collapse(
                   cTm = Redex(
-                    t = Def(qn = qn"__unresolved__.Vec") @ "Vec",
+                    t = Return(
+                      v = DataType(qn = qn"test.Vec", args = List()) @ "Vec",
+                      usage = Auto()
+                    ) @ "Vec",
                     elims = List(
                       ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "l"),
                       ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.t") @ "t") @ "t"),
@@ -89,14 +92,20 @@ List(
               bodyTy = F(
                 vTy = Collapse(
                   cTm = Redex(
-                    t = Def(qn = qn"__unresolved__.Vec") @ "Vec",
+                    t = Return(
+                      v = DataType(qn = qn"test.Vec", args = List()) @ "Vec",
+                      usage = Auto()
+                    ) @ "Vec",
                     elims = List(
                       ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.l") @ "l") @ "l"),
                       ETerm(v = Collapse(cTm = Def(qn = qn"__unresolved__.t") @ "t") @ "t"),
                       ETerm(
                         v = Collapse(
                           cTm = Redex(
-                            t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
+                            t = Return(
+                              v = Con(name = n"Succ", args = List()) @ "Succ",
+                              usage = Auto()
+                            ) @ "Succ",
                             elims = List(ETerm(v = Var(idx = 2) @ "n"))
                           ) @ "Succ n"
                         ) @ "Succ n"

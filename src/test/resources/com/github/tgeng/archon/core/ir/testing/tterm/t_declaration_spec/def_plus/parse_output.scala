@@ -1,54 +1,49 @@
-TDefinition(
-  name = "plus",
-  tParamTys = List(),
-  ty = TFunctionType(
-    arg = TBinding(
-      name = "_",
-      ty = TId(id = "Nat") @ "Nat",
-      usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
-    ),
-    bodyType = TFunctionType(
+List(
+  TDefinition(
+    name = "plus",
+    tParamTys = List(),
+    ty = TFunctionType(
       arg = TBinding(
         name = "_",
-        ty = TId(id = "Nat"),
-        usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
+        ty = TId(id = "Nat") @ "Nat",
+        usage = TDef(qn = qn"archon.builtin.type.Usage.uAny") @ "ε"
       ),
-      bodyType = TF(
-        ty = TId(id = "Nat"),
-        effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
-        usage = TAuto() @ "ε"
-      ) @ "<> Nat",
-      effects = TDef(qn = qn"archon.builtin.effects.total")
-    ) @ "Nat -> <> Nat",
-    effects = TDef(qn = qn"archon.builtin.effects.total")
-  ) @ "Nat -> Nat -> <> Nat",
-  clauses = List(
-    TClause(
-      patterns = List(
-        TcPattern(pattern = TpId(name = "Zero")),
-        TcPattern(pattern = TpId(name = "n"))
-      ),
-      body = Some(value = TId(id = "n") @ "n")
-    ),
-    TClause(
-      patterns = List(
-        TcPattern(
-          pattern = TpXConstructor(forced = false, name = "Succ", args = List(TpId(name = "m")))
+      bodyType = TFunctionType(
+        arg = TBinding(
+          name = "_",
+          ty = TId(id = "Nat"),
+          usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
         ),
-        TcPattern(pattern = TpId(name = "n"))
+        bodyType = TF(
+          ty = TId(id = "Nat"),
+          effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
+          usage = TAuto() @ "ε"
+        ) @ "<> Nat",
+        effects = TDef(qn = qn"archon.builtin.effects.total")
+      ) @ "Nat -> <> Nat",
+      effects = TDef(qn = qn"archon.builtin.effects.total")
+    ) @ "Nat -> Nat -> <> Nat",
+    clauses = List(
+      TClause(
+        patterns = List(
+          TcPattern(pattern = TpId(name = "Zero")),
+          TcPattern(pattern = TpId(name = "n"))
+        ),
+        body = Some(value = TId(id = "n") @ "n")
       ),
-      body = Some(
-        value = TRedex(
-          c = TId(id = "Succ") @ "Succ",
-          elims = List(
-            ETerm(
-              v = TRedex(
-                c = TId(id = "plus") @ "plus",
-                elims = List(ETerm(v = TId(id = "m") @ "m"), ETerm(v = TId(id = "n")))
-              ) @ "plus m n"
-            )
-          )
-        ) @ "Succ (plus m n)"
+      TClause(
+        patterns = List(
+          TcPattern(
+            pattern = TpXConstructor(forced = false, name = "Succ", args = List(TpId(name = "m")))
+          ),
+          TcPattern(pattern = TpId(name = "n"))
+        ),
+        body = Some(
+          value = TCon(
+            name = "Succ",
+            args = List(TId(id = "plus") @ "plus", TId(id = "m") @ "m", TId(id = "n"))
+          ) @ "Succ#{plus m n}"
+        )
       )
     )
   )

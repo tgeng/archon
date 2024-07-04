@@ -7,7 +7,7 @@ class TDeclarationParserSpec extends FileBasedFreeSpec("t_declaration_spec"):
 
   override protected def runTestImpl(testDir: Path): Unit =
     val inputPath = testDir / "input.tdecl"
-    val actual = TTermParserSpec.tTermPprint.apply(Parser.parseDeclaration(inputPath)).plainText
+    val actual = TTermParserSpec.tTermPprint.apply(Parser.parseDeclarations(inputPath)).plainText
     val outputPath = testDir / "parse_output.scala"
     val expected = if os.exists(outputPath) then os.read(outputPath) else ""
     if actual != expected then

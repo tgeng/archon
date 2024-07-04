@@ -292,13 +292,13 @@ extension (tp: TPattern)
 
 extension (tps: Seq[TCoPattern])
   def collectPatternNames(using ctx: TranslationContext): List[String] =
-    val names = mutable.ListBuffer.empty[String]
+    val names = mutable.ArrayBuffer.empty[String]
     def processPattern(pattern: TPattern): Unit = pattern match
       case TpId(name) =>
         ctx.globalDefs.get(name) match
           // skip existing data type and value constructors
-          case Some(_: GData | GDataValue) =>
-          case _                           => names += name
+          case Some(_: (GData | GDataValue)) =>
+          case _                           => names.addOne(name)
       case TpXConstructor(_, _, args) =>
         args.foreach(processPattern)
       case _ =>

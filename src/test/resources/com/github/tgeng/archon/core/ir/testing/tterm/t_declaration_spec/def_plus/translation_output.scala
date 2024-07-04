@@ -35,16 +35,16 @@ List(
         ),
         rhs = Some(
           value = Let(
-            t = Redex(
-              t = Def(qn = qn"__unresolved__.plus") @ "plus",
-              elims = List(ETerm(v = Var(idx = 1) @ "m"), ETerm(v = Var(idx = 0) @ "n"))
-            ) @ "plus m n",
+            t = Def(qn = qn"test.plus") @ "plus",
             tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
             eff = Auto(),
-            body = Redex(
-              t = Def(qn = qn"__unresolved__.Succ") @ "Succ",
-              elims = List(ETerm(v = Var(idx = 0) @ "plus m n"))
-            ) @ "Succ (plus m n)"
+            body = Return(
+              v = Con(
+                name = n"Succ",
+                args = List(Var(idx = 0) @ "plus", Var(idx = 1) @ "m", Var(idx = 0) @ "n")
+              ) @ "Succ#{plus m n}",
+              usage = Auto()
+            ) @ "Succ#{plus m n}"
           ) @ "ε"
         )
       )

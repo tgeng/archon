@@ -45,7 +45,11 @@ List(
               ) @ "Eq Nat m (head self)",
               usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
             ) @ "_",
-            bodyTy = Def(qn = qn"__unresolved__.CStream") @ "CStream",
+            bodyTy = RecordType(
+              qn = qn"test.CStream",
+              args = List(),
+              effects = Effects(literal = Set(), unionOperands = SeqMap()) @ "ε"
+            ) @ "CStream",
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε"
           ) @ "Eq Nat m (head self) -> CStream",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))

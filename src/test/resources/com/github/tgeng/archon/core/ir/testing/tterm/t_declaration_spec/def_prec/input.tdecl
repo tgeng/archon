@@ -1,3 +1,7 @@
-def prec: .test.Nat -> <> .test.Nat
-Zero = .test.Nat.Zero
+data Nat: Type 0L
+Zero: Nat
+Succ: Nat -> Nat
+
+def prec: Nat -> <> Nat
+Zero = Zero
 Succ#{m} = m

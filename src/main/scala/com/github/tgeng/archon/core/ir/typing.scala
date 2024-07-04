@@ -251,7 +251,7 @@ def checkType
                 ),
                 UnmatchedDataIndex(c, dataType),
               )
-              DataType(qn, args)
+              Con(name, args)
         case _ => throw ExpectDataType(ty)
     case Auto() => Collapse(ctx.addUnsolved(F(ty)))
     case _ =>
