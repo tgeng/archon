@@ -148,7 +148,7 @@ def inferType
           val args = checkTypes(uncheckedArgs, (data.context.map(_._1) ++ data.tIndexTys).toList)
           val newTm = DataType(qn, args.map(_.normalized))(using tm.sourceInfo)
           (newTm, Type(newTm))
-    case _: Con          => throw IllegalArgumentException("cannot infer type")
+    case _: Con          => throw InternalIrError("cannot infer type of raw constructor")
     case u: UsageLiteral => (u, UsageType(Some(u)))
     case UsageProd(uncheckedOperands) =>
       val operands = uncheckedOperands.map(o => checkType(o, UsageType(None)))

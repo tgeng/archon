@@ -44,7 +44,8 @@ def assertCType
   (using ctx: TypingContext)
   : Unit =
   try
-    val (actualNormalizedT) = checkType(t, ty)
+    val checkedTy = checkIsCType(ty)
+    val actualNormalizedT = checkType(t, checkedTy)
     expectedNormalizedT match
       case Some(expected) if expected != actualNormalizedT =>
         fail(
@@ -54,7 +55,8 @@ def assertCType
   catch
     case e: IrError => {
       enableDebugging
-      checkType(t, ty)
+      val checkedTy = checkIsCType(ty)
+      checkType(t, checkedTy)
     }
 
 def assertNotCType

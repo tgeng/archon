@@ -139,9 +139,9 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         Succ#{m} = m
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
-        assertVType(vt"Zero u1", vt"Nat")
+        assertVType(vt"Zero", vt"Nat")
         assertCType(
-          ct"prec (Succ #{Zero}",
+          ct"prec (Succ #{Zero})",
           ct"<> Nat",
         )
   }
