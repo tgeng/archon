@@ -41,8 +41,8 @@ List(
       PreConstructor(
         name = n"Nil",
         ty = F(
-          vTy = Con(
-            name = n"Vec",
+          vTy = DataType(
+            qn = qn"test.Vec",
             args = List(
               Var(idx = 1) @ "l",
               Var(idx = 0) @ "t",
@@ -67,15 +67,15 @@ List(
             ) @ "_",
             bodyTy = FunctionType(
               binding = Binding(
-                ty = Con(
-                  name = n"Vec",
+                ty = DataType(
+                  qn = qn"test.Vec",
                   args = List(Var(idx = 3) @ "l", Var(idx = 2) @ "t", Var(idx = 1) @ "n")
                 ) @ "Vec#{l t n}",
                 usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
               ) @ "_",
               bodyTy = F(
-                vTy = Con(
-                  name = n"Vec",
+                vTy = DataType(
+                  qn = qn"test.Vec",
                   args = List(
                     Var(idx = 4) @ "l",
                     Var(idx = 3) @ "t",

@@ -1,3 +1,7 @@
+data Nat: Type 0L
+Zero: Nat
+Succ: Nat -> Nat
+
 def plus: Nat -> Nat -> <> Nat
 Zero n = n
-Succ#{m} n = Succ#{plus m n}
+Succ#{m} n = Succ#{(plus m n)}

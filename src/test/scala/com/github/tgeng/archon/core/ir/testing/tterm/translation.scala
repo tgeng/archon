@@ -107,7 +107,13 @@ extension (tTerm: TTerm)
       case TAuto() => Return(Auto())
       case TCon(name, args) =>
         translate(args*) { case args =>
-          Return(VTerm.Con(Name.Normal(name), args.toList)(using tTerm.sourceInfo))
+          given SourceInfo = tTerm.sourceInfo
+          ctx.globalDefs.get(name) match
+            case Some(GData(qn))     => Return(DataType(qn, args.toList))
+            case Some(GDataValue(n)) => Return(Con(n, args.toList))
+            case Some(GEffect(qn))   => Return(EffectsLiteral(Set((qn, args.toList))))
+            case Some(GRecord(qn))   => RecordType(qn, args.toList)
+            case _                   => throw UnresolvedSymbol(name)
         }
       case TU(t)                => Return(U(t.toCTerm(using ctx.copy(isTypeLevel = true))))
       case TThunk(t)            => Return(Thunk(t.toCTerm))

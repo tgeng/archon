@@ -134,6 +134,10 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
         def prec: Nat -> <> Nat
         Zero = Zero
         Succ#{m} = m
+
+        data Vec (l: Level) +(t: Type l): Nat -> Type l
+        Nil: Vec#{l t Zero}
+        Succ: n: Nat -> t -> Vec#{l t n} -> Vec#{l t Succ#{n}}
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
         assertVType(vt"Zero", vt"Nat")
