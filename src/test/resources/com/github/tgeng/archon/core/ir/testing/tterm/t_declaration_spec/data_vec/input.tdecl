@@ -1,3 +1,3 @@
 data Vec (l: Level) +(t: Type l): Nat -> Type l
-Nil: Vec l t Zero
-Succ: n: Nat -> t -> Vec l t n -> Vec l t (Succ n)
+Nil: Vec#{l t Zero}
+Succ: n: Nat -> t -> Vec#{l t n} -> Vec#{l t Succ#{n}}

@@ -298,7 +298,7 @@ extension (tps: Seq[TCoPattern])
         ctx.globalDefs.get(name) match
           // skip existing data type and value constructors
           case Some(_: (GData | GDataValue)) =>
-          case _                           => names.addOne(name)
+          case _                             => names.addOne(name)
       case TpXConstructor(_, _, args) =>
         args.foreach(processPattern)
       case _ =>
@@ -312,41 +312,69 @@ extension (td: TDeclaration)
   def toPreDeclaration(using ctx: TranslationContext): PreDeclaration =
     td match
       case TData(name, tParamTys, ty, constructors) =>
-        val tParamTysCTerm = tParamTys.map:
-          case (TBinding(name, ty, usage), variance) =>
-            (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
-        val tyCTerm = ty.toCTerm
-        val constructorCTerms = constructors.map(_.toPreConstructor)
-        PreDeclaration.PreData(
-          ctx.moduleQn / name,
-          tParamTysCTerm.toList,
-          tyCTerm,
-          constructorCTerms.toList,
-        )
+        val tParamTysCTerm = translateTParamTysWithVariance(tParamTys.toList)
+        {
+          given TranslationContext = ctx.bindLocal(tParamTys.map(_._1.name)*)
+          val tyCTerm = ty.toCTerm
+          val constructorCTerms = constructors.map(_.toPreConstructor)
+          PreDeclaration.PreData(
+            ctx.moduleQn / name,
+            tParamTysCTerm,
+            tyCTerm,
+            constructorCTerms.toList,
+          )
+        }
       case TRecord(selfName, name, tParamTys, ty, fields) =>
-        val tParamTysCTerm = tParamTys.map:
-          case (TBinding(name, ty, usage), variance) =>
-            (Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)), variance)
-        val tyCTerm = ty.toCTerm
-        val fieldCTerms = fields.map(_.toPreField)
-        PreDeclaration.PreRecord(
-          ctx.moduleQn / name,
-          tParamTysCTerm.toList,
-          tyCTerm,
-          fieldCTerms.toList,
-        )
+        val tParamTysCTerm = translateTParamTysWithVariance(tParamTys.toList)
+        {
+          given TranslationContext = ctx.bindLocal(tParamTys.map(_._1.name)*)
+          val tyCTerm = ty.toCTerm
+          val fieldCTerms = fields.map(_.toPreField)
+          PreDeclaration.PreRecord(
+            ctx.moduleQn / name,
+            tParamTysCTerm,
+            tyCTerm,
+            fieldCTerms.toList,
+          )
+        }
       case TDefinition(name, tParamTys, ty, clauses) =>
-        val tParamTysCTerm = tParamTys.map:
-          case TBinding(name, ty, usage) =>
-            Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name))
-        val tyCTerm = ty.toCTerm
-        val clauseCTerms = clauses.map(_.toPreClause)
-        PreDeclaration.PreDefinition(
-          ctx.moduleQn / name,
-          tParamTysCTerm.toList,
-          tyCTerm,
-          clauseCTerms.toList,
-        )
+        val tParamTysCTerm = translateTParamTys(tParamTys.toList)
+        {
+          given TranslationContext = ctx.bindLocal(tParamTys.map(_.name)*)
+          val tyCTerm = ty.toCTerm
+          val clauseCTerms = clauses.map(_.toPreClause)
+          PreDeclaration.PreDefinition(
+            ctx.moduleQn / name,
+            tParamTysCTerm,
+            tyCTerm,
+            clauseCTerms.toList,
+          )
+        }
+
+private def translateTParamTys
+  (bindings: List[TBinding])
+  (using ctx: TranslationContext)
+  : List[Binding[CTerm]] =
+  bindings match
+    case Nil => Nil
+    case TBinding(name, ty, usage) :: rest =>
+      Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)) :: translateTParamTys(rest)(using
+        ctx.bindLocal(name),
+      )
+
+private def translateTParamTysWithVariance
+  (bindings: List[(TBinding, Variance)])
+  (using ctx: TranslationContext)
+  : List[(Binding[CTerm], Variance)] =
+  bindings match
+    case Nil => Nil
+    case (TBinding(name, ty, usage), variance) :: rest =>
+      (
+        Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)),
+        variance,
+      ) :: translateTParamTysWithVariance(rest)(using
+        ctx.bindLocal(name),
+      )
 
 extension (tc: TConstructor)
   def toPreConstructor(using ctx: TranslationContext): PreConstructor =
