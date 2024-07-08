@@ -48,16 +48,14 @@ List(
       PreConstructor(
         name = n"Refl",
         ty = F(
-          vTy = Collapse(
-            cTm = Redex(
-              t = Return(v = DataType(qn = qn"test.Eq", args = List()) @ "Eq", usage = Auto()) @ "Eq",
-              elims = List(
-                ETerm(v = Var(idx = 2) @ "l"),
-                ETerm(v = Var(idx = 1) @ "A"),
-                ETerm(v = Var(idx = 0) @ "x"),
-                ETerm(v = Var(idx = 0) @ "x")
-              )
-            ) @ "Eq l A x x"
+          vTy = DataType(
+            qn = qn"test.Eq",
+            args = List(
+              Var(idx = 2) @ "l",
+              Var(idx = 1) @ "A",
+              Var(idx = 0) @ "x",
+              Var(idx = 0) @ "x"
+            )
           ) @ "Eq l A x x",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
           usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))

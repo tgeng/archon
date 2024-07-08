@@ -48,10 +48,10 @@ List(
               Var(idx = 0) @ "t",
               Collapse(cTm = Def(qn = qn"__unresolved__.Zero") @ "Zero") @ "Zero"
             )
-          ) @ "Vec#{l t Zero}",
+          ) @ "Vec l t Zero",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
           usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
-        ) @ "Vec#{l t Zero}"
+        ) @ "Vec l t Zero"
       ),
       PreConstructor(
         name = n"Succ",
@@ -70,7 +70,7 @@ List(
                 ty = DataType(
                   qn = qn"test.Vec",
                   args = List(Var(idx = 3) @ "l", Var(idx = 2) @ "t", Var(idx = 1) @ "n")
-                ) @ "Vec#{l t n}",
+                ) @ "Vec l t n",
                 usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
               ) @ "_",
               bodyTy = F(
@@ -79,18 +79,18 @@ List(
                   args = List(
                     Var(idx = 4) @ "l",
                     Var(idx = 3) @ "t",
-                    Con(name = n"Succ", args = List(Var(idx = 2) @ "n")) @ "Succ#{n}"
+                    Con(name = n"Succ", args = List(Var(idx = 2) @ "n")) @ "Succ n"
                   )
-                ) @ "Vec#{l t Succ#{n}}",
+                ) @ "Vec l t (Succ n)",
                 effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
                 usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
-              ) @ "Vec#{l t Succ#{n}}",
+              ) @ "Vec l t (Succ n)",
               effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
-            ) @ "Vec#{l t n} -> Vec#{l t Succ#{n}}",
+            ) @ "Vec l t n -> Vec l t (Succ n)",
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
-          ) @ "t -> Vec#{l t n} -> Vec#{l t Succ#{n}}",
+          ) @ "t -> Vec l t n -> Vec l t (Succ n)",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
-        ) @ "n: Nat -> t -> Vec#{l t n} -> Vec#{l t Succ#{n}}"
+        ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n)"
       )
     )
   )

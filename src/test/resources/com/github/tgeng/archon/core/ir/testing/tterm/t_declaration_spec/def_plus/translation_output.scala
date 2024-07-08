@@ -86,9 +86,9 @@ List(
             tBinding = Binding(ty = Auto(), usage = Auto()) @ "$v",
             eff = Auto(),
             body = Return(
-              v = Con(name = n"Succ", args = List(Var(idx = 0) @ "plus m n")) @ "Succ#{(plus m n)}",
+              v = Con(name = n"Succ", args = List(Var(idx = 0) @ "plus m n")) @ "Succ (plus m n)",
               usage = Auto()
-            ) @ "Succ#{(plus m n)}"
+            ) @ "Succ (plus m n)"
           ) @ "ε"
         )
       )

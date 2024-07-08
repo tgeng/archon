@@ -104,17 +104,7 @@ extension (tTerm: TTerm)
   def toCTerm(using ctx: TranslationContext): CTerm =
     given SourceInfo = tTerm.sourceInfo
     tTerm match
-      case TAuto() => Return(Auto())
-      case TCon(name, args) =>
-        translate(args*) { case args =>
-          given SourceInfo = tTerm.sourceInfo
-          ctx.globalDefs.get(name) match
-            case Some(GData(qn))     => Return(DataType(qn, args.toList))
-            case Some(GDataValue(n)) => Return(Con(n, args.toList))
-            case Some(GEffect(qn))   => Return(EffectsLiteral(Set((qn, args.toList))))
-            case Some(GRecord(qn))   => RecordType(qn, args.toList)
-            case _                   => throw UnresolvedSymbol(name)
-        }
+      case TAuto()              => Return(Auto())
       case TU(t)                => Return(U(t.toCTerm(using ctx.copy(isTypeLevel = true))))
       case TThunk(t)            => Return(Thunk(t.toCTerm))
       case TLevelLiteral(level) => Return(LevelLiteral(level))
@@ -146,7 +136,7 @@ extension (tTerm: TTerm)
             body.toCTerm(using ctx.bindLocal(name)),
           )
         }
-      case TRedex(c, elims) =>
+      case r@TRedex(c, elims) =>
         translate(elims.flatMap {
           case Elimination.ETerm(t) => Seq(t)
           case _                    => Seq.empty
@@ -160,7 +150,19 @@ extension (tTerm: TTerm)
                 index = index + 1
                 Elimination.ETerm[VTerm](arg)
               case Elimination.EProj(name) => Elimination.EProj[VTerm](name)
-            redex(c.toCTerm, translatedElims)
+            c match
+              case TId(id) =>
+                given SourceInfo = r.sourceInfo
+                lazy val args = translatedElims.map:
+                  case Elimination.ETerm(v) => v
+                  case _ => throw new IllegalArgumentException("Unexpected projection")
+                ctx.lookup(id) match
+                  case Right(GData(qn))     => Return(DataType(qn, args))
+                  case Right(GDataValue(n)) => Return(Con(n, args))
+                  case Right(GRecord(qn))   => RecordType(qn, args)
+                  case Right(GEffect(qn))   => Return(EffectsLiteral(Set((qn, args))))
+                  case _                    => redex(c.toCTerm, translatedElims)
+              case _ => redex(c.toCTerm, translatedElims)
       case TFunctionType(arg, bodyType, effects) =>
         given TranslationContext = ctx.copy(isTypeLevel = true)
         translate(arg.ty, arg.usage, effects) { case Seq(ty, usage, effects) =>

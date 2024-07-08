@@ -15,7 +15,6 @@ enum TTerm(val sourceInfo: SourceInfo):
   case TThunk(t: TTerm)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TLevelLiteral(level: Nat)(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TAuto()(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
-  case TCon(name: String, args: List[TTerm])(using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TF(ty: TTerm, effects: TTerm, usage: TTerm)(using sourceInfo: SourceInfo)
     extends TTerm(sourceInfo)
   case TLet

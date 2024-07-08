@@ -4,4 +4,4 @@ Succ: Nat -> Nat
 
 def prec: Nat -> <> Nat
 Zero = Zero
-Succ#{m} = m
+(Succ m) = m

@@ -27,13 +27,9 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
     PT(("." ~~ id).repX(1).!)(s => TTerm.TDef(QualifiedName.from(s.drop(1))))
   private def tU[$: P]: P[TTerm] = PT("U" ~/ atom)(TTerm.TU(_))
   private def tForce[$: P]: P[TTerm] = PT("force" ~/ atom)(TTerm.TForce(_))
-  // TODO[P0]: add special syntax for constructor, projection, and operation, and remove derived
-  //  definitions from data, record, and effect.
-  private def tCon[$: P]: P[TTerm] = PT(id ~ "#{" ~/ atom.rep ~ "}"):
-    case (name, args) => TTerm.TCon(name, args.toList)
 
   private def atom[$: P]: P[TTerm] = P(
-    "(" ~/ tTerm ~ ")" | tAuto | tDef | tLevelLiteral | tForce | tU | tCon | tId,
+    "(" ~/ tTerm ~ ")" | tAuto | tDef | tLevelLiteral | tForce | tU | tId,
   )
   private def tThunk[$: P]: P[TTerm] = PT("thunk" ~/ tTerm)(TTerm.TThunk(_))
   private def tF[$: P]: P[TTerm] =
@@ -68,7 +64,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
     case Left(t)  => Elimination.ETerm(t)
     case Right(n) => Elimination.EProj(Name.Normal(n))
 
-  private def tRedex[$: P]: P[TTerm] = PT((atom ~ indented(_.elim.rep))):
+  private def tRedex[$: P]: P[TTerm] = PT(atom ~ indented(_.elim.rep)):
     case (f, elims) =>
       if elims.isEmpty then f else TTerm.TRedex(f, elims.toList)
 
@@ -130,7 +126,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   private def tTermEnd[$: P]: P[TTerm] = P(tTerm ~ End)
 
   private def tBindingAndVariance[$: P]: P[(TBinding, Variance)] = P(
-    (("+" | "-").!.? ~ "(" ~ tBinding ~ ")").map:
+    (("+" | "-").!.? ~ "(" ~/ tBinding ~ ")").map:
       case (Some("+"), b) => (b, Variance.COVARIANT)
       case (Some("-"), b) => (b, Variance.CONTRAVARIANT)
       case (None, b)      => (b, Variance.INVARIANT)
@@ -162,17 +158,19 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
 
   private def tpVar[$: P]: P[TPattern] = PT(id)(TPattern.TpId.apply)
   private def tpXConstructor[$: P]: P[TPattern] =
-    PT(".".!.?.map(_.isDefined) ~ id ~ "#{" ~/ tPattern.rep ~ "}")(TPattern.TpXConstructor.apply)
+    PT(".".!.?.map(_.isDefined) ~ id ~ tPattern.rep)(TPattern.TpXConstructor.apply)
   private def tpForced[$: P]: P[TPattern] = PT("." ~ "(" ~/ tTerm ~ ")")(TPattern.TpForced.apply)
   private def tpAbsurd[$: P]: P[TPattern] = PT("()")(_ => TPattern.TPAbsurd())
-  private def tPattern[$: P]: P[TPattern] = P(tpAbsurd | tpForced | tpXConstructor | tpVar)
+  private def tPattern[$: P]: P[TPattern] = P(
+    tpAbsurd | "(" ~/ tpXConstructor ~ ")" | tpVar | tpForced,
+  )
 
   private def tCoPattern[$: P]: P[TCoPattern] = P(
     tProjection | tPattern.map(TCoPattern.TcPattern.apply),
   )
 
   private def tClause[$: P]: P[TClause] = P(
-    (tCoPattern.rep ~ "=" ~ indented(_.tTerm).?).map(TClause.apply),
+    (NoCut(tCoPattern).rep ~ "=" ~ indented(_.tTerm).?).map(TClause.apply),
   )
 
   private def tDefinition[$: P]: P[TDeclaration] = P(

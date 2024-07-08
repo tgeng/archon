@@ -77,15 +77,17 @@ List(
           TcPattern(pattern = TpId(name = "n"))
         ),
         body = Some(
-          value = TCon(
-            name = "Succ",
-            args = List(
-              TRedex(
-                c = TId(id = "plus") @ "plus",
-                elims = List(ETerm(v = TId(id = "m") @ "m"), ETerm(v = TId(id = "n")))
-              ) @ "plus m n"
+          value = TRedex(
+            c = TId(id = "Succ") @ "Succ",
+            elims = List(
+              ETerm(
+                v = TRedex(
+                  c = TId(id = "plus") @ "plus",
+                  elims = List(ETerm(v = TId(id = "m") @ "m"), ETerm(v = TId(id = "n")))
+                ) @ "plus m n"
+              )
             )
-          ) @ "Succ#{(plus m n)}"
+          ) @ "Succ (plus m n)"
         )
       )
     )

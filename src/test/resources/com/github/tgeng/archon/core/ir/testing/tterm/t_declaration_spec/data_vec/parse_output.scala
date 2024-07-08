@@ -36,13 +36,17 @@ List(
       TConstructor(
         name = "Nil",
         ty = TF(
-          ty = TCon(
-            name = "Vec",
-            args = List(TId(id = "l"), TId(id = "t") @ "t", TId(id = "Zero") @ "Zero")
-          ) @ "Vec#{l t Zero}",
+          ty = TRedex(
+            c = TId(id = "Vec") @ "Vec",
+            elims = List(
+              ETerm(v = TId(id = "l")),
+              ETerm(v = TId(id = "t") @ "t"),
+              ETerm(v = TId(id = "Zero") @ "Zero")
+            )
+          ) @ "Vec l t Zero",
           effects = TDef(qn = qn"archon.builtin.effects.total"),
           usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
-        ) @ "Vec#{l t Zero}"
+        ) @ "Vec l t Zero"
       ),
       TConstructor(
         name = "Succ",
@@ -61,30 +65,39 @@ List(
             bodyType = TFunctionType(
               arg = TBinding(
                 name = "_",
-                ty = TCon(
-                  name = "Vec",
-                  args = List(TId(id = "l"), TId(id = "t"), TId(id = "n") @ "n")
-                ) @ "Vec#{l t n}",
+                ty = TRedex(
+                  c = TId(id = "Vec"),
+                  elims = List(
+                    ETerm(v = TId(id = "l")),
+                    ETerm(v = TId(id = "t")),
+                    ETerm(v = TId(id = "n") @ "n")
+                  )
+                ) @ "Vec l t n",
                 usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
               ),
               bodyType = TF(
-                ty = TCon(
-                  name = "Vec",
-                  args = List(
-                    TId(id = "l"),
-                    TId(id = "t"),
-                    TCon(name = "Succ", args = List(TId(id = "n"))) @ "Succ#{n}"
+                ty = TRedex(
+                  c = TId(id = "Vec"),
+                  elims = List(
+                    ETerm(v = TId(id = "l")),
+                    ETerm(v = TId(id = "t")),
+                    ETerm(
+                      v = TRedex(
+                        c = TId(id = "Succ") @ "Succ",
+                        elims = List(ETerm(v = TId(id = "n")))
+                      ) @ "Succ n"
+                    )
                   )
-                ) @ "Vec#{l t Succ#{n}}",
+                ) @ "Vec l t (Succ n)",
                 effects = TDef(qn = qn"archon.builtin.effects.total"),
                 usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
-              ) @ "Vec#{l t Succ#{n}}",
+              ) @ "Vec l t (Succ n)",
               effects = TDef(qn = qn"archon.builtin.effects.total")
-            ) @ "Vec#{l t n} -> Vec#{l t Succ#{n}}",
+            ) @ "Vec l t n -> Vec l t (Succ n)",
             effects = TDef(qn = qn"archon.builtin.effects.total")
-          ) @ "t -> Vec#{l t n} -> Vec#{l t Succ#{n}}",
+          ) @ "t -> Vec l t n -> Vec l t (Succ n)",
           effects = TDef(qn = qn"archon.builtin.effects.total")
-        ) @ "n: Nat -> t -> Vec#{l t n} -> Vec#{l t Succ#{n}}"
+        ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n)"
       )
     )
   )
