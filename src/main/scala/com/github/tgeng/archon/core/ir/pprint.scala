@@ -12,6 +12,7 @@ import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.Variance.*
 
+import scala.collection.decorators.*
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
@@ -218,6 +219,27 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using Σ: Signature)
     : Block =
     Block(usageLiteral.usage.toString)
+
+  override def visitUsageProd
+    (usageProd: VTerm.UsageProd)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
+    Block(usageProd.operands.toSeq.map(visitVTerm).intersperse("*"), Whitespace, Aligned, Wrap)
+
+  override def visitUsageSum
+    (usageSum: VTerm.UsageSum)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
+    Block(usageSum.operands.multiToSeq.map(visitVTerm).intersperse("+"), Whitespace, Aligned, Wrap)
+
+  override def visitUsageJoin
+    (usageJoin: VTerm.UsageJoin)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    : Block =
+    Block(usageJoin.operands.toSeq.map(visitVTerm).intersperse("|"), Whitespace, Aligned, Wrap)
 
   override def visitTContext
     (tTelescope: List[(Binding[VTerm], Variance)])
@@ -434,7 +456,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using
       Σ: Signature,
     )
-    : Block = app(".return", r.v)
+    : Block = app(".return", "[", r.usage, "]", r.v)
 
   override def visitLet
     (let: Let)

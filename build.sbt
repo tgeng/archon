@@ -21,6 +21,7 @@ lazy val root = (project in file("."))
       "com.lihaoyi" %% "pprint" % "0.9.0",
       "com.lihaoyi" %% "fastparse" % "3.1.0",
       "com.lihaoyi" %% "os-lib" % "0.10.2",
+      "org.scala-lang.modules" %% "scala-collection-contrib" % "0.3.0"
     ),
     Compile / unmanagedJars += {
       baseDirectory.value / "unmanaged" / "scalaz3_3-4.8.14-macos-aarch64.jar"

@@ -544,7 +544,7 @@ extension (v: VTerm)
 
         def sumToTerm(sum: USum[VTerm]): VTerm = UsageSum(sum.map(prodToTerm)*)
 
-        def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm).toSeq*)
+        def prodToTerm(prod: UProd[VTerm]): VTerm = UsageProd(prod.map(varOrUsageToTerm)*)
 
         def varOrUsageToTerm(t: VTerm | Usage): VTerm = t match
           case v: VTerm => v

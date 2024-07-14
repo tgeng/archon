@@ -128,26 +128,40 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
     "with nat" in:
       decls"""
         data Nat: Type 0L
-        Zero: Nat
-        Succ: Nat -> Nat
-        
+        Z: Nat
+        S: Nat -> Nat
+
         def prec: Nat -> <> Nat
-        Zero = Zero
-        (Succ m) = m
+        Z = Z
+        (S m) = m
+
+        def plus: Nat -> Nat -> <> Nat
+        Z n = n
+        (S m) n = S (plus m n)
 
         data Vec (l: Level) +(t: Type l): Nat -> Type l
-        Nil: Vec l t Zero
-        Succ: n: Nat -> t -> Vec l t n -> Vec l t (Succ n)
+        Nil: Vec l t Z
+        Suc: n: Nat -> t -> Vec l t n -> Vec l t (S n)
+
         """.inUse:
         assertVType(vt"Nat", Type(Top(LevelLiteral(0))))
-        assertVType(vt"Zero", vt"Nat")
+        assertVType(vt"Z", vt"Nat")
         assertCType(
-          ct"prec (Succ Zero)",
+          ct"prec (S Z)",
           ct"<> Nat",
         )
         assertCConvertible(
-          ct"prec (Succ Zero)",
-          ct"Zero",
+          ct"prec (S Z)",
+          ct"Z",
+          Some(ct"<> Nat"),
+        )
+        assertCType(
+          ct"plus (S Z) (S (S Z))",
+          ct"<> Nat",
+        )
+        assertCConvertible(
+          ct"plus (S Z) (S (S Z))",
+          ct"S (S Z)",
           Some(ct"<> Nat"),
         )
   }

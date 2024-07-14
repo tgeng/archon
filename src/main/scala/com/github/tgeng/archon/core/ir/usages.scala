@@ -36,7 +36,13 @@ def collectUsages
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Usages =
-  ctx.trace("collectUsages", PrettyPrinter.pprint(tm)):
+  ctx.trace[Usages](
+    "collectUsages",
+    ty match
+      case Some(ty) => Block(PrettyPrinter.pprint(tm), ":", PrettyPrinter.pprint(ty))
+      case None     => PrettyPrinter.pprint(tm),
+    successMsg = PrettyPrinter.pprint,
+  ):
     tm match
       case Type(upperBound) => collectUsages(upperBound, None)
       case Top(level, eqDecidability) =>
@@ -98,7 +104,13 @@ def collectUsages
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Usages =
-  ctx.trace("collectUsages", PrettyPrinter.pprint(tm)):
+  ctx.trace[Usages](
+    "collectUsages",
+    ty match
+      case Some(ty) => Block(PrettyPrinter.pprint(tm), ":", PrettyPrinter.pprint(ty))
+      case None     => PrettyPrinter.pprint(tm),
+    successMsg = PrettyPrinter.pprint,
+  ):
     tm match
       case Hole => throw IllegalStateException("Hole should not appear here.")
       case CapturedContinuationTip(_) =>
@@ -127,17 +139,22 @@ def collectUsages
             case F(ty, _, _) => ty
             case ty          => throw IllegalStateException(s"bad type, expect F but got $ty")
           },
-        ) * usage
+        ) * usage.normalized
       case Let(t, tBinding, eff, body) =>
         val tUsages = collectUsages(t, Some(F(tBinding.ty, eff, tBinding.usage)))
-        val bodyUsages = collectUsages(body, ty.map(_.weakened))(using Γ :+ tBinding)
-        val actualTUsage = bodyUsages.last
-        ctx.checkSolved(
-          checkUsageSubsumption(actualTUsage, tBinding.usage),
-          NotUsageSubsumption(actualTUsage, tBinding.usage),
-        )
+        val bodyUsages = {
+          given Context = Γ :+ tBinding
+
+          val bodyUsages = collectUsages(body, ty.map(_.weakened))
+          val actualTUsage = bodyUsages.last
+          ctx.checkSolved(
+            checkUsageSubsumption(actualTUsage, tBinding.usage),
+            NotUsageSubsumption(actualTUsage, tBinding.usage),
+          )
+          bodyUsages.dropRight(1)
+        }
         val continuationUsage = getEffectsContinuationUsage(eff)
-        tUsages + bodyUsages.dropRight(1).map { t =>
+        tUsages + bodyUsages.map { t =>
           // A variable's usage may reference the variable bound to the value returned from `t`. In
           // this case, strength would fail and the referenced usage can take any value. Hence, we
           // just approximate it with `uAny`.

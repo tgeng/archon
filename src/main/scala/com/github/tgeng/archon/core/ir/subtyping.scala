@@ -368,7 +368,11 @@ private def checkHandlerTypeSubsumption
       Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
-    case _ => throw NotHandlerTypeSubsumption(handlerType1, handlerType2)
+    case (sub: VTerm, sup: VTerm) =>
+      val solvedSub = ctx.solveTerm(sub)
+      val solvedSup = ctx.solveTerm(sup)
+      if solvedSub == sub && solvedSup == sup then throw NotHandlerTypeSubsumption(sub, sup)
+      else checkHandlerTypeSubsumption(solvedSub, solvedSup)
 
 @throws(classOf[IrError])
 private def checkEqDecidabilitySubsumption
@@ -390,7 +394,11 @@ private def checkEqDecidabilitySubsumption
       Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2))
-    case _ => throw NotEqDecidabilitySubsumption(eqD1, eqD2)
+    case (sub: VTerm, sup: VTerm) =>
+      val solvedSub = ctx.solveTerm(sub)
+      val solvedSup = ctx.solveTerm(sup)
+      if solvedSub == sub && solvedSup == sup then throw NotEqDecidabilitySubsumption(sub, sup)
+      else checkEqDecidabilitySubsumption(solvedSub, solvedSup)  
 
 /** @param invert
   *   useful when checking patterns where the consumed usages are actually provided usages because
@@ -442,7 +450,11 @@ def checkUsageSubsumption
       // hence we can't decide subsumption yet.
       else if spuriousOperands.forall(isMeta) || operands1.exists(isMeta) then
         Set(Constraint.UsageSubsumption(Γ, sub, sup))
-      else throw NotUsageSubsumption(sub, sup)
+      else
+        val solvedSub = ctx.solveTerm(sub)
+        val solvedSup = ctx.solveTerm(sup)
+        if solvedSub == sub && solvedSup == sup then throw NotUsageSubsumption(sub, sup)
+        else checkUsageSubsumption(solvedSub, solvedSup)
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
     case (UsageJoin(operands), RUnsolved(_, _, _, tm, _)) if operands.contains(Collapse(tm)) =>
       Set.empty
@@ -512,11 +524,15 @@ def checkUsageSubsumption
       Set(Constraint.UsageSubsumption(Γ, rawSub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.UsageSubsumption(Γ, rawSub, rawSup))
-    case _ =>
+    case (sub: VTerm, sup: VTerm) =>
       if isMeta(rawSub) || isMeta(rawSup) then
         // We can't decide if the terms are unsolved.
         Set(Constraint.UsageSubsumption(Γ, rawSub, rawSup))
-      else throw NotUsageSubsumption(rawSub, rawSup)
+      else
+        val solvedSub = ctx.solveTerm(sub)
+        val solvedSup = ctx.solveTerm(sup)
+        if solvedSub == sub && solvedSup == sup then throw NotUsageSubsumption(sub, sup)
+        else checkUsageSubsumption(solvedSub, solvedSup)
 
 @throws(classOf[IrError])
 private def checkEffSubsumption
@@ -600,7 +616,11 @@ private def checkEffSubsumption
                 ).normalized
             ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
             Set.empty
-          case _ => throw NotEffectSubsumption(sub, sup)
+          case _ =>
+            val solvedSub = ctx.solveTerm(sub)
+            val solvedSup = ctx.solveTerm(sup)
+            if solvedSub == sub && solvedSup == sup then throw NotEffectSubsumption(sub, sup)
+            else checkEffSubsumption(solvedSub, solvedSup)
       // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
       // ends up being assigned values that are part of sup
       // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary effects and hence
@@ -608,7 +628,11 @@ private def checkEffSubsumption
       else if spuriousOperands.keys.forall(isMeta) || unionOperands2.keys.exists(isMeta) then
         Set(Constraint.EffSubsumption(Γ, sub, sup))
       else throw NotEffectSubsumption(sub, sup)
-    case _ => throw NotEffectSubsumption(rawSub, rawSup)
+    case (sub: VTerm, sup: VTerm) =>
+      val solvedSub = ctx.solveTerm(sub)
+      val solvedSup = ctx.solveTerm(sup)
+      if solvedSub == sub && solvedSup == sup then throw NotEffectSubsumption(sub, sup)
+      else checkEffSubsumption(solvedSub, solvedSup)
 
 /** Checks if l1 is smaller than l2.
   */
@@ -647,7 +671,11 @@ private def checkLevelSubsumption
         // if sup contains unsolved meta variables, it's possible for sup to end up including
         // arbitrary large level and hence we can't decide subsumption yet.
         Set(Constraint.LevelSubsumption(Γ, sub, sup))
-      else throw NotLevelSubsumption(sub, sup)
+      else
+        val solvedSub = ctx.solveTerm(sub)
+        val solvedSup = ctx.solveTerm(sup)
+        if solvedSub == sub && solvedSup == sup then throw NotLevelSubsumption(sub, sup)
+        else checkLevelSubsumption(solvedSub, solvedSup)
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
     case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) =>
       Set.empty
@@ -676,8 +704,11 @@ private def checkLevelSubsumption
       Set(Constraint.LevelSubsumption(Γ, rawSub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
       Set(Constraint.LevelSubsumption(Γ, rawSub, rawSup))
-    case (sub, sup) =>
-      throw NotLevelSubsumption(rawSub, rawSup)
+    case (sub: VTerm, sup: VTerm) =>
+      val solvedSub = ctx.solveTerm(sub)
+      val solvedSup = ctx.solveTerm(sup)
+      if solvedSub == sub && solvedSup == sup then throw NotLevelSubsumption(sub, sup)
+      else checkLevelSubsumption(solvedSub, solvedSup)
 
 private def getSpurious[T, E: PartialOrdering](sub: SeqMap[T, E], sup: SeqMap[T, E]): SeqMap[T, E] =
   sub.filter { case (operand1, e1) =>
