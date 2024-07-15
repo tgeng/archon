@@ -411,8 +411,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       Σ: Signature,
     )
     : Block = cType match
-    case CType(CTop(Level(l, operands), _), _) if operands.isEmpty =>
-      Block("CType" + l.sub)
+    case CType(CTop(Level(l, operands), tEff), eff) if operands.isEmpty && tEff == Total() =>
+      ctype(eff, "CType", l.sub)
     case CType(CTop(l, tEff), eff) if tEff == Total() =>
       ctype(eff, "CType", l)
     case CType(upperBound, eff) =>

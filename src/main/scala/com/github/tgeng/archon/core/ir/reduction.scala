@@ -312,8 +312,7 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
-                h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)
@@ -508,6 +507,9 @@ extension (c: CTerm)
       ) match
         case Return(v, _) => transformVTerm(v)
         case _            => c
+
+      override def transformVTerm(tm: VTerm)(using ctx: TypingContext)(using Σ: Signature): VTerm =
+        tm.normalized
 
     transformer.transformCTerm(c) match
       case Redex(t, elims) => redex(t, elims.map(_.map(_.normalized)))
