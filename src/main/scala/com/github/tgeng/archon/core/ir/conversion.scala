@@ -284,14 +284,17 @@ def checkIsConvertible
                 effConstraint ++ argConstraint
           case (
               OperationCall(eff1, name1, args1),
-              op2@OperationCall(eff2, name2, args2),
+              op2 @ OperationCall(eff2, name2, args2),
             ) if name1 == name2 =>
             val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
             val (qn, tArgs) = eff1 match
-              case Effects(literals, operands) if operands.isEmpty && literals.size == 1 => literals.head
-              case _ => eff2 match
-                case Effects(literals, operands) if operands.isEmpty && literals.size == 1 => literals.head
-                case _ => throw ComplexOperationCall(op2)
+              case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
+                literals.head
+              case _ =>
+                eff2 match
+                  case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
+                    literals.head
+                  case _ => throw ComplexOperationCall(op2)
             val operation = Σ.getOperation(qn, name1)
             var args = IndexedSeq[VTerm]()
             val argConstraint =

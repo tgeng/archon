@@ -136,7 +136,7 @@ extension (tTerm: TTerm)
             body.toCTerm(using ctx.bindLocal(name)),
           )
         }
-      case r@TRedex(c, elims) =>
+      case r @ TRedex(c, elims) =>
         translate(elims.flatMap {
           case Elimination.ETerm(t) => Seq(t)
           case _                    => Seq.empty

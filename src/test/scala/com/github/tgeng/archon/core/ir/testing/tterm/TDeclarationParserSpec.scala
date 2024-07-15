@@ -22,16 +22,15 @@ class TDeclarationParserSpec extends FileBasedFreeSpec("t_declaration_spec"):
 
   "data_vec" in:
     runTest()
-          
+
   "data_eq" in:
     runTest()
-          
+
   "def_plus" in:
     runTest()
-          
+
   "record_stream" in:
     runTest()
-          
+
   "def_prec" in:
     runTest()
-          

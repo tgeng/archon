@@ -398,7 +398,7 @@ private def checkEqDecidabilitySubsumption
       val solvedSub = ctx.solveTerm(sub)
       val solvedSup = ctx.solveTerm(sup)
       if solvedSub == sub && solvedSup == sup then throw NotEqDecidabilitySubsumption(sub, sup)
-      else checkEqDecidabilitySubsumption(solvedSub, solvedSup)  
+      else checkEqDecidabilitySubsumption(solvedSub, solvedSup)
 
 /** @param invert
   *   useful when checking patterns where the consumed usages are actually provided usages because

@@ -45,7 +45,7 @@ def elaborate
       case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
       case (DeclarationPart.HEAD, d: PreRecord)     => elaborateRecordHead(d)
       case (DeclarationPart.HEAD, d: PreDefinition) => elaborateDefHead(d)
-      case (DeclarationPart.HEAD, d: PreEffect)     => elaborateEffectHead(d) 
+      case (DeclarationPart.HEAD, d: PreEffect)     => elaborateEffectHead(d)
       case (DeclarationPart.BODY, d: PreData)       => elaborateDataBody(d)
       case (DeclarationPart.BODY, d: PreRecord)     => elaborateRecordBody(d)
       case (DeclarationPart.BODY, d: PreDefinition) => elaborateDefBody(d)
