@@ -22,6 +22,7 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 import scala.annotation.tailrec
 import scala.collection.immutable.{SeqMap, Set}
 import scala.collection.mutable
+import scala.collection.immutable.MultiSet
 
 @throws(classOf[IrError])
 private def checkLevel
@@ -155,8 +156,8 @@ def inferType
       val newTm = UsageProd(operands)(using tm.sourceInfo).normalized
       (newTm, UsageType(Some(newTm)))
     case UsageSum(uncheckedOperands) =>
-      val operands = uncheckedOperands.multiToSeq.map(o => checkType(o, UsageType(None)))
-      val newTm = UsageSum(operands.toMultiset)(using tm.sourceInfo).normalized
+      val operands = uncheckedOperands.toSeq.map(o => checkType(o, UsageType(None)))
+      val newTm = UsageSum(MultiSet.from(operands))(using tm.sourceInfo).normalized
       (newTm, UsageType(Some(newTm)))
     case UsageJoin(uncheckedOperands) =>
       val operands = uncheckedOperands.map(o => checkType(o, UsageType(None)))

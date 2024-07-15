@@ -79,7 +79,7 @@ def collectUsages
       case UsageProd(operands) =>
         operands.map(collectUsages(_, Some(UsageType()))).fold(Usages.zero)(_ + _)
       case UsageSum(operands) =>
-        operands.multiToSeq.map(collectUsages(_, Some(UsageType()))).fold(Usages.zero)(_ + _)
+        operands.toSeq.map(collectUsages(_, Some(UsageType()))).fold(Usages.zero)(_ + _)
       case UsageJoin(operands) =>
         operands.map(collectUsages(_, Some(UsageType()))).fold(Usages.zero)(_ + _)
       case EqDecidabilityType()     => Usages.zero

@@ -232,7 +232,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block =
-    Block(usageSum.operands.multiToSeq.map(visitVTerm).intersperse("+"), Whitespace, Aligned, Wrap)
+    Block(usageSum.operands.toSeq.map(visitVTerm).intersperse("+"), Whitespace, Aligned, Wrap)
 
   override def visitUsageJoin
     (usageJoin: VTerm.UsageJoin)

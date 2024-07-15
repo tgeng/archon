@@ -232,7 +232,9 @@ def topologicalSort[T]
   val visitingSet = mutable.Set[T]()
 
   def dfs(t: T): Unit =
-    if visitedSet(t) then return if visitingSet(t) then throw CycleException
+    if visitedSet(t) then
+      if visitingSet(t) then throw CycleException
+      else return
     visiting.addOne(t)
     visitedSet.add(t)
     val deps = getDeps(t)
@@ -250,21 +252,6 @@ def topologicalSort[T]
 /** Non negative int. Note that this is only a visual hint and nothing actually checks this.
   */
 type Nat = Int
-
-type Multiset[T] = SeqMap[T, Nat]
-
-extension [T](ts: Iterable[T])
-  def toMultiset: Multiset[T] = groupMapReduce(ts)(t => t)(_ => 1)(_ + _)
-
-extension [T](ms: Multiset[T])
-  def multiMap[R](f: T => R): Multiset[R] = ms.map((k, v) => (f(k), v))
-  def multiToSeq: Seq[T] = ms.toSeq.flatMap((t, count) => Seq.fill(count)(t))
-
-def flattenMultisets[T](ms: Iterable[Multiset[T]]): Multiset[T] =
-  groupMapReduce(ms.flatten)(_._1)(_._2)(_ + _)
-
-def multisetOf[T](ts: T*): Multiset[T] =
-  groupMapReduce(ts)(t => t)(_ => 1)(_ + _)
 
 def groupMapReduce[A, CC[_], C, K, B]
   (elems: IterableOps[A, CC, C])
@@ -307,7 +294,3 @@ package eitherFilter:
       case Right(_) =>
         throw Exception("please use irrefutable pattern with Either")
       case Left(_) => e
-
-def toBoolean(e: Either[?, ?]): Boolean = e match
-  case Right(_) => true
-  case Left(_)  => false

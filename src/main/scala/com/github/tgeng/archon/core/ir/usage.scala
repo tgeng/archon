@@ -4,6 +4,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.ir.Usage.UAff
 
 import scala.annotation.{tailrec, targetName}
+import scala.collection.immutable.MultiSet
 
 /** Here we do not do the full generalization that allows user to define custom semirings for
   * grading. Instead, we use a specialized semiring that only accounts for counting usages.
@@ -118,11 +119,11 @@ private def uLubNormalize[T](lub: ULub[T]): ULub[T] =
           Right(prod.head.asInstanceOf[Usage])
         else Left(prod)
       }
-    .groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U0)(_ + _))(_ | _)
+    .groupMapReduce(e => MultiSet.from(e._1))(_._2.fold(Usage.U0)(_ + _))(_ | _)
     .toSet
     .map { (sum, literal) =>
-      if literal == Usage.U0 then sum.multiToSeq
-      else sum.multiToSeq ++ uSumFromLiteral(literal)
+      if literal == Usage.U0 then sum.toSeq
+      else sum.toSeq ++ uSumFromLiteral(literal)
     }
   // UAny is an absorbing element for |
   if r.contains(uSumFromLiteral(Usage.UAny)) then uLubFromLiteral(Usage.UAny)
@@ -147,12 +148,12 @@ private def uSumNormalize[T](sum: Iterable[UProd[T]]): USum[T] =
     .map:
       _.partitionMap:
         case u: Usage => Right(u)
-        case t        => Left(t.asInstanceOf[T | Usage])
-    .groupMapReduce(_._1.toMultiset)(_._2.fold(Usage.U1)(_ * _))(_ + _)
+        case t        => Left(t)
+    .groupMapReduce(e => MultiSet.from(e._1))(_._2.fold(Usage.U1)(_ * _))(_ + _)
     .toSeq
     .map { (prod, literal) =>
-      if literal == Usage.U1 then prod.multiToSeq
-      else prod.multiToSeq ++ uProdFromLiteral(literal)
+      if literal == Usage.U1 then prod.toSeq
+      else prod.toSeq ++ uProdFromLiteral(literal)
     }
   // URel is an absorbing element for +
   if r.contains(Seq(Usage.URel)) then uSumFromLiteral(Usage.URel)

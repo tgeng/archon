@@ -9,6 +9,7 @@ import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 
 import scala.annotation.targetName
 import scala.collection.immutable.SeqMap
+import scala.collection.immutable.MultiSet
 
 // TODO[P2]: Replace all Set with SeqSet so that type checking become deterministic after
 //  https://github.com/scala/scala-library-next/issues/22 is resolved
@@ -304,9 +305,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case UsageProd(operands: Set[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     UsageCompound(operands)
-  case UsageSum(operands: Multiset[VTerm])(using sourceInfo: SourceInfo)
+  case UsageSum(operands: MultiSet[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
-    UsageCompound(operands.keySet)
+    UsageCompound(operands.toSet)
   case UsageJoin(operands: Set[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     UsageCompound(operands)
@@ -442,9 +443,9 @@ object VTerm:
     val (usages, terms) = separateUsageLiteralsFromRest(operands)
     (usages.foldLeft(U0)(_ + _), terms) match
       case (u, Nil)    => UsageLiteral(u)
-      case (U0, terms) => UsageSum(terms.toMultiset)
+      case (U0, terms) => UsageSum(MultiSet.from(terms))
       case (URel, _)   => UsageLiteral(URel)
-      case (u, terms)  => UsageSum((UsageLiteral(u) :: terms).toMultiset)
+      case (u, terms)  => UsageSum(MultiSet.from(UsageLiteral(u) :: terms))
 
   def UsageJoin(operands: VTerm*)(using SourceInfo): VTerm =
     if operands.isEmpty then throw IllegalStateException("UsageJoin cannot be empty")

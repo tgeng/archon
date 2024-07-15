@@ -92,13 +92,13 @@ trait TermVisitor[C, R]:
     combine()
 
   def visitUsageProd(usageProd: UsageProd)(using ctx: C)(using Σ: Signature): R =
-    combine(usageProd.operands.toSeq.map(visitVTerm)*)
+    combine(usageProd.operands.map(visitVTerm).toSeq*)
 
   def visitUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): R =
-    combine(usageSum.operands.multiMap(visitVTerm).multiToSeq*)
+    combine(usageSum.operands.map(visitVTerm).toSeq*)
 
   def visitUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): R =
-    combine(usageJoin.operands.toSeq.map(visitVTerm)*)
+    combine(usageJoin.operands.map(visitVTerm).toSeq*)
 
   def visitEqDecidabilityType
     (eqDecidabilityType: EqDecidabilityType)
@@ -652,7 +652,7 @@ trait Transformer[C]:
   )
 
   def transformUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): VTerm = UsageSum(
-    usageSum.operands.multiMap(transformVTerm),
+    usageSum.operands.map(transformVTerm),
   )
 
   def transformUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): VTerm = UsageJoin(

@@ -534,7 +534,7 @@ extension (v: VTerm)
         @throws(classOf[IrError])
         def dfs(tm: VTerm): ULub[VTerm] = ctx.withMetaResolved(tm):
           case UsageLiteral(u)                  => uLubFromLiteral(u)
-          case UsageSum(operands)               => uLubSum(operands.multiToSeq.map(dfs))
+          case UsageSum(operands)               => uLubSum(operands.toSeq.map(dfs))
           case UsageProd(operands)              => uLubProd(operands.map(dfs))
           case UsageJoin(operands)              => uLubJoin(operands.map(dfs))
           case c: Collapse                      => dfs(c.normalized)
