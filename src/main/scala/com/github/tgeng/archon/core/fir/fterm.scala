@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.fir
 
-import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
 import scala.collection.immutable.SeqMap

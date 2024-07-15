@@ -7,21 +7,16 @@ import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
-import com.github.tgeng.archon.core.ir.Declaration.*
 import com.github.tgeng.archon.core.ir.Elimination.*
-import com.github.tgeng.archon.core.ir.EqDecidability.*
-import com.github.tgeng.archon.core.ir.HandlerType.Simple
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
-import com.github.tgeng.archon.core.ir.Reducible.reduce
 import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
 import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
-import scala.annotation.tailrec
-import scala.collection.immutable.{SeqMap, Set}
+import scala.collection.immutable.Set
 import scala.collection.mutable
 
 private val ANSI_RESET = "\u001b[0m"

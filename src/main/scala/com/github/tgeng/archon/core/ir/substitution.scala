@@ -2,11 +2,6 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.VTerm.Type
-
-import scala.annotation.targetName
-import scala.collection.immutable.{SeqMap, Set}
-import scala.collection.mutable
 
 type PartialSubstitution[T] = Int => Option[T]
 
@@ -17,7 +12,6 @@ trait Substitutable[S: Raisable, T]:
   def substitute(s: S, substitution: PartialSubstitution[T], offset: Int = 0)(using Σ: Signature): S
 
 import com.github.tgeng.archon.core.ir.CTerm.*
-import com.github.tgeng.archon.core.ir.CoPattern.*
 import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 

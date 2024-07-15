@@ -8,8 +8,7 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 
-import java.awt.PageAttributes.ColorType
-import scala.annotation.{compileTimeOnly, tailrec, targetName}
+import scala.annotation.tailrec
 import scala.math.{max, min}
 
 enum UnificationFailureType:
@@ -40,7 +39,6 @@ enum UnificationResult:
   case UNo(u: VTerm, v: VTerm, ty: VTerm, failureType: UnificationFailureType)
   case UUndecided(u: VTerm, v: VTerm, ty: VTerm)
 
-import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.UnificationResult.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
