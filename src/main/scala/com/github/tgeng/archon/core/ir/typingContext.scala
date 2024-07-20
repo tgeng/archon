@@ -174,7 +174,6 @@ class TypingContext
   private var solvedVersion: Int = 0
   given TypingContext = this
 
-  // TODO[P0]: check usage of this method. Normally the following `resolve` should be used instead.
   def resolveMeta(m: Meta): MetaVariable = metaVars(m.index)
 
   def withMetaResolved[R]

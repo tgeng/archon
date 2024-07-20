@@ -454,7 +454,7 @@ def inferType
           case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
             literals.head
           case _ =>
-            // TODO[p0]: consider adding an effect context to aid operation resolution during type checking
+            // TODO[p2]: consider adding an effect context to aid operation resolution during type checking
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
             )
