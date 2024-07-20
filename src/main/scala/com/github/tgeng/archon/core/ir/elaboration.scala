@@ -779,6 +779,12 @@ private def elaborateDefBody
       },
     )
     _Σ.addCaseTree(preDefinition.qn, _Q)
+    // We didn't solve the meta-variables inside the definition type until now because we want to
+    // have the call-site context ready before solving them. Delay solving during body elaboration
+    // works as long as lambda definitions are APPENDED after the call-site declaration. This is
+    // because our topological sort preserves original order of definitions when possible. Hence,
+    // the call-site function body would be elaborated before the lambda body.
+    _Σ.replaceDeclaration(definition.copy(ty = ctx.solveTerm(definition.ty)))
 
 @throws(classOf[IrError])
 private def elaborateEffectHead

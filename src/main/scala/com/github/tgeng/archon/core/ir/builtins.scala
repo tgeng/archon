@@ -20,6 +20,10 @@ private case class SimpleSignature
   override type S = SimpleSignature
 
   override def addDeclaration(d: Declaration): SimpleSignature =
+    assert(!declarations.contains(d.qn))
+    copy(declarations = declarations + (d.qn -> d))
+  override def replaceDeclaration(d: Declaration): SimpleSignature =
+    assert(declarations.contains(d.qn))
     copy(declarations = declarations + (d.qn -> d))
   override def addConstructor(qn: QualifiedName, c: Constructor): SimpleSignature =
     copy(constructors = constructors + (qn -> (constructors.getOrElse(qn, IndexedSeq()) :+ c)))

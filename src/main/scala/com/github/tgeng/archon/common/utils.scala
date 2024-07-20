@@ -199,8 +199,8 @@ def topologicalSort[T]
 //  (potentially) diverging recursive calls should show up as `div` effect. In other words, one
 //  can not omit `div` effect on effectful computation because handlers can swallow non-div
 //  effects.
-//  2. non-divergemce is much stronger than saying a function is not self-recursive. A
-//  non-recursive function may still diverge if it invoke some other divergen computation. It's
+//  2. non-divergence is much stronger than saying a function is not self-recursive. A
+//  non-recursive function may still diverge if it invoke some other diverging computation. Its
 //  non-divergence is only true when all computations are non-divergent (also non-recursive).
 //  3. there is a problem with heap and parameterized handler: user can store self-reference into
 //  a heap var (or emulate heap with handler parameter) and makes a seemingly total function

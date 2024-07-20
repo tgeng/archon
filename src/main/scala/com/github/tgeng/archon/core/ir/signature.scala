@@ -90,6 +90,7 @@ case class Operation
 trait Signature:
   type S <: Signature
   def addDeclaration(d: Declaration): S
+  def replaceDeclaration(d: Declaration): S
 
   def addConstructor(qn: QualifiedName, c: Constructor): S
 

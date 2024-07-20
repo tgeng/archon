@@ -258,9 +258,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext): Definition =
   given Context = definition.context
   ctx.trace(s"checking def signature ${definition.qn}"):
-    // TODO[P0]: delay this part for synthetic lambda definitions because the signature would
-    //  contain many unsolved meta variables that depends on type checking the call-site definition.
-    val ty = ctx.solveTerm(checkIsCType(definition.ty))
+    val ty = checkIsCType(definition.ty)
     Definition(definition.qn, definition.context, ty)
 
 @throws(classOf[IrError])
