@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.ir
 
-import _root_.pprint.Tree
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
@@ -15,14 +14,11 @@ import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.Reducible.reduce
-import com.github.tgeng.archon.core.ir.UnsolvedMetaVariableConstraint.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.annotation.tailrec
-import scala.collection.immutable.{SeqMap, Set}
-import scala.collection.mutable
-import scala.collection.immutable.MultiSet
+import scala.collection.immutable.{MultiSet, SeqMap, Set}
 
 @throws(classOf[IrError])
 private def checkLevel
@@ -133,11 +129,8 @@ def inferType
       val newTm = U(cty)(using tm.sourceInfo)
       val newTy = ctyTy match
         case CType(_, _) if isTotal(cty, Some(ctyTy)) => Type(newTm)
-        // TODO[P0]: think about if this is desirable
-        // Automatically promote SomeVType to F(SomeVType)
-        case F(Type(_), _, _) if isTotal(cty, Some(ctyTy)) => Type(newTm)
-        case CType(_, _) | F(Type(_), _, _)                => throw EffectfulCTermAsType(cty)
-        case _                                             => throw NotTypeError(tm)
+        case CType(_, _)                              => throw EffectfulCTermAsType(cty)
+        case _                                        => throw NotTypeError(tm)
       (newTm, newTy)
     case Thunk(c) =>
       val (newC, cty) = inferType(c)
