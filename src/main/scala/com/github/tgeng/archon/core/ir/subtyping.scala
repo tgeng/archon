@@ -151,6 +151,7 @@ def checkIsSubtype
       ) =>
       val effConstraint = checkEffSubsumption(eff1, eff2)
       val tyConstraint = ctx.solve(checkIsSubtype(binding2.ty, binding1.ty))
+      val usageConstraint = ctx.solve(checkUsageSubsumption(binding2.usage, binding1.usage))
       val bodyConstraint =
         if tyConstraint.isEmpty
         then checkIsSubtype(bodyTy1, bodyTy2)(using Γ :+ binding2)
@@ -172,7 +173,7 @@ def checkIsSubtype
               case _ => None
             },
           )
-      effConstraint ++ tyConstraint ++ bodyConstraint
+      effConstraint ++ tyConstraint ++ usageConstraint ++ bodyConstraint
     case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
       Σ.getRecordOption(qn1) match
         case None => throw MissingDeclaration(qn1)
