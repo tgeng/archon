@@ -661,6 +661,8 @@ given Reducible[CTerm] with
     (using signature: Signature)
     (using TypingContext)
     : CTerm =
+    // TODO[P0]: if the reduced term contains `Continuation`, then throw away the reduced term and
+    //  simply return t as it is. This is needed because `Continuation` is too hard to be lowered.
     StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
 
 object Reducible:
