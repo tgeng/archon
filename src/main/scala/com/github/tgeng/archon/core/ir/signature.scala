@@ -49,7 +49,6 @@ enum Declaration:
       qn: QualifiedName,
       context: Context,
       continuationUsage: VTerm, // binding += tParamTys
-      handlerType: VTerm, // binding += tParamTys
     )
 
   def qn: QualifiedName
@@ -222,16 +221,12 @@ trait Signature:
       .orElse(getDataConDerivedDefinitionOption(qn))
       .orElse(getRecordDerivedDefinitionOption(qn))
       .orElse(getRecordFieldDerivedDefinitionOption(qn))
-      .orElse(getEffectDerivedDefinitionOption(qn))
-      .orElse(getEffectOpDerivedDefinitionOption(qn))
 
   private def getDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     getDataDerivedClausesOption(qn)
       .orElse(getDataConDerivedClausesOption(qn))
       .orElse(getRecordDerivedClausesOption(qn))
       .orElse(getRecordFieldDerivedClausesOption(qn))
-      .orElse(getEffectDerivedClausesOption(qn))
-      .orElse(getEffectOpDerivedClausesOption(qn))
 
   import CTerm.*
   import QualifiedName.*
@@ -389,63 +384,3 @@ trait Signature:
         )
       case _ => None
 
-  def getEffectDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    getEffectOption(qn)
-      .map(effect => Definition(qn, effect.context, F(EffectsType(), total, uAny)))
-
-  def getEffectDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    for effect <- getEffectOption(qn)
-    yield IndexedSeq(
-      Clause(
-        effect.context,
-        Nil,
-        Return(EffectsLiteral(Set((qn, vars(effect.context.size - 1)))), uAny),
-        F(EffectsType(), total, uAny),
-      ),
-    )
-
-  def getEffectOpDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    qn match
-      case Node(effectQn, opName) =>
-        for
-          eff <- getEffectOption(effectQn)
-          op <- getOperationOption(effectQn, opName)
-        yield
-          val context = eff.context ++ op.paramTys
-          Definition(
-            qn,
-            context,
-            F(
-              op.resultTy,
-              EffectsLiteral(Set((effectQn, vars(context.size - 1, op.paramTys.size)))),
-              op.resultUsage,
-            ),
-          )
-      case _ => None
-
-  def getEffectOpDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    qn match
-      case Node(effectQn, opName) =>
-        for
-          eff <- getEffectOption(effectQn)
-          op <- getOperationOption(effectQn, opName)
-        yield
-          val context = eff.context ++ op.paramTys
-          val opEff = EffectsLiteral(Set((effectQn, vars(context.size - 1, op.paramTys.size))))
-          IndexedSeq(
-            Clause(
-              context,
-              Nil,
-              OperationCall(
-                opEff,
-                opName,
-                vars(op.paramTys.size - 1),
-              ),
-              F(
-                op.resultTy,
-                opEff,
-                op.resultUsage,
-              ),
-            ),
-          )
-      case _ => None

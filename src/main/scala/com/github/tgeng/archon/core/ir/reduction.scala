@@ -241,9 +241,8 @@ private final class StackMachine
             stack.pushAll(normalizedElims)
             run(t)
       case OperationCall(opEff, name, rawArgs) =>
-        val effAndArgs = opEff match
-          case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
-            literals.head
+        val effAndArgs = inferType(opEff)._1 match
+          case HandlerKeyType(eff) => eff
           case _ =>
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
@@ -312,8 +311,7 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
-                h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)
@@ -324,7 +322,6 @@ private final class StackMachine
             replicate(baseStackHeight, tip, tip, continuationUsage)
           case _ => throw IllegalArgumentException("type error")
       case h: Handler =>
-        val eff = h.eff.normalized
         if reduceDown then
           h.input match
             case Return(v, _) =>
@@ -335,7 +332,7 @@ private final class StackMachine
           stack.push(
             HandlerEntry(
               stack.size,
-              h.copy(eff = eff, input = Hole),
+              h.copy(input = Hole),
               this.currentHandlerEntry,
             ),
           )
@@ -559,7 +556,7 @@ extension (v: VTerm)
         def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], SeqMap[VTerm, Boolean]) =
           ctx.withMetaResolved(tm):
             case Effects(literal, operands) =>
-              val literalsAndOperands: Seq[(Set[Eff], SeqMap[VTerm, Boolean])] =
+              val literalsAndOperands: Seq[(VTerm, SeqMap[VTerm, Boolean])] =
                 operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
               (
                 (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
@@ -661,8 +658,9 @@ given Reducible[CTerm] with
     (using signature: Signature)
     (using TypingContext)
     : CTerm =
-    // TODO[P0]: if the reduced term contains `Continuation`, then throw away the reduced term and
-    //  simply return t as it is. This is needed because `Continuation` is too hard to be lowered.
+    // TODO[P0]: if the reduced term contains `Continuation` or `HandlerKey`, then throw away the
+    //  reduced term and simply return t as it is. This is needed because `Continuation` is too hard
+    //  to be lowered.
     StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
 
 object Reducible:

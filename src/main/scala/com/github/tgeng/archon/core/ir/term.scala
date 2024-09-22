@@ -2,14 +2,11 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.EqDecidability.*
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.Usage.*
-import com.github.tgeng.archon.core.ir.VTerm.EqDecidabilityLiteral
 
 import scala.annotation.targetName
-import scala.collection.immutable.SeqMap
-import scala.collection.immutable.MultiSet
+import scala.collection.immutable.{MultiSet, SeqMap}
 
 // TODO[P2]: Replace all Set with SeqSet so that type checking become deterministic after
 //  https://github.com/scala/scala-library-next/issues/22 is resolved
@@ -28,28 +25,13 @@ object Binding:
   def apply(ty: VTerm, usage: Usage = Usage.UAny)(name: Ref[Name]): Binding[VTerm] =
     new Binding(ty, VTerm.UsageLiteral(usage))(name)
 
+/** Heap key is simply a unique value that identifies a handler.
+  */
+class HandlerKey
+
 /** Head is on the left, e.g. Z :: S Z :: []
   */
 type Arguments = List[VTerm]
-
-/** A type is eqDecidable if the equality of its inhabitants can be efficiently determined at
-  * runtime. That is, a type is not eqDecidable if its inhabitants
-  *   - contain thunks because in general there is no way to decide equality of computations
-  *   - contain erased parts whose equality can not be derived from non-erased parts and hence there
-  *     is no way to decide equality at runtime
-  *
-  * The primary purpose of this type is to limit what types are allowed as args to effects.
-  * Efficient methods of deciding equality is needed for runtime handler resolution.
-  *
-  * In future, it's also likely that we can introduce some built-in hashing data structure that can
-  * leverage this as a bound for the key type.
-  */
-enum EqDecidability:
-  case EqDecidable, EqUnknown
-
-  infix def |(that: EqDecidability): EqDecidability = (this, that) match
-    case (EqDecidable, _) | (_, EqDecidable) => EqDecidable
-    case _                                   => EqUnknown
 
 enum HandlerType extends Ordered[HandlerType]:
   /** No continuation is captured, execution simply progresses. The continuation usage can be U0,
@@ -262,12 +244,9 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // linearity for linear types. Also, 0 usage still effectively erases compile-only terms. In
   // addition, some transparent optimization (like in-place update, proactive free, etc) can be done
   // on unrestricted types that are used linearly.
-  case Top
-    (
-      level: VTerm,
-      eqDecidability: VTerm = EqDecidabilityLiteral(EqUnknown),
-    )
-    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo), QualifiedNameOwner(TopQn)
+  case Top(level: VTerm)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo),
+    QualifiedNameOwner(TopQn)
 
   case Var(idx: Nat)(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
@@ -311,31 +290,15 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   case UsageJoin(operands: Set[VTerm])(using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     UsageCompound(operands)
-  case EqDecidabilityType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-  // It's possible to introduce `EqDecidabilityJoin` that signifies the decidability of some compound data consisting of
-  // multiple pieces of data, each of which has some parameterized decidability. However, such a construct does not seem
-  // to increase expressiveness because eqDecidability can only take two values and user can always just declare a
-  // single eqDecidability parameter and use this single parameter to constrain other parameters.
-  case EqDecidabilityLiteral(eqDecidability: EqDecidability)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
-
-  case HandlerTypeType()(using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
-  case HandlerTypeLiteral(handlerType: HandlerType)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
 
   /** @param continuationUsage
     *   see ContinuationUsage for explanation. The reason that we need this part to be a term
     *   instead of a literal usage is because this part needs to participate in usage tracking of
     *   following computations (aka continuation). Having a first-class value here makes definitions
     *   parametric in continuation usage.
-    * @param handlerType
-    *   see ContinuationUsage for explanation
     */
   case EffectsType
-    (
-      continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny),
-      handlerType: VTerm = VTerm.HandlerTypeLiteral(HandlerType.Complex),
-    )
+    (continuationUsage: VTerm = VTerm.UsageLiteral(Usage.UAny))
     (using sourceInfo: SourceInfo)
     extends VTerm(sourceInfo),
     QualifiedNameOwner(
@@ -344,7 +307,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
   case Effects
     (
-      literal: Set[Eff],
+      handlerKeys: Set[VTerm],
       unionOperands: SeqMap[
         VTerm,
         /* whether to filter out complex or non-linear effects. True means only retain simple linear effects */ Boolean,
@@ -364,6 +327,13 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (literal: LevelOrder, maxOperands: SeqMap[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  case HandlerKeyType(effect: Eff, handlerType: HandlerType)(using sourceInfo: SourceInfo)
+    extends VTerm(sourceInfo)
+
+  case HandlerKeyLiteral
+    (effect: Eff, handlerType: HandlerType, handlerKey: HandlerKey = HandlerKey())
+    extends VTerm(SourceInfo.SiEmpty)
+
   /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
     * replaced with `Collapse(Application...(Meta(...)))` and solved through meta-variable
     * unification.
@@ -373,14 +343,14 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
   // Note: during development, I once had devoted constructs for heap handler, alloc, set, and get
   // operations. But they are entirely redundant because one can just use a linear piece of data as
   // the storage and do the same with the general handler. In addition, the heap key concept is
-  // arbitrary and it can actually be substitued with a simple nat instead. The previous heap
+  // arbitrary and it can actually be substituted with a simple nat instead. The previous heap
   // handler basically does two things under the hood: heap allocation and using it. Since the old
   // implementation actually allocates stuff on the heap, the allocation part is non-deterministic.
   // So one either has to make the type checker to do some hard work to prevent the heap variable
-  // from being leaked or just add a non-deterministc effect to all heap handler creations. By
-  // simulating heap hander with general handler, the heap allocation (aka, heap key generation) can
-  // be a separate step. It can even be deterministically created so that a total computation can
-  // rely on mutable states under the hood.
+  // from being leaked or just add a non-deterministic effect to all heap handler creations. By
+  // simulating heap handler with general handler, the heap allocation (aka, heap key generation)
+  // can be a separate step. It can even be deterministically created so that a total computation
+  // can rely on mutable states under the hood.
 
   this match
     case UsageJoin(operands) if operands.isEmpty =>
@@ -394,7 +364,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
 
     this match
       case Type(upperBound)                => Type(upperBound)
-      case Top(l, eqD)                     => Top(l, eqD)
+      case Top(l)                          => Top(l)
       case Var(index)                      => Var(index)
       case Collapse(cTm)                   => Collapse(cTm)
       case U(cTy)                          => U(cTy)
@@ -406,12 +376,7 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case UsageProd(operands)             => UsageProd(operands)
       case UsageSum(operands)              => UsageSum(operands)
       case UsageJoin(operands)             => UsageJoin(operands)
-      case EqDecidabilityType()            => EqDecidabilityType()
-      case EqDecidabilityLiteral(eqD)      => EqDecidabilityLiteral(eqD)
-      case HandlerTypeType()               => HandlerTypeType()
-      case HandlerTypeLiteral(handlerType) => HandlerTypeLiteral(handlerType)
-      case EffectsType(continuationUsage, handlerType) =>
-        EffectsType(continuationUsage, handlerType)
+      case EffectsType(continuationUsage)  => EffectsType(continuationUsage)
       case Effects(literal, unionOperands) => Effects(literal, unionOperands)
       case LevelType(strictUpperBound)     => LevelType(strictUpperBound)
       case Level(literal, maxOperands)     => Level(literal, maxOperands)
@@ -424,12 +389,6 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     transformer.transformVTerm(this)
 
 object VTerm:
-
-  def Top
-    (t: VTerm, eqDecidability: VTerm = EqDecidabilityLiteral(EqDecidable))
-    (using SourceInfo)
-    : Top =
-    Top(t, eqDecidability)
 
   def UsageProd(operands: VTerm*)(using SourceInfo): VTerm =
     val (usages, terms) = separateUsageLiteralsFromRest(operands)
@@ -481,34 +440,24 @@ object VTerm:
   def LevelMax(ts: VTerm*): Level = Level(LevelOrder.zero, SeqMap(ts.map(_ -> 0)*))
 
   def Total()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(Set.empty)
-  val eqDecidable: VTerm = EqDecidabilityLiteral(EqDecidable)
-  val eqUnknown: VTerm = EqDecidabilityLiteral(EqUnknown)
   val total: Effects = EffectsLiteral(Set.empty)(using SourceInfo.SiEmpty)
   val u0: VTerm = VTerm.UsageLiteral(Usage.U0)
   val u1: VTerm = VTerm.UsageLiteral(Usage.U1)
   val uAff: VTerm = VTerm.UsageLiteral(Usage.UAff)
   val uRel: VTerm = VTerm.UsageLiteral(Usage.URel)
   val uAny: VTerm = VTerm.UsageLiteral(Usage.UAny)
-  val handlerSimple: VTerm = HandlerTypeLiteral(HandlerType.Simple)
-  val handlerComplex: VTerm = HandlerTypeLiteral(HandlerType.Complex)
+  val div: HandlerKeyLiteral = HandlerKeyLiteral((Builtins.DivQn, Nil), HandlerKey())
+  val globalKeys: Set[HandlerKeyLiteral] = Set(div)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
     * executed by the type checker.
     */
   def Div()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
-    Set((Builtins.DivQn, Nil), (Builtins.MaybeDivQn, Nil)),
+    Set(div),
   )
 
-  /** Marker of a computation that may or may not diverge. Computation with this effect will be
-    * further checked by statically at callsite (with additional information available) to ensure
-    * it's total before executed by the type checker.
-    */
-  def MaybeDiv()(using sourceInfo: SourceInfo): Effects = EffectsLiteral(
-    Set((Builtins.MaybeDivQn, Nil)),
-  )
-
-  def EffectsLiteral(effects: Set[Eff])(using sourceInfo: SourceInfo): Effects =
-    Effects(effects, SeqMap.empty)
+  def EffectsLiteral(handlerKeys: Set[VTerm])(using sourceInfo: SourceInfo): Effects =
+    Effects(handlerKeys, SeqMap.empty)
 
   def EffectsUnion(effects: VTerm*): Effects =
     Effects(Set.empty, SeqMap(effects.map(_ -> false)*))
@@ -620,8 +569,9 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType, QualifiedNameOwner(qn)
 
-  case OperationCall(eff: VTerm, name: Name, args: Arguments = Nil)(using sourceInfo: SourceInfo)
-    extends CTerm(sourceInfo)
+  case OperationCall
+    (effInstance: VTerm, name: Name, args: Arguments = Nil)
+    (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   /** Internal only. This is only created by reduction.
     *
@@ -633,10 +583,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   case Continuation(continuationTerm: Handler, continuationUsage: Usage) extends CTerm(SiEmpty)
 
   /** @param eff
-    *   Handle general term here instead of some effect literals. During type checking it will fail
-    *   if this term is not convertible to some effect literals. The ability to handle multiple
-    *   effects is useful when one needs to use a linear resource (as parameter to the handler) with
-    *   multiple effects.
+    *   The effect this handler is supposed to handle.
     * @param otherEffects
     *   the effect of the input term without effects being handled by this handler
     * @param handlerEffects
@@ -676,10 +623,14 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     *   All handler implementations declared by the effect. Each handler is essentially a function
     *   body that takes some parameters and return a value, depending on the continuation usage of
     *   the operation. See [[HandlerImpl]] for details.
+    * @param handlerKey
+    *   The so-called "instance variable" in [3]. It's empty initially and populated during
+    *   reduction. Handler matching is done through this variable.
     */
+
   case Handler
     (
-      eff: VTerm,
+      eff: Eff,
       otherEffects: VTerm,
       handlerEffects: VTerm,
       outputUsage: VTerm,
@@ -692,6 +643,10 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       handlers: SeqMap[ /* name identifying an effect operation */ QualifiedName, HandlerImpl],
       input: CTerm,
       inputBinding: Binding[VTerm],
+      // TODO[P1]: figure out how to compile this to a pointer to the handler directly so that at
+      //  runtime there won't be any label matching. Invoking simple effects should be as simple as
+      //  dereferencing a pointer.
+      handlerKey: Option[HandlerKey] = None,
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
@@ -771,4 +726,7 @@ object CTerm:
  [1]  Danel Ahman. 2017. Handling fibred algebraic effects. Proc. ACM Program. Lang. 2, POPL,
       Article 7 (January 2018), 29 pages. DOI:https://doi.org/10.1145/3158095
  [2]  Norell, Ulf. “Towards a practical programming language based on dependent type theory.” (2007).
+ [3]  Dariusz Biernacki, Maciej Piróg, Piotr Polesiuk, and Filip Sieczkowski. 2019. Binders by day,
+      labels by night: effect instances via lexically scoped handlers. Proc. ACM Program. Lang. 4,
+      POPL, Article 48 (January 2020), 29 pages. https://doi.org/10.1145/3371116
  */

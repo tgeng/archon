@@ -70,7 +70,7 @@ def collectUsages
             val data = Σ.getData(qn)
             val constructor = Σ.getConstructor(qn, name)
             val telescope =
-              constructor.paramTys.map(_.substLowers((dArgs.take(data.context.size))*))
+              constructor.paramTys.map(_.substLowers(dArgs.take(data.context.size)*))
             collectArgsUsages(args, telescope)
           case ty => throw IllegalStateException(s"bad type, expect data type but got $ty")
       case UsageType(upperBound) =>
@@ -168,7 +168,7 @@ def collectUsages
             case (_, Nil) => Usages.zero
             case (r @ RecordType(qn, args, _), Elimination.EProj(name) :: elims) =>
               val field = Σ.getField(qn, name)
-              val fieldTy = field.ty.substLowers((args :+ Thunk(r))*)
+              val fieldTy = field.ty.substLowers(args :+ Thunk(r)*)
               impl(fieldTy, elims)
             case (FunctionType(binding, bodyTy, _), Elimination.ETerm(arg) :: elims) =>
               collectUsages(arg, Some(binding.ty)) * binding.usage + impl(

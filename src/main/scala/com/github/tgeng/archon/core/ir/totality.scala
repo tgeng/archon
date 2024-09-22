@@ -33,5 +33,5 @@ def isTotal
         val effects = ctx.solveTerm(ty.asInstanceOf[IType].effects)
         if effects == Total()(using SourceInfo.SiEmpty) then true
         // TODO: use heuristics to determine if a term is total
-        else if effects == MaybeDiv()(using SourceInfo.SiEmpty) then true
+        else if effects == Div()(using SourceInfo.SiEmpty) then true
         else false

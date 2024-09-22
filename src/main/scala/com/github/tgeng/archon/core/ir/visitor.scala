@@ -133,7 +133,7 @@ trait TermVisitor[C, R]:
 
   def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
     combine(
-      (effects.literal.map(visitEff) ++ effects.unionOperands.keys.map(
+      (effects.handlerKeys.map(visitVTerm) ++ effects.unionOperands.keys.map(
         visitVTerm,
       )).toSeq*,
     )
@@ -688,7 +688,7 @@ trait Transformer[C]:
     effectsType
 
   def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm = Effects(
-    effects.literal.map { (qn, args) => (qn, args.map(transformVTerm)) },
+    effects.handlerKeys.map(transformVTerm),
     effects.unionOperands.map((k, v) => (transformVTerm(k), v)),
   )(using effects.sourceInfo)
 

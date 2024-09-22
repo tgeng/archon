@@ -341,7 +341,7 @@ def inferType
           // loaded from handlers and hence there is no way to statically detect cyclic references
           // between computations (functions, etc) unless I make the type system even more
           // complicated to somehow tracking possible call-hierarchy.
-          case U(cty) => augmentEffect(MaybeDiv(), cty)
+          case U(cty) => augmentEffect(Div(), cty)
           case _      => throw ExpectUType(vTy)
         (Force(v), cTy)
       case F(uncheckedVTy, uncheckedEffects, uncheckedUsage) =>

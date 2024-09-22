@@ -109,7 +109,6 @@ object Builtins:
   val AllocOpQn: QualifiedName = HeapEffQn / "alloc"
   val GetOpQn: QualifiedName = HeapEffQn / "get"
   val SetOpQn: QualifiedName = HeapEffQn / "set"
-  val GlobalHeapKeyQn: QualifiedName = HeapEffQn / "global"
   val EffectsUnionQn: QualifiedName = BuiltinEffects / "union"
   val EffectsRetainSimpleLinearQn: QualifiedName = BuiltinEffects / "retainSimpleLinear"
   val TotalQn: QualifiedName = BuiltinEffects / "total"
@@ -136,7 +135,6 @@ object Builtins:
     elaborateAll(builtins)(using Context.empty)(using SimpleSignature())
 
   import CTerm.*
-  import EqDecidability.*
   import PreDeclaration.*
   import Usage.*
   import VTerm.*

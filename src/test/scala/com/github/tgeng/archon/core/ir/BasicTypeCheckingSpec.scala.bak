@@ -31,10 +31,10 @@ class BasicTypeCheckingSpec extends SignatureSpec {
     0L ⋠ 1L
 
     HeapType hasType Type(0L)
-    Heap(GlobalHeapKey) hasType HeapType
+    Heap(GlobalHandlerKey) hasType HeapType
 
-    CellType(Heap(GlobalHeapKey), LevelType, CellStatus.Uninitialized) hasType Type(UωLevel(0))
-    CellType(Heap(GlobalHeapKey), LevelType, CellStatus.Uninitialized) doesNotHaveType Type(0L)
+    CellType(Heap(GlobalHandlerKey), LevelType, CellStatus.Uninitialized) hasType Type(UωLevel(0))
+    CellType(Heap(GlobalHandlerKey), LevelType, CellStatus.Uninitialized) doesNotHaveType Type(0L)
 
     EqualityType(LevelType, 0L, 0L) doesNotHaveType Type(0L)
     EqualityType(LevelType, 0L, 0L) hasType Type(UωLevel(0))
@@ -43,8 +43,8 @@ class BasicTypeCheckingSpec extends SignatureSpec {
 
     EqualityType(
       EffectsType,
-      HeapEffQn(Heap(GlobalHeapKey)),
-      HeapEffQn(Heap(GlobalHeapKey)),
+      HeapEffQn(Heap(GlobalHandlerKey)),
+      HeapEffQn(Heap(GlobalHandlerKey)),
     ) hasType Type(0L)
 
     F(LevelType) hasType Type(UωLevel(0))

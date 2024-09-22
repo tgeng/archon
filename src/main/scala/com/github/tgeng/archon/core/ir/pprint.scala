@@ -375,10 +375,10 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     Block(Concat, NoWrap, con.name, bracketAndComma(con.args.map(visitVTerm)))
 
   override def visitEffects(effects: Effects)(using ctx: PPrintContext)(using Σ: Signature): Block =
-    if effects.literal.isEmpty && effects.unionOperands.isEmpty then Block("total")
+    if effects.handlerKeys.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp):
-        (effects.literal.map(visitEff) ++ effects.unionOperands.map((k, v) =>
+        (effects.handlerKeys.map(visitVTerm) ++ effects.unionOperands.map((k, v) =>
           (if v then "$" else "") + visitVTerm(k),
         )) sepBy "|"
 
@@ -531,7 +531,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = app(
-    Block(operationCall.name, "@", visitVTerm(operationCall.eff)),
+    Block(operationCall.name, "@", visitVTerm(operationCall.effInstance)),
     operationCall.args.map(visitVTerm),
   )
 
@@ -563,7 +563,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     val (statements, input) = unroll[Block, CTerm](handler):
       // TODO[P2]: print the extra effect and output type annotations
       case h @ Handler(
-          effTm,
+          eff,
           otherEffects,
           outputEffects,
           outputUsage,
@@ -576,6 +576,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           handlers,
           input,
           inputBinding,
+          handlerKey,
         ) =>
         Left(
           (
@@ -583,7 +584,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
               Whitespace,
               NoWrap,
               ".handler",
-              visitVTerm(effTm),
+              visitEff(eff),
               handlerDefinition(
                 h.parameterBinding.name,
                 Block(
