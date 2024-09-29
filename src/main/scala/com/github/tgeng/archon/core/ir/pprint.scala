@@ -334,14 +334,9 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     Block(Concat, "#", p.name)
 
   override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
-    case Type(Top(Level(l, operands), _)) if operands.isEmpty =>
+    case Type(Top(Level(l, operands))) if operands.isEmpty =>
       Block("Type" + l.sub)
-    case Type(Top(l, EqDecidabilityLiteral(EqDecidability.EqDecidable))) =>
-      app("Type", l)
-    case Type(Top(l, EqDecidabilityLiteral(EqDecidability.EqUnknown))) =>
-      app("Type?", l)
-    case Type(Top(l, eqD)) => app("Type", l, "withEqDecidability", eqD)
-    case Type(upperBound)  => app("TypeOf", upperBound)
+    case Type(upperBound) => app("TypeOf", upperBound)
 
   override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
     top.level match

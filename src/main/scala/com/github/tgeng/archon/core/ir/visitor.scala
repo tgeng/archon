@@ -42,11 +42,6 @@ trait TermVisitor[C, R]:
     case usageProd: UsageProd                   => visitUsageProd(usageProd)
     case usageSum: UsageSum                     => visitUsageSum(usageSum)
     case usageJoin: UsageJoin                   => visitUsageJoin(usageJoin)
-    case eqDecidabilityType: EqDecidabilityType => visitEqDecidabilityType(eqDecidabilityType)
-    case eqDecidabilityLiteral: EqDecidabilityLiteral =>
-      visitEqDecidabilityLiteral(eqDecidabilityLiteral)
-    case handlerTypeType: HandlerTypeType       => visitHandlerTypeType(handlerTypeType)
-    case handlerTypeLiteral: HandlerTypeLiteral => visitHandlerTypeLiteral(handlerTypeLiteral)
     case effectsType: EffectsType               => visitEffectsType(effectsType)
     case effects: Effects                       => visitEffects(effects)
     case levelType: LevelType                   => visitLevelType(levelType)
@@ -58,7 +53,6 @@ trait TermVisitor[C, R]:
 
   def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
     visitVTerm(top.level),
-    visitVTerm(top.eqDecidability),
   )
 
   def visitVar(v: Var)(using ctx: C)(using Σ: Signature): R = combine()
@@ -99,34 +93,6 @@ trait TermVisitor[C, R]:
 
   def visitUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): R =
     combine(usageJoin.operands.map(visitVTerm).toSeq*)
-
-  def visitEqDecidabilityType
-    (eqDecidabilityType: EqDecidabilityType)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    visitQualifiedName(Builtins.EqDecidabilityQn)
-
-  def visitEqDecidabilityLiteral
-    (eqDecidabilityLiteral: EqDecidabilityLiteral)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    eqDecidabilityLiteral.eqDecidability match
-      case EqDecidability.EqDecidable => visitQualifiedName(Builtins.EqDecidableQn)
-      case EqDecidability.EqUnknown   => visitQualifiedName(Builtins.EqUnknownQn)
-
-  def visitHandlerTypeType(handlerTypeType: HandlerTypeType)(using ctx: C)(using Σ: Signature): R =
-    visitQualifiedName(Builtins.HandlerTypeQn)
-
-  def visitHandlerTypeLiteral
-    (handlerTypeLiteral: HandlerTypeLiteral)
-    (using ctx: C)
-    (using Σ: Signature)
-    : R =
-    handlerTypeLiteral.handlerType match
-      case HandlerType.Simple  => visitQualifiedName(Builtins.HtSimpleQn)
-      case HandlerType.Complex => visitQualifiedName(Builtins.HtComplexQn)
 
   def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R =
     visitQualifiedName(Builtins.EffectsQn)
@@ -227,7 +193,7 @@ trait TermVisitor[C, R]:
 
   def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitVTerm(operationCall.eff) +:
+      visitVTerm(operationCall.effInstance) +:
         visitName(operationCall.name) +:
         operationCall.args.map(visitVTerm)*,
     )
@@ -238,7 +204,7 @@ trait TermVisitor[C, R]:
   def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
     combine(
       Seq(
-        visitVTerm(handler.eff),
+        visitEff(handler.eff),
         visitVTerm(handler.parameter),
         visitBinding(handler.parameterBinding),
       ) ++ handler.parameterDisposer.map(t =>
@@ -598,13 +564,6 @@ trait Transformer[C]:
       case usageSum: UsageSum                     => transformUsageSum(usageSum)
       case usageJoin: UsageJoin                   => transformUsageJoin(usageJoin)
       case usageType: UsageType                   => transformUsageType(usageType)
-      case eqDecidabilityType: EqDecidabilityType => transformEqDecidabilityType(eqDecidabilityType)
-      case eqDecidabilityLiteral: EqDecidabilityLiteral =>
-        transformEqDecidabilityLiteral(
-          eqDecidabilityLiteral,
-        )
-      case handlerTypeType: HandlerTypeType       => transformHandlerTypeType(handlerTypeType)
-      case handlerTypeLiteral: HandlerTypeLiteral => transformHandlerTypeLiteral(handlerTypeLiteral)
       case effectsType: EffectsType               => transformEffectsType(effectsType)
       case effects: Effects                       => transformEffects(effects)
       case levelType: LevelType                   => transformLevelType(levelType)
@@ -616,7 +575,6 @@ trait Transformer[C]:
 
   def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(
     transformVTerm(top.level),
-    transformVTerm(top.eqDecidability),
   )(using top.sourceInfo)
 
   def transformVar(v: Var)(using ctx: C)(using Σ: Signature): VTerm = v
@@ -658,31 +616,6 @@ trait Transformer[C]:
   def transformUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): VTerm = UsageJoin(
     usageJoin.operands.map(transformVTerm),
   )
-
-  def transformEqDecidabilityType
-    (eqDecidabilityType: EqDecidabilityType)
-    (using ctx: C)
-    (using Σ: Signature)
-    : VTerm =
-    eqDecidabilityType
-
-  def transformEqDecidabilityLiteral
-    (eqDecidabilityLiteral: EqDecidabilityLiteral)
-    (using ctx: C)
-    (using Σ: Signature)
-    : VTerm = eqDecidabilityLiteral
-
-  def transformHandlerTypeType
-    (handlerTypeType: HandlerTypeType)
-    (using ctx: C)
-    (using Σ: Signature)
-    : VTerm = handlerTypeType
-
-  def transformHandlerTypeLiteral
-    (handlerTypeLiteral: HandlerTypeLiteral)
-    (using ctx: C)
-    (using Σ: Signature)
-    : VTerm = handlerTypeLiteral
 
   def transformEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): VTerm =
     effectsType
@@ -792,7 +725,7 @@ trait Transformer[C]:
     (using Σ: Signature)
     : CTerm =
     OperationCall(
-      transformVTerm(operationCall.eff),
+      transformVTerm(operationCall.effInstance),
       transformName(operationCall.name),
       operationCall.args.map(transformVTerm),
     )(using operationCall.sourceInfo)
@@ -802,7 +735,7 @@ trait Transformer[C]:
 
   def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
     Handler(
-      transformVTerm(handler.eff),
+      transformEff(handler.eff),
       transformVTerm(handler.otherEffects),
       transformVTerm(handler.handlerEffects),
       transformVTerm(handler.outputUsage),

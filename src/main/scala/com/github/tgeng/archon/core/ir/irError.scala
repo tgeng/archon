@@ -102,4 +102,5 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
     extends IrError(Γ)
   case InternalIrError(message: String)(using Γ: Context) extends IrError(Γ)
   case ComplexOperationCall(call: CTerm.OperationCall)(using Γ: Context) extends IrError(Γ)
+  case ExpectEffectInstance(badEffInstance: VTerm)(using Γ: Context) extends IrError(Γ)
   override def getMessage: String = verbosePPrinter.apply(this).plainText

@@ -36,7 +36,7 @@ def checkIsConvertible
         if operands1.exists((v, _) => isMeta(v)) || operands2.exists((v, _) => isMeta(v))
         then Set(Constraint.VConversion(Γ, left, right, ty))
         else throw NotVConvertible(left, right, ty)
-      case (Effects(_, operands1), Effects(_, operands2), Some(EffectsType(_, _))) =>
+      case (Effects(_, operands1), Effects(_, operands2), Some(EffectsType(_))) =>
         // If meta some component is not reduced yet, we can't check subsumption
         if operands1.keys.exists(isMeta) || operands2.keys.exists(isMeta)
         then Set(Constraint.VConversion(Γ, left, right, ty))
@@ -53,16 +53,13 @@ def checkIsConvertible
         else throw NotVConvertible(left, right, ty)
       case (Type(upperBound1), Type(upperBound2), _) =>
         checkIsConvertible(upperBound1, upperBound2, None)
-      case (ty, Top(level2, eqD2), _) =>
+      case (ty, Top(level2), _) =>
         val level1 = inferLevel(ty)
-        val levelConstraints = checkIsConvertible(
+        checkIsConvertible(
           level1,
           level2,
           Some(LevelType(LevelOrder.upperBound)),
         )
-        val eqD1 = inferEqDecidability(ty)
-        val eqDecidabilityConstraints = checkIsConvertible(eqD1, eqD2, Some(EqDecidabilityType()))
-        levelConstraints ++ eqDecidabilityConstraints
       case (U(cty1), U(cty2), _) => checkIsConvertible(cty1, cty2, None)
       case (Thunk(c1), Thunk(c2), Some(U(ty))) =>
         checkIsConvertible(c1, c2, Some(ty))
@@ -288,7 +285,7 @@ def checkIsConvertible
             ) if name1 == name2 =>
             val effConstraint = checkIsConvertible(effInstance1, effInstance2, Some(EffectsType()))
             val (qn, tArgs) = inferType(effInstance1)._1 match
-              case HandlerKeyType(eff) => eff
+              case HandlerKeyType(eff, _) => eff
               case _                   => throw ComplexOperationCall(op2)
             val operation = Σ.getOperation(qn, name1)
             var args = IndexedSeq[VTerm]()

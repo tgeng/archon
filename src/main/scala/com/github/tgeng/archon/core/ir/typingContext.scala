@@ -489,9 +489,7 @@ class TypingContext
               ty match
                 case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
                 case F(UsageType(_), _, u)                        => Return(uAny, u)
-                case F(EffectsType(_, _), _, u)                   => Return(total, u)
-                case F(EqDecidabilityType(), _, u)                => Return(eqDecidable, u)
-                case F(HandlerTypeType(), _, u)                   => Return(handlerSimple, u)
+                case F(EffectsType(_), _, u)                      => Return(total, u)
                 // TODO[P2]: implement proof/instance search here.
                 case _ => ()
             case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
@@ -578,10 +576,6 @@ class TypingContext
         checkLevelSubsumption(sub, sup)(using context)
       case Constraint.UsageSubsumption(context, sub, sup) =>
         checkUsageSubsumption(sub, sup)(using context)
-      case Constraint.EqDecidabilitySubsumption(context, sub, sup) =>
-        checkEqDecidabilitySubsumption(sub, sup)(using context)
-      case Constraint.HandlerTypeSubsumption(context, sub, sup) =>
-        checkHandlerTypeSubsumption(sub, sup)(using context)
 
   @throws(classOf[IrError])
   inline def trace[R]

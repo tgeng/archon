@@ -162,7 +162,7 @@ object Builtins:
       ),
       ty = FunctionType(
         Binding(Var(1))(n"y"),
-        F(Type(Top(Var(3), EqDecidabilityLiteral(EqDecidable)))),
+        F(Type(Top(Var(3)))),
       ),
       constructors = List(
         PreConstructor(n"Refl", F(DataType(EqualityQn, List(Var(2), Var(1), Var(0), Var(0))))),
@@ -172,19 +172,18 @@ object Builtins:
       PairQn,
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
-        (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
         (binding(n"usage1", UsageType(Some(u1))), Variance.INVARIANT),
-        (binding(n"A1", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
+        (binding(n"A1", Type(Top(Var(1)))), Variance.COVARIANT),
         (binding(n"usage2", UsageType(Some(u1))), Variance.INVARIANT),
-        (binding(n"A2", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
+        (binding(n"A2", Type(Top(Var(3)))), Variance.COVARIANT),
       ),
-      ty = F(Type(Top(Var(5), Var(4)))),
+      ty = F(Type(Top(Var(4)))),
       constructors = List(
         PreConstructor(
           n"MkPair",
           FunctionType(
             Binding(Var(2), Var(3))(n"x"),
-            FunctionType(Binding(Var(1), Var(2))(n"y"), F(DataType(PairQn, vars(7, 2)))),
+            FunctionType(Binding(Var(1), Var(2))(n"y"), F(DataType(PairQn, vars(6, 2)))),
           ),
         ),
       ),
@@ -193,21 +192,20 @@ object Builtins:
       EitherQn,
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
-        (binding(n"eqDec", EqDecidabilityType()), Variance.INVARIANT),
         (binding(n"usageL", UsageType(Some(u1))), Variance.INVARIANT),
-        (binding(n"AL", Type(Top(Var(2), Var(1)))), Variance.COVARIANT),
+        (binding(n"AL", Type(Top(Var(1)))), Variance.COVARIANT),
         (binding(n"usageR", UsageType(Some(u1))), Variance.INVARIANT),
-        (binding(n"AR", Type(Top(Var(4), Var(3)))), Variance.COVARIANT),
+        (binding(n"AR", Type(Top(Var(3)))), Variance.COVARIANT),
       ),
-      ty = F(Type(Top(Var(5), Var(4)))),
+      ty = F(Type(Top(Var(4)))),
       constructors = List(
         PreConstructor(
           n"Left",
-          FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(6, 1)))),
+          FunctionType(Binding(Var(2), Var(3))(n"value"), F(DataType(EitherQn, vars(5, 1)))),
         ),
         PreConstructor(
           n"Right",
-          FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(6, 1)))),
+          FunctionType(Binding(Var(0), Var(1))(n"value"), F(DataType(EitherQn, vars(5, 1)))),
         ),
       ),
     ),
@@ -299,7 +297,6 @@ object Builtins:
                 PairQn,
                 List(
                   Var(12),
-                  EqDecidabilityLiteral(EqUnknown),
                   Var(10),
                   U(RecordType(ContinuationQn, vars(12, 3))),
                   Var(10),
@@ -682,16 +679,11 @@ object Builtins:
       Nil,
       Nil,
       Return(u0, uAny),
-      Return(HandlerTypeLiteral(HandlerType.Simple), uAny),
     ),
     PreEffect(
       MaybeDivQn,
       Nil,
       Nil,
       Return(uAff, uAny),
-      Return(HandlerTypeLiteral(HandlerType.Simple), uAny),
     ),
   )
-
-  private def b[T](qn: QualifiedName, f: SourceInfo ?=> T): (QualifiedName, T) =
-    (qn, f(using SourceInfo.SiEmpty))

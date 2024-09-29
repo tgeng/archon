@@ -3,6 +3,7 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.HandlerType.Simple
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
@@ -45,14 +46,10 @@ def collectUsages
   ):
     tm match
       case Type(upperBound) => collectUsages(upperBound, None)
-      case Top(level, eqDecidability) =>
-        collectUsages(level, Some(LevelType())) + collectUsages(
-          eqDecidability,
-          Some(EqDecidabilityType()),
-        )
-      case v: Var        => Usages.single(v)
-      case Collapse(ctm) => collectUsages(ctm, ty.map(F(_, Total(), uAny)))
-      case U(cty)        => collectUsages(cty, None)
+      case Top(level)       => collectUsages(level, Some(LevelType()))
+      case v: Var           => Usages.single(v)
+      case Collapse(ctm)    => collectUsages(ctm, ty.map(F(_, Total(), uAny)))
+      case U(cty)           => collectUsages(cty, None)
       case Thunk(ctm) =>
         collectUsages(
           ctm,
@@ -82,15 +79,17 @@ def collectUsages
         operands.toSeq.map(collectUsages(_, Some(UsageType()))).fold(Usages.zero)(_ + _)
       case UsageJoin(operands) =>
         operands.map(collectUsages(_, Some(UsageType()))).fold(Usages.zero)(_ + _)
-      case EqDecidabilityType()     => Usages.zero
-      case EqDecidabilityLiteral(_) => Usages.zero
-      case HandlerTypeType()        => Usages.zero
-      case HandlerTypeLiteral(_)    => Usages.zero
-      case EffectsType(continuationUsage, handlerType) =>
-        collectUsages(continuationUsage, Some(UsageType())) +
-          collectUsages(handlerType, Some(HandlerTypeType()))
-      case Effects(literal, unionOperands) =>
-        literal.map(collectEffUsages).fold(Usages.zero)(_ + _) +
+      case EffectsType(continuationUsage) => collectUsages(continuationUsage, Some(UsageType()))
+      case Effects(effectInstances, unionOperands) =>
+        effectInstances
+          // The type here doesn't matter because in nowhere is this type used to direct usage collection.
+          .map(
+            collectUsages(
+              _,
+              Some(HandlerKeyType((Builtins.DivQn, Nil), HandlerConstraint(Usage.U1, Simple))),
+            ),
+          )
+          .fold(Usages.zero)(_ + _) +
           unionOperands.keys.map(collectUsages(_, Some(EffectsType()))).fold(Usages.zero)(_ + _)
       case LevelType(_) => Usages.zero
       case Level(_, maxOperands) =>
@@ -151,16 +150,16 @@ def collectUsages
             checkUsageSubsumption(actualTUsage, tBinding.usage),
             NotUsageSubsumption(actualTUsage, tBinding.usage),
           )
-          bodyUsages.dropRight(1)
+          bodyUsages.dropRight(1).map { t =>
+            // A variable's usage may reference the variable bound to the value returned from `t`. In
+            // this case, strength would fail and the referenced usage can take any value. Hence, we
+            // just approximate it with `uAny`.
+            try t.strengthened
+            catch case _: StrengthenException => uAny
+          }
         }
         val continuationUsage = getEffectsContinuationUsage(eff)
-        tUsages + bodyUsages.map { t =>
-          // A variable's usage may reference the variable bound to the value returned from `t`. In
-          // this case, strength would fail and the referenced usage can take any value. Hence, we
-          // just approximate it with `uAny`.
-          try t.strengthened
-          catch case _: StrengthenException => uAny
-        } * continuationUsage
+        tUsages + bodyUsages * continuationUsage
       case Redex(t, elims) =>
         val (_, ty) = inferType(t)
         def impl(ty: CTerm, elims: List[Elimination[VTerm]]): Usages =
@@ -194,10 +193,9 @@ def collectUsages
         val record = Σ.getRecord(qn)
         collectArgsUsages(args, record.context.map(_._1).toList) +
           collectUsages(effects, Some(EffectsType()))
-      case OperationCall(eff, name, args) =>
-        val (qn, tArgs) = eff match
-          case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
-            literals.head
+      case OperationCall(effectInstance, name, args) =>
+        val (qn, tArgs) = inferType(effectInstance)._1 match
+          case HandlerKeyType(eff, _) => eff
           case _ =>
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
@@ -206,7 +204,7 @@ def collectUsages
         collectArgsUsages(args, operation.paramTys.substLowers(tArgs*))
       case Continuation(_, _) => Usages.zero
       case Handler(
-          eff: VTerm,
+          eff: Eff,
           otherEffects: VTerm,
           handlerEffects: VTerm,
           outputUsage: VTerm,
@@ -219,33 +217,51 @@ def collectUsages
           handlers: SeqMap[QualifiedName, HandlerImpl],
           input: CTerm,
           inputBinding: Binding[VTerm],
+          _: Option[HandlerKey],
         ) =>
-        val effs = eff.normalized match
-          case Effects(effs, s) if s.isEmpty => effs
-          case _                             => throw EffectTermTooComplex(eff)
-        val handlerUsages = effs
-          .flatMap { case (qn, tArgs) =>
-            Σ.getOperations(qn).map { (op: Operation) =>
-              val opTelescope = op.paramTys.substLowers(tArgs*)
-              val opQn = qn / op.name
-              val handler = handlers(opQn)
-              val handlerTelescope = handler.handlerConstraint match
-                case HandlerConstraint(_, HandlerType.Simple) => parameterBinding +: opTelescope
-                case HandlerConstraint(_, HandlerType.Complex) =>
-                  parameterBinding +: opTelescope :+
-                    Binding(handler.continuationType.get, u1)(gn"continuation")
-              val handlerUsages =
-                collectUsages(handler.body, Some(handler.bodyTy))(using Γ ++ handlerTelescope)
-              partiallyVerifyUsages(handlerUsages, handlerTelescope)
-            }
+        val (qn, tArgs) = eff
+        val handlerUsages = Σ
+          .getOperations(qn)
+          .map { (op: Operation) =>
+            val opTelescope = op.paramTys.substLowers(tArgs*)
+            val opQn = qn / op.name
+            val handler = handlers(opQn)
+            val handlerTelescope = handler.handlerConstraint match
+              case HandlerConstraint(_, HandlerType.Simple) => parameterBinding +: opTelescope
+              case HandlerConstraint(_, HandlerType.Complex) =>
+                parameterBinding +: opTelescope :+
+                  Binding(handler.continuationType.get, u1)(gn"continuation")
+            val handlerUsages =
+              collectUsages(handler.body, Some(handler.bodyTy))(using Γ ++ handlerTelescope)
+            partiallyVerifyUsages(handlerUsages, handlerTelescope)
           }
           .fold(Usages.zero)(_ + _)
+
         val parameterUsages =
           collectUsages(parameter, Some(parameterBinding.ty)) * parameterBinding.usage
+        val inputΓ = Γ :+ Binding(
+          HandlerKeyType(
+            eff,
+            handlers.values.foldLeft(HandlerConstraint(Usage.U1, HandlerType.Simple))((c, impl) =>
+              c | impl.handlerConstraint,
+            ),
+          ),
+        )(gn"e")
+        val inputEffects =
+          Effects(Set(Var(0)), SeqMap(otherEffects.weakened /* for effect instance */ -> false))
+            .normalized(using inputΓ)
         val inputUsages = collectUsages(
           input,
-          Some(F(inputBinding.ty, EffectsUnion(eff, otherEffects).normalized, inputBinding.usage)),
-        )
+          Some(
+            F(
+              inputBinding.ty.weakened,
+              inputEffects,
+              inputBinding.usage.weakened,
+            ),
+          ),
+        )(using inputΓ).dropRight(1).map { t =>
+          t.strengthened // safe since the last binding is effect instance.
+        }
         val transformTelescope = List(parameterBinding, inputBinding.weakened)
         val transformUsages =
           partiallyVerifyUsages(
@@ -284,7 +300,6 @@ def collectUsages
                         Builtins.PairQn,
                         List(
                           LevelUpperBound(),
-                          EqDecidabilityLiteral(EqDecidability.EqUnknown),
                           parameterBinding.usage,
                           parameterBinding.ty,
                           parameterBinding.usage,

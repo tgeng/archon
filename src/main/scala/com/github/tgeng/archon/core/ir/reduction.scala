@@ -57,11 +57,11 @@ private final class StackMachine
   private var currentHandlerEntry: Option[HandlerEntry] = None
   @tailrec
   private def getMatchingHandler
-    (effAndArgs: Eff, start: Option[HandlerEntry] = currentHandlerEntry)
+    (handlerKey: HandlerKey, start: Option[HandlerEntry] = currentHandlerEntry)
     : HandlerEntry =
     val current = start.getOrElse(throw IllegalStateException("type error: no more handlers"))
-    if current.handler.eff == effAndArgs then current
-    else getMatchingHandler(effAndArgs, current.previous)
+    if current.handler.handlerKey.contains(handlerKey) then current
+    else getMatchingHandler(handlerKey, current.previous)
 
   /** @param pc
     *   "program counter"
@@ -240,20 +240,17 @@ private final class StackMachine
               case EProj(n) => EProj(n)
             stack.pushAll(normalizedElims)
             run(t)
-      case OperationCall(opEff, name, rawArgs) =>
-        val effAndArgs = inferType(opEff)._1 match
-          case HandlerKeyType(eff) => eff
-          case _ =>
-            throw IllegalStateException(
-              "operation should have been type checked and verified to be simple before reduction",
-            )
+      case OperationCall(effInstance, name, rawArgs) =>
+        val (effAndArgs, _, handlerKey) = effInstance match
+          case HandlerKeyLiteral(eff, handlerType, handlerKey) => (eff, handlerType, handlerKey)
+          case _ => throw IllegalStateException(s"Bad operation call with effInstance $effInstance")
         val (effQn, rawEffArgs) = effAndArgs
         Σ.getEffectOption(effQn) match
           case None => throw MissingDeclaration(effQn)
           case Some(eff) =>
             val effArgs = rawEffArgs.normalized
             val args = rawArgs.normalized
-            val matchingHandler = getMatchingHandler(effAndArgs)
+            val matchingHandler = getMatchingHandler(handlerKey)
             val matchingHandlerIdx = matchingHandler.index
             val handler = matchingHandler.handler
             val handlerImpl = handler.handlers(effQn / name)
@@ -332,14 +329,14 @@ private final class StackMachine
           stack.push(
             HandlerEntry(
               stack.size,
-              h.copy(input = Hole),
+              h.copy(input = Hole, handlerKey = Some(HandlerKey())),
               this.currentHandlerEntry,
             ),
           )
           run(h.input)
 
   /** @param baseStackSize
-    *   size of the base stack, excludng the part that needs to be replicated
+    *   size of the base stack, excluding the part that needs to be replicated
     */
   @tailrec
   @throws(classOf[IrError])
@@ -553,59 +550,38 @@ extension (v: VTerm)
         lubToTerm(dfs(u))
       case e: Effects =>
         @throws(classOf[IrError])
-        def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[Eff], SeqMap[VTerm, Boolean]) =
+        def dfs(tm: VTerm, retainSimpleLinearOnly: Boolean): (Set[VTerm], SeqMap[VTerm, Boolean]) =
           ctx.withMetaResolved(tm):
             case Effects(literal, operands) =>
-              val literalsAndOperands: Seq[(VTerm, SeqMap[VTerm, Boolean])] =
+              val literalsAndOperands: Seq[(Set[VTerm], SeqMap[VTerm, Boolean])] =
                 operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
-              (
-                (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
-                  .filter((qn, args) =>
-                    if retainSimpleLinearOnly then {
-                      val effect = Σ.getEffect(qn)
-                      effect.continuationUsage
-                        .substLowers(args*)
-                        .normalized == UsageLiteral(U1) && effect.handlerType
-                        .substLowers(args*)
-                        .normalized == HandlerTypeLiteral(HandlerType.Simple)
-                    } else true,
-                  )
-                  .toSet,
-                groupMapReduce(
-                  literalsAndOperands
-                    .flatMap { case (_, o) => o },
-                )(_._1)(_._2)(_ && _),
-              )
+              val newLiterals = (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
+                .filter(effInstance =>
+                  val (qn, args) = inferType(effInstance)._1 match
+                    case HandlerKeyType(eff, _) => eff
+                    case _                      => throw IllegalStateException("bad type")
+                  if retainSimpleLinearOnly then {
+                    val effect = Σ.getEffect(qn)
+                    effect.continuationUsage
+                      .substLowers(args*)
+                      .normalized == UsageLiteral(U1)
+                  } else true,
+                )
+                .toSet
+              val newOperands = groupMapReduce(
+                literalsAndOperands
+                  .flatMap { case (_, o) => o },
+              )(_._1)(_._2)(_ && _)
+              (newLiterals, newOperands)
             case _: Collapse => (Set.empty, SeqMap(tm -> false))
-            case v: Var =>
-              Γ.resolve(v).ty match
-                case EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)) =>
-                  (Set.empty, SeqMap(tm -> true))
-                case _ => (Set.empty, SeqMap(tm -> false))
-            case r: RSolved =>
-              r.ty match
-                case F(
-                    EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)),
-                    _,
-                    _,
-                  ) =>
-                  (Set.empty, SeqMap(Collapse(r.value).normalized -> true))
-                case _ => (Set.empty, SeqMap(Collapse(r.value).normalized -> false))
-            case r: ResolvedMetaVariable =>
-              r.ty match
-                case F(
-                    EffectsType(UsageLiteral(U1), HandlerTypeLiteral(HandlerType.Simple)),
-                    _,
-                    _,
-                  ) =>
-                  (Set.empty, SeqMap(tm -> true))
-                case _ => (Set.empty, SeqMap(tm -> false))
-            case _ =>
-              throw IllegalStateException(s"expect to be of Effects type: $tm")
+            case _: Var      => (Set.empty, SeqMap(tm -> false))
+            case r: RSolved  => (Set.empty, SeqMap(Collapse(r.value).normalized -> false))
+            case _: ResolvedMetaVariable => (Set.empty, SeqMap(tm -> false))
+            case _ => throw IllegalStateException(s"expect to be of Effects type: $tm")
 
-        val (eff, operands) = dfs(e, false)
-        if eff.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
-        else Effects(eff, operands)
+        val (effInstances, operands) = dfs(e, false)
+        if effInstances.isEmpty && operands.size == 1 && !operands.head._2 then operands.head._1
+        else Effects(effInstances, operands)
       case l: Level =>
         @throws(classOf[IrError])
         def dfs(tm: VTerm): (LevelOrder, SeqMap[VTerm, Nat]) =
@@ -634,8 +610,8 @@ extension (v: VTerm)
           val upperbound = m
             .map { case (t, offset) =>
               inferType(t)._2 match
-                case LevelType(upperbound) => upperbound.sucAsStrictUpperbound(offset)
-                case t => throw IllegalStateException(s"expect level type but got $t")
+                case LevelType(ub) => ub.sucAsStrictUpperbound(offset)
+                case t             => throw IllegalStateException(s"expect level type but got $t")
             }
             .foldLeft(LevelOrder.zero)(LevelOrder.orderMax)
           if literal >= upperbound then LevelLiteral(literal)

@@ -8,7 +8,6 @@ import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
 import com.github.tgeng.archon.core.ir.Elimination.*
-import com.github.tgeng.archon.core.ir.EqDecidability.*
 import com.github.tgeng.archon.core.ir.HandlerType.Simple
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
@@ -52,7 +51,7 @@ def inferLevel(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
         )
         inferLevel(typeBound.normalized)
       case Type(upperBound) => LevelSuc(inferLevel(upperBound))
-      case Top(level, _)    => level
+      case Top(level)       => level
       case r: Var =>
         val levelBound =
           Collapse(ctx.addUnsolved(F(LevelType(LevelOrder.upperBound))))
@@ -78,8 +77,8 @@ def inferLevel(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
       case DataType(qn, args) =>
         val data = Σ.getData(qn)
         data.level.substLowers(args.take(data.context.size)*)
-      case _: UsageType | _: EqDecidabilityType | _: EffectsType => LevelLiteral(0)
-      case LevelType(strictUpperBound)                           => LevelLiteral(strictUpperBound)
+      case _: UsageType | _: EffectsType => LevelLiteral(0)
+      case LevelType(strictUpperBound)   => LevelLiteral(strictUpperBound)
       case _ => throw IllegalArgumentException(s"should have been checked to be a type: $ty")
 
 // Precondition: tm is already type-checked and is normalized
@@ -109,10 +108,9 @@ def inferType
       val upperBound = checkIsType(uncheckedUpperBound)
       val newTm = Type(upperBound.normalized)(using tm.sourceInfo)
       (newTm, Type(newTm))
-    case Top(uncheckedLevel, uncheckedEqD) =>
+    case Top(uncheckedLevel) =>
       val level = checkLevel(uncheckedLevel)
-      val eqD = checkType(uncheckedEqD, EqDecidabilityType())
-      val newTm = Top(level, eqD.normalized)(using tm.sourceInfo)
+      val newTm = Top(level)(using tm.sourceInfo)
       (newTm, Type(newTm))
     case r: Var => (r, Γ.resolve(r).ty)
     case Collapse(uncheckedCTm) =>
@@ -160,34 +158,28 @@ def inferType
       u.upperBound.map(upperBound => checkType(upperBound, UsageType(None))) match
         case Some(upperBound) => (u, Type(UsageType(Some(upperBound))))
         case _                => (u, Type(u))
-    case eqD: EqDecidabilityType          => (eqD, Type(eqD))
-    case eqD: EqDecidabilityLiteral       => (eqD, EqDecidabilityType())
-    case handlerTypeType: HandlerTypeType => (handlerTypeType, Type(handlerTypeType))
-    case handlerType: HandlerTypeLiteral  => (handlerType, HandlerTypeType())
-    case EffectsType(continuationUsage, handlerType) =>
+    case EffectsType(continuationUsage) =>
       val checkedContinuationUsage = checkType(continuationUsage, UsageType())
-      val checkedHandlerType = checkType(handlerType, HandlerTypeType())
-      val e = EffectsType(checkedContinuationUsage, checkedHandlerType)
+      val e = EffectsType(checkedContinuationUsage)
       (e, Type(e))
     case Effects(uncheckedLiteral, checkedOperands) =>
       val literal =
-        uncheckedLiteral.map { (qn, args) =>
-          Σ.getEffectOption(qn) match
-            case None => throw MissingDeclaration(qn)
-            case Some(effect) =>
-              val checkedArgs = checkTypes(args, effect.context.toList)
-              ((qn, checkedArgs))
+        uncheckedLiteral.map { effInstance =>
+          inferType(effInstance) match
+            case (newEffInstance, HandlerKeyType(_, _)) => newEffInstance
+            case (_, _)                                 => throw ExpectEffectInstance(effInstance)
         }
       val operands = checkedOperands.map { (ref, retainSimple) =>
         val v = checkType(ref, EffectsType())
-        ((v, retainSimple))
+        (v, retainSimple)
       }
       val newTm: Effects = Effects(literal, operands.to(SeqMap))(using tm.sourceInfo)
       val usage = getEffectsContinuationUsage(newTm)
-      (
-        newTm,
-        EffectsType(usage),
-      )
+      (newTm, EffectsType(usage))
+    case HandlerKeyType(eff, handlerConstraint) =>
+      val newTm = HandlerKeyType(checkEff(eff), handlerConstraint)
+      (newTm, Type(newTm))
+    case HandlerKeyLiteral(_, _, _) => ???
     case LevelType(strictUpperBound) =>
       (LevelType(strictUpperBound), Type(LevelType(strictUpperBound)))
     case Level(literal, maxOperands) =>
@@ -447,12 +439,10 @@ def inferType
             val effects = checkType(uncheckedEffects, EffectsType())
             val args = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
             (RecordType(qn, args, effects), CType(tm, Total()))
-      case OperationCall(eff, name, uncheckedArgs) =>
-        val (qn, uncheckedTArgs) = eff match
-          case Effects(literals, operands) if operands.isEmpty && literals.size == 1 =>
-            literals.head
+      case OperationCall(effInstance, name, uncheckedArgs) =>
+        val (qn, uncheckedTArgs) = inferType(effInstance)._1 match
+          case HandlerKeyType(eff, _) => eff
           case _ =>
-            // TODO[p2]: consider adding an effect context to aid operation resolution during type checking
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
             )
@@ -465,7 +455,7 @@ def inferType
                 val checkedTArgs = checkTypes(uncheckedTArgs, effect.context.toList)
                 val tArgs = checkedTArgs.map(_.normalized)
                 val args = checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs*))
-                val newEff = EffectsLiteral(Set((qn, tArgs)))
+                val newEff = EffectsLiteral(Set(effInstance))
                 val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
                 val ty = op.resultTy.substLowers(tArgs ++ args*).normalized
                 (
@@ -476,7 +466,7 @@ def inferType
                     // operations. The dynamic nature of handler dispatching makes it impossible to
                     // know at compile time whether this would lead to a cyclic reference in
                     // computations.
-                    EffectsLiteral(Set((qn, tArgs), (Builtins.MaybeDivQn, Nil))),
+                    EffectsLiteral(Set(effInstance, div)),
                   ),
                 )
       case Continuation(uncheckedHandler, continuationUsage) =>
@@ -513,12 +503,6 @@ def inferType
           ),
         )
       case h: Handler => checkHandler(h, None)
-
-private def getEffVarContinuationUsage(v: Var)(using Γ: Context)(using Signature): VTerm =
-  Γ.resolve(v) match
-    case Binding(EffectsType(usage, _), _) => usage
-    case _ =>
-      throw IllegalStateException("typing exception")
 
 @throws(classOf[IrError])
 def checkType
@@ -565,55 +549,6 @@ private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]():
       case Guarded(_, _, value, _) => visitCTerm(value)
       case Solved(_, _, value)     => visitCTerm(value)
     )
-
-@tailrec
-@throws(classOf[IrError])
-def inferEqDecidability
-  (ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm =
-  ty match
-    case _: Type | _: UsageType | _: EqDecidabilityType | _: EffectsType | _: LevelType =>
-      EqDecidabilityLiteral(EqDecidable)
-    case Top(_, eqDecidability) => eqDecidability
-    case _: Var | _: Collapse =>
-      val (_, tyTy) = inferType(ty)
-      tyTy match
-        case Type(upperBound) => inferEqDecidability(upperBound)
-        case _                => throw ExpectVType(ty)
-    case _: U => EqDecidabilityLiteral(EqUnknown)
-    case DataType(qn, args) =>
-      val data = Σ.getData(qn)
-      data.inherentEqDecidability.substLowers(args.take(data.context.size)*)
-    case _ => throw ExpectVType(ty)
-
-@throws(classOf[IrError])
-private def checkIsEqDecidableTypes
-  (ty: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Unit =
-  val eqD = inferEqDecidability(ty)
-  ctx.checkSolved(
-    checkIsConvertible(eqD, EqDecidabilityLiteral(EqDecidable), Some(EqDecidabilityType())),
-    NotEqDecidableType(ty),
-  )
-
-@tailrec
-@throws(classOf[IrError])
-private def checkAreEqDecidableTypes
-  (telescope: Telescope)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : Unit = telescope match
-  case Nil =>
-  case binding :: telescope =>
-    checkIsEqDecidableTypes(binding.ty)
-    checkAreEqDecidableTypes(telescope)(using Γ :+ binding)
 
 @throws(classOf[IrError])
 def checkTypes
@@ -723,11 +658,8 @@ def checkHandler
   (using Σ: Signature)
   (using ctx: TypingContext)
   : (CTerm, CTerm) =
-  val eff = checkType(h.eff, EffectsType())
-  val effs = eff.normalized match
-    case Effects(effs, s) if s.isEmpty => effs
-    case _                             => throw EffectTermTooComplex(eff)
-  val operations = effs.flatMap(e => Σ.getOperations(e._1).map(op => (e._1 / op.name, e._2, op)))
+  val eff = checkEff(h.eff)
+  val operations = Σ.getOperations(eff._1).map(op => (eff._1 / op.name, eff._2, op)).toSet
   val expectedOperationNames = operations.map(_._1)
   val actualOperationNames = h.handlers.keySet
   if expectedOperationNames != actualOperationNames then
@@ -754,8 +686,25 @@ def checkHandler
   // requirement on the final return type of the input computation.
   val inputBindingUsage = checkType(h.inputBinding.usage, UsageType())
   val inputBinding = Binding(inputTy, inputBindingUsage)(h.inputBinding.name)
-  val inputEffects = EffectsUnion(eff, otherEffects).normalized
-  val input = checkType(h.input, F(inputTy, inputEffects, inputBindingUsage))
+  val inputΓ = Γ :+ Binding(
+    HandlerKeyType(
+      h.eff,
+      h.handlers.values.foldLeft(HandlerConstraint(Usage.U1, HandlerType.Simple))((c, impl) =>
+        c | impl.handlerConstraint,
+      ),
+    ),
+  )(gn"e")
+  val inputEffects =
+    Effects(Set(Var(0)), SeqMap(otherEffects.weakened /* for effect instance */ -> false))
+      .normalized(using inputΓ)
+  val input = checkType(
+    h.input,
+    F(
+      inputTy.weakened /* for effect instance */,
+      inputEffects,
+      inputBindingUsage.weakened, /* for effect instance */
+    ),
+  )
   val inputEffectsContinuationUsage = getEffectsContinuationUsage(inputEffects)
   val parameterDisposer = h.parameterDisposer match
     case Some(parameterDisposer) =>
@@ -779,7 +728,6 @@ def checkHandler
             Builtins.PairQn,
             List(
               LevelUpperBound(),
-              EqDecidabilityLiteral(EqDecidability.EqUnknown),
               parameterBindingUsage,
               parameterTy,
               parameterBindingUsage,
@@ -804,10 +752,6 @@ def checkHandler
   val handlerAndUsages = operations.map { (qn, effArgs, operation) =>
     val effect = Σ.getEffect(qn.parent)
     val handlerImpl = h.handlers(qn)
-    checkHandlerTypeSubsumption(
-      HandlerTypeLiteral(handlerImpl.handlerConstraint.handlerType),
-      effect.handlerType.substLowers(effArgs*),
-    )
     // Note that usage subsumption check is reversed because this is checking how continuation
     // can be used by handler.
     checkUsageSubsumption(
@@ -891,7 +835,7 @@ def checkHandler
           NotCConvertible(handlerImplBodyTy, bodyTy, None),
         )
         val body = checkType(handlerImpl.body, bodyTy)
-        val effects = checkEffectsAreSimple(bodyTy.asInstanceOf[F].effects)
+        val effects = bodyTy.asInstanceOf[CType].effects
         // Simple operation can only perform U1 effects so that linear resources in the continuation
         // are managed correctly.
         ctx.checkSolved(
@@ -899,7 +843,10 @@ def checkHandler
           ExpectU1Effect(qn),
         )
         ctx.checkSolved(
-          checkEffSubsumption(effects, implOutputEffects),
+          checkEffSubsumption(
+            bodyTy.asInstanceOf[F].effects,
+            EffectsRetainSimpleLinear(implOutputEffects),
+          ),
           NotEffectSubsumption(effects, implOutputEffects),
         )
         handlerImpl.copy(body = body)(handlerImpl.boundNames)
@@ -977,6 +924,13 @@ def checkHandler
     F(outputTy, outputEffects, outputUsage),
   )
 
+@throws(classOf[IrError])
+private def checkEff(eff: Eff)(using Γ: Context)(using Σ: Signature)(using TypingContext): Eff =
+  val (qn, args) = eff
+  val effect = Σ.getEffect(qn)
+  val newArgs = checkTypes(args, effect.context.toList)
+  (qn, newArgs)
+
 // Input effects should be type-checked.
 // returned effects should be normalized
 @throws(classOf[IrError])
@@ -987,49 +941,24 @@ private def getEffectsContinuationUsage
   (using ctx: TypingContext)
   : VTerm =
   val usage = ctx.withMetaResolved(effects.normalized):
-    case Effects(literal, operands) =>
-      val literalUsages = literal.map { case (qn, args) =>
-        Σ.getEffect(qn).continuationUsage.substLowers(args*)
+    case Effects(effectInstances, operands) =>
+      val literalUsages = effectInstances.map { effectInstance =>
+        inferType(effectInstance)._1 match
+          case HandlerKeyType(_, handlerConstraint) =>
+            UsageLiteral(handlerConstraint.continuationUsage)
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)
       UsageJoin(Set(UsageLiteral(U1)) ++ usages ++ literalUsages)
     case v: Var =>
       Γ.resolve(v).ty match
-        case EffectsType(continuationUsage, _) => continuationUsage
-        case _                                 => throw IllegalStateException("type error")
+        case EffectsType(continuationUsage) => continuationUsage
+        case _                              => throw IllegalStateException("type error")
     case r: ResolvedMetaVariable =>
       r.ty match
-        case F(EffectsType(continuationUsage, _), _, _) => continuationUsage
-        case _                                          => throw IllegalStateException("type error")
+        case F(EffectsType(continuationUsage), _, _) => continuationUsage
+        case _                                       => throw IllegalStateException("type error")
     case _ => UsageLiteral(UAny)
   usage.normalized
-
-@throws(classOf[IrError])
-private def checkEffectsAreSimple
-  (rawEffects: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : VTerm =
-  val effects = rawEffects.normalized
-  ctx.withMetaResolved(effects):
-    case Effects(literal, operands) =>
-      literal.foreach { case (qn, _) =>
-        checkHandlerTypeSubsumption(Σ.getEffect(qn).handlerType, VTerm.HandlerTypeLiteral(Simple))
-      }
-      operands.keySet.map(getEffectsContinuationUsage)
-    case v: Var =>
-      Γ.resolve(v).ty match
-        case EffectsType(_, handlerType) =>
-          checkHandlerTypeSubsumption(handlerType, VTerm.HandlerTypeLiteral(Simple))
-        case _ => throw IllegalStateException("type error")
-    case r: ResolvedMetaVariable =>
-      r.ty match
-        case F(EffectsType(_, handlerType), _, _) =>
-          checkHandlerTypeSubsumption(handlerType, VTerm.HandlerTypeLiteral(Simple))
-        case _ => throw IllegalStateException("type error")
-    case _ =>
-  effects
 
 @throws(classOf[IrError])
 def checkIsType

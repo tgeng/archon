@@ -6,7 +6,6 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.EqDecidability.*
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.Usage.*
@@ -26,9 +25,7 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
         ctx.solveTerm(checkParameterTyDeclarations(data.tIndexTys))
       checkTParamsAreUnrestricted((tParamTys ++ tIndexTys).toTelescope)
       val level = ctx.solveTerm(checkLevel(data.level))
-      val inherentEqDecidability =
-        ctx.solveTerm(checkType(data.inherentEqDecidability, EqDecidabilityType()))
-      Data(data.qn, tParamTys.zip(data.context.map(_._2)), tIndexTys, level, inherentEqDecidability)
+      Data(data.qn, tParamTys.zip(data.context.map(_._2)), tIndexTys, level)
     }
 
 @throws(classOf[IrError])
@@ -50,50 +47,7 @@ def checkDataConstructor
         val violatingVars =
           VarianceChecker.visitTelescope(con.paramTys)(using data.context, Variance.COVARIANT, 0)
         if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars.toSet)
-        checkConstructorEqDecidability(data.qn, con, data.inherentEqDecidability)
         Constructor(con.name, paramTys, tArgs)
-
-@throws(classOf[IrError])
-private def checkConstructorEqDecidability
-  (qn: QualifiedName, constructor: Constructor, dataEqDecidability: VTerm)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using ctx: TypingContext)
-  : Unit = ctx.trace(s"check constructor eq-decidability $qn.${constructor.name}"):
-  // No need to check anything if data is declared to be eq-undecidable.
-  if dataEqDecidability != EqDecidabilityLiteral(EqUnknown) then
-    // When deciding equality, components that are referenced in data index (except those under
-    // Collapse) arguments are guaranteed to be equal because type checker has enforced the type
-    // equality at compile time. Hence, we do not need to check eqDecidability of these components.
-    val dataIndexReferencedComponentIndex = constructor.tArgs
-      .flatMap(IgnoreCollapseFreeVarsVisitor.visitVTerm(_)(using 0))
-      .map(v => constructor.paramTys.size - 1 - v.idx)
-      .filter(_ >= 0)
-      .toSet
-
-    @tailrec
-    def checkComponents(components: Telescope, i: Nat)(using Γ: Context): Unit =
-      components match
-        case Nil =>
-        case binding :: rest =>
-          if !dataIndexReferencedComponentIndex(i) then
-            ctx.checkSolved(
-              checkEqDecidabilitySubsumption(
-                inferEqDecidability(binding.ty),
-                dataEqDecidability.weaken(i, 0),
-              ),
-              NotEqDecidableDueToConstructor(qn, constructor.name, i),
-            )
-            ctx.checkSolved(
-              checkUsageSubsumption(binding.usage, u1),
-              NotEqDecidableDueToConstructor(qn, constructor.name, i),
-            )
-          checkComponents(rest, i + 1)(using Γ :+ binding)
-    checkComponents(constructor.paramTys, 0)
-
-private object IgnoreCollapseFreeVarsVisitor extends FreeVarsVisitorTrait:
-  override def visitCollapse(collapse: Collapse)(using ctx: Nat)(using Σ: Signature): Seq[Var] =
-    Seq.empty
 
 @throws(classOf[IrError])
 def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): Record =
@@ -267,13 +221,11 @@ def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effe
   ctx.trace(s"checking effect signature ${effect.qn}"):
     val telescope = ctx.solveTerm(checkParameterTyDeclarations(effect.context.toTelescope))
     checkTParamsAreUnrestricted(telescope)
-    checkAreEqDecidableTypes(telescope)
 
     {
       given Γ: Context = Context.fromTelescope(telescope)
       val continuationUsage = ctx.solveTerm(checkType(effect.continuationUsage, UsageType()))
-      val handlerType = ctx.solveTerm(checkType(effect.handlerType, HandlerTypeType()))
-      Effect(effect.qn, Γ, continuationUsage, handlerType)
+      Effect(effect.qn, Γ, continuationUsage)
     }
 
 @throws(classOf[IrError])

@@ -39,7 +39,6 @@ enum PreDeclaration:
       tParamTys: PreTelescope,
       operations: List[PreOperation],
       continuationUsage: CTerm,
-      handlerType: CTerm,
     )
 
   def qn: QualifiedName

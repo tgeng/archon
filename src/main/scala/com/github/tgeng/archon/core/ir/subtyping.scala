@@ -6,7 +6,6 @@ import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.EqDecidability.*
 import com.github.tgeng.archon.core.ir.HandlerType.{Complex, Simple}
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
@@ -29,6 +28,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkIsSubtype", sub, sup):
   check2(sub, sup):
+    // TODO[P0]: add logic for HandlerKeyType
     case (sub, sup) if sub == sup => Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
       ctx.adaptForMetaVariable(u, sub):
@@ -47,11 +47,8 @@ def checkIsSubtype
     case (_: ResolvedMetaVariable, _) | (_, _: ResolvedMetaVariable) =>
       Set(Constraint.VSubType(Γ, sub, sup))
     case (Type(upperBound1), Type(upperBound2)) => checkIsSubtype(upperBound1, upperBound2)
-    case (ty: VTerm, Top(level2, eqD2)) =>
-      val levelConstraints = checkLevelSubsumption(inferLevel(ty), level2)
-      val eqDecidabilityConstraints = checkEqDecidabilitySubsumption(inferEqDecidability(ty), eqD2)
-      levelConstraints ++ eqDecidabilityConstraints
-    case (U(cty1), U(cty2)) => checkIsSubtype(cty1, cty2)
+    case (ty: VTerm, Top(level2))               => checkLevelSubsumption(inferLevel(ty), level2)
+    case (U(cty1), U(cty2))                     => checkIsSubtype(cty1, cty2)
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
       Σ.getDataOption(qn1) match
         case None => throw MissingDeclaration(qn1)
@@ -85,11 +82,7 @@ def checkIsSubtype
             }
             .flatten
             .toSet
-    case (
-        EffectsType(continuationUsage1, handlerType1),
-        EffectsType(continuationUsage2, handlerType2),
-      ) =>
-      checkHandlerTypeSubsumption(handlerType1, handlerType2)
+    case (EffectsType(continuationUsage1), EffectsType(continuationUsage2)) =>
       // Note that subsumption checking is reversed because the effect of the computation
       // marks how the continuation can be invoked. Normally, checking usage is checking
       // how a resource is *consumed*. But here, checking usage is checking how the
@@ -290,14 +283,9 @@ def typeUnion
   : VTerm =
   if a == b then return a
   (a, b) match
-    case (Type(upperBound1), Type(upperBound2)) =>
-      Type(typeUnion(upperBound1, upperBound2))
-    case (Top(level1, eqD1), Top(level2, eqD2)) =>
-      val level = LevelMax(level1, level2).normalized
-      Top(level, eqDecidabilityJoin(eqD1, eqD2))
-    case (U(cty1), U(cty2)) =>
-      val cty = typeUnion(cty1, cty2)
-      U(cty)
+    case (Type(upperBound1), Type(upperBound2)) => Type(typeUnion(upperBound1, upperBound2))
+    case (Top(level1), Top(level2))             => Top(LevelMax(level1, level2).normalized)
+    case (U(cty1), U(cty2))                     => U(typeUnion(cty1, cty2))
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
       val data = Σ.getData(qn1)
       val args = args1
@@ -316,17 +304,11 @@ def typeUnion
     case (UsageType(_), UsageType(_))                    => UsageType(None)
     case (_: StuckValueType, _) | (_, _: StuckValueType) => throw CannotFindVTypeUnion(a, b)
     case (
-        EffectsType(continuationUsage1, handlerType1),
-        EffectsType(continuationUsage2, handlerType2),
+        EffectsType(continuationUsage1),
+        EffectsType(continuationUsage2),
       ) =>
       val continuationUsage = UsageJoin(continuationUsage1, continuationUsage2).normalized
-      val handlerType =
-        if handlerType1.normalized == HandlerTypeLiteral(
-            Simple,
-          ) && handlerType2.normalized == HandlerTypeLiteral(Simple)
-        then HandlerTypeLiteral(Simple)
-        else HandlerTypeLiteral(Complex)
-      EffectsType(continuationUsage, handlerType)
+      EffectsType(continuationUsage)
     case (LevelType(level1), LevelType(level2)) =>
       LevelType(LevelOrder.orderMax(level1, level2))
     case _ => throw IllegalStateException("type error")
@@ -339,67 +321,8 @@ private def getTop
   (using TypingContext)
   : VTerm =
   val aLevel = inferLevel(a)
-  val aEqDecidability = inferEqDecidability(a)
   val bLevel = inferLevel(b)
-  val bEqDecidability = inferEqDecidability(b)
-  val level = LevelMax(aLevel, bLevel).normalized
-  Top(level, eqDecidabilityJoin(aEqDecidability, bEqDecidability))
-
-private def eqDecidabilityJoin(t1: VTerm, t2: VTerm): VTerm =
-  (t1, t2) match
-    case (EqDecidabilityLiteral(e1), EqDecidabilityLiteral(e2)) => EqDecidabilityLiteral(e1 | e2)
-    case _ => EqDecidabilityLiteral(EqDecidability.EqUnknown)
-
-@throws(classOf[IrError])
-private def checkHandlerTypeSubsumption
-  (handlerType1: VTerm, handlerType2: VTerm)
-  (using Γ: Context)
-  (using Signature)
-  (using ctx: TypingContext)
-  : Set[Constraint] = debugSubsumption("checkHandlerTypeSubsumption", handlerType1, handlerType2):
-  check2(handlerType1, handlerType2):
-    case (sub, sup) if sub == sup => Set.empty
-    case (HandlerTypeLiteral(Simple), _) | (_, HandlerTypeLiteral(Complex)) =>
-      Set.empty
-    case (u: RUnsolved, HandlerTypeLiteral(Simple)) =>
-      ctx.assignUnsolved(u, Return(handlerType2, u1))
-    case (HandlerTypeLiteral(Complex), u: RUnsolved) =>
-      ctx.assignUnsolved(u, Return(handlerType1, u1))
-    case (_: ResolvedMetaVariable, handlerType2: VTerm) =>
-      Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
-    case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
-      Set(Constraint.HandlerTypeSubsumption(Γ, handlerType1, handlerType2))
-    case (sub: VTerm, sup: VTerm) =>
-      val solvedSub = ctx.solveTerm(sub)
-      val solvedSup = ctx.solveTerm(sup)
-      if solvedSub == sub && solvedSup == sup then throw NotHandlerTypeSubsumption(sub, sup)
-      else checkHandlerTypeSubsumption(solvedSub, solvedSup)
-
-@throws(classOf[IrError])
-private def checkEqDecidabilitySubsumption
-  (eqD1: VTerm, eqD2: VTerm)
-  (using Γ: Context)
-  (using Signature)
-  (using ctx: TypingContext)
-  : Set[Constraint] = debugSubsumption("checkEqDecidabilitySubsumption", eqD1, eqD2):
-  check2(eqD1, eqD2):
-    case (sub, sup) if sub == sup => Set.empty
-    case (EqDecidabilityLiteral(EqDecidability.EqDecidable), _) |
-      (_, EqDecidabilityLiteral(EqDecidability.EqUnknown)) =>
-      Set.empty
-    case (u: RUnsolved, EqDecidabilityLiteral(EqDecidability.EqDecidable)) =>
-      ctx.assignUnsolved(u, Return(eqD2, u1))
-    case (EqDecidabilityLiteral(EqDecidability.EqUnknown), u: RUnsolved) =>
-      ctx.assignUnsolved(u, Return(eqD1, u1))
-    case (_: ResolvedMetaVariable, eqD2: VTerm) =>
-      Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2))
-    case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
-      Set(Constraint.EqDecidabilitySubsumption(Γ, eqD1, eqD2))
-    case (sub: VTerm, sup: VTerm) =>
-      val solvedSub = ctx.solveTerm(sub)
-      val solvedSup = ctx.solveTerm(sup)
-      if solvedSub == sub && solvedSup == sup then throw NotEqDecidabilitySubsumption(sub, sup)
-      else checkEqDecidabilitySubsumption(solvedSub, solvedSup)
+  Top(LevelMax(aLevel, bLevel).normalized)
 
 /** @param invert
   *   useful when checking patterns where the consumed usages are actually provided usages because

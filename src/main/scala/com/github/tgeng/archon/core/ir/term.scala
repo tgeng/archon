@@ -327,11 +327,14 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (literal: LevelOrder, maxOperands: SeqMap[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  case HandlerKeyType(effect: Eff, handlerType: HandlerType)(using sourceInfo: SourceInfo)
-    extends VTerm(sourceInfo)
+  // TODO[P0]: rename to EffectInstanceType
+  case HandlerKeyType
+    (effect: Eff, handlerConstraint: HandlerConstraint)
+    (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  // TODO[P0]: rename to EffectInstance
   case HandlerKeyLiteral
-    (effect: Eff, handlerType: HandlerType, handlerKey: HandlerKey = HandlerKey())
+    (effect: Eff, handlerConstraint: HandlerConstraint, handlerKey: HandlerKey = HandlerKey())
     extends VTerm(SourceInfo.SiEmpty)
 
   /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
@@ -446,7 +449,8 @@ object VTerm:
   val uAff: VTerm = VTerm.UsageLiteral(Usage.UAff)
   val uRel: VTerm = VTerm.UsageLiteral(Usage.URel)
   val uAny: VTerm = VTerm.UsageLiteral(Usage.UAny)
-  val div: HandlerKeyLiteral = HandlerKeyLiteral((Builtins.DivQn, Nil), HandlerKey())
+  val div: HandlerKeyLiteral =
+    HandlerKeyLiteral((Builtins.DivQn, Nil), HandlerConstraint(Usage.U0, HandlerType.Simple))
   val globalKeys: Set[HandlerKeyLiteral] = Set(div)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
@@ -637,12 +641,14 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       outputTy: VTerm,
       parameter: VTerm,
       parameterBinding: Binding[VTerm],
-      parameterDisposer: Option[CTerm], // binding offset + 1 (for parameter)
-      parameterReplicator: Option[CTerm], // binding offset + 1 (for parameter)
-      transform: CTerm, // binding offset + 1 (for parameter) + 1 (for input value)
+      parameterDisposer: Option[CTerm], // binding offset: + 1 (for parameter)
+      parameterReplicator: Option[CTerm], // binding offset: + 1 (for parameter)
+      transform: CTerm, // binding offset: + 1 (for parameter) + 1 (for input value)
       handlers: SeqMap[ /* name identifying an effect operation */ QualifiedName, HandlerImpl],
-      input: CTerm,
-      inputBinding: Binding[VTerm],
+      input: CTerm, // binding offset: + 1 (for effect instance variable)
+      inputBinding: Binding[
+        VTerm,
+      ], // binding offset: +0 (effect instance is not bound because it's not available in handler implementations
       // TODO[P1]: figure out how to compile this to a pointer to the handler directly so that at
       //  runtime there won't be any label matching. Invoking simple effects should be as simple as
       //  dereferencing a pointer.

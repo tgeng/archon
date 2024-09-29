@@ -180,34 +180,29 @@ private def elaborateDataHead
       (using Γ: Context)
       (using Signature)
       (using TypingContext)
-      : (Telescope, VTerm, VTerm) =
+      : (Telescope, VTerm) =
       checkIsCType(ty).normalized(None) match
         // Here and below we do not care about the declared effect types because data type
         // constructors are always total. Declaring non-total signature is not necessary (nor
         // desirable) but acceptable.
-        case F(Type(Top(level, eqDecidability)), _, _) => (Nil, level, eqDecidability)
+        case F(Type(Top(level)), _, _) => (Nil, level)
         case F(t, _, _)                                => throw ExpectVType(t)
         case FunctionType(binding, bodyTy, _) =>
-          val (telescope, level, eqDecidability) = elaborateTy(bodyTy)(using Γ :+ binding)
-          (binding +: telescope, level, eqDecidability)
+          val (telescope, level) = elaborateTy(bodyTy)(using Γ :+ binding)
+          (binding +: telescope, level)
         case _ => throw NotDataTypeType(ty)
 
-    val (tIndices, level, eqDecidability) = elaborateTy(preData.ty)
+    val (tIndices, level) = elaborateTy(preData.ty)
     // level and eqDecidability should not depend on index arguments
     val strengthenedLevel =
       try level.strengthen(tIndices.size, 0)
       catch case e: StrengthenException => throw DataLevelCannotDependOnIndexArgument(preData)
-    val strengthenedEqDecidability =
-      try eqDecidability.strengthen(tIndices.size, 0)
-      catch
-        case e: StrengthenException => throw DataEqDecidabilityCannotDependOnIndexArgument(preData)
     val data = checkData(
       Data(
         preData.qn,
         Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
         tIndices,
         strengthenedLevel,
-        strengthenedEqDecidability,
       ),
     )
     Σ.addDeclaration(data)
@@ -801,12 +796,7 @@ private def elaborateEffectHead
       .normalized(Some(F(UsageType()))) match
       case Return(continuationUsage, _) => continuationUsage
       case c                            => throw ExpectReturnAValue(c)
-    val handlerType = checkType(effect.handlerType, F(HandlerTypeType()))
-      .normalized(Some(F(HandlerTypeType()))) match
-      case Return(handlerType, _) => handlerType
-      case c                      => throw ExpectReturnAValue(c)
-
-    val e: Effect = Effect(effect.qn, Γ2, continuationUsage, handlerType)
+    val e: Effect = Effect(effect.qn, Γ2, continuationUsage)
     Σ.addDeclaration(checkEffect(e))
 
 @throws(classOf[IrError])
