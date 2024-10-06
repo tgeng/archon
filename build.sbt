@@ -1,14 +1,14 @@
 Global / onChangedBuildSource := ReloadOnSourceChanges
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
-ThisBuild / scalaVersion := "3.4.2"
+ThisBuild / scalaVersion := "3.5.1"
 
 lazy val root = (project in file("."))
   .settings(
     name := "archon",
     scalacOptions ++= Seq(
       "-Yexplicit-nulls",
-      "-Ykind-projector",
+      "-Xkind-projector",
       "-Xfatal-warnings",
       "-feature",
       "-deprecation",
@@ -17,10 +17,10 @@ lazy val root = (project in file("."))
       "-indent",
     ),
     libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % "3.2.18" % "test",
+      "org.scalatest" %% "scalatest" % "3.2.19" % "test",
       "com.lihaoyi" %% "pprint" % "0.9.0",
-      "com.lihaoyi" %% "fastparse" % "3.1.0",
-      "com.lihaoyi" %% "os-lib" % "0.10.2",
+      "com.lihaoyi" %% "fastparse" % "3.1.1",
+      "com.lihaoyi" %% "os-lib" % "0.10.7",
       "org.scala-lang.modules" %% "scala-collection-contrib" % "0.3.0",
     ),
     Compile / unmanagedJars += {

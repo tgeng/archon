@@ -846,7 +846,7 @@ def checkHandler
           ExpectU1Effect(qn),
         )
         ctx.checkSolved(
-          checkEffSubsumption(
+          checkEffectSubsumption(
             bodyTy.asInstanceOf[F].effects,
             EffectsRetainSimpleLinear(implOutputEffects),
           ),

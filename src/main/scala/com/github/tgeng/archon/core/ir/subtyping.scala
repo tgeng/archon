@@ -131,15 +131,15 @@ def checkIsSubtype
     case ((_: ResolvedMetaVariable, Nil), _) | (_, (_: ResolvedMetaVariable, Nil)) =>
       Set(Constraint.CSubType(Γ, sub, sup))
     case (CType(upperBound1, eff1), CType(upperBound2, eff2)) =>
-      val effConstraint = checkEffSubsumption(eff1, eff2)
+      val effConstraint = checkEffectSubsumption(eff1, eff2)
       val upperBoundConstraint = checkIsSubtype(upperBound1, upperBound2)
       effConstraint ++ upperBoundConstraint
     case (ty: IType, CTop(level2, eff2)) =>
       val levelConstraint = checkLevelSubsumption(inferLevel(sub), level2)
-      val effConstraint = checkEffSubsumption(ty.effects, eff2)
+      val effConstraint = checkEffectSubsumption(ty.effects, eff2)
       levelConstraint ++ effConstraint
     case (F(vTy1, eff1, u1), F(vTy2, eff2, u2)) =>
-      val effConstraint = checkEffSubsumption(eff1, eff2)
+      val effConstraint = checkEffectSubsumption(eff1, eff2)
       val usageConstraint = checkUsageSubsumption(u1, u2)
       val tyConstraint = checkIsSubtype(vTy1, vTy2)
       effConstraint ++ usageConstraint ++ tyConstraint
@@ -147,7 +147,7 @@ def checkIsSubtype
         FunctionType(binding1, bodyTy1, eff1),
         FunctionType(binding2, bodyTy2, eff2),
       ) =>
-      val effConstraint = checkEffSubsumption(eff1, eff2)
+      val effConstraint = checkEffectSubsumption(eff1, eff2)
       val tyConstraint = ctx.solve(checkIsSubtype(binding2.ty, binding1.ty))
       val usageConstraint = ctx.solve(checkUsageSubsumption(binding2.usage, binding1.usage))
       val bodyConstraint =
@@ -177,7 +177,7 @@ def checkIsSubtype
         case None => throw MissingDeclaration(qn1)
         case Some(record) =>
           val args = ArrayBuffer[VTerm]()
-          val effConstraint = checkEffSubsumption(eff1, eff2)
+          val effConstraint = checkEffectSubsumption(eff1, eff2)
           val argConstraint = args1
             .zip(args2)
             .zip(record.context)
@@ -449,6 +449,8 @@ def checkUsageSubsumption
           )
           Set.empty
         case _ => Set(Constraint.UsageSubsumption(Γ, sub, rawSup))
+    case (_: VTerm, r: ResolvedMetaVariable) =>
+      throw IllegalStateException(s"Expected unsolved usage meta var but got $r")
     case (_: ResolvedMetaVariable, sup: VTerm) =>
       Set(Constraint.UsageSubsumption(Γ, rawSub, sup))
     case (_: ResolvedMetaVariable, _: ResolvedMetaVariable) =>
@@ -464,12 +466,12 @@ def checkUsageSubsumption
         else checkUsageSubsumption(solvedSub, solvedSup)
 
 @throws(classOf[IrError])
-private def checkEffSubsumption
+private def checkEffectSubsumption
   (rawSub: VTerm, rawSup: VTerm)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
-  : Set[Constraint] = debugSubsumption("checkEffSubsumption", rawSub, rawSup):
+  : Set[Constraint] = debugSubsumption("checkEffectSubsumption", rawSub, rawSup):
   check2(rawSub, rawSup):
     case (sub, sup) if sub == sup => Set.empty
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
@@ -501,6 +503,8 @@ private def checkEffSubsumption
             case _ => throw IllegalStateException("type error")
           ctx.updateConstraint(u, UmcEffSubsumption(newLowerBound))
           Set.empty
+    case (_: VTerm, r: ResolvedMetaVariable) =>
+      throw IllegalStateException(s"Expected unsolved effect meta var but got $r")
     // If upper bound is total, the meta variable can only take total as the value.
     case (
         u @ RUnsolved(_, _, UmcEffSubsumption(_), _, _),
@@ -549,7 +553,7 @@ private def checkEffSubsumption
             val solvedSub = ctx.solveTerm(sub)
             val solvedSup = ctx.solveTerm(sup)
             if solvedSub == sub && solvedSup == sup then throw NotEffectSubsumption(sub, sup)
-            else checkEffSubsumption(solvedSub, solvedSup)
+            else checkEffectSubsumption(solvedSub, solvedSup)
       // If spurious operands are all stuck computation, it's possible for sub to be if all of these stuck computation
       // ends up being assigned values that are part of sup
       // Also, if sup contains stuck computation, it's possible for sup to end up including arbitrary effects and hence
@@ -561,7 +565,7 @@ private def checkEffSubsumption
       val solvedSub = ctx.solveTerm(sub)
       val solvedSup = ctx.solveTerm(sup)
       if solvedSub == sub && solvedSup == sup then throw NotEffectSubsumption(sub, sup)
-      else checkEffSubsumption(solvedSub, solvedSup)
+      else checkEffectSubsumption(solvedSub, solvedSup)
 
 /** Checks if l1 is smaller than l2.
   */
@@ -605,6 +609,8 @@ private def checkLevelSubsumption
         val solvedSup = ctx.solveTerm(sup)
         if solvedSub == sub && solvedSup == sup then throw NotLevelSubsumption(sub, sup)
         else checkLevelSubsumption(solvedSub, solvedSup)
+    case (_: VTerm, r: ResolvedMetaVariable) =>
+      throw IllegalStateException(s"Expected unsolved level meta var but got $r")
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
     case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) =>
       Set.empty

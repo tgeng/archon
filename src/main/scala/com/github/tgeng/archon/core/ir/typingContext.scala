@@ -301,7 +301,7 @@ class TypingContext
       case UmcNothing               => Set.empty
       case UmcCSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, value)).flatten
       case UmcVSubtype(lowerBounds) => lowerBounds.map(checkIsSubtype(_, Collapse(value))).flatten
-      case UmcEffSubsumption(lowerBound)   => checkEffSubsumption(lowerBound, Collapse(value))
+      case UmcEffSubsumption(lowerBound)   => checkEffectSubsumption(lowerBound, Collapse(value))
       case UmcLevelSubsumption(lowerBound) => checkLevelSubsumption(lowerBound, Collapse(value))
       case UmcUsageSubsumption(lowerBounds, upperBound) =>
         lowerBounds.flatMap(lb => checkUsageSubsumption(Collapse(value), lb)) ++
@@ -567,7 +567,7 @@ class TypingContext
       case Constraint.CSubType(context, sub, sup) =>
         checkIsSubtype(sub, sup)(using context)
       case Constraint.EffSubsumption(context, sub, sup) =>
-        checkEffSubsumption(sub, sup)(using context)
+        checkEffectSubsumption(sub, sup)(using context)
       case Constraint.LevelSubsumption(context, sub, sup) =>
         checkLevelSubsumption(sub, sup)(using context)
       case Constraint.UsageSubsumption(context, sub, sup) =>

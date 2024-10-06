@@ -193,8 +193,6 @@ object LevelOrder:
   // 256 is arbitrary but it should be enough for any practical purpose
   val upperBound: LevelOrder = LevelOrder(256, 0)
 
-extension (o: LevelOrder) infix def suc(n: Nat): LevelOrder = LevelOrder(o.m, o.n + n)
-
 sealed trait UsageCompound(val distinctOperands: Set[VTerm])
 
 /** @param body

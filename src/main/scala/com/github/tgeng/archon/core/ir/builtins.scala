@@ -2,7 +2,11 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.*
+import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.PreDeclaration.*
+import com.github.tgeng.archon.core.ir.Usage.*
+import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.collection.immutable.SeqMap
 
@@ -134,10 +138,6 @@ object Builtins:
     if conflictingDefs.nonEmpty then
       throw new IllegalArgumentException(s"Conflicting definitions: $conflictingDefs")
     elaborateAll(builtins)(using Context.empty)(using SimpleSignature())
-
-import CTerm.*
-import PreDeclaration.* import Usage.*
-  import VTerm.*
 
   private def binding(name: Name, ty: VTerm, usage: VTerm = uAny): Binding[CTerm] =
     Binding(Return(ty, uAny), Return(usage, uAny))(name)

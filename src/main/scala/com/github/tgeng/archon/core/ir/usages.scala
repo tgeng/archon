@@ -94,6 +94,8 @@ def collectUsages
       case LevelType(_) => Usages.zero
       case Level(_, maxOperands) =>
         maxOperands.keys.map(collectUsages(_, Some(LevelType()))).fold(Usages.zero)(_ + _)
+      case EffectInstanceType(eff, _) => collectEffUsages(eff)
+      case EffectInstance(eff, _, _)  => collectEffUsages(eff)
       case Auto() =>
         throw IllegalStateException("All auto should have been replaced by meta variables.")
 
