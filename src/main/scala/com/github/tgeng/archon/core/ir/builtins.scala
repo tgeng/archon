@@ -113,6 +113,7 @@ object Builtins:
   val EffectsRetainSimpleLinearQn: QualifiedName = BuiltinEffects / "retainSimpleLinear"
   val TotalQn: QualifiedName = BuiltinEffects / "total"
   val DivQn: QualifiedName = BuiltinEffects / "div"
+  val NdetQn: QualifiedName = BuiltinEffects / "ndet"
   val MaybeDivQn: QualifiedName = BuiltinEffects / "mdiv"
 
   val BuiltinLevel: QualifiedName = Builtin / "level"
@@ -134,9 +135,8 @@ object Builtins:
       throw new IllegalArgumentException(s"Conflicting definitions: $conflictingDefs")
     elaborateAll(builtins)(using Context.empty)(using SimpleSignature())
 
-  import CTerm.*
-  import PreDeclaration.*
-  import Usage.*
+import CTerm.*
+import PreDeclaration.* import Usage.*
   import VTerm.*
 
   private def binding(name: Name, ty: VTerm, usage: VTerm = uAny): Binding[CTerm] =

@@ -48,7 +48,7 @@ List(
             bodyTy = RecordType(
               qn = qn"test.CStream",
               args = List(),
-              effects = Effects(literal = Set(), unionOperands = SeqMap()) @ "ε"
+              effects = Effects(handlerKeys = Set(), unionOperands = SeqMap()) @ "ε"
             ) @ "CStream",
             effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε"
           ) @ "Eq Nat m (head self) -> CStream",

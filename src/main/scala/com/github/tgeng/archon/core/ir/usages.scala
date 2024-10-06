@@ -194,7 +194,7 @@ def collectUsages
         collectArgsUsages(args, record.context.map(_._1).toList) +
           collectUsages(effects, Some(EffectsType()))
       case OperationCall(effectInstance, name, args) =>
-        val (qn, tArgs) = inferType(effectInstance)._1 match
+        val (qn, tArgs) = inferType(effectInstance)._2 match
           case EffectInstanceType(eff, _) => eff
           case _ =>
             throw IllegalStateException(

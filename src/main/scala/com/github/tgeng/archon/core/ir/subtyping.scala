@@ -6,7 +6,6 @@ import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.HandlerType.{Complex, Simple}
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.ResolvedMetaVariable.*
@@ -28,7 +27,6 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkIsSubtype", sub, sup):
   check2(sub, sup):
-    // TODO[P0]: add logic for EffectInstanceType
     case (sub, sup) if sub == sup => Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
       ctx.adaptForMetaVariable(u, sub):
@@ -96,6 +94,13 @@ def checkIsSubtype
         case _                => throw NotVSubtype(sub, sup)
     case (LevelType(ub1), LevelType(ub2)) =>
       if ub1 <= ub2 then Set.empty else throw NotVSubtype(sub, sup)
+    case (
+        EffectInstanceType((qn1, args1), handlerConstraint1),
+        EffectInstanceType((qn2, args2), handlerConstraint2),
+      ) =>
+      if handlerConstraint1 > handlerConstraint2 || qn1 != qn2 then
+        throw ExpectEffectInstanceTypeSubsumption(sub, sup)
+      else checkAreConvertible(args1, args2, Σ.getEffect(qn1).context.toList)
     case _ => checkIsConvertible(sub, sup, None)
 
 /** Preconditions: sub and sup are both types

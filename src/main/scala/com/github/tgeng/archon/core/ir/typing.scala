@@ -179,7 +179,9 @@ def inferType
     case EffectInstanceType(eff, handlerConstraint) =>
       val newTm = EffectInstanceType(checkEff(eff), handlerConstraint)
       (newTm, Type(newTm))
-    case EffectInstance(_, _, _) => ???
+    case t @ EffectInstance(eff, handlerConstraint, _) =>
+      // There is no need to check eff because EffectInstance is only created by reduction.
+      (t, EffectInstanceType(eff, handlerConstraint))
     case LevelType(strictUpperBound) =>
       (LevelType(strictUpperBound), Type(LevelType(strictUpperBound)))
     case Level(literal, maxOperands) =>
@@ -440,7 +442,7 @@ def inferType
             val args = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
             (RecordType(qn, args, effects), CType(tm, Total()))
       case OperationCall(effInstance, name, uncheckedArgs) =>
-        val (qn, uncheckedTArgs) = inferType(effInstance)._1 match
+        val (qn, uncheckedTArgs) = inferType(effInstance)._2 match
           case EffectInstanceType(eff, _) => eff
           case _ =>
             throw IllegalStateException(
@@ -511,6 +513,7 @@ def checkType
   (using Σ: Signature)
   (using ctx: TypingContext)
   : CTerm = debugCheckType(tm, ty):
+  // TODO[P0]: using something of effect instance type but not as an effect instance should yield ndet effect.
   tm match
     case Force(v) =>
       val checkedV = checkType(v, U(ty))
@@ -943,7 +946,7 @@ private def getEffectsContinuationUsage
   val usage = ctx.withMetaResolved(effects.normalized):
     case Effects(effectInstances, operands) =>
       val literalUsages = effectInstances.map { effectInstance =>
-        inferType(effectInstance)._1 match
+        inferType(effectInstance)._2 match
           case EffectInstanceType(_, handlerConstraint) =>
             UsageLiteral(handlerConstraint.continuationUsage)
           case _ => throw IllegalStateException("type error")

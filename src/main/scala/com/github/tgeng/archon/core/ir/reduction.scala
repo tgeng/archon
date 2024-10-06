@@ -557,9 +557,9 @@ extension (v: VTerm)
                 operands.map((k, v) => dfs(k.normalized, retainSimpleLinearOnly || v)).toSeq
               val newLiterals = (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
                 .filter(effInstance =>
-                  val (qn, args) = inferType(effInstance)._1 match
+                  val (qn, args) = inferType(effInstance)._2 match
                     case EffectInstanceType(eff, _) => eff
-                    case _                          => throw IllegalStateException("bad type")
+                    case t                          => throw IllegalStateException(s"Expect EffectInstanceType but got $t")
                   if retainSimpleLinearOnly then {
                     val effect = Σ.getEffect(qn)
                     effect.continuationUsage
@@ -634,9 +634,9 @@ given Reducible[CTerm] with
     (using signature: Signature)
     (using TypingContext)
     : CTerm =
-    // TODO[P0]: if the reduced term contains `Continuation` or `HandlerKey`, then throw away the
-    //  reduced term and simply return t as it is. This is needed because `Continuation` is too hard
-    //  to be lowered.
+    // TODO[P1]: if the reduced term contains `Continuation` or `EffectInstance`, then throw away
+    //  the reduced term and simply return t as it is. This is needed because `Continuation` is too
+    //  hard to be lowered.
     StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
 
 object Reducible:

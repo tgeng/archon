@@ -121,10 +121,10 @@ trait TermVisitor[C, R]:
     (using ctx: C)
     (using Σ: Signature)
     : R =
-    visitEff(instanceType.effect)
+    visitEff(instanceType.eff)
 
   def visitEffectInstance(instance: VTerm.EffectInstance)(using ctx: C)(using Σ: Signature): R =
-    visitEff(instance.effect)
+    visitEff(instance.eff)
 
   def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -655,13 +655,13 @@ trait Transformer[C]:
     (using Σ: Signature)
     : VTerm =
     EffectInstanceType(
-      transformEff(instanceType.effect),
+      transformEff(instanceType.eff),
       instanceType.handlerConstraint,
     )
 
   def transformEffectInstance(instance: EffectInstance)(using ctx: C)(using Σ: Signature): VTerm =
     EffectInstance(
-      transformEff(instance.effect),
+      transformEff(instance.eff),
       instance.handlerConstraint,
       instance.handlerKey,
     )

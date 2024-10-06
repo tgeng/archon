@@ -327,14 +327,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (literal: LevelOrder, maxOperands: SeqMap[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  // TODO[P0]: rename to EffectInstanceType
   case EffectInstanceType
-    (effect: Eff, handlerConstraint: HandlerConstraint)
+    (eff: Eff, handlerConstraint: HandlerConstraint)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
-  // TODO[P0]: rename to EffectInstance
   case EffectInstance
-    (effect: Eff, handlerConstraint: HandlerConstraint, handlerKey: HandlerKey = HandlerKey())
+    (eff: Eff, handlerConstraint: HandlerConstraint, handlerKey: HandlerKey = HandlerKey())
     extends VTerm(SourceInfo.SiEmpty)
 
   /** Automatically derived term, aka, `_` in Agda-like languages. During type checking, this is
@@ -455,7 +453,9 @@ object VTerm:
   val uAny: VTerm = VTerm.UsageLiteral(Usage.UAny)
   val div: EffectInstance =
     EffectInstance((Builtins.DivQn, Nil), HandlerConstraint(Usage.U0, HandlerType.Simple))
-  val globalKeys: Set[EffectInstance] = Set(div)
+  val ndet: EffectInstance =
+    EffectInstance((Builtins.NdetQn, Nil), HandlerConstraint(Usage.U1, HandlerType.Simple))
+  val globalKeys: Set[EffectInstance] = Set(div, ndet)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
     * executed by the type checker.

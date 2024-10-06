@@ -284,7 +284,7 @@ def checkIsConvertible
               op2 @ OperationCall(effInstance2, name2, args2),
             ) if name1 == name2 =>
             val effConstraint = checkIsConvertible(effInstance1, effInstance2, Some(EffectsType()))
-            val (qn, tArgs) = inferType(effInstance1)._1 match
+            val (qn, tArgs) = inferType(effInstance1)._2 match
               case EffectInstanceType(eff, _) => eff
               case _                          => throw ComplexOperationCall(op2)
             val operation = Σ.getOperation(qn, name1)
