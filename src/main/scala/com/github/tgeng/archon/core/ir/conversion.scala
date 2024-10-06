@@ -285,8 +285,8 @@ def checkIsConvertible
             ) if name1 == name2 =>
             val effConstraint = checkIsConvertible(effInstance1, effInstance2, Some(EffectsType()))
             val (qn, tArgs) = inferType(effInstance1)._1 match
-              case HandlerKeyType(eff, _) => eff
-              case _                   => throw ComplexOperationCall(op2)
+              case EffectInstanceType(eff, _) => eff
+              case _                          => throw ComplexOperationCall(op2)
             val operation = Σ.getOperation(qn, name1)
             var args = IndexedSeq[VTerm]()
             val argConstraint =

@@ -186,7 +186,7 @@ private def elaborateDataHead
         // constructors are always total. Declaring non-total signature is not necessary (nor
         // desirable) but acceptable.
         case F(Type(Top(level)), _, _) => (Nil, level)
-        case F(t, _, _)                                => throw ExpectVType(t)
+        case F(t, _, _)                => throw ExpectVType(t)
         case FunctionType(binding, bodyTy, _) =>
           val (telescope, level) = elaborateTy(bodyTy)(using Γ :+ binding)
           (binding +: telescope, level)

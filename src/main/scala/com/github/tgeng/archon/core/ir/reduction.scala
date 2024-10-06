@@ -242,7 +242,7 @@ private final class StackMachine
             run(t)
       case OperationCall(effInstance, name, rawArgs) =>
         val (effAndArgs, _, handlerKey) = effInstance match
-          case HandlerKeyLiteral(eff, handlerType, handlerKey) => (eff, handlerType, handlerKey)
+          case EffectInstance(eff, handlerType, handlerKey) => (eff, handlerType, handlerKey)
           case _ => throw IllegalStateException(s"Bad operation call with effInstance $effInstance")
         val (effQn, rawEffArgs) = effAndArgs
         Σ.getEffectOption(effQn) match
@@ -558,8 +558,8 @@ extension (v: VTerm)
               val newLiterals = (literalsAndOperands.flatMap { case (l, _) => l } ++ literal)
                 .filter(effInstance =>
                   val (qn, args) = inferType(effInstance)._1 match
-                    case HandlerKeyType(eff, _) => eff
-                    case _                      => throw IllegalStateException("bad type")
+                    case EffectInstanceType(eff, _) => eff
+                    case _                          => throw IllegalStateException("bad type")
                   if retainSimpleLinearOnly then {
                     val effect = Σ.getEffect(qn)
                     effect.continuationUsage

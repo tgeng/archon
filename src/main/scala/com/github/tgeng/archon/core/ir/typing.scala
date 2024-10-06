@@ -166,8 +166,8 @@ def inferType
       val literal =
         uncheckedLiteral.map { effInstance =>
           inferType(effInstance) match
-            case (newEffInstance, HandlerKeyType(_, _)) => newEffInstance
-            case (_, _)                                 => throw ExpectEffectInstance(effInstance)
+            case (newEffInstance, EffectInstanceType(_, _)) => newEffInstance
+            case (_, _) => throw ExpectEffectInstance(effInstance)
         }
       val operands = checkedOperands.map { (ref, retainSimple) =>
         val v = checkType(ref, EffectsType())
@@ -176,10 +176,10 @@ def inferType
       val newTm: Effects = Effects(literal, operands.to(SeqMap))(using tm.sourceInfo)
       val usage = getEffectsContinuationUsage(newTm)
       (newTm, EffectsType(usage))
-    case HandlerKeyType(eff, handlerConstraint) =>
-      val newTm = HandlerKeyType(checkEff(eff), handlerConstraint)
+    case EffectInstanceType(eff, handlerConstraint) =>
+      val newTm = EffectInstanceType(checkEff(eff), handlerConstraint)
       (newTm, Type(newTm))
-    case HandlerKeyLiteral(_, _, _) => ???
+    case EffectInstance(_, _, _) => ???
     case LevelType(strictUpperBound) =>
       (LevelType(strictUpperBound), Type(LevelType(strictUpperBound)))
     case Level(literal, maxOperands) =>
@@ -441,7 +441,7 @@ def inferType
             (RecordType(qn, args, effects), CType(tm, Total()))
       case OperationCall(effInstance, name, uncheckedArgs) =>
         val (qn, uncheckedTArgs) = inferType(effInstance)._1 match
-          case HandlerKeyType(eff, _) => eff
+          case EffectInstanceType(eff, _) => eff
           case _ =>
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
@@ -687,7 +687,7 @@ def checkHandler
   val inputBindingUsage = checkType(h.inputBinding.usage, UsageType())
   val inputBinding = Binding(inputTy, inputBindingUsage)(h.inputBinding.name)
   val inputΓ = Γ :+ Binding(
-    HandlerKeyType(
+    EffectInstanceType(
       h.eff,
       h.handlers.values.foldLeft(HandlerConstraint(Usage.U1, HandlerType.Simple))((c, impl) =>
         c | impl.handlerConstraint,
@@ -944,7 +944,7 @@ private def getEffectsContinuationUsage
     case Effects(effectInstances, operands) =>
       val literalUsages = effectInstances.map { effectInstance =>
         inferType(effectInstance)._1 match
-          case HandlerKeyType(_, handlerConstraint) =>
+          case EffectInstanceType(_, handlerConstraint) =>
             UsageLiteral(handlerConstraint.continuationUsage)
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)

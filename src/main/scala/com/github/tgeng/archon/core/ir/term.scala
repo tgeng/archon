@@ -328,12 +328,12 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   // TODO[P0]: rename to EffectInstanceType
-  case HandlerKeyType
+  case EffectInstanceType
     (effect: Eff, handlerConstraint: HandlerConstraint)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
   // TODO[P0]: rename to EffectInstance
-  case HandlerKeyLiteral
+  case EffectInstance
     (effect: Eff, handlerConstraint: HandlerConstraint, handlerKey: HandlerKey = HandlerKey())
     extends VTerm(SourceInfo.SiEmpty)
 
@@ -449,9 +449,9 @@ object VTerm:
   val uAff: VTerm = VTerm.UsageLiteral(Usage.UAff)
   val uRel: VTerm = VTerm.UsageLiteral(Usage.URel)
   val uAny: VTerm = VTerm.UsageLiteral(Usage.UAny)
-  val div: HandlerKeyLiteral =
-    HandlerKeyLiteral((Builtins.DivQn, Nil), HandlerConstraint(Usage.U0, HandlerType.Simple))
-  val globalKeys: Set[HandlerKeyLiteral] = Set(div)
+  val div: EffectInstance =
+    EffectInstance((Builtins.DivQn, Nil), HandlerConstraint(Usage.U0, HandlerType.Simple))
+  val globalKeys: Set[EffectInstance] = Set(div)
 
   /** Marker of a computation that surely diverges. Computation with this effect will not be
     * executed by the type checker.

@@ -28,7 +28,7 @@ def checkIsSubtype
   (using ctx: TypingContext)
   : Set[Constraint] = debugSubsumption("checkIsSubtype", sub, sup):
   check2(sub, sup):
-    // TODO[P0]: add logic for HandlerKeyType
+    // TODO[P0]: add logic for EffectInstanceType
     case (sub, sup) if sub == sup => Set.empty
     case (sub: VTerm, u @ RUnsolved(_, _, constraint, _, _)) =>
       ctx.adaptForMetaVariable(u, sub):

@@ -373,4 +373,3 @@ trait Signature:
           ),
         )
       case _ => None
-

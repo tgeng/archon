@@ -86,7 +86,7 @@ def collectUsages
           .map(
             collectUsages(
               _,
-              Some(HandlerKeyType((Builtins.DivQn, Nil), HandlerConstraint(Usage.U1, Simple))),
+              Some(EffectInstanceType((Builtins.DivQn, Nil), HandlerConstraint(Usage.U1, Simple))),
             ),
           )
           .fold(Usages.zero)(_ + _) +
@@ -195,7 +195,7 @@ def collectUsages
           collectUsages(effects, Some(EffectsType()))
       case OperationCall(effectInstance, name, args) =>
         val (qn, tArgs) = inferType(effectInstance)._1 match
-          case HandlerKeyType(eff, _) => eff
+          case EffectInstanceType(eff, _) => eff
           case _ =>
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
@@ -240,7 +240,7 @@ def collectUsages
         val parameterUsages =
           collectUsages(parameter, Some(parameterBinding.ty)) * parameterBinding.usage
         val inputΓ = Γ :+ Binding(
-          HandlerKeyType(
+          EffectInstanceType(
             eff,
             handlers.values.foldLeft(HandlerConstraint(Usage.U1, HandlerType.Simple))((c, impl) =>
               c | impl.handlerConstraint,

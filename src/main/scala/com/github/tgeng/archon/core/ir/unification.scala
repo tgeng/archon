@@ -77,7 +77,7 @@ def unify
 
     // injectivity
     case (ty @ Type(upperBound1), Type(upperBound2), _) => unify(upperBound1, upperBound2, ty)
-    case (Top(l1), Top(l2), _) => unify(l1, l2, LevelType(LevelOrder.ω))
+    case (Top(l1), Top(l2), _)                          => unify(l1, l2, LevelType(LevelOrder.ω))
     // We do not unify any computation types since it does not seem to be very
     // useful. If someday we would add such support, we will need to extend
     // matching logic and case tree to support dispatching on computation types.
