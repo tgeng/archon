@@ -4,7 +4,6 @@ import com.github.tgeng.archon.common.Ref.given
 import com.github.tgeng.archon.core.common.{n, qn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
-import com.github.tgeng.archon.core.ir.EqDecidability.{EqDecidable, EqUnknown}
 import com.github.tgeng.archon.core.ir.HandlerType.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
@@ -77,16 +76,6 @@ class BasicTypeCheckSpec extends AnyFreeSpec:
       assertNotVType(UsageLiteral(U1), UsageType(Some(UsageLiteral(UAff))))
       assertNotVType(UsageLiteral(U1), UsageType(Some(UsageLiteral(U0))))
       assertNotVType(LevelLiteral(1), UsageType())
-
-    "check eq decidability literals" in:
-      assertVType(EqDecidabilityLiteral(EqDecidable), EqDecidabilityType())
-      assertVType(EqDecidabilityLiteral(EqUnknown), EqDecidabilityType())
-      assertNotVType(LevelLiteral(1), EqDecidabilityType())
-
-    "check handler type literals" in:
-      assertVType(HandlerTypeLiteral(Simple), HandlerTypeType())
-      assertVType(HandlerTypeLiteral(Complex), HandlerTypeType())
-      assertNotVType(LevelLiteral(1), HandlerTypeType())
 
     "check vtype types" in:
       assertVType(UsageType(), Type(UsageType()))

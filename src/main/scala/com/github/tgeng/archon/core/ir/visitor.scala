@@ -29,24 +29,26 @@ trait TermVisitor[C, R]:
         )
 
   def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
-    case ty: Type                   => visitType(ty)
-    case top: Top                   => visitTop(top)
-    case v: Var                     => visitVar(v)
-    case collapse: Collapse         => visitCollapse(collapse)
-    case u: U                       => visitU(u)
-    case thunk: Thunk               => visitThunk(thunk)
-    case dataType: DataType         => visitDataType(dataType)
-    case con: Con                   => visitCon(con)
-    case usageType: UsageType       => visitUsageType(usageType)
-    case usageLiteral: UsageLiteral => visitUsageLiteral(usageLiteral)
-    case usageProd: UsageProd       => visitUsageProd(usageProd)
-    case usageSum: UsageSum         => visitUsageSum(usageSum)
-    case usageJoin: UsageJoin       => visitUsageJoin(usageJoin)
-    case effectsType: EffectsType   => visitEffectsType(effectsType)
-    case effects: Effects           => visitEffects(effects)
-    case levelType: LevelType       => visitLevelType(levelType)
-    case level: Level               => visitLevel(level)
-    case auto: Auto                 => visitAuto(auto)
+    case ty: Type                               => visitType(ty)
+    case top: Top                               => visitTop(top)
+    case v: Var                                 => visitVar(v)
+    case collapse: Collapse                     => visitCollapse(collapse)
+    case u: U                                   => visitU(u)
+    case thunk: Thunk                           => visitThunk(thunk)
+    case dataType: DataType                     => visitDataType(dataType)
+    case con: Con                               => visitCon(con)
+    case usageType: UsageType                   => visitUsageType(usageType)
+    case usageLiteral: UsageLiteral             => visitUsageLiteral(usageLiteral)
+    case usageProd: UsageProd                   => visitUsageProd(usageProd)
+    case usageSum: UsageSum                     => visitUsageSum(usageSum)
+    case usageJoin: UsageJoin                   => visitUsageJoin(usageJoin)
+    case effectsType: EffectsType               => visitEffectsType(effectsType)
+    case effects: Effects                       => visitEffects(effects)
+    case levelType: LevelType                   => visitLevelType(levelType)
+    case level: Level                           => visitLevel(level)
+    case effectInstanceType: EffectInstanceType => visitEffectInstanceType(effectInstanceType)
+    case effectInstance: EffectInstance         => visitEffectInstance(effectInstance)
+    case auto: Auto                             => visitAuto(auto)
 
   def visitType(ty: Type)(using ctx: C)(using Σ: Signature): R =
     visitVTerm(ty.upperBound)
@@ -113,6 +115,16 @@ trait TermVisitor[C, R]:
         visitVTerm(v)
       }.toSeq*,
     )
+
+  def visitEffectInstanceType
+    (instanceType: EffectInstanceType)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    visitEff(instanceType.effect)
+
+  def visitEffectInstance(instance: VTerm.EffectInstance)(using ctx: C)(using Σ: Signature): R =
+    visitEff(instance.effect)
 
   def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature): R = combine()
 
@@ -569,6 +581,9 @@ trait Transformer[C]:
       case levelType: LevelType       => transformLevelType(levelType)
       case level: Level               => transformLevel(level)
       case auto: Auto                 => transformAuto(auto)
+      case effectInstanceType: VTerm.EffectInstanceType =>
+        transformEffectInstanceType(effectInstanceType)
+      case effectInstance: VTerm.EffectInstance => transformEffectInstance(effectInstance)
 
   def transformType(ty: Type)(using ctx: C)(using Σ: Signature): VTerm =
     Type(transformVTerm(ty.upperBound))(using ty.sourceInfo)
@@ -633,6 +648,23 @@ trait Transformer[C]:
       level.literal,
       level.maxOperands.map((k, v) => (transformVTerm(k), v)),
     )(using level.sourceInfo)
+
+  def transformEffectInstanceType
+    (instanceType: EffectInstanceType)
+    (using ctx: C)
+    (using Σ: Signature)
+    : VTerm =
+    EffectInstanceType(
+      transformEff(instanceType.effect),
+      instanceType.handlerConstraint,
+    )
+
+  def transformEffectInstance(instance: EffectInstance)(using ctx: C)(using Σ: Signature): VTerm =
+    EffectInstance(
+      transformEff(instance.effect),
+      instance.handlerConstraint,
+      instance.handlerKey,
+    )
 
   def transformAuto(auto: Auto)(using ctx: C)(using Σ: Signature): VTerm = auto
 
@@ -776,9 +808,6 @@ trait Transformer[C]:
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))
-
-  def transformBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature): Nat =
-    layer
 
   def transformQualifiedName(qn: QualifiedName)(using ctx: C)(using Σ: Signature): QualifiedName =
     qn

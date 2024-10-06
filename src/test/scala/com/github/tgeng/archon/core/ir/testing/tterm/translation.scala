@@ -26,7 +26,6 @@ enum GlobalNameInfo:
   case GData(qn: QualifiedName)
   case GDataValue(n: Name)
   case GRecord(qn: QualifiedName)
-  case GEffect(qn: QualifiedName)
 
 case class TranslationContext
   (
@@ -115,7 +114,6 @@ extension (tTerm: TTerm)
           case Right(GData(qn))     => Return(DataType(qn, Nil))
           case Right(GDataValue(n)) => Return(Con(n, Nil))
           case Right(GRecord(qn))   => RecordType(qn, Nil)
-          case Right(GEffect(qn))   => Return(EffectsLiteral(Set((qn, Nil))))
       case TDef(qn) => Def(qn)
       case TForce(t) =>
         translate(t) { case Seq(t) =>
@@ -160,7 +158,6 @@ extension (tTerm: TTerm)
                   case Right(GData(qn))     => Return(DataType(qn, args))
                   case Right(GDataValue(n)) => Return(Con(n, args))
                   case Right(GRecord(qn))   => RecordType(qn, args)
-                  case Right(GEffect(qn))   => Return(EffectsLiteral(Set((qn, args))))
                   case _                    => redex(c.toCTerm, translatedElims)
               case _ => redex(c.toCTerm, translatedElims)
       case TFunctionType(arg, bodyType, effects) =>
@@ -173,7 +170,7 @@ extension (tTerm: TTerm)
           )
         }
       case THandler(
-          eff,
+          (qn, tArgs),
           otherEffects,
           outputEffects,
           outputUsage,
@@ -187,58 +184,58 @@ extension (tTerm: TTerm)
           input,
           inputBinding,
         ) =>
-        translate(
-          eff,
-          otherEffects,
-          outputEffects,
-          outputUsage,
-          outputTy,
-          parameter,
-          parameterBinding.ty,
-          parameterBinding.usage,
-          inputBinding.ty,
-          inputBinding.usage,
-        ) {
-          case Seq(
-              eff,
-              otherEffects,
-              outputEffects,
-              outputUsage,
-              outputTy,
-              parameter,
-              parameterTy,
-              parameterUsage,
-              inputTy,
-              inputUsage,
-            ) =>
-            Handler(
-              eff,
-              otherEffects,
-              outputEffects,
-              outputUsage,
-              outputTy,
-              parameter,
-              Binding(parameterTy, parameterUsage)(Name.Normal(parameterBinding.name)),
-              parameterDisposer.map(_.toCTerm),
-              parameterReplicator.map(_.toCTerm),
-              transform.toCTerm,
-              handlers
-                .map:
-                  case (qn, THandlerImpl(h, body, boundNames)) =>
-                    qn -> HandlerImpl(
-                      h,
-                      body.toCTerm(using
-                        summon[TranslationContext].bindLocal(parameterBinding.name +: boundNames*),
-                      ),
-                      F(Auto(), Auto(), u1),
-                      h.handlerType match
-                        case HandlerType.Simple  => None
-                        case HandlerType.Complex => Some(Auto()),
-                    )(boundNames.map(n => Name.Normal(n)))
-                .to(SeqMap),
-              input.toCTerm,
-              Binding(inputTy, inputUsage)(Name.Normal(inputBinding.name)),
-            )
+        translate(tArgs*) { case tArgs =>
+          translate(
+            otherEffects,
+            outputEffects,
+            outputUsage,
+            outputTy,
+            parameter,
+            parameterBinding.ty,
+            parameterBinding.usage,
+            inputBinding.ty,
+            inputBinding.usage,
+          ) {
+            case Seq(
+                otherEffects,
+                outputEffects,
+                outputUsage,
+                outputTy,
+                parameter,
+                parameterTy,
+                parameterUsage,
+                inputTy,
+                inputUsage,
+              ) =>
+              Handler(
+                (qn, tArgs.toList),
+                otherEffects,
+                outputEffects,
+                outputUsage,
+                outputTy,
+                parameter,
+                Binding(parameterTy, parameterUsage)(Name.Normal(parameterBinding.name)),
+                parameterDisposer.map(_.toCTerm),
+                parameterReplicator.map(_.toCTerm),
+                transform.toCTerm,
+                handlers
+                  .map:
+                    case (qn, THandlerImpl(h, body, boundNames)) =>
+                      qn -> HandlerImpl(
+                        h,
+                        body.toCTerm(using
+                          summon[TranslationContext].bindLocal(parameterBinding.name +: boundNames*),
+                        ),
+                        F(Auto(), Auto(), u1),
+                        h.handlerType match
+                          case HandlerType.Simple  => None
+                          case HandlerType.Complex => Some(Auto()),
+                      )(boundNames.map(n => Name.Normal(n)))
+                  .to(SeqMap),
+                input.toCTerm,
+                Binding(inputTy, inputUsage)(Name.Normal(inputBinding.name)),
+              )
+          }
         }
 
 def translate
@@ -278,7 +275,7 @@ extension (tp: TPattern)
           case Left(index)          => Pattern.PVar(index)
           case Right(GData(qn))     => Pattern.PDataType(qn, Nil)
           case Right(GDataValue(n)) => Pattern.PConstructor(n, Nil)
-          case Right(GRecord(_)) | Right(GEffect(_)) | Right(GDef(_)) =>
+          case Right(GRecord(_)) | Right(GDef(_)) =>
             throw UnresolvedSymbol(name)
       case TpXConstructor(forced, name, args) =>
         val argPatterns = args.map(_.toPattern).toList

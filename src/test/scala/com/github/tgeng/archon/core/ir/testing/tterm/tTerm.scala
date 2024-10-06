@@ -26,7 +26,7 @@ enum TTerm(val sourceInfo: SourceInfo):
     extends TTerm(SourceInfo.merge(arg.sourceInfo, bodyType.sourceInfo))
   case THandler
     (
-      eff: TTerm,
+      eff: (QualifiedName, Seq[TTerm]),
       otherEffects: TTerm,
       outputEffects: TTerm,
       outputUsage: TTerm,

@@ -946,6 +946,7 @@ private def getEffectsContinuationUsage
         inferType(effectInstance)._1 match
           case EffectInstanceType(_, handlerConstraint) =>
             UsageLiteral(handlerConstraint.continuationUsage)
+          case _ => throw IllegalStateException("type error")
       }
       val usages = operands.keySet.map(getEffectsContinuationUsage)
       UsageJoin(Set(UsageLiteral(U1)) ++ usages ++ literalUsages)

@@ -384,6 +384,10 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case LevelType(strictUpperBound)     => LevelType(strictUpperBound)
       case Level(literal, maxOperands)     => Level(literal, maxOperands)
       case Auto()                          => Auto()
+      case EffectInstanceType(effect, handlerConstraint) =>
+        EffectInstanceType(effect, handlerConstraint)
+      case EffectInstance(effect, handlerConstraint, handlerKey) =>
+        EffectInstance(effect, handlerConstraint, handlerKey)
 
   def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
     visitor.visitVTerm(this)
@@ -460,8 +464,8 @@ object VTerm:
     Set(div),
   )
 
-  def EffectsLiteral(handlerKeys: Set[VTerm])(using sourceInfo: SourceInfo): Effects =
-    Effects(handlerKeys, SeqMap.empty)
+  def EffectsLiteral(effectInstances: Set[VTerm])(using sourceInfo: SourceInfo): Effects =
+    Effects(effectInstances, SeqMap.empty)
 
   def EffectsUnion(effects: VTerm*): Effects =
     Effects(Set.empty, SeqMap(effects.map(_ -> false)*))

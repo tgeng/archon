@@ -44,8 +44,6 @@ enum Constraint:
   case EffSubsumption(context: Context, sub: VTerm, sup: VTerm)
   case LevelSubsumption(context: Context, sub: VTerm, sup: VTerm)
   case UsageSubsumption(context: Context, sub: VTerm, sup: VTerm)
-  case EqDecidabilitySubsumption(context: Context, sub: VTerm, sup: VTerm)
-  case HandlerTypeSubsumption(context: Context, sub: VTerm, sup: VTerm)
 
 enum UnsolvedMetaVariableConstraint:
   case UmcNothing
@@ -554,8 +552,6 @@ class TypingContext
         case Constraint.EffSubsumption(_, sub, sup)            => visitVTerm(sub) ++ visitVTerm(sup)
         case Constraint.LevelSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
         case Constraint.UsageSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
-        case Constraint.EqDecidabilitySubsumption(_, sub, sup) => visitVTerm(sub) ++ visitVTerm(sup)
-        case Constraint.HandlerTypeSubsumption(_, sub, sup)    => visitVTerm(sub) ++ visitVTerm(sup)
 
   @throws(classOf[IrError])
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =
