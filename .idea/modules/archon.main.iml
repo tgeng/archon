@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module external.linked.project.id="root:main [file:/Users/tgeng/dev/archon/]" external.linked.project.path="$MODULE_DIR$/../.." external.root.project.path="$MODULE_DIR$/../.." external.system.id="SBT" external.system.module.type="sbtSourceSet" type="JAVA_MODULE" version="4">
+  <component name="DisplayModuleName">
+    <option name="name" value="archon.main" />
+  </component>
+  <component name="NewModuleRootManager" LANGUAGE_LEVEL="JDK_17">
+    <output url="file://$MODULE_DIR$/../../target/scala-3.5.1/classes" />
+    <exclude-output />
+    <content url="file://$MODULE_DIR$/../../src/main">
+      <sourceFolder url="file://$MODULE_DIR$/../../src/main/scala" isTestSource="false" />
+    </content>
+    <content url="file://$MODULE_DIR$/../../target/scala-3.5.1/resource_managed/main" />
+    <content url="file://$MODULE_DIR$/../../target/scala-3.5.1/src_managed/main" />
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="sbt: scala-sdk-3.5.1" level="project" />
+    <orderEntry type="module-library">
+      <library name="sbt: unmanaged-jars">
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/../../unmanaged/scalaz3_3-4.8.14-macos-aarch64.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
+    <orderEntry type="library" name="sbt: com.lihaoyi:fastparse_3:3.1.1:jar" level="project" />
+    <orderEntry type="library" name="sbt: com.lihaoyi:geny_3:1.1.1:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.scala-lang:scala-library:2.13.14:jar" level="project" />
+    <orderEntry type="library" name="sbt: com.lihaoyi:sourcecode_3:0.4.0:jar" level="project" />
+    <orderEntry type="library" name="sbt: com.lihaoyi:pprint_3:0.9.0:jar" level="project" />
+    <orderEntry type="library" name="sbt: com.lihaoyi:os-lib_3:0.10.7:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.scala-lang:scala3-library_3:3.5.1:jar" level="project" />
+    <orderEntry type="library" name="sbt: com.lihaoyi:fansi_3:0.5.0:jar" level="project" />
+    <orderEntry type="library" name="sbt: org.scala-lang.modules:scala-collection-contrib_3:0.3.0:jar" level="project" />
+  </component>
+</module>

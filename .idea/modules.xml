@@ -4,6 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon.iml" filepath="$PROJECT_DIR$/.idea/modules/archon.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon.archon-build.iml" filepath="$PROJECT_DIR$/.idea/modules/archon.archon-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon.main.iml" filepath="$PROJECT_DIR$/.idea/modules/archon.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/archon.test.iml" filepath="$PROJECT_DIR$/.idea/modules/archon.test.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/dev.archon.iml" filepath="$PROJECT_DIR$/.idea/modules/dev.archon.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/project.archon-build.iml" filepath="$PROJECT_DIR$/.idea/modules/project.archon-build.iml" />
     </modules>
