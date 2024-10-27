@@ -32,6 +32,8 @@ extension (ctx: collection.IndexedSeq[Binding[VTerm]])
 
 type TContext = collection.IndexedSeq[(Binding[VTerm], Variance)]
 
+type DContext = collection.IndexedSeq[(Binding[VTerm], EscapeStatus)]
+
 extension (ctx: collection.IndexedSeq[(Binding[VTerm], Variance)])
   @targetName("resolveT")
   def resolve(ref: VTerm.Var)(using Signature): (Binding[VTerm], Variance) = resolve(ref.idx)

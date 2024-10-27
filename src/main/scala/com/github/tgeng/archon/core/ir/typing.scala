@@ -8,7 +8,6 @@ import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
 import com.github.tgeng.archon.core.ir.Elimination.*
-import com.github.tgeng.archon.core.ir.HandlerType.Simple
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
@@ -18,6 +17,7 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{MultiSet, SeqMap, Set}
+
 
 @throws(classOf[IrError])
 private def checkLevel
@@ -260,7 +260,7 @@ def inferLevel(ty: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
       case CType(upperBound, _) => LevelSuc(inferLevel(upperBound))
       case CTop(level, _)       => level
       case F(vTy, _, _)         => inferLevel(vTy)
-      case FunctionType(binding, bodyTy, _) =>
+      case FunctionType(binding, bodyTy, _, _) =>
         val argLevel = inferLevel(binding.ty)
         val bodyLevel = inferLevel(bodyTy)(using Γ :+ binding)
         // strengthen is always safe because the only case that bodyLevel would reference 0 is when
@@ -323,8 +323,8 @@ def inferType
           case Some(definition) =>
             (
               d,
-              definition.context.foldRight(definition.ty) { case (binding, bodyTy) =>
-                FunctionType(binding, bodyTy, Total())
+              definition.context.foldRight(definition.ty) { case ((binding, es), bodyTy) =>
+                FunctionType(binding, bodyTy, Total(), es)
               },
             )
       case Force(uncheckedV) =>
@@ -359,7 +359,7 @@ def inferType
         val (v, vTy) = inferType(uncheckedV)
         (Return(v, usage), F(vTy, Total()))
       case tm: Let => checkLet(tm, None)
-      case FunctionType(binding, uncheckedBodyTy, uncheckedEffects) =>
+      case FunctionType(binding, uncheckedBodyTy, uncheckedEffects, _) =>
         val effects = checkType(uncheckedEffects, EffectsType())
         val (ty, tyTy) = inferType(binding.ty)
         val bindingUsage = checkType(binding.usage, UsageType(None))
@@ -399,7 +399,8 @@ def inferType
             case (e @ ETerm(uncheckedArg)) :: uncheckedRest =>
               // Note that this `cty` is created by `inferType` so it's already checked.
               cty match
-                case FunctionType(binding, bodyTy, effects) =>
+                // TODO[P0]: honor escape status here and use it for escape analysis
+                case FunctionType(binding, bodyTy, effects, _) =>
                   val arg = checkType(uncheckedArg, binding.ty)
                   val (rest, cty) =
                     checkElims(
@@ -513,7 +514,6 @@ def checkType
   (using Σ: Signature)
   (using ctx: TypingContext)
   : CTerm = debugCheckType(tm, ty):
-  // TODO[P0]: using something of effect instance type but not as an effect instance should yield ndet effect.
   tm match
     case Force(v) =>
       val checkedV = checkType(v, U(ty))
@@ -530,12 +530,8 @@ def checkType
           )
           Return(checkedV, usage)
         case _ => throw ExpectFType(ty)
-    case l: Let =>
-      val (v, _) = checkLet(l, Some(ty))
-      v
-    case h: Handler =>
-      val (v, _) = checkHandler(h, Some(ty))
-      v
+    case l: Let     => checkLet(l, Some(ty))._1
+    case h: Handler => checkHandler(h, Some(ty))._1
     case _ =>
       val (checkedTm, tmTy) = inferType(tm)
       val normalizedTy = ty.normalized(None)
@@ -661,6 +657,8 @@ def checkHandler
   (using Σ: Signature)
   (using ctx: TypingContext)
   : (CTerm, CTerm) =
+  // TODO[P0]: do escape analysis of the effect instance variable and if it escapes, otherEffects
+  //  should contain ndet.
   val eff = checkEff(h.eff)
   val operations = Σ.getOperations(eff._1).map(op => (eff._1 / op.name, eff._2, op)).toSet
   val expectedOperationNames = operations.map(_._1)
@@ -1035,11 +1033,12 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
     CType(upperBound, EffectsUnion(eff, effects))
   case CTop(level, effects)   => CTop(level, EffectsUnion(eff, effects))
   case F(vTy, effects, usage) => F(vTy, EffectsUnion(eff, effects), usage)
-  case FunctionType(binding, bodyTy, effects) =>
+  case FunctionType(binding, bodyTy, effects, es) =>
     FunctionType(
       binding,
       bodyTy,
       EffectsUnion(eff, effects),
+      es
     )
   case RecordType(qn, args, effects) =>
     RecordType(qn, args, EffectsUnion(eff, effects))

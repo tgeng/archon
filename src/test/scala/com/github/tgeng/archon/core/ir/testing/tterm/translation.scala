@@ -5,6 +5,7 @@ import com.github.tgeng.archon.core.common.Name.Normal
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
+import com.github.tgeng.archon.core.ir.EscapeStatus.EsUnknown
 import com.github.tgeng.archon.core.ir.PreDeclaration.*
 import com.github.tgeng.archon.core.ir.SourceInfo.SiEmpty
 import com.github.tgeng.archon.core.ir.VTerm.*
@@ -350,7 +351,8 @@ extension (td: TDeclaration)
           val clauseCTerms = clauses.map(_.toPreClause)
           PreDeclaration.PreDefinition(
             ctx.moduleQn / name,
-            tParamTysCTerm,
+            // TODO[P0]: propagate escape status from TDefinition
+            tParamTysCTerm.zip(LazyList.continually(EsUnknown)),
             tyCTerm,
             clauseCTerms.toList,
           )

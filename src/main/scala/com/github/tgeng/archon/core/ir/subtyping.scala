@@ -144,9 +144,10 @@ def checkIsSubtype
       val tyConstraint = checkIsSubtype(vTy1, vTy2)
       effConstraint ++ usageConstraint ++ tyConstraint
     case (
-        FunctionType(binding1, bodyTy1, eff1),
-        FunctionType(binding2, bodyTy2, eff2),
+        FunctionType(binding1, bodyTy1, eff1, es1),
+        FunctionType(binding2, bodyTy2, eff2, es2),
       ) =>
+      if es1 > es2 then throw NotCSubtype(sub, sup)
       val effConstraint = checkEffectSubsumption(eff1, eff2)
       val tyConstraint = ctx.solve(checkIsSubtype(binding2.ty, binding1.ty))
       val usageConstraint = ctx.solve(checkUsageSubsumption(binding2.usage, binding1.usage))
@@ -235,11 +236,11 @@ def typeUnion
         val usage = UsageJoin(usage1, usage2).normalized
         F(vty, effects, usage)
       // for simplicity we just treat types at contravariant position as invariant
-      case (FunctionType(binding1, body1, effects1), FunctionType(binding2, body2, effects2))
+      case (FunctionType(binding1, body1, effects1, es1), FunctionType(binding2, body2, effects2, es2))
         if binding1 == binding2 =>
         val effects = EffectsUnion(effects1, effects2).normalized
         val body = typeUnion(body1, body2)(using Γ :+ binding1)
-        FunctionType(binding1, body, effects)
+        FunctionType(binding1, body, effects, es1 | es2)
       case (r1 @ RecordType(qn1, args1, effects1), r2 @ RecordType(qn2, args2, effects2))
         if qn1 == qn2 =>
         val record = Σ.getRecord(qn1)

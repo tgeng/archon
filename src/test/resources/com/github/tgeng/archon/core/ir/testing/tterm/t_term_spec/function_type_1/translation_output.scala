@@ -13,7 +13,9 @@ FunctionType(
       effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
       usage = Auto() @ "ε"
     ) @ "<> C",
-    effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+    effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+    escapeStatus = EsLocal
   ) @ "B -> <> C",
-  effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+  effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+  escapeStatus = EsLocal
 ) @ "A -> B -> <> C"

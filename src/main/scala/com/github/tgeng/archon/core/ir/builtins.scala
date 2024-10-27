@@ -4,6 +4,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.EscapeStatus.EsLocal
 import com.github.tgeng.archon.core.ir.PreDeclaration.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
@@ -139,7 +140,23 @@ object Builtins:
       throw new IllegalArgumentException(s"Conflicting definitions: $conflictingDefs")
     elaborateAll(builtins)(using Context.empty)(using SimpleSignature())
 
-  private def binding(name: Name, ty: VTerm, usage: VTerm = uAny): Binding[CTerm] =
+  private def dBinding
+    (
+      name: Name,
+      ty: VTerm,
+      usage: VTerm = uAny,
+      escapeStatus: EscapeStatus = EscapeStatus.EsReturned,
+    )
+    : (Binding[CTerm], EscapeStatus) =
+    (Binding(Return(ty, uAny), Return(usage, uAny))(name), escapeStatus)
+
+  private def binding
+    (
+      name: Name,
+      ty: VTerm,
+      usage: VTerm = uAny,
+    )
+    : Binding[CTerm] =
     Binding(Return(ty, uAny), Return(usage, uAny))(name)
 
   private val L0 = LevelLiteral(0)
@@ -314,7 +331,7 @@ object Builtins:
       */
     PreDefinition(
       TypeQn,
-      paramTys = List(binding(n"level", LevelType())),
+      paramTys = List(dBinding(n"level", LevelType())),
       ty = F(Type(Type(Top(Var(0))))),
       clauses = List(
         PreClause(
@@ -332,8 +349,8 @@ object Builtins:
     PreDefinition(
       TypeOfQn,
       paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"upperBound", Type(Type(Top(Var(0))))),
+        dBinding(n"level", LevelType()),
+        dBinding(n"upperBound", Type(Type(Top(Var(0))))),
       ),
       ty = F(Type(Type(Var(0)))),
       clauses = List(
@@ -350,7 +367,7 @@ object Builtins:
       */
     PreDefinition(
       TopQn,
-      paramTys = List(binding(n"level", LevelType())),
+      paramTys = List(dBinding(n"level", LevelType())),
       ty = F(Type(Top(Var(0)))),
       clauses = List(
         PreClause(
@@ -413,8 +430,8 @@ object Builtins:
     PreDefinition(
       UsageProdQn,
       paramTys = List(
-        binding(n"usage1", UsageType()),
-        binding(n"usage2", UsageType()),
+        dBinding(n"usage1", UsageType(), escapeStatus = EsLocal),
+        dBinding(n"usage2", UsageType(), escapeStatus = EsLocal),
       ),
       ty = F(UsageType()),
       clauses = List(
@@ -432,8 +449,8 @@ object Builtins:
     PreDefinition(
       UsageSumQn,
       paramTys = List(
-        binding(n"usage1", UsageType()),
-        binding(n"usage2", UsageType()),
+        dBinding(n"usage1", UsageType(), escapeStatus = EsLocal),
+        dBinding(n"usage2", UsageType(), escapeStatus = EsLocal),
       ),
       ty = F(UsageType()),
       clauses = List(
@@ -451,8 +468,8 @@ object Builtins:
     PreDefinition(
       UsageJoinQn,
       paramTys = List(
-        binding(n"usage1", UsageType()),
-        binding(n"usage2", UsageType()),
+        dBinding(n"usage1", UsageType(), escapeStatus = EsLocal),
+        dBinding(n"usage2", UsageType(), escapeStatus = EsLocal),
       ),
       ty = F(UsageType()),
       clauses = List(
@@ -531,8 +548,8 @@ object Builtins:
     PreDefinition(
       CTypeQn,
       paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"effects", EffectsType()),
+        dBinding(n"level", LevelType()),
+        dBinding(n"effects", EffectsType()),
       ),
       ty = CType(CType(CTop(Var(1), Var(0)))),
       clauses = List(
@@ -552,9 +569,9 @@ object Builtins:
     PreDefinition(
       CTypeOfQn,
       paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"effects", EffectsType()),
-        binding(n"upperBound", U(CType(CTop(Var(1), Var(0))))),
+        dBinding(n"level", LevelType()),
+        dBinding(n"effects", EffectsType()),
+        dBinding(n"upperBound", U(CType(CTop(Var(1), Var(0))))),
       ),
       ty = CType(CType(Force(Var(0)), Var(1))),
       clauses = List(
@@ -574,8 +591,8 @@ object Builtins:
     PreDefinition(
       CTopQn,
       paramTys = List(
-        binding(n"level", LevelType()),
-        binding(n"effects", EffectsType()),
+        dBinding(n"level", LevelType()),
+        dBinding(n"effects", EffectsType()),
       ),
       ty = CType(CTop(Var(1), Var(0))),
       clauses = List(
@@ -594,8 +611,8 @@ object Builtins:
     PreDefinition(
       EffectsUnionQn,
       paramTys = List(
-        binding(n"eff1", EffectsType()),
-        binding(n"eff2", EffectsType()),
+        dBinding(n"eff1", EffectsType()),
+        dBinding(n"eff2", EffectsType()),
       ),
       ty = F(EffectsType()),
       clauses = List(
@@ -613,7 +630,7 @@ object Builtins:
     PreDefinition(
       EffectsRetainSimpleLinearQn,
       paramTys = List(
-        binding(n"eff", EffectsType()),
+        dBinding(n"eff", EffectsType()),
       ),
       ty = F(EffectsType()),
       clauses = List(
@@ -631,7 +648,7 @@ object Builtins:
     PreDefinition(
       LevelSucQn,
       paramTys = List(
-        binding(n"level", LevelType()),
+        dBinding(n"level", LevelType()),
       ),
       ty = F(LevelType()),
       clauses = List(
@@ -650,8 +667,8 @@ object Builtins:
     PreDefinition(
       LevelMaxQn,
       paramTys = List(
-        binding(n"level1", LevelType()),
-        binding(n"level2", LevelType()),
+        dBinding(n"level1", LevelType()),
+        dBinding(n"level2", LevelType()),
       ),
       ty = F(LevelType()),
       clauses = List(

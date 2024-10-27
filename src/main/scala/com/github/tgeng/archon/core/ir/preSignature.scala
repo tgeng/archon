@@ -5,6 +5,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
 
 type PreTTelescope = List[(Binding[CTerm], Variance)]
+type PreDTelescope = List[(Binding[CTerm], EscapeStatus)]
 type PreTelescope = List[Binding[CTerm]]
 
 enum PreDeclaration:
@@ -32,7 +33,7 @@ enum PreDeclaration:
       fields: List[Field],
       selfName: Name = n"self",
     )
-  case PreDefinition(qn: QualifiedName, paramTys: PreTelescope, ty: CTerm, clauses: List[PreClause])
+  case PreDefinition(qn: QualifiedName, paramTys: PreDTelescope, ty: CTerm, clauses: List[PreClause])
   case PreEffect
     (
       qn: QualifiedName,

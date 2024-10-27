@@ -112,7 +112,7 @@ def checkIsConvertible
   if left == right then Set.empty
   else
     ty match
-      case Some(FunctionType(binding, bodyTy, _)) =>
+      case Some(FunctionType(binding, bodyTy, _, _)) =>
         checkIsConvertible(
           Application(left.weakened, Var(0)),
           Application(right.weakened, Var(0)),
@@ -211,7 +211,10 @@ def checkIsConvertible
               using Γ :+ Binding(tBinding1.ty, UsageLiteral(UAny))(gn"v"),
             )
             tyConstraint ++ effConstraint ++ usageConstraint ++ tConstraint ++ ctxConstraint
-          case (FunctionType(binding1, bodyTy1, eff1), FunctionType(binding2, bodyTy2, eff2)) =>
+          case (
+              FunctionType(binding1, bodyTy1, eff1, es1),
+              FunctionType(binding2, bodyTy2, eff2, es2),
+            ) if es1 == es2 =>
             val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
             val tyConstraint = ctx.solve(checkIsConvertible(binding2.ty, binding1.ty, None))
             val bodyConstraint =
@@ -365,7 +368,7 @@ private def checkElimIsConvertible
     case (Nil, Nil, _) => Set.empty
     case (ETerm(left) :: lefts, ETerm(right) :: rights, headTy) =>
       headTy match
-        case FunctionType(binding, bodyTy, _) =>
+        case FunctionType(binding, bodyTy, _, _) =>
           val headConstraints = ctx.solve(checkIsConvertible(left, right, Some(binding.ty)))
           if headConstraints.isEmpty then
             checkElimIsConvertible(Application(head, left), lefts, rights, bodyTy, ty)

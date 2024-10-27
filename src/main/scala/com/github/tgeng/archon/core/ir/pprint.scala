@@ -474,6 +474,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           binding,
           bodyTy,
           effects,
+          _,
         ) =>
         Left(
           (

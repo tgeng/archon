@@ -42,7 +42,8 @@ List(
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
         usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1") @ "ε") @ "ε"
       ) @ "Type l",
-      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+      escapeStatus = EsLocal
     ) @ "A -> Type l",
     constructors = List(
       PreConstructor(

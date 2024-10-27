@@ -171,14 +171,14 @@ def collectUsages
               val field = Σ.getField(qn, name)
               val fieldTy = field.ty.substLowers(args :+ Thunk(r)*)
               impl(fieldTy, elims)
-            case (FunctionType(binding, bodyTy, _), Elimination.ETerm(arg) :: elims) =>
+            case (FunctionType(binding, bodyTy, _, _), Elimination.ETerm(arg) :: elims) =>
               collectUsages(arg, Some(binding.ty)) * binding.usage + impl(
                 bodyTy.substLowers(arg),
                 elims,
               )
             case _ => throw IllegalStateException(s"bad redex with\nty=$ty\nelims=$elims")
         impl(ty, elims)
-      case FunctionType(binding, bodyTy, effects) =>
+      case FunctionType(binding, bodyTy, effects, _) =>
         val bindingUsages =
           collectUsages(binding.ty, None) + collectUsages(binding.usage, Some(UsageType()))
         val effectsUsages = collectUsages(effects, Some(EffectsType()))

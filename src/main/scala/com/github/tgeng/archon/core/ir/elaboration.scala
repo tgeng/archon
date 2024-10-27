@@ -187,7 +187,7 @@ private def elaborateDataHead
         // desirable) but acceptable.
         case F(Type(Top(level)), _, _) => (Nil, level)
         case F(t, _, _)                => throw ExpectVType(t)
-        case FunctionType(binding, bodyTy, _) =>
+        case FunctionType(binding, bodyTy, _, _) =>
           val (telescope, level) = elaborateTy(bodyTy)(using Γ :+ binding)
           (binding +: telescope, level)
         case _ => throw NotDataTypeType(ty)
@@ -234,7 +234,7 @@ private def elaborateDataBody
         // TODO: check and report invalid args
         (Nil, args.drop(data.context.size))
       case F(t, _, _) => throw ExpectDataType(t, Some(data.qn))
-      case FunctionType(binding, bodyTy, _) =>
+      case FunctionType(binding, bodyTy, _, _) =>
         val (telescope, level) = elaborateTy(bodyTy)(using Γ :+ binding)
         (binding :: telescope, level)
       case _ => throw NotDataTypeType(ty)
@@ -317,10 +317,13 @@ private def elaborateDefHead
   given SourceInfo = SiEmpty
 
   ctx.trace(s"elaborating def signature ${definition.qn}"):
-    val paramTys = elaborateTelescope(definition.paramTys)(using Γ)
-    given newΓ: Context = Γ ++ paramTys
+    val paramTys = elaborateTelescope(definition.paramTys.map(_._1))(using Γ)
+    val newDContext: DContext =
+      // The parameters in context are module parameters, which usually would escape arbitrarily.
+      Γ.map((_, EscapeStatus.EsUnknown)) ++ paramTys.zip(definition.paramTys.map(_._2))
+    given Context = newDContext.map(_._1)
     val ty = checkIsCType(definition.ty).normalized(None)
-    val d: Definition = Definition(definition.qn, newΓ, ty)
+    val d: Definition = Definition(definition.qn, newDContext, ty)
     Σ.addDeclaration(checkDef(d))
 
 @throws(classOf[IrError])
@@ -518,7 +521,7 @@ private def elaborateDefBody
       // [intro]
       case (
           ElabClause(_, CPattern(_) :: _, _, _) :: _,
-          FunctionType(unsolvedBinding, bodyTy, _),
+          FunctionType(unsolvedBinding, bodyTy, _, _),
         ) =>
         val binding = unsolvedBinding.map(ctx.solveTerm)
         val _A = shift(problem, binding.ty)
@@ -763,7 +766,7 @@ private def elaborateDefBody
       case (Nil, _) => throw IncompleteClauses(preDefinition.qn)
 
   val definition = Σ.getDefinition(preDefinition.qn)
-  given Context = definition.context
+  given Context = definition.context.map(_._1)
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}"):
     val (_Σ, _Q) = elaborate(
@@ -822,7 +825,7 @@ private def elaborateEffectBody
         // acceptable.
         case F(ty, _, usage) =>
           (Nil, ty, usage)
-        case FunctionType(binding, bodyTy, _) =>
+        case FunctionType(binding, bodyTy, _, _) =>
           val (telescope, level, usage) = elaborateTy(bodyTy)(using Γ :+ binding)
           (binding :: telescope, level, usage)
         case _ => throw ExpectFType(ty)

@@ -32,7 +32,7 @@ enum Declaration:
       selfBinding: Binding[VTerm],
     )
 
-  case Definition(qn: QualifiedName, context: Context, ty: CTerm /* binding += context */ )
+  case Definition(qn: QualifiedName, context: DContext, ty: CTerm /* binding += context */ )
 
   case Effect
     (
@@ -146,8 +146,15 @@ trait Signature:
     case QualifiedName.Node(recordQn, fieldName) => getFieldOption(recordQn, fieldName)
     case _ => throw IllegalArgumentException(s"Not a field '$fieldQn'")
 
+  // In a previous design I had derived definitions for effects, data, and record. But that turns
+  // out to be not good. Instead, data type and value constructors, record type constructors, and
+  // effect type constructors and operators directly contribute to global names that are recognized
+  // by the global mix-fix parser. This way, type checking is much simpler and more predictable.
+  // Also, any name conflicts are caught during parsing. Record field will have a special syntax for
+  // projection. Type class also contributes to the mix-fix parser and it's basically syntax sugar
+  // of records under the hood.
   def getDefinitionOption(qn: QualifiedName): Option[Definition] =
-    getDefinitionOptionImpl(qn).orElse(getDerivedDefinitionOption(qn))
+    getDefinitionOptionImpl(qn)
 
   def getDefinitionOptionImpl(qn: QualifiedName): Option[Definition]
 
@@ -156,7 +163,7 @@ trait Signature:
   )
 
   def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    getClausesOptionImpl(qn).orElse(getDerivedClausesOption(qn))
+    getClausesOptionImpl(qn)
 
   def getClausesOptionImpl(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
@@ -199,177 +206,3 @@ trait Signature:
     getOperationOption(qn, opName).getOrElse(
       throw IllegalArgumentException(s"missing operation $opName"),
     )
-
-  // TODO[P2]: remove all these derived defs from data, record, and effects. Instead, data type and
-  //  value constructors, record type constructors, and effect type constructors and operators
-  //  directly contribute to global names that are recognized by the global mix-fix parser. This
-  //  way, type checking is much simpler and more predictable. Also, any name conflicts are caught
-  //  during parsing. Record field will have a special syntax for projection. Type class also
-  //  contributes to the mix-fix parser and it's basically syntax sugar of records under the hood.
-  private def getDerivedDefinitionOption(qn: QualifiedName): Option[Definition] =
-    getDataDerivedDefinitionOption(qn)
-      .orElse(getDataConDerivedDefinitionOption(qn))
-      .orElse(getRecordDerivedDefinitionOption(qn))
-      .orElse(getRecordFieldDerivedDefinitionOption(qn))
-
-  private def getDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    getDataDerivedClausesOption(qn)
-      .orElse(getDataConDerivedClausesOption(qn))
-      .orElse(getRecordDerivedClausesOption(qn))
-      .orElse(getRecordFieldDerivedClausesOption(qn))
-
-  import CTerm.*
-  import QualifiedName.*
-  import VTerm.*
-
-  given SourceInfo = SiEmpty
-  given Signature = this
-
-  def getDataDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    getDataOption(qn).map { data =>
-      val context = data.context.map(_._1) ++ data.tIndexTys
-      Definition(qn, context, F(Type(DataType(qn, vars(context.size - 1))), total, uAny))
-    }
-
-  def getDataDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    getDataOption(qn)
-      .map(data => {
-        val context = data.context.map(_._1) ++ data.tIndexTys
-        val dataType = DataType(qn, vars(context.size - 1))
-        IndexedSeq(
-          Clause(
-            context,
-            Nil,
-            Return(dataType, uAny),
-            F(Type(dataType), total, uAny),
-          ),
-        )
-      })
-
-  def getDataConDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    qn match
-      case Node(dataQn, conName) =>
-        for
-          data <- getDataOption(dataQn)
-          constructor <- getConstructorOption(dataQn, conName)
-        yield
-          val context = data.context.map(_._1) ++ data.tIndexTys
-          // Synthesize a usage parameter for polymorphic usages in data types.
-          val conContext =
-            (context :+ Binding(UsageType(), uAny)(gn"usage")) ++
-              constructor.paramTys.zipWithIndex.map((b, i) =>
-                Binding(
-                  b.ty.weakened,
-                  // multiply the usage by the synthesized usage parameter
-                  UsageProd(b.usage.weakened, Var(i)),
-                )(b.name),
-              )
-          Definition(
-            qn / conName,
-            conContext,
-            F(
-              DataType(
-                dataQn,
-                vars(conContext.size - 1, constructor.paramTys.size + 1) ++
-                  // weaken due to the synthesized usage parameter
-                  constructor.tArgs.map(_.weaken(1, constructor.paramTys.size)),
-              ),
-              total,
-              Var(constructor.paramTys.size), // reference the synthesized usage parameter
-            ),
-          )
-      case _ => None
-
-  def getDataConDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    qn match
-      case Node(dataQn, conName) =>
-        for
-          data <- getDataOption(dataQn)
-          constructor <- getConstructorOption(dataQn, conName)
-        yield
-          val context = data.context.map(_._1) ++ data.tIndexTys
-          // Synthesize a usage parameter for polymorphic usages in data types.
-          val conContext =
-            (context :+ Binding(UsageType(), uAny)(gn"usage")) ++
-              constructor.paramTys.zipWithIndex.map((b, i) =>
-                Binding(
-                  b.ty.weakened,
-                  // multiply the usage by the synthesized usage parameter
-                  UsageProd(b.usage.weakened, Var(i)),
-                )(b.name),
-              )
-          IndexedSeq(
-            Clause(
-              conContext,
-              Nil,
-              Return(
-                Con(
-                  conName,
-                  vars(constructor.paramTys.size - 1),
-                ),
-                Var(constructor.paramTys.size), // reference the synthesized usage parameter
-              ),
-              F(
-                DataType(
-                  dataQn,
-                  vars(conContext.size - 1, constructor.paramTys.size + 1) ++
-                    // weaken due to the synthesized usage parameter
-                    constructor.tArgs.map(_.weaken(1, constructor.paramTys.size)),
-                ),
-                total,
-                Var(constructor.paramTys.size), // reference the synthesized usage parameter
-              ),
-            ),
-          )
-      case _ => None
-
-  def getRecordDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    getRecordOption(qn)
-      .map(record =>
-        Definition(
-          qn,
-          record.context.map(_._1) :+ Binding(EffectsType(), uAny)(gn"effects"),
-          // The effect should be parametrically polymorphic so that one is able to construct record
-          // type with different effects.
-          CType(RecordType(qn, vars(record.context.size, 1), Var(0))),
-        ),
-      )
-
-  def getRecordDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    getRecordOption(qn)
-      .map(record => {
-        val recordType = RecordType(qn, vars(record.context.size, 1), Var(0))
-        IndexedSeq(
-          Clause(
-            record.context.map(_._1) :+ Binding(EffectsType(), uAny)(gn"effects"),
-            Nil,
-            recordType,
-            CType(recordType),
-          ),
-        )
-      })
-
-  def getRecordFieldDerivedDefinitionOption(qn: QualifiedName): Option[Declaration.Definition] =
-    qn match
-      case Node(qn, fieldName) =>
-        for
-          record <- getRecordOption(qn)
-          field <- getFieldOption(qn, fieldName)
-        yield Definition(qn, record.context.map(_._1) :+ record.selfBinding, field.ty)
-      case _ => None
-
-  def getRecordFieldDerivedClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    qn match
-      case Node(qn, fieldName) =>
-        for
-          record <- getRecordOption(qn)
-          field <- getFieldOption(qn, fieldName)
-        yield IndexedSeq(
-          Clause(
-            record.context.map(_._1) :+ record.selfBinding,
-            Nil,
-            redex(Force(Var(0)), fieldName),
-            field.ty,
-          ),
-        )
-      case _ => None

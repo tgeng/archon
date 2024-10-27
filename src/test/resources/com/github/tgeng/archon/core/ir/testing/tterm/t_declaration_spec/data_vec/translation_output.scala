@@ -35,7 +35,8 @@ List(
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
         usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1") @ "ε") @ "ε"
       ) @ "Type l",
-      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+      escapeStatus = EsLocal
     ) @ "Nat -> Type l",
     constructors = List(
       PreConstructor(
@@ -85,11 +86,14 @@ List(
                 effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
                 usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
               ) @ "Vec l t (Succ n)",
-              effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+              effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+              escapeStatus = EsLocal
             ) @ "Vec l t n -> Vec l t (Succ n)",
-            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+            escapeStatus = EsLocal
           ) @ "t -> Vec l t n -> Vec l t (Succ n)",
-          effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+          effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+          escapeStatus = EsLocal
         ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n)"
       )
     )

@@ -4,7 +4,6 @@ import com.github.tgeng.archon.common.Ref.given
 import com.github.tgeng.archon.core.common.{n, qn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
-import com.github.tgeng.archon.core.ir.HandlerType.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 import com.github.tgeng.archon.core.ir.testing.*

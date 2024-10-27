@@ -50,9 +50,11 @@ List(
               args = List(),
               effects = Effects(handlerKeys = Set(), unionOperands = SeqMap()) @ "ε"
             ) @ "CStream",
-            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε"
+            effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
+            escapeStatus = EsLocal
           ) @ "Eq Nat m (head self) -> CStream",
-          effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+          effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+          escapeStatus = EsLocal
         ) @ "m: Nat -> Eq Nat m (head self) -> CStream"
       )
     ),

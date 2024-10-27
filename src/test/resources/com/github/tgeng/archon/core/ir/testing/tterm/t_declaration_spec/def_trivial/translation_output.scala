@@ -12,7 +12,8 @@ List(
         effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total") @ "ε") @ "ε",
         usage = Auto() @ "ε"
       ) @ "<> Nat",
-      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total"))
+      effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
+      escapeStatus = EsLocal
     ) @ "Nat -> <> Nat",
     clauses = List(
       PreClause(

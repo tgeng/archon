@@ -2,6 +2,7 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.EscapeStatus.EsLocal
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.Usage.*
 
@@ -14,6 +15,34 @@ import scala.collection.immutable.{MultiSet, SeqMap}
 // Term hierarchy is inspired by Pédrot 2020 [0]. The difference is that our computation types are
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
+
+enum EscapeStatus extends Ordered[EscapeStatus]:
+  /** Aka, no escape */
+  case EsLocal
+
+  /** Escaped via the terminal `return` */
+  case EsReturned
+
+  /** Any kind of usage that is untracked */
+  case EsUnknown
+
+  infix def &(that: EscapeStatus): EscapeStatus = (this, that) match
+    case (EsLocal, _) | (_, EsLocal)       => EsLocal
+    case (EsReturned, _) | (_, EsReturned) => EsReturned
+    case _                                 => EsUnknown
+
+  infix def |(that: EscapeStatus): EscapeStatus = (this, that) match
+    case (EsUnknown, _) | (_, EsUnknown)   => EsUnknown
+    case (EsReturned, _) | (_, EsReturned) => EsReturned
+    case _                                 => EsLocal
+
+  infix def *(that: EscapeStatus): EscapeStatus = (this, that) match
+    case (EsLocal, e)          => e
+    case (EsReturned, EsLocal) => EsReturned
+    case (EsReturned, e)       => e
+    case _                     => EsUnknown
+
+  override def compare(that: EscapeStatus): Nat = this.ordinal - that.ordinal
 
 case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
   def map[S](f: T => S): Binding[S] = Binding(f(ty), f(usage))(name)
@@ -137,8 +166,6 @@ object HandlerConstraint:
   val CuSimple: HandlerConstraint = HandlerConstraint(Usage.UAff, Simple)
   val CuException: HandlerConstraint = HandlerConstraint(Usage.U0, Simple)
   val CuLinear: HandlerConstraint = HandlerConstraint(Usage.U0, Simple)
-
-import com.github.tgeng.archon.core.ir.HandlerConstraint.*
 
 enum Elimination[T](val sourceInfo: SourceInfo) extends SourceInfoOwner[Elimination[T]]:
   case ETerm(v: T)(using sourceInfo: SourceInfo) extends Elimination[T](sourceInfo)
@@ -564,6 +591,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * application is tracked by the `bodyTy`.
         */
       effects: VTerm = VTerm.Total()(using SiEmpty),
+      escapeStatus: EscapeStatus = EsLocal,
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
@@ -656,6 +684,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       //  dereferencing a pointer.
       handlerKey: Option[HandlerKey] = None,
     )
+  // TODO[P2]: track user specified effect instance binding name
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo)
 
   override def withSourceInfo(sourceInfo: SourceInfo): CTerm =
