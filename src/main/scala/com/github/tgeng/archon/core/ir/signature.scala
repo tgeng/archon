@@ -32,7 +32,7 @@ enum Declaration:
       selfBinding: Binding[VTerm],
     )
 
-  case Definition(qn: QualifiedName, context: DContext, ty: CTerm /* binding += context */ )
+  case Definition(qn: QualifiedName, context: EContext, ty: CTerm /* binding += context */ )
 
   case Effect
     (

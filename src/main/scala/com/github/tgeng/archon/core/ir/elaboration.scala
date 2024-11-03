@@ -318,12 +318,12 @@ private def elaborateDefHead
 
   ctx.trace(s"elaborating def signature ${definition.qn}"):
     val paramTys = elaborateTelescope(definition.paramTys.map(_._1))(using Γ)
-    val newDContext: DContext =
+    val newEContext: EContext =
       // The parameters in context are module parameters, which usually would escape arbitrarily.
       Γ.map((_, EscapeStatus.EsUnknown)) ++ paramTys.zip(definition.paramTys.map(_._2))
-    given Context = newDContext.map(_._1)
+    given Context = newEContext.map(_._1)
     val ty = checkIsCType(definition.ty).normalized(None)
-    val d: Definition = Definition(definition.qn, newDContext, ty)
+    val d: Definition = Definition(definition.qn, newEContext, ty)
     Σ.addDeclaration(checkDef(d))
 
 @throws(classOf[IrError])
