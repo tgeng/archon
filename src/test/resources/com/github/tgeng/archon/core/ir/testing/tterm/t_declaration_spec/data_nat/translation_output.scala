@@ -36,7 +36,7 @@ List(
             usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
           ) @ "Nat",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
-          escapeStatus = EsLocal
+          escapeStatus = EsUnknown
         ) @ "Nat -> Nat"
       )
     )

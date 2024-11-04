@@ -18,7 +18,6 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 import scala.annotation.tailrec
 import scala.collection.immutable.{MultiSet, SeqMap, Set}
 
-
 @throws(classOf[IrError])
 private def checkLevel
   (level: VTerm)
@@ -324,7 +323,20 @@ def inferType
             (
               d,
               definition.context.foldRight(definition.ty) { case ((binding, es), bodyTy) =>
-                FunctionType(binding, bodyTy, Total(), es)
+                FunctionType(
+                  binding,
+                  bodyTy,
+                  Total(),
+                  es match
+                    // Recursive definition can cause partially elaborated definitions being
+                    // referenced.
+                    // In this case, we just approximate with EsUnknown to avoid further complexity
+                    // in type checking.
+                    // Practically, this should be fine since user can always manually annotate if
+                    // they don't like this default value.
+                    case null => EscapeStatus.EsUnknown
+                    case es   => es,
+                )
               },
             )
       case Force(uncheckedV) =>
@@ -1038,7 +1050,7 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
       binding,
       bodyTy,
       EffectsUnion(eff, effects),
-      es
+      es,
     )
   case RecordType(qn, args, effects) =>
     RecordType(qn, args, EffectsUnion(eff, effects))

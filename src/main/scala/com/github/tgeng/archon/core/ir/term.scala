@@ -2,7 +2,7 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
-import com.github.tgeng.archon.core.ir.EscapeStatus.EsLocal
+import com.github.tgeng.archon.core.ir.EscapeStatus.{EsLocal, EsUnknown}
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.Usage.*
 
@@ -17,13 +17,13 @@ import scala.collection.immutable.{MultiSet, SeqMap}
 // effects would not reduce during type checking.
 
 enum EscapeStatus extends Ordered[EscapeStatus]:
-  /** Aka, no escape */
+  /** The variable is consumed locally */
   case EsLocal
 
-  /** Escaped via the terminal `return` */
+  /** The variable escaped via the terminal `return` */
   case EsReturned
 
-  /** Any kind of usage that is untracked */
+  /** The variable's usage is complex and untracked statically */
   case EsUnknown
 
   infix def &(that: EscapeStatus): EscapeStatus = (this, that) match
@@ -37,10 +37,9 @@ enum EscapeStatus extends Ordered[EscapeStatus]:
     case _                                 => EsLocal
 
   infix def *(that: EscapeStatus): EscapeStatus = (this, that) match
-    case (EsLocal, e)          => e
-    case (EsReturned, EsLocal) => EsReturned
-    case (EsReturned, e)       => e
-    case _                     => EsUnknown
+    case (EsUnknown, _) | (_, EsUnknown) => EsUnknown
+    case (EsLocal, _)                    => EsLocal
+    case (EsReturned, _)                 => EsReturned
 
   override def compare(that: EscapeStatus): Nat = this.ordinal - that.ordinal
 
@@ -591,7 +590,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
         * application is tracked by the `bodyTy`.
         */
       effects: VTerm = VTerm.Total()(using SiEmpty),
-      escapeStatus: EscapeStatus = EsLocal,
+      escapeStatus: EscapeStatus = EsUnknown,
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 

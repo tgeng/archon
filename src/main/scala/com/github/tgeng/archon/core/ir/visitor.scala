@@ -232,25 +232,30 @@ trait TermVisitor[C, R]:
           visitCTerm(handler.transform)
         },
       ) ++ handler.handlers.map { (qn, handlerImpl) =>
-        val operation = Σ.getOperation(qn)
-        assert(operation.paramTys.size == handlerImpl.boundNames.size)
-        val handlerParams = operation.paramTys
-          .zip(handlerImpl.boundNames)
-          .map((binding, name) => binding.copy()(name))
-        withTelescope(handler.parameterBinding +: handlerParams) {
-          visitHandlerImpl(handlerImpl)
-        }
+        visitHandlerImpl(handler.eff, handler.parameterBinding, qn, handlerImpl)
       } ++ Seq(
         visitCTerm(handler.input),
         visitBinding(handler.inputBinding),
       )*,
     )
 
-  def visitHandlerImpl(handlerImpl: HandlerImpl)(using ctx: C)(using Σ: Signature): R =
-    combine(
-      (Seq(visitCTerm(handlerImpl.body), visitCTerm(handlerImpl.bodyTy)) ++
-        handlerImpl.continuationType.map(visitVTerm).toSeq)*,
-    )
+  def visitHandlerImpl
+    (eff: Eff, parameterBinding: Binding[VTerm], qn: QualifiedName, handlerImpl: HandlerImpl)
+    (using ctx: C)
+    (using Σ: Signature)
+    : R =
+    val operation = Σ.getOperation(qn)
+    assert(operation.paramTys.size == handlerImpl.boundNames.size)
+    val handlerParams = operation.paramTys
+      .substLowers(eff._2*)
+      .zip(handlerImpl.boundNames)
+      .map((binding, name) => binding.copy()(name))
+    withTelescope(parameterBinding +: handlerParams) {
+      combine(
+        (Seq(visitCTerm(handlerImpl.body), visitCTerm(handlerImpl.bodyTy)) ++
+          handlerImpl.continuationType.map(visitVTerm).toSeq)*,
+      )
+    }
 
   def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
     combine(

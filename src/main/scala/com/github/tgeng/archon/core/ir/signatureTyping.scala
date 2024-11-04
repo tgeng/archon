@@ -210,7 +210,7 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 
 @throws(classOf[IrError])
 def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext): Definition =
-  // TODO[P0]: do escape analysis here.
+  // TODO[P0]: do escape analysis here. Make sure to automatically derive it for null escape status
   given Context = definition.context.map(_._1)
   ctx.trace(s"checking def signature ${definition.qn}"):
     val ty = checkIsCType(definition.ty)

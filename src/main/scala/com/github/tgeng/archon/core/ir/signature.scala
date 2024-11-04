@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.ir
 
-import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 

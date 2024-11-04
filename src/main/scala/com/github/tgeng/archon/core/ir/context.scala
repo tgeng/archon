@@ -32,7 +32,9 @@ extension (ctx: collection.IndexedSeq[Binding[VTerm]])
 
 type TContext = collection.IndexedSeq[(Binding[VTerm], Variance)]
 
-type EContext = collection.IndexedSeq[(Binding[VTerm], EscapeStatus)]
+/** Null escape status means it's not declared and hence type checking can derive it instead.
+  */
+type EContext = collection.IndexedSeq[(Binding[VTerm], EscapeStatus | Null)]
 
 extension (ctx: collection.IndexedSeq[(Binding[VTerm], Variance)])
   @targetName("resolveT")

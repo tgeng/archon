@@ -19,8 +19,8 @@ FunctionType(
       usage = Collapse(cTm = Def(qn = qn"__unresolved__.uC") @ "uC") @ "uC"
     ) @ "<effC> [uC] C a b",
     effects = Collapse(cTm = Def(qn = qn"__unresolved__.effB") @ "effB") @ "effB",
-    escapeStatus = EsLocal
+    escapeStatus = EsUnknown
   ) @ "b: [uB] B -> <effC> [uC] C a b",
   effects = Collapse(cTm = Def(qn = qn"__unresolved__.effA") @ "effA") @ "effA",
-  escapeStatus = EsLocal
+  escapeStatus = EsUnknown
 ) @ "a: [uA] A -> <effB> b: [uB] B -> <effC> [uC] C a b"
