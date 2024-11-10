@@ -411,7 +411,6 @@ def inferType
             case (e @ ETerm(uncheckedArg)) :: uncheckedRest =>
               // Note that this `cty` is created by `inferType` so it's already checked.
               cty match
-                // TODO[P0]: honor escape status here and use it for escape analysis
                 case FunctionType(binding, bodyTy, effects, _) =>
                   val arg = checkType(uncheckedArg, binding.ty)
                   val (rest, cty) =
@@ -669,8 +668,6 @@ def checkHandler
   (using Σ: Signature)
   (using ctx: TypingContext)
   : (CTerm, CTerm) =
-  // TODO[P0]: do escape analysis of the effect instance variable and if it escapes, otherEffects
-  //  should contain ndet.
   val eff = checkEff(h.eff)
   val operations = Σ.getOperations(eff._1).map(op => (eff._1 / op.name, eff._2, op)).toSet
   val expectedOperationNames = operations.map(_._1)
@@ -678,22 +675,6 @@ def checkHandler
   if expectedOperationNames != actualOperationNames then
     throw HandlerOperationsMismatch(h, expectedOperationNames, actualOperationNames)
   val otherEffects = checkType(h.otherEffects, EffectsType()).normalized
-  val handlerEffects = checkType(h.handlerEffects, EffectsType()).normalized
-  val outputEffects = EffectsUnion(otherEffects, handlerEffects).normalized
-  val outputUsage = checkType(h.outputUsage, UsageType()).normalized
-  val outputTy = checkIsType(h.outputTy)
-  outputType match
-    case None =>
-    case Some(outputType) =>
-      ctx.checkSolved(
-        checkIsSubtype(F(outputTy, outputEffects, outputUsage), outputType),
-        NotCSubtype(F(outputTy, outputEffects, outputUsage), outputType),
-      )
-  val parameterTy = checkIsType(h.parameterBinding.ty)
-  // parameter binding usage dictates how much resources the handler needs when consuming the parameter
-  val parameterBindingUsage = checkType(h.parameterBinding.usage, UsageType())
-  val parameterBinding = Binding(parameterTy, parameterBindingUsage)(h.parameterBinding.name)
-  val parameter = checkType(h.parameter, parameterTy)
   val inputTy = checkIsType(h.inputBinding.ty)
   // Unlike parameter, input is a computation and hence only executed linearly. The input binding usage is simply a
   // requirement on the final return type of the input computation.
@@ -717,7 +698,34 @@ def checkHandler
       inputEffects,
       inputBindingUsage.weakened, /* for effect instance */
     ),
-  )
+  )(using inputΓ)
+  val effInsDbNumber = Γ.size
+  val effInsEscapeStatus =
+    computeEscapeStatuses(h.input, Set(effInsDbNumber))(using inputΓ)(effInsDbNumber)
+  effInsEscapeStatus match
+    // If effect instance does not escape, there is no need to check anything.
+    case EscapeStatus.EsLocal =>
+    case _ =>
+      ctx.checkSolved(
+        checkEffectSubsumption(EffectsLiteral(Set(ndet)), otherEffects),
+        EscapedEffectInstanceCausesNdet(h),
+      )
+  val handlerEffects = checkType(h.handlerEffects, EffectsType()).normalized
+  val outputEffects = EffectsUnion(otherEffects, handlerEffects).normalized
+  val outputUsage = checkType(h.outputUsage, UsageType()).normalized
+  val outputTy = checkIsType(h.outputTy)
+  outputType match
+    case None =>
+    case Some(outputType) =>
+      ctx.checkSolved(
+        checkIsSubtype(F(outputTy, outputEffects, outputUsage), outputType),
+        NotCSubtype(F(outputTy, outputEffects, outputUsage), outputType),
+      )
+  val parameterTy = checkIsType(h.parameterBinding.ty)
+  // parameter binding usage dictates how much resources the handler needs when consuming the parameter
+  val parameterBindingUsage = checkType(h.parameterBinding.usage, UsageType())
+  val parameterBinding = Binding(parameterTy, parameterBindingUsage)(h.parameterBinding.name)
+  val parameter = checkType(h.parameter, parameterTy)
   val inputEffectsContinuationUsage = getEffectsContinuationUsage(inputEffects)
   val parameterDisposer = h.parameterDisposer match
     case Some(parameterDisposer) =>

@@ -55,8 +55,7 @@ def elaborate
 enum DeclarationPart:
   case HEAD, BODY
 
-import com.github.tgeng.archon.core.ir.DeclarationPart.*
-import com.github.tgeng.archon.core.ir.unifyAll
+import com.github.tgeng.archon.core.ir.DeclarationPart.* import com.github.tgeng.archon.core.ir.unifyAll
 
 @throws(classOf[IrError])
 def sortPreDeclarations
@@ -655,7 +654,16 @@ private def elaborateDefBody
                       given Signature = _Σ
                       // in context _Γ1
                       val tArgs = binding.ty.asInstanceOf[DataType].args
-                      val Δ = constructor.paramTys.substLowers(tArgs*)
+                      val xUsage = binding.usage
+                      val Δ: Telescope = constructor.paramTys
+                        .substLowers(tArgs*)
+                        .zipWithIndex
+                        .map((binding, i) =>
+                          // Here we need to multiply the component usage by the usage of X at the split
+                          binding.copy(usage = UsageProd(xUsage.weaken(i, 0), binding.usage))(
+                            binding.name,
+                          ),
+                        )
 
                       // in context _Γ1 ⊎ Δ
                       val cTArgs = constructor.tArgs.map(

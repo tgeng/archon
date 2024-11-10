@@ -1,6 +1,5 @@
 package com.github.tgeng.archon.core.ir
 
-import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
@@ -93,5 +92,7 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case InternalIrError(message: String)(using Γ: Context) extends IrError(Γ)
   case ComplexOperationCall(call: CTerm.OperationCall)(using Γ: Context) extends IrError(Γ)
   case ExpectEffectInstance(badEffInstance: VTerm)(using Γ: Context) extends IrError(Γ)
-  case ExpectEffectInstanceTypeSubsumption(sub: VTerm, sup: VTerm)(using Γ: Context) extends IrError(Γ)
+  case ExpectEffectInstanceTypeSubsumption(sub: VTerm, sup: VTerm)(using Γ: Context)
+    extends IrError(Γ)
+  case EscapedEffectInstanceCausesNdet(handler: CTerm.Handler)(using Γ: Context) extends IrError(Γ)
   override def getMessage: String = verbosePPrinter.apply(this).plainText
