@@ -638,7 +638,7 @@ class TypingContext
     if enableDebugging then
       val indent = "│ " * traceLevel + " "
       println(
-        indent + ANSI_CYAN + stringify(t) + " = " + verbosePPrinter
+        indent + ANSI_CYAN + "[DEBUG] " + stringify(t) + " = " + verbosePPrinter
           .apply(t)
           .toString
           .replace("\n", "\n" + indent) + ANSI_RESET,

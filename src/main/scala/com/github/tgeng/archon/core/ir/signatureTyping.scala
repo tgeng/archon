@@ -1,7 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
-import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
@@ -18,13 +17,12 @@ def checkData(data: Data)(using Σ: Signature)(using ctx: TypingContext): Data =
   given Context = IndexedSeq()
   ctx.trace(s"checking data signature ${data.qn}"):
     val tParamsTysTelescope =
-      ctx.solveTerm(checkParameterTyDeclarations(data.context.map(_._1).toTelescope))
+      ctx.solveTerm(data.context.map(_._1).toTelescope)
     {
       given tParamTys: Context = Context.fromTelescope(tParamsTysTelescope)
-      val tIndexTys =
-        ctx.solveTerm(checkParameterTyDeclarations(data.tIndexTys))
+      val tIndexTys = ctx.solveTerm(data.tIndexTys)
       checkTParamsAreUnrestricted((tParamTys ++ tIndexTys).toTelescope)
-      val level = ctx.solveTerm(checkLevel(data.level))
+      val level = ctx.solveTerm(data.level)
       Data(data.qn, tParamTys.zip(data.context.map(_._2)), tIndexTys, level)
     }
 
@@ -39,7 +37,7 @@ def checkDataConstructor
     case Some(data) =>
       given Γ: Context = data.context.map(_._1)
       ctx.trace(s"checking data constructor $qn.${con.name}"):
-        val paramTys = ctx.solveTerm(checkParameterTyDeclarations(con.paramTys, Some(data.level)))
+        val paramTys = ctx.solveTerm(con.paramTys)
         val tArgsContext = Γ ++ paramTys
         val tArgs =
           checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using tArgsContext)
@@ -54,7 +52,7 @@ def checkRecord(record: Record)(using Σ: Signature)(using ctx: TypingContext): 
   given Context = IndexedSeq()
   ctx.trace(s"checking record signature ${record.qn}"):
     val tParams = record.context.map(_._1)
-    val tParamTysTelescope = ctx.solveTerm(checkParameterTyDeclarations(tParams.toList))
+    val tParamTysTelescope = ctx.solveTerm(tParams.toList)
     {
       given tParamTys: Context = Context.fromTelescope(tParamTysTelescope)
       checkTParamsAreUnrestricted(tParamTysTelescope)
@@ -81,7 +79,7 @@ def checkRecordField
       given Context = record.context.map(_._1).toIndexedSeq :+ record.selfBinding
 
       ctx.trace(s"checking record field $qn.${field.name}"):
-        val ty = ctx.solveTerm(checkIsCType(field.ty, Some(record.level.weakened)))
+        val ty = ctx.solveTerm(field.ty)
         val violatingVars =
           // 1 is to offset self binding.
           VarianceChecker.visitCTerm(field.ty)(using record.context, Variance.COVARIANT, 1)
@@ -210,24 +208,15 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 
 @throws(classOf[IrError])
 def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext): Definition =
-  // TODO[P0]: do escape analysis here. Make sure to automatically derive it for null escape status
-  given Context = definition.context.map(_._1)
-  ctx.trace(s"checking def signature ${definition.qn}"):
-    val ty = checkIsCType(definition.ty)
-    Definition(definition.qn, definition.context, ty)
+  definition.copy(ty = ctx.solveTerm(definition.ty)(using definition.context.map(_._1)))
 
 @throws(classOf[IrError])
 def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effect =
   given Context = Context.empty
   ctx.trace(s"checking effect signature ${effect.qn}"):
-    val telescope = ctx.solveTerm(checkParameterTyDeclarations(effect.context.toTelescope))
-    checkTParamsAreUnrestricted(telescope)
-
-    {
-      given Γ: Context = Context.fromTelescope(telescope)
-      val continuationUsage = ctx.solveTerm(checkType(effect.continuationUsage, UsageType()))
-      Effect(effect.qn, Γ, continuationUsage)
-    }
+    given Γ: Context = Context.fromTelescope(effect.context.toTelescope)
+    val continuationUsage = ctx.solveTerm(effect.continuationUsage)
+    Effect(effect.qn, Γ, continuationUsage)
 
 @throws(classOf[IrError])
 def checkOperation
@@ -241,12 +230,11 @@ def checkOperation
       given Γ: Context = effect.context
 
       ctx.trace(s"checking effect operation $qn.${operation.name}"):
-        val paramTys = ctx.solveTerm(checkParameterTyDeclarations(operation.paramTys))
+        val paramTys = ctx.solveTerm(operation.paramTys)
         {
           given Context = Γ ++ paramTys
-          val resultTy = ctx.solveTerm(checkIsType(operation.resultTy))
-          val resultUsage =
-            ctx.solveTerm(checkType(operation.resultUsage, UsageType(None)))
+          val resultTy = ctx.solveTerm(operation.resultTy)
+          val resultUsage = ctx.solveTerm(operation.resultUsage)
           Operation(
             operation.name,
             paramTys,
@@ -270,16 +258,3 @@ private def checkTParamsAreUnrestricted
       ExpectUnrestrictedTypeParameterBinding(binding),
     )
     checkTParamsAreUnrestricted(rest)(using Γ :+ binding)
-
-@throws(classOf[IrError])
-private def checkParameterTyDeclarations
-  (tParamTys: Telescope, levelBound: Option[VTerm] = None)
-  (using Γ: Context)
-  (using Σ: Signature)
-  (using TypingContext)
-  : Telescope = tParamTys match
-  case Nil => Nil
-  case binding :: rest =>
-    val ty = checkIsType(binding.ty, levelBound)
-    val usage = checkType(binding.usage, UsageType(None))
-    Binding(ty, usage)(binding.name) :: checkParameterTyDeclarations(rest)(using Γ :+ binding)

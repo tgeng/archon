@@ -26,7 +26,7 @@ enum Declaration:
     (
       qn: QualifiedName,
       context: TContext,
-      /* binding: + context + tIndexTys */
+      /* binding += context */
       level: VTerm,
       selfBinding: Binding[VTerm],
     )
@@ -56,11 +56,11 @@ case class Constructor
     tArgs: Arguments = Nil, /* binding += context + paramTys */
   )
 
-case class Field(name: Name, /* + tParamTys + 1 for self */ ty: CTerm)
+case class Field(name: Name, /* binding += context + 1 for self */ ty: CTerm)
 
 case class Clause
   (
-    // contains def.context
+    // contains def.context + elaborated variables from lhs co-patterns
     context: Context,
     lhs: List[CoPattern], /* bindings += clause.context */
     rhs: CTerm, /* bindings += clause.context */

@@ -7,12 +7,14 @@ import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.CaseTree.*
 import com.github.tgeng.archon.core.ir.CoPattern.*
 import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.DeclarationPart.*
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.PreDeclaration.*
 import com.github.tgeng.archon.core.ir.SourceInfo.*
 import com.github.tgeng.archon.core.ir.UnificationResult.*
 import com.github.tgeng.archon.core.ir.VTerm.*
+import com.github.tgeng.archon.core.ir.unifyAll
 
 import scala.collection.immutable.SeqMap
 import scala.collection.mutable
@@ -54,8 +56,6 @@ def elaborate
 
 enum DeclarationPart:
   case HEAD, BODY
-
-import com.github.tgeng.archon.core.ir.DeclarationPart.* import com.github.tgeng.archon.core.ir.unifyAll
 
 @throws(classOf[IrError])
 def sortPreDeclarations
@@ -192,17 +192,15 @@ private def elaborateDataHead
         case _ => throw NotDataTypeType(ty)
 
     val (tIndices, level) = elaborateTy(preData.ty)
-    // level and eqDecidability should not depend on index arguments
+    // level should not depend on index arguments
     val strengthenedLevel =
       try level.strengthen(tIndices.size, 0)
       catch case e: StrengthenException => throw DataLevelCannotDependOnIndexArgument(preData)
-    val data = checkData(
-      Data(
-        preData.qn,
-        Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
-        tIndices,
-        strengthenedLevel,
-      ),
+    val data = Data(
+      preData.qn,
+      Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
+      tIndices,
+      strengthenedLevel,
     )
     Σ.addDeclaration(data)
 
@@ -216,12 +214,12 @@ private def elaborateDataBody
 
   @throws(classOf[IrError])
   def elaborateTy
-    (ty: CTerm)
+    (ty: CTerm, level: VTerm)
     (using Γ: Context)
     (using Signature)
     (using TypingContext)
     : (Telescope, /* constructor tArgs */ List[VTerm]) =
-    checkIsCType(ty).normalized(None) match
+    checkIsCType(ty, Some(level)).normalized(None) match
       // Here and below we do not care the declared effect types because data type constructors
       // are always total. Declaring non-total signature is not necessary (nor desirable) but
       // acceptable.
@@ -234,23 +232,25 @@ private def elaborateDataBody
         (Nil, args.drop(data.context.size))
       case F(t, _, _) => throw ExpectDataType(t, Some(data.qn))
       case FunctionType(binding, bodyTy, _, _) =>
-        val (telescope, level) = elaborateTy(bodyTy)(using Γ :+ binding)
-        (binding :: telescope, level)
+        val (telescope, args) = elaborateTy(bodyTy, level.weakened)(using Γ :+ binding)
+        (binding :: telescope, args)
       case _ => throw NotDataTypeType(ty)
 
   // number of index arguments
   given Context = data.context.map(_._1)
 
   ctx.trace(s"elaborating data body ${preData.qn}"):
-    preData.constructors.foldLeft[Signature](Σ) { case (_Σ, constructor) =>
-      given Signature = _Σ
-      ctx.trace(s"elaborating constructor ${constructor.name}"):
-        val ty = constructor.ty
-        val (paramTys, tArgs) = elaborateTy(ty)
-        val con =
-          checkDataConstructor(preData.qn, Constructor(constructor.name, paramTys, tArgs))
-        _Σ.addConstructor(preData.qn, con)
-    }
+    preData.constructors
+      .foldLeft[Signature](Σ) { case (_Σ, constructor) =>
+        given Signature = _Σ
+        ctx.trace(s"elaborating constructor ${constructor.name}"):
+          val ty = constructor.ty
+          val (paramTys, tArgs) = elaborateTy(ty, data.level)
+          val con =
+            checkDataConstructor(preData.qn, Constructor(constructor.name, paramTys, tArgs))
+          _Σ.addConstructor(preData.qn, con)
+      }
+      .replaceDeclaration(checkData(data))
 
 @throws(classOf[IrError])
 private def elaborateRecordHead
@@ -280,7 +280,7 @@ private def elaborateRecordHead
             ),
           )
         case t => throw ExpectCType(t)
-    Σ.addDeclaration(checkRecord(r))
+    Σ.addDeclaration(r)
 
 @throws(classOf[IrError])
 private def elaborateRecordBody
@@ -297,13 +297,16 @@ private def elaborateRecordBody
       record.selfBinding.name,
     )
 
+  val level = record.level.weakened // weakened for self
   ctx.trace(s"elaborating record body ${preRecord.qn}"):
-    preRecord.fields.foldLeft[Signature](Σ) { case (_Σ, field) =>
-      ctx.trace(s"elaborating field ${field.name}"):
-        val ty = checkIsCType(field.ty).normalized(None)
-        val f = checkRecordField(preRecord.qn, Field(field.name, ty))
-        _Σ.addField(preRecord.qn, f)
-    }
+    preRecord.fields
+      .foldLeft[Signature](Σ) { case (_Σ, field) =>
+        ctx.trace(s"elaborating field ${field.name}"):
+          val ty = checkIsCType(field.ty, Some(level)).normalized(None)
+          val f = checkRecordField(preRecord.qn, Field(field.name, ty))
+          _Σ.addField(preRecord.qn, f)
+      }
+      .replaceDeclaration(checkRecord(record))
 
 @throws(classOf[IrError])
 private def elaborateDefHead
@@ -323,7 +326,7 @@ private def elaborateDefHead
     given Context = newEContext.map(_._1)
     val ty = checkIsCType(definition.ty).normalized(None)
     val d: Definition = Definition(definition.qn, newEContext, ty)
-    Σ.addDeclaration(checkDef(d))
+    Σ.addDeclaration(d)
 
 @throws(classOf[IrError])
 private def elaborateDefBody
@@ -690,7 +693,6 @@ private def elaborateDefBody
                           val ρ2t = ρ2.toTermSubstitutor
                           given ΓSplit: Context =
                             _Γ1 ++ Δ.subst(ρ.toTermSubstitutor) ++ _Γ2.subst(ρ1t)
-                          ctx.debug(ΓSplit)
 
                           val newProblem = subst(problem, ρ2t)
                           if newProblem.isEmpty then
@@ -785,12 +787,12 @@ private def elaborateDefBody
       },
     )
     _Σ.addCaseTree(preDefinition.qn, _Q)
-    // We didn't solve the meta-variables inside the definition type until now because we want to
-    // have the call-site context ready before solving them. Delay solving during body elaboration
-    // works as long as lambda definitions are APPENDED after the call-site declaration. This is
-    // because our topological sort preserves original order of definitions when possible. Hence,
-    // the call-site function body would be elaborated before the lambda body.
-    _Σ.replaceDeclaration(definition.copy(ty = ctx.solveTerm(definition.ty)))
+      // We didn't solve the meta-variables inside the definition type until now because we want to
+      // have the call-site context ready before solving them. Delay solving during body elaboration
+      // works as long as lambda definitions are APPENDED after the call-site declaration. This is
+      // because our topological sort preserves original order of definitions when possible. Hence,
+      // the call-site function body would be elaborated before the lambda body.
+      .replaceDeclaration(checkDef(definition))
 
 @throws(classOf[IrError])
 private def elaborateEffectHead
@@ -808,7 +810,7 @@ private def elaborateEffectHead
       case Return(continuationUsage, _) => continuationUsage
       case c                            => throw ExpectReturnAValue(c)
     val e: Effect = Effect(effect.qn, Γ2, continuationUsage)
-    Σ.addDeclaration(checkEffect(e))
+    Σ.addDeclaration(e)
 
 @throws(classOf[IrError])
 private def elaborateEffectBody
@@ -831,20 +833,21 @@ private def elaborateEffectBody
         // Here and below we do not care the declared effect types because data type constructors
         // are always total. Declaring non-total signature is not necessary (nor desirable) but
         // acceptable.
-        case F(ty, _, usage) =>
-          (Nil, ty, usage)
+        case F(ty, _, usage) => (Nil, ty, usage.normalized)
         case FunctionType(binding, bodyTy, _, _) =>
           val (telescope, level, usage) = elaborateTy(bodyTy)(using Γ :+ binding)
           (binding :: telescope, level, usage)
         case _ => throw ExpectFType(ty)
 
-    preEffect.operations.foldLeft[Signature](Σ) { case (_Σ, operation) =>
-      given Signature = _Σ
-      ctx.trace(s"elaborating operation ${operation.name}"):
-        val (paramTys, resultTy, usage) = elaborateTy(operation.ty)
-        val o = Operation(operation.name, paramTys, resultTy, usage)
-        _Σ.addOperation(effect.qn, checkOperation(effect.qn, o))
-    }
+    preEffect.operations
+      .foldLeft[Signature](Σ) { case (_Σ, operation) =>
+        given Signature = _Σ
+        ctx.trace(s"elaborating operation ${operation.name}"):
+          val (paramTys, resultTy, usage) = elaborateTy(operation.ty)
+          val o = Operation(operation.name, paramTys, resultTy, usage)
+          _Σ.addOperation(effect.qn, checkOperation(effect.qn, o))
+      }
+      .replaceDeclaration(checkEffect(effect))
 
 @throws(classOf[IrError])
 private def elaborateTTelescope
