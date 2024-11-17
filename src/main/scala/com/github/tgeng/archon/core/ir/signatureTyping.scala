@@ -7,7 +7,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.EscapeStatus.{EsLocal, EsReturned, EsUnknown}
+import com.github.tgeng.archon.core.ir.EscapeStatus.{EsLocal, EsUnknown}
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.Usage.*
