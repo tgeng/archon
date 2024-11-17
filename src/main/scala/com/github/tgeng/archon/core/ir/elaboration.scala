@@ -792,7 +792,7 @@ private def elaborateDefBody
       // works as long as lambda definitions are APPENDED after the call-site declaration. This is
       // because our topological sort preserves original order of definitions when possible. Hence,
       // the call-site function body would be elaborated before the lambda body.
-      .replaceDeclaration(checkDef(definition))
+      .replaceDeclaration(checkDef(definition, _Σ.getClauses(preDefinition.qn)))
 
 @throws(classOf[IrError])
 private def elaborateEffectHead

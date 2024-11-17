@@ -4,7 +4,7 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
-import com.github.tgeng.archon.core.ir.EscapeStatus.EsLocal
+import com.github.tgeng.archon.core.ir.EscapeStatus.EsReturned
 import com.github.tgeng.archon.core.ir.PreDeclaration.*
 import com.github.tgeng.archon.core.ir.Usage.*
 import com.github.tgeng.archon.core.ir.VTerm.*
@@ -430,8 +430,8 @@ object Builtins:
     PreDefinition(
       UsageProdQn,
       paramTys = List(
-        eBinding(n"usage1", UsageType(), escapeStatus = EsLocal),
-        eBinding(n"usage2", UsageType(), escapeStatus = EsLocal),
+        eBinding(n"usage1", UsageType(), escapeStatus = EsReturned),
+        eBinding(n"usage2", UsageType(), escapeStatus = EsReturned),
       ),
       ty = F(UsageType()),
       clauses = List(
@@ -449,8 +449,8 @@ object Builtins:
     PreDefinition(
       UsageSumQn,
       paramTys = List(
-        eBinding(n"usage1", UsageType(), escapeStatus = EsLocal),
-        eBinding(n"usage2", UsageType(), escapeStatus = EsLocal),
+        eBinding(n"usage1", UsageType(), escapeStatus = EsReturned),
+        eBinding(n"usage2", UsageType(), escapeStatus = EsReturned),
       ),
       ty = F(UsageType()),
       clauses = List(
@@ -468,8 +468,8 @@ object Builtins:
     PreDefinition(
       UsageJoinQn,
       paramTys = List(
-        eBinding(n"usage1", UsageType(), escapeStatus = EsLocal),
-        eBinding(n"usage2", UsageType(), escapeStatus = EsLocal),
+        eBinding(n"usage1", UsageType(), escapeStatus = EsReturned),
+        eBinding(n"usage2", UsageType(), escapeStatus = EsReturned),
       ),
       ty = F(UsageType()),
       clauses = List(

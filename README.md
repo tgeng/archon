@@ -29,23 +29,23 @@ checker.
 ✅ completed | 🚧 under construction | 💡 planned
 
 * [🚧] Core type theory
-  * [✅] IR
-  * [🚧] Type checker
-    * [✅] Normalization and conversion
-    * [✅] Subtyping
-    * [✅] Meta variable unification
-    * [🚧] Escape analysis to detect effect instance leak
-    * [💡] Totality checker
-    * [💡] Proof searcher
-    * [💡] Nominal subtyping of records and effects
-  * [✅] Function elaboration
+    * [✅] IR
+    * [🚧] Type checker
+        * [✅] Normalization and conversion
+        * [✅] Subtyping
+        * [✅] Meta variable unification
+        * [✅] Escape analysis to detect effect instance leak
+        * [💡] Totality checker
+        * [💡] Proof searcher
+        * [💡] Nominal subtyping of records and effects
+    * [✅] Function elaboration
 * [🚧] Low-level IR
-  * [🚧] LIR ([Archon VM](https://github.com/tgeng/archon-vm)) - need to adopt lexical effects
-  * [💡] IR -> LIR lowering
-  * [💡] Primitives
+    * [🚧] LIR ([Archon VM](https://github.com/tgeng/archon-vm)) - need to adopt lexical effects
+    * [💡] IR -> LIR lowering
+    * [💡] Primitives
 * [💡] Frontend IR (User language)
-  * [💡] [Mix-fix parser](https://www.cse.chalmers.se/~nad/publications/danielsson-norell-mixfix.pdf)
-  * [💡] FIR -> IR lowering
-    * [💡] Type class via record and proof search
-    * [💡] Type-driven resolution? (likely limited to only certain heuristics)
+    * [💡] [Mix-fix parser](https://www.cse.chalmers.se/~nad/publications/danielsson-norell-mixfix.pdf)
+    * [💡] FIR -> IR lowering
+        * [💡] Type class via record and proof search
+        * [💡] Type-driven resolution? (likely limited to only certain heuristics)
 * [💡] Standard library

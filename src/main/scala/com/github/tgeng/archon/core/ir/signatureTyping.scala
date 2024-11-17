@@ -1,10 +1,13 @@
 package com.github.tgeng.archon.core.ir
 
+import com.github.tgeng.archon
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.core
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
+import com.github.tgeng.archon.core.ir.EscapeStatus.{EsLocal, EsReturned, EsUnknown}
 import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
 import com.github.tgeng.archon.core.ir.Usage.*
@@ -206,9 +209,101 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
           visitVTerm(arg)(using (tContext, variance.flip, offset))
       .toSeq
 
+private object PatternEscapeStatusCollector extends Visitor[Nat, Set[Nat]]:
+  override def combine(rs: Set[Nat]*)(using ctxSize: Nat)(using Σ: Signature): Set[Nat] =
+    rs.flatten.toSet
+
+  override def withBoundNames
+    (bindingNames: => Seq[Ref[Name]])
+    (action: Nat ?=> Set[Nat])
+    (using ctxSize: Nat)
+    (using Σ: Signature)
+    : Set[Nat] = action(using ctxSize + bindingNames.size)
+
+  override def visitPVar
+    (pVar: core.ir.Pattern.PVar)
+    (using ctxSize: Nat)
+    (using Σ: Signature)
+    : Set[Nat] = Set(ctxSize - 1 - pVar.idx)
+
+  override def visitPForced
+    (pForced: archon.core.ir.Pattern.PForced)
+    (using ctx: Nat)
+    (using Σ: Signature)
+    : Set[Nat] = Set()
+
 @throws(classOf[IrError])
-def checkDef(definition: Definition)(using Signature)(using ctx: TypingContext): Definition =
-  definition.copy(ty = ctx.solveTerm(definition.ty)(using definition.context.map(_._1)))
+def checkDef
+  (definition: Definition, clauses: Seq[Clause])
+  (using Σ: Signature)
+  (using ctx: TypingContext)
+  : Definition =
+  val d = definition.copy(ty = ctx.solveTerm(definition.ty)(using definition.context.map(_._1)))
+
+  def checkClause(clause: Clause): collection.Seq[EscapeStatus] =
+    given Context = clause.context
+    val actualEscapeStatuses: Map[Nat, EscapeStatus] =
+      computeEscapeStatuses(clause.rhs, clause.context.indices.toSet)
+
+    // 1. collect escape statuses of the def context variables
+    val defContextEscapeStatuses = definition.context.zipWithIndex.map {
+      case ((_, declaredEscapeStatus), dbNumber) =>
+        if declaredEscapeStatus == null then actualEscapeStatuses(dbNumber)
+        else if declaredEscapeStatus < actualEscapeStatuses.getOrElse(dbNumber, EsLocal) then
+          throw VariableEscaped(
+            declaredEscapeStatus,
+            actualEscapeStatuses(dbNumber),
+            dbNumber,
+            definition,
+            clause,
+          )
+        else declaredEscapeStatus
+    }
+
+    // 2. check escape statuses of the (co)pattern-matched variables
+    def combineEscapeStatuses
+      (m1: collection.Map[Nat, EscapeStatus], m2: collection.Map[Nat, EscapeStatus])
+      : collection.Map[Nat, EscapeStatus] =
+      val result = m1.to(collection.mutable.Map)
+      for (k, v) <- m2 do result(k) = result.getOrElse(k, EsUnknown) & v
+      result
+
+    def getDeclaredEscapeStatusesInClauseContext
+      (coPatterns: List[CoPattern], ty: CTerm)
+      (using ctxSize: Nat)
+      : collection.Map[Nat, EscapeStatus] = (coPatterns, ty) match
+      case (Nil, _) => Map()
+      case (CoPattern.CPattern(p) :: coPatterns, FunctionType(_, bodyTy, _, es)) =>
+        combineEscapeStatuses(
+          PatternEscapeStatusCollector.visitPattern(p).map((_, es)).toMap,
+          getDeclaredEscapeStatusesInClauseContext(coPatterns, bodyTy)(using ctxSize + 1),
+        )
+      case (CoPattern.CProjection(name) :: coPatterns, RecordType(qn, _, _)) =>
+        getDeclaredEscapeStatusesInClauseContext(coPatterns, Σ.getField(qn, name).ty)
+      case _ => throw IllegalStateException(s"type error:\ncoPatterns: ${coPatterns}\nty:${ty}")
+
+    for (dbNumber, declaredEscapeStatus) <- getDeclaredEscapeStatusesInClauseContext(
+        clause.lhs,
+        definition.ty,
+      )(using definition.context.size)
+    do
+      val actualEscapeStatus = actualEscapeStatuses.getOrElse(dbNumber, EscapeStatus.EsLocal)
+      if declaredEscapeStatus < actualEscapeStatus then
+        throw VariableEscaped(
+          declaredEscapeStatus,
+          actualEscapeStatuses(dbNumber),
+          dbNumber,
+          definition,
+          clause,
+        )
+
+    // 3. return the new context escape status since the user provided definition may contain null
+    // escape status, which is like mini meta-variables for escape status.
+    defContextEscapeStatuses
+
+  val newContextEscapeStatuses: Seq[EscapeStatus] =
+    clauses.map(checkClause).transpose.map(_.fold(EsLocal)(_ | _))
+  definition.copy(context = definition.context.map(_._1).zip(newContextEscapeStatuses))
 
 @throws(classOf[IrError])
 def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effect =
