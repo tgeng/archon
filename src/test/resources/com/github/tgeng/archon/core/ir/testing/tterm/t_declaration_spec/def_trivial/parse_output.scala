@@ -13,7 +13,8 @@ List(
         effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
         usage = TAuto() @ "ε"
       ) @ "<> Nat",
-      effects = TDef(qn = qn"archon.builtin.effects.total")
+      effects = TDef(qn = qn"archon.builtin.effects.total"),
+      escapeStatus = EsUnknown
     ) @ "Nat -> <> Nat",
     clauses = List(
       TClause(

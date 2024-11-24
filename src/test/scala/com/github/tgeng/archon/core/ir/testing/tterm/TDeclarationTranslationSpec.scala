@@ -39,3 +39,7 @@ class TDeclarationTranslationSpec extends FileBasedFreeSpec("t_declaration_spec"
 
   "def_prec" in:
     runTest()
+
+  "def_escape_status" in:
+    runTest()
+          

@@ -32,7 +32,8 @@ List(
             effects = TDef(qn = qn"archon.builtin.effects.total"),
             usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
           ),
-          effects = TDef(qn = qn"archon.builtin.effects.total")
+          effects = TDef(qn = qn"archon.builtin.effects.total"),
+          escapeStatus = EsUnknown
         ) @ "Nat -> Nat"
       )
     )
@@ -57,9 +58,11 @@ List(
           effects = TDef(qn = qn"archon.builtin.effects.total"),
           usage = TAuto() @ "ε"
         ) @ "<> Nat",
-        effects = TDef(qn = qn"archon.builtin.effects.total")
+        effects = TDef(qn = qn"archon.builtin.effects.total"),
+        escapeStatus = EsUnknown
       ) @ "Nat -> <> Nat",
-      effects = TDef(qn = qn"archon.builtin.effects.total")
+      effects = TDef(qn = qn"archon.builtin.effects.total"),
+      escapeStatus = EsUnknown
     ) @ "Nat -> Nat -> <> Nat",
     clauses = List(
       TClause(

@@ -10,7 +10,9 @@ TFunctionType(
       effects = TId(id = "effC") @ "effC",
       usage = TId(id = "uC") @ "uC"
     ) @ "<effC> [uC] C a b",
-    effects = TId(id = "effB") @ "effB"
+    effects = TId(id = "effB") @ "effB",
+    escapeStatus = EsUnknown
   ) @ "b: [uB] B -> <effC> [uC] C a b",
-  effects = TId(id = "effA") @ "effA"
+  effects = TId(id = "effA") @ "effA",
+  escapeStatus = EsUnknown
 ) @ "a: [uA] A -> <effB> b: [uB] B -> <effC> [uC] C a b"

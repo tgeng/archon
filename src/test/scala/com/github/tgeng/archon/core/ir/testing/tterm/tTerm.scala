@@ -22,7 +22,7 @@ enum TTerm(val sourceInfo: SourceInfo):
     (using sourceInfo: SourceInfo) extends TTerm(sourceInfo)
   case TRedex(c: TTerm, elims: List[Elimination[TTerm]])(using sourceInfo: SourceInfo)
     extends TTerm(sourceInfo)
-  case TFunctionType(arg: TBinding, bodyType: TTerm, effects: TTerm)
+  case TFunctionType(arg: TBinding, bodyType: TTerm, effects: TTerm, escapeStatus: EscapeStatus)
     extends TTerm(SourceInfo.merge(arg.sourceInfo, bodyType.sourceInfo))
   case THandler
     (

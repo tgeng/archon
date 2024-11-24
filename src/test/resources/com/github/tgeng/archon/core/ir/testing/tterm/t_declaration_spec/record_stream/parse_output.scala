@@ -33,9 +33,11 @@ List(
               usage = TDef(qn = qn"archon.builtin.type.Usage.uAny")
             ),
             bodyType = TId(id = "CStream") @ "CStream",
-            effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε"
+            effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
+            escapeStatus = EsUnknown
           ) @ "Eq Nat m (head self) -> CStream",
-          effects = TDef(qn = qn"archon.builtin.effects.total")
+          effects = TDef(qn = qn"archon.builtin.effects.total"),
+          escapeStatus = EsUnknown
         ) @ "m: Nat -> Eq Nat m (head self) -> CStream"
       )
     )

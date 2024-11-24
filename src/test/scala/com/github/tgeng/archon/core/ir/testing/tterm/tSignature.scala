@@ -1,6 +1,6 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
-import com.github.tgeng.archon.core.ir.{SourceInfo, Variance}
+import com.github.tgeng.archon.core.ir.{EscapeStatus, SourceInfo, Variance}
 
 enum TDeclaration(val name: String):
   case TData
@@ -21,7 +21,7 @@ enum TDeclaration(val name: String):
   case TDefinition
     (
       override val name: String,
-      tParamTys: Seq[TBinding],
+      tParamTys: Seq[(TBinding, EscapeStatus)],
       ty: TTerm,
       clauses: Seq[TClause],
     ) extends TDeclaration(name)

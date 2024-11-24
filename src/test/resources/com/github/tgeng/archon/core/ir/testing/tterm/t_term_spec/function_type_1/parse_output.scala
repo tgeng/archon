@@ -15,7 +15,9 @@ TFunctionType(
       effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
       usage = TAuto() @ "ε"
     ) @ "<> C",
-    effects = TDef(qn = qn"archon.builtin.effects.total")
+    effects = TDef(qn = qn"archon.builtin.effects.total"),
+    escapeStatus = EsUnknown
   ) @ "B -> <> C",
-  effects = TDef(qn = qn"archon.builtin.effects.total")
+  effects = TDef(qn = qn"archon.builtin.effects.total"),
+  escapeStatus = EsUnknown
 ) @ "A -> B -> <> C"

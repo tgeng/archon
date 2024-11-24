@@ -3,6 +3,7 @@ package com.github.tgeng.archon.core.ir.testing.tterm
 import com.github.tgeng.archon.common.parsing.{SignificantWhitespace, indexToColumn}
 import com.github.tgeng.archon.core.common.{Name, QualifiedName}
 import com.github.tgeng.archon.core.ir.*
+import com.github.tgeng.archon.core.ir.EscapeStatus.EsUnknown
 import com.github.tgeng.archon.core.ir.SourceInfo.SiEmpty
 import com.github.tgeng.archon.core.ir.testing.tterm.TDeclaration.*
 import fastparse.{*, given}
@@ -12,7 +13,8 @@ import scala.language.unsafeNulls
 
 class Parser(val text: String, val path: Option[Path], val indent: Int):
   given whitespace: Whitespace = SignificantWhitespace(indent)
-  private val keywords = Set("U", "force", "thunk", "auto", "F", "let", "handler", "_")
+  private val keywords =
+    Set("U", "force", "thunk", "auto", "F", "let", "handler", "_", "loc", "ret", "esc")
   private inline def PT[$: P, T, R](p: => P[T])(f: SourceInfo ?=> T => R): P[R] =
     P((Index ~~ p ~~ Index).map:
       case (start, t, end) =>
@@ -68,6 +70,15 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
     case (f, elims) =>
       if elims.isEmpty then f else TTerm.TRedex(f, elims.toList)
 
+  private def escapeStatus[$: P]: P[EscapeStatus] =
+    P(
+      "loc".map(_ => EscapeStatus.EsLocal) | "ret".map(_ => EscapeStatus.EsReturned) | "esc".map(
+        _ => EscapeStatus.EsUnknown,
+      ),
+    )
+
+  private def escapeStatusOpt[$: P]: P[EscapeStatus] = escapeStatus.?.map(_.getOrElse(EsUnknown))
+
   private def tBinding[$: P]: P[TBinding] =
     PT((id ~ ":").? ~/ ("[" ~/ tTerm ~ "]").? ~ tRedex)((name, usage, ty) =>
       TBinding(
@@ -79,14 +90,15 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
 
   private inline def xFunctionType[$: P](resultP: => P[TTerm]): P[TTerm] =
     P(
-      (NoCut(("<" ~/ tTerm ~ ">").? ~ tBinding ~ "->").rep ~ resultP).map:
+      (NoCut(("<" ~/ tTerm ~ ">").? ~ escapeStatusOpt ~ tBinding ~ "->").rep ~ resultP).map:
         (effectAndBindings, ty) =>
           effectAndBindings.foldRight(ty):
-            case ((effect, binding), ty) =>
+            case ((effect, escapeStatus, binding), ty) =>
               TTerm.TFunctionType(
                 binding,
                 ty,
                 effect.getOrElse(TTerm.TDef(Builtins.TotalQn)(using SourceInfo.SiEmpty)),
+                escapeStatus,
               ),
     )
 
@@ -174,7 +186,13 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
   )
 
   private def tDefinition[$: P]: P[TDeclaration] = P(
-    ("def" ~ id ~ ("(" ~ tBinding ~ ")").rep ~ ":" ~/ indented(_.tFunctionType) ~ tClause.rep)
+    ("def" ~ id ~ ("(" ~ escapeStatusOpt ~ tBinding ~ ")")
+      .map((a, b) =>
+        (b, a),
+      ) // swap escape status and binding since they are reverted in declaration type
+      .rep ~ ":" ~/ indented(
+      _.tFunctionType,
+    ) ~ tClause.rep)
       .map(TDefinition.apply),
   )
 

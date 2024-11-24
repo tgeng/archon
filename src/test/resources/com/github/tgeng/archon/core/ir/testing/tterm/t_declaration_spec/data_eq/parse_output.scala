@@ -38,7 +38,8 @@ List(
         effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
         usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
       ) @ "Type l",
-      effects = TDef(qn = qn"archon.builtin.effects.total")
+      effects = TDef(qn = qn"archon.builtin.effects.total"),
+      escapeStatus = EsUnknown
     ) @ "A -> Type l",
     constructors = List(
       TConstructor(

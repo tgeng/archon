@@ -1,7 +1,6 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.{MutableRef, Nat}
-import com.github.tgeng.archon.core.common.Name.Normal
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*
@@ -161,13 +160,14 @@ extension (tTerm: TTerm)
                   case Right(GRecord(qn))   => RecordType(qn, args)
                   case _                    => redex(c.toCTerm, translatedElims)
               case _ => redex(c.toCTerm, translatedElims)
-      case TFunctionType(arg, bodyType, effects) =>
+      case TFunctionType(arg, bodyType, effects, escapeStatus) =>
         given TranslationContext = ctx.copy(isTypeLevel = true)
         translate(arg.ty, arg.usage, effects) { case Seq(ty, usage, effects) =>
           FunctionType(
             Binding(ty, usage)(Name.Normal(arg.name)),
             bodyType.toCTerm(using summon[TranslationContext].bindLocal(arg.name)),
             effects,
+            escapeStatus,
           )
         }
       case THandler(
@@ -344,15 +344,14 @@ extension (td: TDeclaration)
           )
         }
       case TDefinition(name, tParamTys, ty, clauses) =>
-        val tParamTysCTerm = translateTParamTys(tParamTys.toList)
+        val tParamTysCTerm = translateTParamTysWithEscapeStatus(tParamTys.toList)
         {
-          given TranslationContext = ctx.bindLocal(tParamTys.map(_.name)*)
+          given TranslationContext = ctx.bindLocal(tParamTys.map(_._1.name)*)
           val tyCTerm = ty.toCTerm
           val clauseCTerms = clauses.map(_.toPreClause)
           PreDeclaration.PreDefinition(
             ctx.moduleQn / name,
-            // TODO[P0]: propagate escape status from TDefinition
-            tParamTysCTerm.zip(LazyList.continually(EsUnknown)),
+            tParamTysCTerm,
             tyCTerm,
             clauseCTerms.toList,
           )
@@ -366,6 +365,20 @@ private def translateTParamTys
     case Nil => Nil
     case TBinding(name, ty, usage) :: rest =>
       Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)) :: translateTParamTys(rest)(using
+        ctx.bindLocal(name),
+      )
+
+private def translateTParamTysWithEscapeStatus
+  (bindings: List[(TBinding, EscapeStatus)])
+  (using ctx: TranslationContext)
+  : List[(Binding[CTerm], EscapeStatus)] =
+  bindings match
+    case Nil => Nil
+    case (TBinding(name, ty, usage), escapeStatus) :: rest =>
+      (
+        Binding(ty.toCTerm, usage.toCTerm)(Name.Normal(name)),
+        escapeStatus,
+      ) :: translateTParamTysWithEscapeStatus(rest)(using
         ctx.bindLocal(name),
       )
 

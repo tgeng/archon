@@ -1,0 +1,2 @@
+def foo (loc x: Nat) (ret y: Nat) (esc z: Nat): loc Nat -> ret Nat -> esc Nat -> <> Nat
+a b c = b

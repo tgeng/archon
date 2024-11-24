@@ -32,7 +32,8 @@ List(
             effects = TDef(qn = qn"archon.builtin.effects.total"),
             usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
           ),
-          effects = TDef(qn = qn"archon.builtin.effects.total")
+          effects = TDef(qn = qn"archon.builtin.effects.total"),
+          escapeStatus = EsUnknown
         ) @ "Nat -> Nat"
       )
     )

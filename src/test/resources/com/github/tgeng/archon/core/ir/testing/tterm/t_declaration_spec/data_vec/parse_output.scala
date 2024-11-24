@@ -30,7 +30,8 @@ List(
         effects = TDef(qn = qn"archon.builtin.effects.total") @ "ε",
         usage = TDef(qn = qn"archon.builtin.type.Usage.u1") @ "ε"
       ) @ "Type l",
-      effects = TDef(qn = qn"archon.builtin.effects.total")
+      effects = TDef(qn = qn"archon.builtin.effects.total"),
+      escapeStatus = EsUnknown
     ) @ "Nat -> Type l",
     constructors = List(
       TConstructor(
@@ -92,11 +93,14 @@ List(
                 effects = TDef(qn = qn"archon.builtin.effects.total"),
                 usage = TDef(qn = qn"archon.builtin.type.Usage.u1")
               ) @ "Vec l t (Succ n)",
-              effects = TDef(qn = qn"archon.builtin.effects.total")
+              effects = TDef(qn = qn"archon.builtin.effects.total"),
+              escapeStatus = EsUnknown
             ) @ "Vec l t n -> Vec l t (Succ n)",
-            effects = TDef(qn = qn"archon.builtin.effects.total")
+            effects = TDef(qn = qn"archon.builtin.effects.total"),
+            escapeStatus = EsUnknown
           ) @ "t -> Vec l t n -> Vec l t (Succ n)",
-          effects = TDef(qn = qn"archon.builtin.effects.total")
+          effects = TDef(qn = qn"archon.builtin.effects.total"),
+          escapeStatus = EsUnknown
         ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n)"
       )
     )
