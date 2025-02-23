@@ -351,6 +351,24 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
     (literal: LevelOrder, maxOperands: SeqMap[VTerm, /* level offset */ Nat])
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
 
+  // TODO[P2]: It's possible to introduce TranEff or even DepEff like in idris
+  //  https://docs.idris-lang.org/en/latest/effects/state.html#the-type-eff. To do that, basically
+  //  here we need to track both the input eff args and output eff args (I don't think we can do
+  //  transition across effect qn since the handler is already bound and we do fine-grained effect
+  //  instance level tracking.) Then
+  //  * at call-site,
+  //    - before each computation check, we need to make sure the current eff args are convertible
+  //      with the input eff args
+  //    - after each computation check, we need to update the current context to have
+  //      the output eff args
+  //  * in handler operation implementation, we need to make sure the declared effect args indeed
+  //    match the implementation. Practically this means
+  //    - start checking the body using the input eff args.
+  //    - checking the handler param and operation output type matches the declared output eff args.
+  //  A practical need of this capability is to track type changes across mutable states, like
+  //  pushing to a vector should update the length tracked in type. Using a sigma type indexed by
+  //  length is too coarse as the length information is lost through effect updates. This seems to
+  //  defeat the ultimate goal of combining dependent type with effects.
   case EffectInstanceType
     (eff: Eff, handlerConstraint: HandlerConstraint)
     (using sourceInfo: SourceInfo) extends VTerm(sourceInfo)
