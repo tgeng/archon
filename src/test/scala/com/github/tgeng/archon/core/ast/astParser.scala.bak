@@ -20,7 +20,7 @@ import SourceInfo.*
 
 object AstParser:
   def declarations: StrParser[List[AstDeclaration]] =
-    (dataDecl | recordDecl | defDecl | effectDecl) sepBy P.whitespaces
+    (dataDecl | corecordDecl | defDecl | effectDecl) sepBy P.whitespaces
 
   def binding: StrParser[Binding[AstTerm]] =
     for
@@ -45,19 +45,19 @@ object AstParser:
     yield AstData(name, tParamTys, ty, isPure, constructors)
   }
 
-  def recordDecl: StrParser[AstRecord] = P {
-    val field: StrParser[AstField] = P {
+  def corecordDecl: StrParser[AstCorecord] = P {
+    val cofield: StrParser[AstCofield] = P {
       for
         name <- name <%< P.from(":") << P.whitespaces
         ty <- rhs <%< P.from(";") << P.whitespaces
-      yield AstField(name, ty)
+      yield AstCofield(name, ty)
     }
     for
-      name <- P.from("record") >%> name << P.whitespaces
+      name <- P.from("corecord") >%> name << P.whitespaces
       tParamTys <- tParamTys <%< P.from(":") << P.whitespaces
       ty <- rhs <%< P.from(";") << P.whitespaces
-      fields <- field sepByGreedy P.whitespaces
-    yield AstRecord(name, tParamTys, ty, fields)
+      cofields <- cofield sepByGreedy P.whitespaces
+    yield AstCorecord(name, tParamTys, ty, cofields)
   }
 
   def defDecl: StrParser[AstDefinition] = P {
@@ -384,7 +384,7 @@ object AstParser:
     "frc",
     "pure",
     "data",
-    "record",
+    "corecord",
     "effect",
     "def"
   )

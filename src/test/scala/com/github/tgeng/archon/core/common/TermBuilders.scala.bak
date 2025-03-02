@@ -98,9 +98,9 @@ object TermBuilders:
 
   given(using Σ: Signature): Conversion[SomeCall[QualifiedName], CTerm] = _ match
     case SomeCall(qn, elims) =>
-      Σ.getRecordOption(qn).flatMap { record =>
-        if record.tParamTys.size == elims.size then
-          Some(RecordType(qn, elims.map(_.asInstanceOf[Arg].v), Total())
+      Σ.getCorecordOption(qn).flatMap { corecord =>
+        if corecord.tParamTys.size == elims.size then
+          Some(CorecordType(qn, elims.map(_.asInstanceOf[Arg].v), Total())
         else
           None
       }.orElse(

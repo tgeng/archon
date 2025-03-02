@@ -8,7 +8,7 @@ import scala.collection.immutable.SeqMap
 enum CaseTree:
   case CtTerm(term: CTerm)
   case CtLambda( /* binding + 1 */ body: CaseTree)(val boundName: Ref[Name])
-  case CtRecord(fields: SeqMap[Name, CaseTree])
+  case CtCorecord(cofields: SeqMap[Name, CaseTree])
   case CtTypeCase
     (
       operand: VTerm,

@@ -196,11 +196,11 @@ trait TermVisitor[C, R]:
       visitVTerm(functionType.effects),
     )
 
-  def visitRecordType(recordType: RecordType)(using ctx: C)(using Σ: Signature): R =
+  def visitCorecordType(corecordType: CorecordType)(using ctx: C)(using Σ: Signature): R =
     combine(
-      visitQualifiedName(recordType.qn) +:
-        recordType.args.map(visitVTerm) :+
-        visitVTerm(recordType.effects)*,
+      visitQualifiedName(corecordType.qn) +:
+        corecordType.args.map(visitVTerm) :+
+        visitVTerm(corecordType.effects)*,
     )
 
   def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
@@ -282,7 +282,7 @@ trait TermVisitor[C, R]:
     case let: Let                     => visitLet(let)
     case redex: Redex                 => visitRedex(redex)
     case functionType: FunctionType   => visitFunctionType(functionType)
-    case recordType: RecordType       => visitRecordType(recordType)
+    case corecordType: CorecordType       => visitCorecordType(corecordType)
     case operationCall: OperationCall => visitOperationCall(operationCall)
     case continuation: Continuation   => visitContinuation(continuation)
     case handler: Handler             => visitHandler(handler)
@@ -410,7 +410,7 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
   def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
     case t: CtTerm      => visitCtTerm(t)
     case l: CtLambda    => visitCtLambda(l)
-    case r: CtRecord    => visitCtRecord(r)
+    case r: CtCorecord    => visitCtCorecord(r)
     case tc: CtTypeCase => visitCtTypeCase(tc)
     case dc: CtDataCase => visitCtDataCase(dc)
 
@@ -420,9 +420,9 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
     withBoundNames(Seq(l.boundName)):
       visitCaseTree(l.body)
 
-  def visitCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): R =
+  def visitCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature): R =
     combine(
-      r.fields.flatMap { (name, body) =>
+      r.cofields.flatMap { (name, body) =>
         Seq(visitName(name), visitCaseTree(body))
       }.toSeq*,
     )
@@ -473,7 +473,7 @@ trait Transformer[C]:
     ct match
       case t: CtTerm      => transformCtTerm(t)
       case l: CtLambda    => transformCtLambda(l)
-      case r: CtRecord    => transformCtRecord(r)
+      case r: CtCorecord    => transformCtCorecord(r)
       case tc: CtTypeCase => transformCtTypeCase(tc)
       case dc: CtDataCase => transformCtDataCase(dc)
 
@@ -487,10 +487,10 @@ trait Transformer[C]:
       },
     )(l.boundName)
 
-  def transformCtRecord(r: CtRecord)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtRecord(
-      r.fields.map { (name, field) =>
-        (name, transformCaseTree(field))
+  def transformCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtCorecord(
+      r.cofields.map { (name, cofield) =>
+        (name, transformCaseTree(cofield))
       },
     )
 
@@ -749,12 +749,12 @@ trait Transformer[C]:
       transformVTerm(functionType.effects),
     )(using functionType.sourceInfo)
 
-  def transformRecordType(recordType: RecordType)(using ctx: C)(using Σ: Signature): CTerm =
-    RecordType(
-      transformQualifiedName(recordType.qn),
-      recordType.args.map(transformVTerm),
-      transformVTerm(recordType.effects),
-    )(using recordType.sourceInfo)
+  def transformCorecordType(corecordType: CorecordType)(using ctx: C)(using Σ: Signature): CTerm =
+    CorecordType(
+      transformQualifiedName(corecordType.qn),
+      corecordType.args.map(transformVTerm),
+      transformVTerm(corecordType.effects),
+    )(using corecordType.sourceInfo)
 
   def transformOperationCall
     (operationCall: OperationCall)
@@ -833,7 +833,7 @@ trait Transformer[C]:
       case let: Let                     => transformLet(let)
       case redex: Redex                 => transformRedex(redex)
       case functionType: FunctionType   => transformFunctionType(functionType)
-      case recordType: RecordType       => transformRecordType(recordType)
+      case corecordType: CorecordType       => transformCorecordType(corecordType)
       case operationCall: OperationCall => transformOperationCall(operationCall)
       case continuation: Continuation   => transformContinuation(continuation)
       case handler: Handler             => transformHandler(handler)

@@ -45,11 +45,11 @@ def elaborate
   try
     (part, decl) match
       case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
-      case (DeclarationPart.HEAD, d: PreRecord)     => elaborateRecordHead(d)
+      case (DeclarationPart.HEAD, d: PreCorecord)     => elaborateCorecordHead(d)
       case (DeclarationPart.HEAD, d: PreDefinition) => elaborateDefHead(d)
       case (DeclarationPart.HEAD, d: PreEffect)     => elaborateEffectHead(d)
       case (DeclarationPart.BODY, d: PreData)       => elaborateDataBody(d)
-      case (DeclarationPart.BODY, d: PreRecord)     => elaborateRecordBody(d)
+      case (DeclarationPart.BODY, d: PreCorecord)     => elaborateCorecordBody(d)
       case (DeclarationPart.BODY, d: PreDefinition) => elaborateDefBody(d)
       case (DeclarationPart.BODY, d: PreEffect)     => elaborateEffectBody(d)
   catch case e: IrError => throw ElaborationFailure(part, decl, e)
@@ -74,10 +74,10 @@ def sortPreDeclarations
             QualifiedNameVisitor.visitPreTContext(data.tParamTys),
             data.ty.visitWith(QualifiedNameVisitor),
           )
-        case record: PreRecord =>
+        case corecord: PreCorecord =>
           QualifiedNameVisitor.combine(
-            QualifiedNameVisitor.visitPreTContext(record.tParamTys),
-            record.ty.visitWith(QualifiedNameVisitor),
+            QualifiedNameVisitor.visitPreTContext(corecord.tParamTys),
+            corecord.ty.visitWith(QualifiedNameVisitor),
           )
         case definition: PreDefinition =>
           definition.ty.visitWith(QualifiedNameVisitor)
@@ -99,12 +99,12 @@ def sortPreDeclarations
               constructor.ty.visitWith(QualifiedNameVisitor)
             }*,
           ) + data.qn
-        case record: PreRecord =>
+        case corecord: PreCorecord =>
           QualifiedNameVisitor.combine(
-            record.fields.map { field =>
-              field.ty.visitWith(QualifiedNameVisitor)
+            corecord.cofields.map { cofield =>
+              cofield.ty.visitWith(QualifiedNameVisitor)
             }*,
-          ) + record.qn
+          ) + corecord.qn
         case definition: PreDefinition =>
           QualifiedNameVisitor.combine(
             definition.clauses.flatMap { clause =>
@@ -253,60 +253,60 @@ private def elaborateDataBody
       .replaceDeclaration(checkData(data))
 
 @throws(classOf[IrError])
-private def elaborateRecordHead
-  (record: PreRecord)
+private def elaborateCorecordHead
+  (corecord: PreCorecord)
   (using Γ: Context)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  if Σ.getRecordOption(record.qn).isDefined then throw DuplicatedDeclaration(record.qn)
-  ctx.trace(s"elaborating record signature ${record.qn}"):
-    val tParamTys = elaborateTTelescope(record.tParamTys)(using Γ)
+  if Σ.getCorecordOption(corecord.qn).isDefined then throw DuplicatedDeclaration(corecord.qn)
+  ctx.trace(s"elaborating corecord signature ${corecord.qn}"):
+    val tParamTys = elaborateTTelescope(corecord.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
-    val r: Record =
-      checkIsCType(record.ty).normalized(None) match
+    val r: Corecord =
+      checkIsCType(corecord.ty).normalized(None) match
         case CType(CTop(level, _), _) =>
-          Record(
-            record.qn,
+          Corecord(
+            corecord.qn,
             Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
             level,
             // Self usage is always `uAny` because
-            // 1. it's only used in field type declarations so `uAny` is handy
+            // 1. it's only used in cofield type declarations so `uAny` is handy
             // 2. having `uAny` here does not put any restrictions because any references of `self`
-            //    are always in field types and all such usages will multiple by `u0` when type
-            //    checking field implementations.
-            Binding(U(RecordType(record.qn, vars(tParamTys.size - 1))), uAny)(
-              record.selfName,
+            //    are always in cofield types and all such usages will multiple by `u0` when type
+            //    checking cofield implementations.
+            Binding(U(CorecordType(corecord.qn, vars(tParamTys.size - 1))), uAny)(
+              corecord.selfName,
             ),
           )
         case t => throw ExpectCType(t)
     Σ.addDeclaration(r)
 
 @throws(classOf[IrError])
-private def elaborateRecordBody
-  (preRecord: PreRecord)
+private def elaborateCorecordBody
+  (preCorecord: PreCorecord)
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  val record = Σ.getRecord(preRecord.qn)
+  val corecord = Σ.getCorecord(preCorecord.qn)
 
   given SourceInfo = SiEmpty
 
-  given Context = record.context.map(_._1).toIndexedSeq :+
-    Binding(U(RecordType(record.qn, vars(record.context.size - 1))), Total())(
-      record.selfBinding.name,
+  given Context = corecord.context.map(_._1).toIndexedSeq :+
+    Binding(U(CorecordType(corecord.qn, vars(corecord.context.size - 1))), Total())(
+      corecord.selfBinding.name,
     )
 
-  val level = record.level.weakened // weakened for self
-  ctx.trace(s"elaborating record body ${preRecord.qn}"):
-    preRecord.fields
-      .foldLeft[Signature](Σ) { case (_Σ, field) =>
-        ctx.trace(s"elaborating field ${field.name}"):
-          val ty = checkIsCType(field.ty, Some(level)).normalized(None)
-          val f = checkRecordField(preRecord.qn, Field(field.name, ty))
-          _Σ.addField(preRecord.qn, f)
+  val level = corecord.level.weakened // weakened for self
+  ctx.trace(s"elaborating corecord body ${preCorecord.qn}"):
+    preCorecord.cofields
+      .foldLeft[Signature](Σ) { case (_Σ, cofield) =>
+        ctx.trace(s"elaborating cofield ${cofield.name}"):
+          val ty = checkIsCType(cofield.ty, Some(level)).normalized(None)
+          val f = checkCorecordCofield(preCorecord.qn, Cofield(cofield.name, ty))
+          _Σ.addCofield(preCorecord.qn, f)
       }
-      .replaceDeclaration(checkRecord(record))
+      .replaceDeclaration(checkCorecord(corecord))
 
 @throws(classOf[IrError])
 private def elaborateDefHead
@@ -498,28 +498,28 @@ private def elaborateDefBody
       // [cosplit]
       case (
           ElabClause(_, CProjection(_) :: _, _, _) :: _,
-          RecordType(qn, args, _),
+          CorecordType(qn, args, _),
         ) =>
-        val (_Σ, fields) = Σ
-          .getFields(qn)
+        val (_Σ, cofields) = Σ
+          .getCofields(qn)
           .foldLeft[(Signature, SeqMap[Name, CaseTree])]((Σ, SeqMap())):
-            case ((_Σ, fields), field) =>
+            case ((_Σ, cofields), cofield) =>
               val (_Σmod, ct) = elaborate(
-                q̅ :+ CProjection(field.name),
-                field.ty.substLowers(args :+ Thunk(apply(qn, q̅))*),
-                filter(problem, field.name),
+                q̅ :+ CProjection(cofield.name),
+                cofield.ty.substLowers(args :+ Thunk(apply(qn, q̅))*),
+                filter(problem, cofield.name),
               )(using Γ)(using _Σ)
 
-              (_Σmod, fields + (field.name -> ct))
-        (_Σ, CtRecord(fields))
+              (_Σmod, cofields + (cofield.name -> ct))
+        (_Σ, CtCorecord(cofields))
       // [cosplit empty]
       // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
       // user (projection) pattern. This seems more natural.
-      case (ElabClause(_, Nil, None, source) :: _, RecordType(qn, _, _)) =>
-        Σ.getFields(qn).size match
-          // There is no need to modify Σ because empty record does not have any clause
-          case 0 => (Σ, CtRecord(SeqMap()))
-          case _ => throw MissingFieldsInCoPattern(source)
+      case (ElabClause(_, Nil, None, source) :: _, CorecordType(qn, _, _)) =>
+        Σ.getCofields(qn).size match
+          // There is no need to modify Σ because empty corecord does not have any clause
+          case 0 => (Σ, CtCorecord(SeqMap()))
+          case _ => throw MissingCofieldsInCoPattern(source)
       // [intro]
       case (
           ElabClause(_, CPattern(_) :: _, _, _) :: _,

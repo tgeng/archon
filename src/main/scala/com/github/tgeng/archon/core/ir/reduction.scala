@@ -85,7 +85,7 @@ private final class StackMachine
       // Take a shortcut when returning a collapsable computation
       case Return(Collapse(c), _) => run(c)
       // terminal cases
-      case _: CType | _: F | _: Return | _: FunctionType | _: RecordType | _: CTop =>
+      case _: CType | _: F | _: Return | _: FunctionType | _: CorecordType | _: CTop =>
         if stack.isEmpty then pc
         else
           stack.pop() match
@@ -673,7 +673,7 @@ def matchPattern
         //  self-contained, just like all declared `Data`. The downside is then the need to carry
         //  a level everywhere with the cell. On the other hand, whether to allow this does not
         //  affect the expressive power because one can simulate such by declaring a wrapper
-        //  data class. This same trick can be used for equality type, function type, and record
+        //  data class. This same trick can be used for equality type, function type, and corecord
         //  type.
         // case (PDataType(CellQn, heapP :: tyP :: Nil), CellType(heap, ty, status)) =>
         //   constraints = (heapP, heap) :: (tyP, ty) :: constraints

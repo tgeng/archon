@@ -98,21 +98,21 @@ def astToIr
           constructors
         )
       }
-    case AstRecord(name, tParamTys, ty, fields) =>
+    case AstCorecord(name, tParamTys, ty, cofields) =>
       astToIr(tParamTys) {
         for
           ty <- astToIr(ty)
-          fields <- bind(n"self") {
+          cofields <- bind(n"self") {
             transpose(
-              fields.map { field =>
-                astToIr(field.ty)
-                  .map(Field(field.name, _))
+              cofields.map { cofield =>
+                astToIr(cofield.ty)
+                  .map(Cofield(cofield.name, _))
               }
             )
           }
-        yield (ty, fields)
-      }.map { case (tParamTys, (ty, fields)) =>
-        PreRecord(moduleQn / name)(tParamTys, ty, fields)
+        yield (ty, cofields)
+      }.map { case (tParamTys, (ty, cofields)) =>
+        PreCorecord(moduleQn / name)(tParamTys, ty, cofields)
       }
     case AstDefinition(name, paramTys, ty, clauses) =>
       astToIr(paramTys) {

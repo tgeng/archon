@@ -1,12 +1,12 @@
 List(
-  TRecord(
+  TCorecord(
     selfName = "self",
     name = "CStream",
     tParamTys = List(),
     ty = TRedex(c = TId(id = "CType") @ "CType", elims = List(ETerm(v = TId(id = "l") @ "l"))) @ "CType l",
-    fields = List(
-      TField(name = "head", ty = TId(id = "Nat") @ "Nat"),
-      TField(
+    cofields = List(
+      TCofield(name = "head", ty = TId(id = "Nat") @ "Nat"),
+      TCofield(
         name = "tail",
         ty = TFunctionType(
           arg = TBinding(

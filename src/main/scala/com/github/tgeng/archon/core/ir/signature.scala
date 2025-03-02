@@ -22,7 +22,7 @@ enum Declaration:
       /* binding: + context */
       level: VTerm,
     )
-  case Record
+  case Corecord
     (
       qn: QualifiedName,
       context: TContext,
@@ -56,7 +56,7 @@ case class Constructor
     tArgs: Arguments = Nil, /* binding += context + paramTys */
   )
 
-case class Field(name: Name, /* binding += context + 1 for self */ ty: CTerm)
+case class Cofield(name: Name, /* binding += context + 1 for self */ ty: CTerm)
 
 case class Clause
   (
@@ -82,7 +82,7 @@ trait Signature:
 
   def addConstructor(qn: QualifiedName, c: Constructor): S
 
-  def addField(qn: QualifiedName, f: Field): S
+  def addCofield(qn: QualifiedName, f: Cofield): S
 
   def addClause(qn: QualifiedName, c: Clause): S
 
@@ -119,39 +119,39 @@ trait Signature:
     case QualifiedName.Node(dataQn, conName) => getConstructorOption(dataQn, conName)
     case _ => throw IllegalArgumentException(s"Not a constructor $constructorQn")
 
-  def getRecordOption(qn: QualifiedName): Option[Record]
+  def getCorecordOption(qn: QualifiedName): Option[Corecord]
 
-  def getRecord(qn: QualifiedName): Record =
-    getRecordOption(qn).getOrElse(throw IllegalArgumentException(s"Missing record for '$qn'"))
+  def getCorecord(qn: QualifiedName): Corecord =
+    getCorecordOption(qn).getOrElse(throw IllegalArgumentException(s"Missing corecord for '$qn'"))
 
-  def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]]
+  def getCofieldsOption(qn: QualifiedName): Option[IndexedSeq[Cofield]]
 
-  def getFields(qn: QualifiedName): IndexedSeq[Field] =
-    getFieldsOption(qn).getOrElse(throw IllegalArgumentException(s"Missing fields for '$qn'"))
+  def getCofields(qn: QualifiedName): IndexedSeq[Cofield] =
+    getCofieldsOption(qn).getOrElse(throw IllegalArgumentException(s"Missing cofields for '$qn'"))
 
-  def getFieldOption(qn: QualifiedName, fieldName: Name): Option[Field] =
+  def getCofieldOption(qn: QualifiedName, cofieldName: Name): Option[Cofield] =
     for
-      fields <- getFieldsOption(qn)
-      r <- fields.collectFirst:
-        case field if field.name == fieldName => field
+      cofields <- getCofieldsOption(qn)
+      r <- cofields.collectFirst:
+        case cofield if cofield.name == cofieldName => cofield
     yield r
 
-  def getField(qn: QualifiedName, fieldName: Name): Field =
-    getFieldOption(qn, fieldName).getOrElse(
-      throw IllegalArgumentException(s"Missing field '$fieldName' for '$qn'"),
+  def getCofield(qn: QualifiedName, cofieldName: Name): Cofield =
+    getCofieldOption(qn, cofieldName).getOrElse(
+      throw IllegalArgumentException(s"Missing cofield '$cofieldName' for '$qn'"),
     )
 
-  def getFieldOption(fieldQn: QualifiedName): Option[Field] = fieldQn match
-    case QualifiedName.Node(recordQn, fieldName) => getFieldOption(recordQn, fieldName)
-    case _ => throw IllegalArgumentException(s"Not a field '$fieldQn'")
+  def getCofieldOption(cofieldQn: QualifiedName): Option[Cofield] = cofieldQn match
+    case QualifiedName.Node(corecordQn, cofieldName) => getCofieldOption(corecordQn, cofieldName)
+    case _ => throw IllegalArgumentException(s"Not a cofield '$cofieldQn'")
 
-  // In a previous design I had derived definitions for effects, data, and record. But that turns
-  // out to be not good. Instead, data type and value constructors, record type constructors, and
+  // In a previous design I had derived definitions for effects, data, and corecord. But that turns
+  // out to be not good. Instead, data type and value constructors, corecord type constructors, and
   // effect type constructors and operators directly contribute to global names that are recognized
   // by the global mix-fix parser. This way, type checking is much simpler and more predictable.
-  // Also, any name conflicts are caught during parsing. Record field will have a special syntax for
+  // Also, any name conflicts are caught during parsing. Corecord cofield will have a special syntax for
   // projection. Type class also contributes to the mix-fix parser and it's basically syntax sugar
-  // of records under the hood.
+  // of corecords under the hood.
   def getDefinitionOption(qn: QualifiedName): Option[Definition] =
     getDefinitionOptionImpl(qn)
 

@@ -509,15 +509,15 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     case Elimination.ETerm(t) => t
     case Elimination.EProj(n) => Block("#" + n)
 
-  override def visitRecordType
+  override def visitCorecordType
     (
-      recordType: RecordType,
+      corecordType: CorecordType,
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
     : Block = ctype(
-    recordType.effects,
-    Block(Concat, NoWrap, recordType.qn, bracketAndComma(recordType.args.map(visitVTerm))),
+    corecordType.effects,
+    Block(Concat, NoWrap, corecordType.qn, bracketAndComma(corecordType.args.map(visitVTerm))),
   )
 
   override def visitOperationCall

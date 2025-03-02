@@ -22,7 +22,7 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case ExpectFunction(c: CTerm)(using Γ: Context) extends IrError(Γ)
   case ExpectParameterDisposer(h: CTerm.Handler)(using Γ: Context) extends IrError(Γ)
   case ExpectParameterReplicator(h: CTerm.Handler)(using Γ: Context) extends IrError(Γ)
-  case ExpectRecord(c: CTerm)(using Γ: Context) extends IrError(Γ)
+  case ExpectCorecord(c: CTerm)(using Γ: Context) extends IrError(Γ)
   case ExpectU1Effect(operationQn: QualifiedName)(using Γ: Context) extends IrError(Γ)
   case ExpectUType(vTy: VTerm)(using Γ: Context) extends IrError(Γ)
   case ExpectUnrestrictedTypeParameterBinding(binding: Binding[VTerm])(using Γ: Context)
@@ -34,7 +34,7 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case IllegalVarianceInData
     (qn: QualifiedName, violatingVars: collection.Set[VTerm.Var])
     (using Γ: Context) extends IrError(Γ)
-  case IllegalVarianceInRecord
+  case IllegalVarianceInCorecord
     (qn: QualifiedName, violatingVars: collection.Set[VTerm.Var])
     (using Γ: Context) extends IrError(Γ)
   case IncompleteClauses(qn: QualifiedName)(using Γ: Context) extends IrError(Γ)
@@ -47,8 +47,8 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case MissingDeclaration(qn: QualifiedName) extends IrError(Context.empty)
   case MissingDefaultTypeCase() extends IrError(Context.empty)
   case MissingDefinition(qn: QualifiedName) extends IrError(Context.empty)
-  case MissingField(name: Name, qn: QualifiedName) extends IrError(Context.empty)
-  case MissingFieldsInCoPattern(clause: PreClause)(using Γ: Context) extends IrError(Γ)
+  case MissingCofield(name: Name, qn: QualifiedName) extends IrError(Context.empty)
+  case MissingCofieldsInCoPattern(clause: PreClause)(using Γ: Context) extends IrError(Γ)
   case MissingUserCoPattern(clause: PreClause)(using Γ: Context) extends IrError(Γ)
   case NonEmptyType(ty: VTerm, source: PreClause)(using Γ: Context) extends IrError(Γ)
   case NotCConvertible(sub: CTerm, sup: CTerm, ty: Option[CTerm])(using Γ: Context)

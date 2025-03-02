@@ -25,7 +25,7 @@ enum GlobalNameInfo:
   case GDef(qn: QualifiedName)
   case GData(qn: QualifiedName)
   case GDataValue(n: Name)
-  case GRecord(qn: QualifiedName)
+  case GCorecord(qn: QualifiedName)
 
 case class TranslationContext
   (
@@ -55,16 +55,16 @@ case class TranslationContext
         data.constructors.map(c => c.name -> GDataValue(Name.Normal(c.name))),
     )
 
-  def bindRecordDecl(record: TRecord): TranslationContext =
+  def bindCorecordDecl(corecord: TCorecord): TranslationContext =
     this.copy(
-      globalDefs = globalDefs + (record.name -> GRecord(moduleQn / record.name)),
+      globalDefs = globalDefs + (corecord.name -> GCorecord(moduleQn / corecord.name)),
     )
 
   def bindDecls(decls: Seq[TDeclaration]): TranslationContext =
     decls.foldLeft(this) { (ctx, decl) =>
       decl match
         case data: TData     => ctx.bindDataDecl(data)
-        case record: TRecord => ctx.bindRecordDecl(record)
+        case corecord: TCorecord => ctx.bindCorecordDecl(corecord)
         case d: TDefinition  => ctx.bindDef(d.name)
     }
 
@@ -77,10 +77,10 @@ case class TranslationContext
               (data.qn.shortName.toString -> GData(data.qn)) ++
               data.constructors.map(c => c.name.toString -> GDataValue(c.name)),
           )
-        case record: PreRecord =>
+        case corecord: PreCorecord =>
           ctx.copy(
             globalDefs = globalDefs +
-              (record.qn.shortName.toString -> GRecord(record.qn)),
+              (corecord.qn.shortName.toString -> GCorecord(corecord.qn)),
           )
         case _ => ctx.bindDef(decl.qn.shortName.toString, decl.qn)
     }
@@ -113,7 +113,7 @@ extension (tTerm: TTerm)
           case Right(GDef(qn))      => Def(qn)
           case Right(GData(qn))     => Return(DataType(qn, Nil))
           case Right(GDataValue(n)) => Return(Con(n, Nil))
-          case Right(GRecord(qn))   => RecordType(qn, Nil)
+          case Right(GCorecord(qn))   => CorecordType(qn, Nil)
       case TDef(qn) => Def(qn)
       case TForce(t) =>
         translate(t) { case Seq(t) =>
@@ -157,7 +157,7 @@ extension (tTerm: TTerm)
                 ctx.lookup(id) match
                   case Right(GData(qn))     => Return(DataType(qn, args))
                   case Right(GDataValue(n)) => Return(Con(n, args))
-                  case Right(GRecord(qn))   => RecordType(qn, args)
+                  case Right(GCorecord(qn))   => CorecordType(qn, args)
                   case _                    => redex(c.toCTerm, translatedElims)
               case _ => redex(c.toCTerm, translatedElims)
       case TFunctionType(arg, bodyType, effects, escapeStatus) =>
@@ -276,7 +276,7 @@ extension (tp: TPattern)
           case Left(index)          => Pattern.PVar(index)
           case Right(GData(qn))     => Pattern.PDataType(qn, Nil)
           case Right(GDataValue(n)) => Pattern.PConstructor(n, Nil)
-          case Right(GRecord(_)) | Right(GDef(_)) =>
+          case Right(GCorecord(_)) | Right(GDef(_)) =>
             throw UnresolvedSymbol(name)
       case TpXConstructor(forced, name, args) =>
         val argPatterns = args.map(_.toPattern).toList
@@ -330,17 +330,17 @@ extension (td: TDeclaration)
             constructorCTerms.toList,
           )
         }
-      case TRecord(selfName, name, tParamTys, ty, fields) =>
+      case TCorecord(selfName, name, tParamTys, ty, cofields) =>
         val tParamTysCTerm = translateTParamTysWithVariance(tParamTys.toList)
         {
           given TranslationContext = ctx.bindLocal(tParamTys.map(_._1.name)*)
           val tyCTerm = ty.toCTerm
-          val fieldCTerms = fields.map(_.toPreField)
-          PreDeclaration.PreRecord(
+          val cofieldCTerms = cofields.map(_.toPreCofield)
+          PreDeclaration.PreCorecord(
             ctx.moduleQn / name,
             tParamTysCTerm,
             tyCTerm,
-            fieldCTerms.toList,
+            cofieldCTerms.toList,
           )
         }
       case TDefinition(name, tParamTys, ty, clauses) =>
@@ -400,9 +400,9 @@ extension (tc: TConstructor)
   def toPreConstructor(using ctx: TranslationContext): PreConstructor =
     PreConstructor(Name.Normal(tc.name), tc.ty.toCTerm)
 
-extension (tf: TField)
-  def toPreField(using ctx: TranslationContext): Field =
-    Field(Name.Normal(tf.name), tf.ty.toCTerm)
+extension (tf: TCofield)
+  def toPreCofield(using ctx: TranslationContext): Cofield =
+    Cofield(Name.Normal(tf.name), tf.ty.toCTerm)
 
 extension (tc: TClause)
   def toPreClause(using ctx: TranslationContext): PreClause =

@@ -156,14 +156,14 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
       .map(TData.apply),
   )
 
-  private def tField[$: P]: P[TField] = P(
-    (id ~ ":" ~/ indented(_.tFunctionType)).map(TField.apply),
+  private def tCofield[$: P]: P[TCofield] = P(
+    (id ~ ":" ~/ indented(_.tFunctionType)).map(TCofield.apply),
   )
 
-  private def tRecord[$: P]: P[TDeclaration] = P(
-    ("record" ~/ (id ~ ":").?.map(
+  private def tCorecord[$: P]: P[TDeclaration] = P(
+    ("corecord" ~/ (id ~ ":").?.map(
       _.getOrElse("self"),
-    ) ~ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tRedex) ~ tField.rep).map(TRecord.apply),
+    ) ~ id ~ tBindingAndVariance.rep ~ ":" ~/ indented(_.tRedex) ~ tCofield.rep).map(TCorecord.apply),
   )
 
   private def tProjection[$: P]: P[TCoPattern] = PT("#" ~/ id)(TCoPattern.TcProjection.apply)
@@ -196,7 +196,7 @@ class Parser(val text: String, val path: Option[Path], val indent: Int):
       .map(TDefinition.apply),
   )
 
-  private def tDeclaration[$: P]: P[TDeclaration] = P(tData | tRecord | tDefinition)
+  private def tDeclaration[$: P]: P[TDeclaration] = P(tData | tCorecord | tDefinition)
 
   private def tDeclarationEnd[$: P]: P[TDeclaration] = P(tDeclaration ~ End)
 

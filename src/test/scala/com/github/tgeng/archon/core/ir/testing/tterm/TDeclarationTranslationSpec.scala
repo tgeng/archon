@@ -34,7 +34,7 @@ class TDeclarationTranslationSpec extends FileBasedFreeSpec("t_declaration_spec"
   "def_trivial" in:
     runTest()
 
-  "record_stream" in:
+  "corecord_stream" in:
     runTest()
 
   "def_prec" in:

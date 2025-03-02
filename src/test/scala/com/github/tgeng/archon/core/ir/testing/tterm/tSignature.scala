@@ -10,13 +10,13 @@ enum TDeclaration(val name: String):
       ty: TTerm,
       constructors: Seq[TConstructor],
     ) extends TDeclaration(name)
-  case TRecord
+  case TCorecord
     (
       selfName: String,
       override val name: String,
       tParamTys: Seq[(TBinding, Variance)],
       ty: TTerm,
-      fields: Seq[TField],
+      cofields: Seq[TCofield],
     ) extends TDeclaration(name)
   case TDefinition
     (
@@ -33,7 +33,7 @@ case class TConstructor
     ty: TTerm,
   )
 
-case class TField
+case class TCofield
   (
     name: String,
     ty: TTerm,

@@ -173,15 +173,15 @@ def checkIsSubtype
             },
           )
       effConstraint ++ tyConstraint ++ usageConstraint ++ bodyConstraint
-    case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
-      Σ.getRecordOption(qn1) match
+    case (CorecordType(qn1, args1, eff1), CorecordType(qn2, args2, eff2)) if qn1 == qn2 =>
+      Σ.getCorecordOption(qn1) match
         case None => throw MissingDeclaration(qn1)
-        case Some(record) =>
+        case Some(corecord) =>
           val args = ArrayBuffer[VTerm]()
           val effConstraint = checkEffectSubsumption(eff1, eff2)
           val argConstraint = args1
             .zip(args2)
-            .zip(record.context)
+            .zip(corecord.context)
             .map { case ((arg1, arg2), (binding, variance)) =>
               variance match
                 case Variance.INVARIANT =>
@@ -241,13 +241,13 @@ def typeUnion
         val effects = EffectsUnion(effects1, effects2).normalized
         val body = typeUnion(body1, body2)(using Γ :+ binding1)
         FunctionType(binding1, body, effects, es1 | es2)
-      case (r1 @ RecordType(qn1, args1, effects1), r2 @ RecordType(qn2, args2, effects2))
+      case (r1 @ CorecordType(qn1, args1, effects1), r2 @ CorecordType(qn2, args2, effects2))
         if qn1 == qn2 =>
-        val record = Σ.getRecord(qn1)
+        val corecord = Σ.getCorecord(qn1)
         val effects = EffectsUnion(effects1, effects2).normalized
         val args = args1
           .zip(args2)
-          .zip(record.context)
+          .zip(corecord.context)
           .map { case ((arg1, arg2), (_, variance)) =>
             variance match
               case Variance.COVARIANT => Some(typeUnion(arg1, arg2))
@@ -256,7 +256,7 @@ def typeUnion
                 else None
           }
         val actualArgs = args.collect { case Some(arg) => arg }
-        if actualArgs.size == args.size then RecordType(qn1, actualArgs, effects)
+        if actualArgs.size == args.size then CorecordType(qn1, actualArgs, effects)
         else getCTop(r1, r2)
       case (a: IType, b: IType) => getCTop(a, b)
       // One may want to treat `Force(Var(...))` to be the upperbound stored in the context corresponding to this

@@ -81,9 +81,9 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
         case (_, Nil) => Map()
         case (FunctionType(_, ty, _, es), (elim @ Elimination.ETerm(arg)) :: elims) =>
           combine(multiply(es, visitVTerm(arg)), processArgs(ty, elims, processedElims :+ elim))
-        case (RecordType(qn, args, _), (elim @ Elimination.EProj(name)) :: elims) =>
+        case (CorecordType(qn, args, _), (elim @ Elimination.EProj(name)) :: elims) =>
           processArgs(
-            Σ.getField(qn, name).ty.substLowers(args :+ Thunk(Redex(redex.t, processedElims))*),
+            Σ.getCofield(qn, name).ty.substLowers(args :+ Thunk(Redex(redex.t, processedElims))*),
             elims,
             processedElims :+ elim,
           )

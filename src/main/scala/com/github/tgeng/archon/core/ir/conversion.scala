@@ -118,16 +118,16 @@ def checkIsConvertible
           Application(right.weakened, Var(0)),
           Some(bodyTy),
         )(using Γ :+ binding)
-      case Some(RecordType(qn, _, _)) =>
-        Σ.getFieldsOption(qn) match
+      case Some(CorecordType(qn, _, _)) =>
+        Σ.getCofieldsOption(qn) match
           case None => throw MissingDefinition(qn)
-          case Some(fields) =>
-            fields
-              .map { field =>
+          case Some(cofields) =>
+            cofields
+              .map { cofield =>
                 checkIsConvertible(
-                  Projection(left, field.name),
-                  Projection(right, field.name),
-                  Some(field.ty),
+                  Projection(left, cofield.name),
+                  Projection(right, cofield.name),
+                  Some(cofield.ty),
                 )
               }
               .flatten
@@ -240,15 +240,15 @@ def checkIsConvertible
                   None,
                 )
             effConstraint ++ tyConstraint ++ bodyConstraint
-          case (RecordType(qn1, args1, eff1), RecordType(qn2, args2, eff2)) if qn1 == qn2 =>
-            Σ.getRecordOption(qn1) match
+          case (CorecordType(qn1, args1, eff1), CorecordType(qn2, args2, eff2)) if qn1 == qn2 =>
+            Σ.getCorecordOption(qn1) match
               case None => throw MissingDeclaration(qn1)
-              case Some(record) =>
+              case Some(corecord) =>
                 var args = IndexedSeq[VTerm]()
                 val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
                 val argConstraint = args1
                   .zip(args2)
-                  .zip(record.context)
+                  .zip(corecord.context)
                   .map { case ((arg1, arg2), (binding, variance)) =>
                     variance match
                       case Variance.INVARIANT =>
@@ -385,20 +385,20 @@ private def checkElimIsConvertible
         case _ => throw IllegalStateException("should have been checked to be a function type")
     case (EProj(leftName) :: lefts, EProj(rightName) :: rights, rt) =>
       rt match
-        case RecordType(qn, args, _) =>
+        case CorecordType(qn, args, _) =>
           if leftName == rightName then
             checkElimIsConvertible(
               Projection(head, leftName),
               lefts,
               rights,
-              Σ.getField(qn, leftName).ty.substLowers(args :+ Thunk(head)*),
+              Σ.getCofield(qn, leftName).ty.substLowers(args :+ Thunk(head)*),
               ty,
             )
           else resultConstraint
-        case _ => throw IllegalStateException("should have been checked to be a record type")
+        case _ => throw IllegalStateException("should have been checked to be a corecord type")
     case (ETerm(_) :: _, EProj(_) :: _, _) | (EProj(_) :: _, ETerm(_) :: _, _) =>
       throw IllegalArgumentException("type mismatch")
-    // Different length may not be a problem since it's possible that one side may be calling more projection of some record
+    // Different length may not be a problem since it's possible that one side may be calling more projection of some corecord
     case (_ :: _, Nil, _) | (Nil, _ :: _, _) => resultConstraint
 
 private inline def debugCheckIsConvertible[R]

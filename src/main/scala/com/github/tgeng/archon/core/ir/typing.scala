@@ -265,7 +265,7 @@ def inferLevel(ty: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
         // strengthen is always safe because the only case that bodyLevel would reference 0 is when
         // arg is of type Level. But in that case the overall level would be ω.
         LevelMax(argLevel.weakened, bodyLevel).normalized(using Γ :+ binding).strengthened
-      case RecordType(qn, args, _) => Σ.getRecord(qn).level.substLowers(args*)
+      case CorecordType(qn, args, _) => Σ.getCorecord(qn).level.substLowers(args*)
       case Force(ctm) =>
         val (_, cty) = inferType(ctm)
         inferLevel(cty)
@@ -426,12 +426,12 @@ def inferType
                 case _ => throw ExpectFunction(redex(c, checkedElims.reverse))
             case (e @ EProj(name)) :: uncheckedRest =>
               cty match
-                case RecordType(qn, args, effects) =>
-                  Σ.getFieldOption(qn, name) match
-                    case None    => throw MissingField(name, qn)
+                case CorecordType(qn, args, effects) =>
+                  Σ.getCofieldOption(qn, name) match
+                    case None    => throw MissingCofield(name, qn)
                     case Some(f) =>
-                      // `self` of record is only used in type checking. Hence usages of variables
-                      // in the record are not counted.
+                      // `self` of corecord is only used in type checking. Hence usages of variables
+                      // in the corecord are not counted.
                       val self = redex(c, checkedElims)
                       val (rest, checkedCty) = checkElims(
                         e :: checkedElims,
@@ -442,17 +442,17 @@ def inferType
                         EProj(name) :: rest,
                         augmentEffect(effects, checkedCty),
                       )
-                case _ => throw ExpectRecord(redex(c, checkedElims.reverse))
+                case _ => throw ExpectCorecord(redex(c, checkedElims.reverse))
         val (checkedC, cty) = inferType(c)
         val (_, resultCty) = checkElims(Nil, cty, elims)
         (redex(checkedC, elims), resultCty)
-      case RecordType(qn, uncheckedArgs, uncheckedEffects) =>
-        Σ.getRecordOption(qn) match
+      case CorecordType(qn, uncheckedArgs, uncheckedEffects) =>
+        Σ.getCorecordOption(qn) match
           case None => throw MissingDeclaration(qn)
-          case Some(record) =>
+          case Some(corecord) =>
             val effects = checkType(uncheckedEffects, EffectsType())
-            val args = checkTypes(uncheckedArgs, record.context.map(_._1).toList)
-            (RecordType(qn, args, effects), CType(tm, Total()))
+            val args = checkTypes(uncheckedArgs, corecord.context.map(_._1).toList)
+            (CorecordType(qn, args, effects), CType(tm, Total()))
       case OperationCall(effInstance, name, uncheckedArgs) =>
         val (qn, uncheckedTArgs) = inferType(effInstance)._2 match
           case EffectInstanceType(eff, _) => eff
@@ -500,7 +500,7 @@ def inferType
         val continuationLevel = LevelMax(paramLevel, resultLevel, outputLevel).normalized
         (
           Continuation(handler, continuationUsage),
-          RecordType(
+          CorecordType(
             Builtins.ContinuationQn,
             List(
               continuationLevel,
@@ -879,7 +879,7 @@ def checkHandler
         val continuationOtherEffects = otherEffects.weaken(continuationWeakenOffset, 0)
         val continuationHandlerEffects = handlerEffects.weaken(continuationWeakenOffset, 0)
         val continuationOutputUsage = outputUsage.weaken(continuationWeakenOffset, 0)
-        val continuationType = RecordType(
+        val continuationType = CorecordType(
           Builtins.ContinuationQn,
           List(
             Auto(),
@@ -1060,8 +1060,8 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
       EffectsUnion(eff, effects),
       es,
     )
-  case RecordType(qn, args, effects) =>
-    RecordType(qn, args, EffectsUnion(eff, effects))
+  case CorecordType(qn, args, effects) =>
+    CorecordType(qn, args, EffectsUnion(eff, effects))
   case _ => throw IllegalArgumentException(s"trying to augment $cty with $eff")
 
 // Report an error if the type of `body` needs to reference the effectful

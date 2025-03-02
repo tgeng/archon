@@ -167,10 +167,10 @@ def collectUsages
         def impl(ty: CTerm, elims: List[Elimination[VTerm]]): Usages =
           (ty, elims) match
             case (_, Nil) => Usages.zero
-            case (r @ RecordType(qn, args, _), Elimination.EProj(name) :: elims) =>
-              val field = Σ.getField(qn, name)
-              val fieldTy = field.ty.substLowers(args :+ Thunk(r)*)
-              impl(fieldTy, elims)
+            case (r @ CorecordType(qn, args, _), Elimination.EProj(name) :: elims) =>
+              val cofield = Σ.getCofield(qn, name)
+              val cofieldTy = cofield.ty.substLowers(args :+ Thunk(r)*)
+              impl(cofieldTy, elims)
             case (FunctionType(binding, bodyTy, _, _), Elimination.ETerm(arg) :: elims) =>
               collectUsages(arg, Some(binding.ty)) * binding.usage + impl(
                 bodyTy.substLowers(arg),
@@ -191,9 +191,9 @@ def collectUsages
             catch case _: StrengthenException => uAny,
           )
         bindingUsages + effectsUsages + bodyUsages
-      case RecordType(qn, args, effects) =>
-        val record = Σ.getRecord(qn)
-        collectArgsUsages(args, record.context.map(_._1).toList) +
+      case CorecordType(qn, args, effects) =>
+        val corecord = Σ.getCorecord(qn)
+        collectArgsUsages(args, corecord.context.map(_._1).toList) +
           collectUsages(effects, Some(EffectsType()))
       case OperationCall(effectInstance, name, args) =>
         val (qn, tArgs) = inferType(effectInstance)._2 match

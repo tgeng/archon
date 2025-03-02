@@ -16,12 +16,12 @@ enum AstDeclaration:
       val isPure: Boolean,
       val constructors: List[AstConstructor],
     )
-  case AstRecord
+  case AstCorecord
     (
       override val name: Name,
       val tParamTys: AstTContext,
       val ty: AstTerm,
-      val fields: List[AstField],
+      val cofields: List[AstCofield],
     )
   case AstDefinition
     (
@@ -41,7 +41,7 @@ enum AstDeclaration:
 
 case class AstConstructor(name: Name, ty: AstTerm)
 
-case class AstField(name: Name, ty: AstTerm)
+case class AstCofield(name: Name, ty: AstTerm)
 
 case class AstClause
   (

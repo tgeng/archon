@@ -29,7 +29,7 @@ class TDeclarationParserSpec extends FileBasedFreeSpec("t_declaration_spec"):
   "def_plus" in:
     runTest()
 
-  "record_stream" in:
+  "corecord_stream" in:
     runTest()
 
   "def_prec" in:
@@ -37,4 +37,3 @@ class TDeclarationParserSpec extends FileBasedFreeSpec("t_declaration_spec"):
 
   "def_escape_status" in:
     runTest()
-          

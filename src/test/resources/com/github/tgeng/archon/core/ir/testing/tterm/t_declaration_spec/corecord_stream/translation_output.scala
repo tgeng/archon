@@ -1,5 +1,5 @@
 List(
-  PreRecord(
+  PreCorecord(
     qn = qn"test.CStream",
     tParamTys = List(),
     ty = Let(
@@ -11,9 +11,9 @@ List(
         elims = List(ETerm(v = Var(idx = 0) @ "l"))
       ) @ "CType l"
     ) @ "ε",
-    fields = List(
-      Field(name = n"head", ty = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
-      Field(
+    cofields = List(
+      Cofield(name = n"head", ty = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+      Cofield(
         name = n"tail",
         ty = FunctionType(
           binding = Binding(
@@ -45,7 +45,7 @@ List(
               ) @ "Eq Nat m (head self)",
               usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.uAny"))
             ) @ "_",
-            bodyTy = RecordType(
+            bodyTy = CorecordType(
               qn = qn"test.CStream",
               args = List(),
               effects = Effects(handlerKeys = Set(), unionOperands = SeqMap()) @ "ε"

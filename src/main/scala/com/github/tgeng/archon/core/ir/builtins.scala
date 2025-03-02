@@ -15,7 +15,7 @@ private case class SimpleSignature
   (
     declarations: SeqMap[QualifiedName, Declaration] = SeqMap(),
     constructors: SeqMap[QualifiedName, IndexedSeq[Constructor]] = SeqMap(),
-    fields: SeqMap[QualifiedName, IndexedSeq[Field]] = SeqMap(),
+    cofields: SeqMap[QualifiedName, IndexedSeq[Cofield]] = SeqMap(),
     clauses: SeqMap[QualifiedName, IndexedSeq[Clause]] = SeqMap(),
     caseTrees: SeqMap[QualifiedName, CaseTree] = SeqMap(),
     operations: SeqMap[QualifiedName, IndexedSeq[Operation]] = SeqMap(),
@@ -32,8 +32,8 @@ private case class SimpleSignature
     copy(declarations = declarations + (d.qn -> d))
   override def addConstructor(qn: QualifiedName, c: Constructor): SimpleSignature =
     copy(constructors = constructors + (qn -> (constructors.getOrElse(qn, IndexedSeq()) :+ c)))
-  override def addField(qn: QualifiedName, f: Field): SimpleSignature =
-    copy(fields = fields + (qn -> (fields.getOrElse(qn, IndexedSeq()) :+ f)))
+  override def addCofield(qn: QualifiedName, f: Cofield): SimpleSignature =
+    copy(cofields = cofields + (qn -> (cofields.getOrElse(qn, IndexedSeq()) :+ f)))
   override def addClause(qn: QualifiedName, c: Clause): SimpleSignature =
     copy(clauses = clauses + (qn -> (clauses.getOrElse(qn, IndexedSeq()) :+ c)))
   override def addCaseTree(qn: QualifiedName, ct: CaseTree): SimpleSignature =
@@ -51,10 +51,10 @@ private case class SimpleSignature
     declarations.get(qn).collect { case d: Data => d }
   override def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]] =
     constructors.get(qn)
-  override def getRecordOption(qn: QualifiedName): Option[Record] =
-    declarations.get(qn).collect { case d: Record => d }
-  override def getFieldsOption(qn: QualifiedName): Option[IndexedSeq[Field]] =
-    fields.get(qn)
+  override def getCorecordOption(qn: QualifiedName): Option[Corecord] =
+    declarations.get(qn).collect { case d: Corecord => d }
+  override def getCofieldsOption(qn: QualifiedName): Option[IndexedSeq[Cofield]] =
+    cofields.get(qn)
   override def getEffectOption(qn: QualifiedName): Option[Effect] =
     declarations.get(qn).collect { case d: Effect => d }
   override def getOperationsOption(qn: QualifiedName): Option[IndexedSeq[Operation]] =
@@ -276,7 +276,7 @@ object Builtins:
         ),
       ),
     ),
-    PreRecord(
+    PreCorecord(
       ContinuationQn,
       tParamTys = List(
         (binding(n"level", LevelType()), Variance.INVARIANT),
@@ -291,21 +291,21 @@ object Builtins:
         (binding(n"outputType", Type(Top(Var(8)))), Variance.COVARIANT),
       ),
       ty = CType(CTop(Var(9))),
-      fields = List(
-        Field(
+      cofields = List(
+        Cofield(
           n"resume",
           Binding(DataType(IsResumableQn, List(Var(6))))(n"isResumable") ->:
             Binding(Var(8), Var(9))(n"param") ->:
             Binding(Var(7), Var(8))(n"result") ->:
             F(Var(4), EffectsUnion(Var(6), Var(7)), Var(5)),
         ),
-        Field(
+        Cofield(
           n"dispose",
           Binding(DataType(IsDisposableQn, List(Var(6))))(n"isDisposable") ->:
             Binding(Var(8), Var(9))(n"param") ->:
             F(DataType(UnitQn, Nil), EffectsRetainSimpleLinear(Var(5))),
         ),
-        Field(
+        Cofield(
           n"replicate",
           Binding(DataType(IsReplicableQn, List(Var(6))))(n"isReplicable") ->:
             Binding(Var(8), Var(9))(n"param") ->:
@@ -315,9 +315,9 @@ object Builtins:
                 List(
                   Var(12),
                   Var(10),
-                  U(RecordType(ContinuationQn, vars(12, 3))),
+                  U(CorecordType(ContinuationQn, vars(12, 3))),
                   Var(10),
-                  U(RecordType(ContinuationQn, vars(12, 3))),
+                  U(CorecordType(ContinuationQn, vars(12, 3))),
                 ),
               ),
               EffectsRetainSimpleLinear(Var(6)),

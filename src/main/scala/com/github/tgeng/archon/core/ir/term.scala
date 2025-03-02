@@ -92,10 +92,10 @@ enum HandlerType extends Ordered[HandlerType]:
   *     - UAff: continuation can be resumed or disposed
   *     - URel: continuation can be resumed or replicated
   *     - UAny: continuation an be resumed, disposed, or replicated. Note that continuation is
-  *       always captured linearly in `U`. It's difficult to sugarize the record type `U U1
+  *       always captured linearly in `U`. It's difficult to sugarize the corecord type `U U1
   *       Continuation` as a function type with various usages and automatically insert dispose and
   *       replicate wherever needed. This is because dispose and replicate can be effectful. The
-  *       effect is captured by the `Continuation` record type, though such effects can only have
+  *       effect is captured by the `Continuation` corecord type, though such effects can only have
   *       `None` continuation usage so that the operation semantic is simple.
   *
   *   - simplicity:
@@ -236,7 +236,7 @@ sealed trait UsageCompound(val distinctOperands: Set[VTerm])
   * @param boundNames
   *   the parameter and optional continuation parameter names. Note that handler parameter name is
   *   not among the names here because it's shared across all handler implementations and stored in
-  *   the parent `Handler` construct under the `parameterBinding` field.
+  *   the parent `Handler` construct under the `parameterBinding` cofield.
   * @param continuationType
   *   type of the continuation parameter when the handler is complex. This is only available when
   *   the handler is complex.
@@ -612,7 +612,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
 
-  case RecordType
+  case CorecordType
     (
       qn: QualifiedName,
       args: Arguments = Nil,
@@ -720,7 +720,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case t: Let                     => t.copy()
       case t: Redex                   => t.copy()
       case t: FunctionType            => t.copy()
-      case t: RecordType              => t.copy()
+      case t: CorecordType              => t.copy()
       case t: OperationCall           => t.copy()
       case c: Continuation            => c
       case h: Handler                 => h.copy()
@@ -757,8 +757,8 @@ object CTerm:
   def redex(c: CTerm, args: VTerm*)(using SourceInfo): CTerm = redex(c, args)
 
   @targetName("redexFromProjection")
-  def redex(c: CTerm, fieldName: Name)(using SourceInfo): CTerm =
-    redex(c, Elimination.EProj(fieldName))
+  def redex(c: CTerm, cofieldName: Name)(using SourceInfo): CTerm =
+    redex(c, Elimination.EProj(cofieldName))
 
   def Application(fun: CTerm, arg: VTerm)(using SourceInfo): CTerm =
     fun match

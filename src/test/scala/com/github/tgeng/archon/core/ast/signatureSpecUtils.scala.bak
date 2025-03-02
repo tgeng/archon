@@ -143,8 +143,8 @@ class TestSignature
     private val allConstructors: mutable.Map[QualifiedName, IndexedSeq[
       Constructor
     ]] = mutable.Map(),
-    private val allRecords: mutable.Map[QualifiedName, Record] = mutable.Map(),
-    private val allFields: mutable.Map[QualifiedName, IndexedSeq[Field]] = mutable.Map(),
+    private val allCorecords: mutable.Map[QualifiedName, Corecord] = mutable.Map(),
+    private val allCofields: mutable.Map[QualifiedName, IndexedSeq[Cofield]] = mutable.Map(),
     private val allDefinitions: mutable.Map[QualifiedName, Definition] = mutable.Map(),
     private val allClauses: mutable.Map[QualifiedName, IndexedSeq[Clause]] = mutable.Map(),
     private val allEffects: mutable.Map[QualifiedName, Effect] = mutable.Map(),
@@ -154,7 +154,7 @@ class TestSignature
 
   override def addConstructor(c: Constructor): Signature = ???
 
-  override def addField(f: Field): Signature = ???
+  override def addCofield(f: Cofield): Signature = ???
 
   override def addOperation(o: Operation): Signature = ???
 
@@ -165,7 +165,7 @@ class TestSignature
   override def toString: String =
     s"""
        |data:    ${allData.keys}
-       |records: ${allRecords.keys}
+       |corecords: ${allCorecords.keys}
        |defs:    ${allDefinitions.keys}
        |effects: ${allEffects.keys}
        |""".stripMargin
@@ -182,8 +182,8 @@ class TestSignature
   allConstructors.foreach((qn, constructors) =>
     constructors.foreach(c => updateQnByName(qn / c.name))
   )
-  allRecords.keys.foreach(updateQnByName)
-  allFields.foreach((qn, fields) => fields.foreach(f => updateQnByName(qn / f.name)))
+  allCorecords.keys.foreach(updateQnByName)
+  allCofields.foreach((qn, cofields) => cofields.foreach(f => updateQnByName(qn / f.name)))
   allDefinitions.keys.foreach(updateQnByName)
   allEffects.keys.foreach(updateQnByName)
   allOperations.foreach((qn, operations) => operations.foreach(o => updateQnByName(qn / o.name)))
@@ -193,9 +193,9 @@ class TestSignature
   override def getUserConstructorsOption(qn: QualifiedName) =
     allConstructors.get(qn)
 
-  override def getUserRecordOption(qn: QualifiedName) = allRecords.get(qn)
+  override def getUserCorecordOption(qn: QualifiedName) = allCorecords.get(qn)
 
-  override def getUserFieldsOption(qn: QualifiedName) = allFields.get(qn)
+  override def getUserCofieldsOption(qn: QualifiedName) = allCofields.get(qn)
 
   override def getUserDefinitionOption(qn: QualifiedName) =
     allDefinitions.get(qn)
@@ -220,8 +220,8 @@ class TestSignature
   def copy: TestSignature = TestSignature(
     allData,
     allConstructors,
-    allRecords,
-    allFields,
+    allCorecords,
+    allCofields,
     allDefinitions,
     allClauses,
     allEffects,
@@ -245,11 +245,11 @@ class TestSignature
         constructors.foreach { constructor =>
           updateQnByName(dataQn / constructor.name)
         }
-      case AstRecord(name, _, _, fields) =>
-        val recordQn = testModuleQn / name
-        updateQnByName(recordQn)
-        fields.foreach { field =>
-          updateQnByName(recordQn / field.name)
+      case AstCorecord(name, _, _, cofields) =>
+        val corecordQn = testModuleQn / name
+        updateQnByName(corecordQn)
+        cofields.foreach { cofield =>
+          updateQnByName(corecordQn / cofield.name)
         }
       case AstDefinition(name, _, _, _) => updateQnByName(testModuleQn / name)
       case AstEffect(name, _, operations) =>
@@ -278,14 +278,14 @@ class TestSignature
       //     val constructors = assertRight(elaborateBody(preData))
       //     assertRight(checkDataConstructors(preData.qn, constructors))
       //     allConstructors(preData.qn) = constructors.toIndexedSeq
-      //   case (SIGNATURE, preRecord: PreRecord) =>
-      //     val record = assertRight(elaborateSignature(preRecord))
-      //     assertRight(checkRecord(record))
-      //     allRecords(record.qn) = record
-      //   case (BODY, preRecord: PreRecord) =>
-      //     val fields = assertRight(elaborateBody(preRecord))
-      //     assertRight(checkRecordFields(preRecord.qn, fields))
-      //     allFields(preRecord.qn) = fields.toIndexedSeq
+      //   case (SIGNATURE, preCorecord: PreCorecord) =>
+      //     val corecord = assertRight(elaborateSignature(preCorecord))
+      //     assertRight(checkCorecord(corecord))
+      //     allCorecords(corecord.qn) = corecord
+      //   case (BODY, preCorecord: PreCorecord) =>
+      //     val cofields = assertRight(elaborateBody(preCorecord))
+      //     assertRight(checkCorecordCofields(preCorecord.qn, cofields))
+      //     allCofields(preCorecord.qn) = cofields.toIndexedSeq
       //   case (SIGNATURE, preDefinition: PreDefinition) =>
       //     val definition = assertRight(elaborateSignature(preDefinition))
       //     assertRight(checkDef(definition))
