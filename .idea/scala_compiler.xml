@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ScalaCompilerConfiguration">
+    <option name="separateProdTestSources" value="true" />
     <profile name="sbt 1" modules="dev.archon">
       <option name="implicitConversions" value="true" />
       <option name="deprecationWarnings" value="true" />
@@ -13,7 +14,8 @@
         <parameter value="-indent" />
       </parameters>
     </profile>
-    <profile name="sbt 3" modules="archon,archon.main,archon.test">
+    <profile name="sbt 2" modules="archon" />
+    <profile name="sbt 3" modules="archon.main,archon.test">
       <option name="implicitConversions" value="true" />
       <option name="deprecationWarnings" value="true" />
       <option name="featureWarnings" value="true" />

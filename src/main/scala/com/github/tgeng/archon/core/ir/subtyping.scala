@@ -236,8 +236,10 @@ def typeUnion
         val usage = UsageJoin(usage1, usage2).normalized
         F(vty, effects, usage)
       // for simplicity we just treat types at contravariant position as invariant
-      case (FunctionType(binding1, body1, effects1, es1), FunctionType(binding2, body2, effects2, es2))
-        if binding1 == binding2 =>
+      case (
+          FunctionType(binding1, body1, effects1, es1),
+          FunctionType(binding2, body2, effects2, es2),
+        ) if binding1 == binding2 =>
         val effects = EffectsUnion(effects1, effects2).normalized
         val body = typeUnion(body1, body2)(using Γ :+ binding1)
         FunctionType(binding1, body, effects, es1 | es2)
@@ -610,8 +612,6 @@ private def checkLevelSubsumption
         val solvedSup = ctx.solveTerm(sup)
         if solvedSub == sub && solvedSup == sup then throw NotLevelSubsumption(sub, sup)
         else checkLevelSubsumption(solvedSub, solvedSup)
-    case (_: VTerm, r: ResolvedMetaVariable) =>
-      throw IllegalStateException(s"Expected unsolved level meta var but got $r")
     // Handle the special case that the right hand side simply contains the left hand side as an operand.
     case (RUnsolved(_, _, _, tm, _), Level(_, operands)) if operands.contains(Collapse(tm)) =>
       Set.empty
@@ -626,6 +626,8 @@ private def checkLevelSubsumption
             case _ => throw IllegalStateException("type error")
           ctx.updateConstraint(u, UmcLevelSubsumption(newLowerBound))
           Set.empty
+    case (_: VTerm, r: ResolvedMetaVariable) =>
+      throw IllegalStateException(s"Expected unsolved level meta var but got $r")
     // If upper bound is zero, the meta variable can only take zero as the value.
     case (
         u @ RUnsolved(_, _, UmcLevelSubsumption(_), _, _),
