@@ -1,7 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
-import com.github.tgeng.archon.common.DelimitPolicy.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
@@ -308,7 +307,8 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
+                h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)
@@ -485,9 +485,20 @@ private final class StackMachine
 
 extension (c: CTerm)
   @throws(classOf[IrError])
-  def normalized(using Γ: Context)(using Signature)(using TypingContext): CTerm =
-    val transformer = new Transformer[TypingContext]():
-      override def transformRedex(r: Redex)(using ctx: TypingContext)(using Σ: Signature): CTerm =
+  def normalized(using Γ: Context)(using Signature)(using ctx: TypingContext): CTerm =
+    val transformer = new TermTransformer[(TypingContext, Context)]():
+      override def withTelescope[T]
+        (telescope: => Telescope)
+        (action: ((TypingContext, Context)) ?=> T)
+        (using ctx: (TypingContext, Context))
+        (using Σ: Signature)
+        : T = action(using (ctx._1, ctx._2 ++ telescope))
+
+      override def transformRedex
+        (r: Redex)
+        (using ctx: (TypingContext, Context))
+        (using Σ: Signature)
+        : CTerm =
         redex(
           transformCTerm(r.t),
           r.elims.map(transformElim),
@@ -495,7 +506,7 @@ extension (c: CTerm)
 
       override def transformCollapse
         (c: Collapse)
-        (using ctx: TypingContext)
+        (using ctx: (TypingContext, Context))
         (using Σ: Signature)
         : VTerm = transformCTerm(
         c.cTm,
@@ -503,10 +514,14 @@ extension (c: CTerm)
         case Return(v, _) => transformVTerm(v)
         case _            => c
 
-      override def transformVTerm(tm: VTerm)(using ctx: TypingContext)(using Σ: Signature): VTerm =
-        tm.normalized
+      override def transformVTerm
+        (tm: VTerm)
+        (using ctx: (TypingContext, Context))
+        (using Σ: Signature)
+        : VTerm =
+        tm.normalized(using ctx._2)
 
-    transformer.transformCTerm(c) match
+    transformer.transformCTerm(c)(using (ctx, Γ)) match
       case Redex(t, elims) => redex(t, elims.map(_.map(_.normalized)))
       case t               => t
 
@@ -559,7 +574,7 @@ extension (v: VTerm)
                 .filter(effInstance =>
                   val (qn, args) = inferType(effInstance)._2 match
                     case EffectInstanceType(eff, _) => eff
-                    case t                          => throw IllegalStateException(s"Expect EffectInstanceType but got $t")
+                    case t => throw IllegalStateException(s"Expect EffectInstanceType but got $t")
                   if retainSimpleLinearOnly then {
                     val effect = Σ.getEffect(qn)
                     effect.continuationUsage
@@ -641,12 +656,13 @@ given Reducible[CTerm] with
 
 object Reducible:
   @throws(classOf[IrError])
-  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): CTerm =
+  def reduce(t: CTerm)(using Context)(using Signature)(using ctx: TypingContext): CTerm = {
     ctx.trace[CTerm](
       s"reducing",
       Block(ChopDown, Aligned, yellow(t.sourceInfo), pprint(t)),
       tm => Block(ChopDown, Aligned, yellow(tm.sourceInfo), green(pprint(tm))),
     )(summon[Reducible[CTerm]].reduce(t))
+  }
 
 enum MatchingStatus:
   case Matched, Stuck, Mismatch
@@ -659,7 +675,6 @@ def matchPattern
     matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
-  import Builtins.*
   constraints match
     case Nil => matchingStatus
     case elim :: rest =>
@@ -714,7 +729,6 @@ def matchCoPattern
     matchingStatus: MatchingStatus = MatchingStatus.Matched,
   )
   : MatchingStatus =
-  import Builtins.*
   import Elimination.*
   elims match
     case Nil => matchingStatus

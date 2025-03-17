@@ -18,7 +18,7 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 case class StrengthenException(v: Var | PVar, amount: Int) extends Exception
 
 private object RaiseTransformer extends Transformer[( /* amount */ Int, /* bar */ Int)]:
-  override def withBindings[T]
+  override def withBoundNames[T]
     (bindingNames: => Seq[Ref[Name]])
     (action: ((Int, Int)) ?=> T)
     (using ctx: (Int, Int))
@@ -71,7 +71,7 @@ given RaisableTelescope: Raisable[Telescope] with
 
 private object PatternSubstituteTransformer
   extends Transformer[(PartialSubstitution[Pattern], /* offset */ Int)]:
-  override def withBindings[T]
+  override def withBoundNames[T]
     (bindingNames: => Seq[Ref[Name]])
     (action: ((PartialSubstitution[Pattern], Int)) ?=> T)
     (using ctx: (PartialSubstitution[Pattern], Int))
@@ -131,7 +131,7 @@ given SubstitutableCoPattern: Substitutable[CoPattern, Pattern] with
 
 private object VTermSubstituteTransformer
   extends Transformer[(PartialSubstitution[VTerm], /* offset */ Int)]:
-  override def withBindings[T]
+  override def withBoundNames[T]
     (bindingNames: => Seq[Ref[Name]])
     (action: ((PartialSubstitution[VTerm], Int)) ?=> T)
     (using ctx: (PartialSubstitution[VTerm], Int))

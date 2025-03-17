@@ -282,7 +282,7 @@ trait TermVisitor[C, R]:
     case let: Let                     => visitLet(let)
     case redex: Redex                 => visitRedex(redex)
     case functionType: FunctionType   => visitFunctionType(functionType)
-    case corecordType: CorecordType       => visitCorecordType(corecordType)
+    case corecordType: CorecordType   => visitCorecordType(corecordType)
     case operationCall: OperationCall => visitOperationCall(operationCall)
     case continuation: Continuation   => visitContinuation(continuation)
     case handler: Handler             => visitHandler(handler)
@@ -410,7 +410,7 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
   def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
     case t: CtTerm      => visitCtTerm(t)
     case l: CtLambda    => visitCtLambda(l)
-    case r: CtCorecord    => visitCtCorecord(r)
+    case r: CtCorecord  => visitCtCorecord(r)
     case tc: CtTypeCase => visitCtTypeCase(tc)
     case dc: CtDataCase => visitCtDataCase(dc)
 
@@ -459,112 +459,15 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
         }.toSeq*,
     )
 
-trait Transformer[C]:
+trait TermTransformer[C]:
 
-  def withBindings[T]
-    (bindingNames: => Seq[Ref[Name]])
+  def withTelescope[T]
+    (telescope: => Telescope)
     (action: C ?=> T)
     (using ctx: C)
     (using Σ: Signature)
     : T =
     action(using ctx)
-
-  def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
-    ct match
-      case t: CtTerm      => transformCtTerm(t)
-      case l: CtLambda    => transformCtLambda(l)
-      case r: CtCorecord    => transformCtCorecord(r)
-      case tc: CtTypeCase => transformCtTypeCase(tc)
-      case dc: CtDataCase => transformCtDataCase(dc)
-
-  def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtTerm(transformCTerm(ct.term))
-
-  def transformCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtLambda(
-      withBindings(Seq(l.boundName)) {
-        transformCaseTree(l.body)
-      },
-    )(l.boundName)
-
-  def transformCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtCorecord(
-      r.cofields.map { (name, cofield) =>
-        (name, transformCaseTree(cofield))
-      },
-    )
-
-  def transformCtTypeCase(tc: CtTypeCase)(using ctx: C)(using Σ: Signature): CaseTree =
-    CtTypeCase(
-      transformVTerm(tc.operand),
-      tc.cases.map { (qn, body) =>
-        val data = Σ.getData(qn)
-        (
-          qn,
-          withBindings((data.context.map(_._1.name) ++ data.tIndexTys.map(_.name)).toList) {
-            body
-          },
-        )
-      },
-      transformCaseTree(tc.default),
-    )
-
-  def transformCtDataCase(dc: CtDataCase)(using ctx: C)(using Σ: Signature): CaseTree =
-    val constructors = Σ.getConstructors(dc.qn)
-    CtDataCase(
-      transformVTerm(dc.operand),
-      dc.qn,
-      dc.cases.map { (name, body) =>
-        val constructor = constructors
-          .collectFirst { case con if con.name == name => con }
-          .getOrElse(throw IllegalStateException(s"missing constructor $name for ${dc.qn}"))
-        (name, withBindings(constructor.paramTys.map(_.name)) { body })
-      },
-    )
-
-  def transformCoPattern(q: CoPattern)(using ctx: C)(using Σ: Signature): CoPattern =
-    q match
-      case p: CPattern    => transformCPattern(p)
-      case p: CProjection => transformCProjection(p)
-
-  def transformCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): CoPattern =
-    CPattern(transformPattern(p.pattern))
-
-  def transformCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): CoPattern =
-    CProjection(transformName(p.name))(using p.sourceInfo)
-
-  def transformPattern(p: Pattern)(using ctx: C)(using Σ: Signature): Pattern =
-    p match
-      case v: PVar               => transformPVar(v)
-      case d: PDataType          => transformPDataType(d)
-      case d: PForcedDataType    => transformPForcedDataType(d)
-      case c: PConstructor       => transformPConstructor(c)
-      case c: PForcedConstructor => transformPForcedConstructor(c)
-      case f: PForced            => transformPForced(f)
-      case a: PAbsurd            => transformPAbsurd(a)
-
-  def transformPVar(v: PVar)(using ctx: C)(using Σ: Signature): Pattern = v
-
-  def transformPDataType(d: PDataType)(using ctx: C)(using Σ: Signature): Pattern =
-    PDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
-
-  def transformPForcedDataType(d: PForcedDataType)(using ctx: C)(using Σ: Signature): Pattern =
-    PForcedDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
-
-  def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
-    PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
-
-  def transformPForcedConstructor
-    (d: PForcedConstructor)
-    (using ctx: C)
-    (using Σ: Signature)
-    : Pattern =
-    PForcedConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
-
-  def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature): Pattern =
-    PForced(transformVTerm(f.term))(using f.sourceInfo)
-
-  def transformPAbsurd(a: PAbsurd)(using ctx: C)(using Σ: Signature): Pattern = a
 
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm =
     tm match
@@ -718,7 +621,7 @@ trait Transformer[C]:
         let.tBinding.name,
       ),
       transformVTerm(let.eff),
-      withBindings(Seq(let.tBinding.name)) {
+      withTelescope(List(let.tBinding)) {
         transformCTerm(let.body)
       },
     )(using let.sourceInfo)
@@ -743,7 +646,7 @@ trait Transformer[C]:
         transformVTerm(functionType.binding.ty),
         transformVTerm(functionType.binding.usage),
       )(functionType.binding.name),
-      withBindings(List(functionType.binding.name)) {
+      withTelescope(List(functionType.binding)) {
         transformCTerm(functionType.bodyTy)
       },
       transformVTerm(functionType.effects),
@@ -780,23 +683,23 @@ trait Transformer[C]:
       transformVTerm(handler.parameter),
       handler.parameterBinding.map(transformVTerm),
       handler.parameterDisposer.map(t =>
-        withBindings(Seq(handler.parameterBinding.name)) {
+        withTelescope(List(handler.parameterBinding)) {
           transformCTerm(t)
         },
       ),
       handler.parameterReplicator.map(t =>
-        withBindings(Seq(handler.parameterBinding.name)) {
+        withTelescope(List(handler.parameterBinding)) {
           transformCTerm(t)
         },
       ),
-      withBindings(Seq(handler.parameterBinding.name, handler.inputBinding.name)) {
+      withTelescope(List(handler.parameterBinding, handler.inputBinding)) {
         transformCTerm(handler.transform)
       },
-      handler.handlers.map { (name, handlerImpl) =>
+      handler.handlers.map { (qn, handlerImpl) =>
         (
-          name,
-          withBindings(handler.parameterBinding.name +: handlerImpl.boundNames) {
-            transformHandlerImpl(handlerImpl)
+          qn,
+          withTelescope(List(handler.parameterBinding)) {
+            transformHandlerImpl(handler.eff, qn, handlerImpl)
           },
         )
       },
@@ -805,11 +708,19 @@ trait Transformer[C]:
     )(using handler.sourceInfo)
 
   def transformHandlerImpl
-    (handlerImpl: HandlerImpl)
+    (eff: Eff, qn: QualifiedName, handlerImpl: HandlerImpl)
     (using ctx: C)
     (using Σ: Signature)
     : HandlerImpl =
-    handlerImpl.copy(body = transformCTerm(handlerImpl.body))(handlerImpl.boundNames)
+    val operation = Σ.getOperation(qn)
+    assert(operation.paramTys.size == handlerImpl.boundNames.size)
+    val handlerParams = operation.paramTys
+      .substLowers(eff._2*)
+      .zip(handlerImpl.boundNames)
+      .map((binding, name) => binding.copy()(name))
+    withTelescope(handlerParams) {
+      handlerImpl.copy(body = transformCTerm(handlerImpl.body))(handlerImpl.boundNames)
+    }
 
   def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))
@@ -833,7 +744,121 @@ trait Transformer[C]:
       case let: Let                     => transformLet(let)
       case redex: Redex                 => transformRedex(redex)
       case functionType: FunctionType   => transformFunctionType(functionType)
-      case corecordType: CorecordType       => transformCorecordType(corecordType)
+      case corecordType: CorecordType   => transformCorecordType(corecordType)
       case operationCall: OperationCall => transformOperationCall(operationCall)
       case continuation: Continuation   => transformContinuation(continuation)
       case handler: Handler             => transformHandler(handler)
+
+trait Transformer[C] extends TermTransformer[C]:
+
+  override def withTelescope[T]
+    (telescope: => Telescope)
+    (action: C ?=> T)
+    (using ctx: C)
+    (using Σ: Signature)
+    : T = withBoundNames(telescope.map(_.name))(action)
+
+  def withBoundNames[T]
+    (bindingNames: => Seq[Ref[Name]])
+    (action: C ?=> T)
+    (using ctx: C)
+    (using Σ: Signature)
+    : T =
+    action(using ctx)
+
+  def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
+    ct match
+      case t: CtTerm      => transformCtTerm(t)
+      case l: CtLambda    => transformCtLambda(l)
+      case r: CtCorecord  => transformCtCorecord(r)
+      case tc: CtTypeCase => transformCtTypeCase(tc)
+      case dc: CtDataCase => transformCtDataCase(dc)
+
+  def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtTerm(transformCTerm(ct.term))
+
+  def transformCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtLambda(
+      withBoundNames(Seq(l.boundName)) {
+        transformCaseTree(l.body)
+      },
+    )(l.boundName)
+
+  def transformCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtCorecord(
+      r.cofields.map { (name, cofield) =>
+        (name, transformCaseTree(cofield))
+      },
+    )
+
+  def transformCtTypeCase(tc: CtTypeCase)(using ctx: C)(using Σ: Signature): CaseTree =
+    CtTypeCase(
+      transformVTerm(tc.operand),
+      tc.cases.map { (qn, body) =>
+        val data = Σ.getData(qn)
+        (
+          qn,
+          withBoundNames((data.context.map(_._1.name) ++ data.tIndexTys.map(_.name)).toList) {
+            body
+          },
+        )
+      },
+      transformCaseTree(tc.default),
+    )
+
+  def transformCtDataCase(dc: CtDataCase)(using ctx: C)(using Σ: Signature): CaseTree =
+    val constructors = Σ.getConstructors(dc.qn)
+    CtDataCase(
+      transformVTerm(dc.operand),
+      dc.qn,
+      dc.cases.map { (name, body) =>
+        val constructor = constructors
+          .collectFirst { case con if con.name == name => con }
+          .getOrElse(throw IllegalStateException(s"missing constructor $name for ${dc.qn}"))
+        (name, withBoundNames(constructor.paramTys.map(_.name)) { body })
+      },
+    )
+
+  def transformCoPattern(q: CoPattern)(using ctx: C)(using Σ: Signature): CoPattern =
+    q match
+      case p: CPattern    => transformCPattern(p)
+      case p: CProjection => transformCProjection(p)
+
+  def transformCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): CoPattern =
+    CPattern(transformPattern(p.pattern))
+
+  def transformCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): CoPattern =
+    CProjection(transformName(p.name))(using p.sourceInfo)
+
+  def transformPattern(p: Pattern)(using ctx: C)(using Σ: Signature): Pattern =
+    p match
+      case v: PVar               => transformPVar(v)
+      case d: PDataType          => transformPDataType(d)
+      case d: PForcedDataType    => transformPForcedDataType(d)
+      case c: PConstructor       => transformPConstructor(c)
+      case c: PForcedConstructor => transformPForcedConstructor(c)
+      case f: PForced            => transformPForced(f)
+      case a: PAbsurd            => transformPAbsurd(a)
+
+  def transformPVar(v: PVar)(using ctx: C)(using Σ: Signature): Pattern = v
+
+  def transformPDataType(d: PDataType)(using ctx: C)(using Σ: Signature): Pattern =
+    PDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPForcedDataType(d: PForcedDataType)(using ctx: C)(using Σ: Signature): Pattern =
+    PForcedDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
+    PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPForcedConstructor
+    (d: PForcedConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    : Pattern =
+    PForcedConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
+
+  def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature): Pattern =
+    PForced(transformVTerm(f.term))(using f.sourceInfo)
+
+  def transformPAbsurd(a: PAbsurd)(using ctx: C)(using Σ: Signature): Pattern = a
