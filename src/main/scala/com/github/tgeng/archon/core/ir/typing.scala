@@ -1026,7 +1026,7 @@ def checkIsCType
 @throws(classOf[IrError])
 def reduceUsage(usage: CTerm)(using Context)(using Signature)(using ctx: TypingContext): VTerm =
   ctx.trace("reduce usage", Block(yellow(usage.sourceInfo), pprint(usage))):
-    checkType(usage, F(UsageType()))
+    checkType(usage, checkIsCType(F(UsageType())))
     val reduced = reduce(usage)
     reduced match
       case Return(u, _) => u
