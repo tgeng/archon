@@ -545,13 +545,20 @@ class TypingContext
       constraints.flatMap:
         case Constraint.Conversions(_, lhs, rhs, _) =>
           lhs.flatMap(visitVTerm) ++ rhs.flatMap(visitVTerm)
-        case Constraint.VConversion(_, lhs, rhs, _)            => visitVTerm(lhs) ++ visitVTerm(rhs)
-        case Constraint.CConversion(_, lhs, rhs, _)            => visitCTerm(lhs) ++ visitCTerm(rhs)
-        case Constraint.VSubType(_, sub, sup)                  => visitVTerm(sub) ++ visitVTerm(sup)
-        case Constraint.CSubType(_, sub, sup)                  => visitCTerm(sub) ++ visitCTerm(sup)
-        case Constraint.EffSubsumption(_, sub, sup)            => visitVTerm(sub) ++ visitVTerm(sup)
-        case Constraint.LevelSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
-        case Constraint.UsageSubsumption(_, sub, sup)          => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.VConversion(_, lhs, rhs, _)   => visitVTerm(lhs) ++ visitVTerm(rhs)
+        case Constraint.CConversion(_, lhs, rhs, _)   => visitCTerm(lhs) ++ visitCTerm(rhs)
+        case Constraint.VSubType(_, sub, sup)         => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.CSubType(_, sub, sup)         => visitCTerm(sub) ++ visitCTerm(sup)
+        case Constraint.EffSubsumption(_, sub, sup)   => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.LevelSubsumption(_, sub, sup) => visitVTerm(sub) ++ visitVTerm(sup)
+        case Constraint.UsageSubsumption(_, sub, sup) => visitVTerm(sub) ++ visitVTerm(sup)
+
+    override def withBoundNames
+      (bindingNames: => Seq[Ref[Name]])
+      (action: TypingContext ?=> Set[Nat])
+      (using ctx: TypingContext)
+      (using Σ: Signature)
+      : Set[Nat] = action
 
   @throws(classOf[IrError])
   private def solveConstraints(constraints: Set[Constraint])(using Σ: Signature): Set[Constraint] =

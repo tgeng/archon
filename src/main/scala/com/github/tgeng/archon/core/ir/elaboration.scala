@@ -45,11 +45,11 @@ def elaborate
   try
     (part, decl) match
       case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
-      case (DeclarationPart.HEAD, d: PreCorecord)     => elaborateCorecordHead(d)
+      case (DeclarationPart.HEAD, d: PreCorecord)   => elaborateCorecordHead(d)
       case (DeclarationPart.HEAD, d: PreDefinition) => elaborateDefHead(d)
       case (DeclarationPart.HEAD, d: PreEffect)     => elaborateEffectHead(d)
       case (DeclarationPart.BODY, d: PreData)       => elaborateDataBody(d)
-      case (DeclarationPart.BODY, d: PreCorecord)     => elaborateCorecordBody(d)
+      case (DeclarationPart.BODY, d: PreCorecord)   => elaborateCorecordBody(d)
       case (DeclarationPart.BODY, d: PreDefinition) => elaborateDefBody(d)
       case (DeclarationPart.BODY, d: PreEffect)     => elaborateEffectBody(d)
   catch case e: IrError => throw ElaborationFailure(part, decl, e)
@@ -145,7 +145,6 @@ def sortPreDeclarations
     case Left(cycle)  => throw CyclicDeclarations(cycle)
 
 private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
-
   override def combine
     (rs: Set[QualifiedName]*)
     (using ctx: Unit)
@@ -160,7 +159,12 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
     (using Σ: Signature)
     : Set[QualifiedName] = Set(qn)
 
-end QualifiedNameVisitor
+  override def withBoundNames
+    (bindingNames: => Seq[Ref[Name]])
+    (action: Unit ?=> Set[QualifiedName])
+    (using ctx: Unit)
+    (using Σ: Signature)
+    : Set[QualifiedName] = action
 
 @throws(classOf[IrError])
 private def elaborateDataHead

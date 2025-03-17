@@ -11,8 +11,7 @@ import com.github.tgeng.archon.core.ir.VTerm.*
 trait TermVisitor[C, R]:
   def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
 
-  def withTelescope(telescope: => Telescope)(action: C ?=> R)(using ctx: C)(using Σ: Signature): R =
-    action(using ctx)
+  def withTelescope(telescope: => Telescope)(action: C ?=> R)(using ctx: C)(using Σ: Signature): R
 
   def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
     combine(visitVTerm(binding.ty), visitVTerm(binding.usage))
@@ -302,8 +301,7 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
     (action: C ?=> R)
     (using ctx: C)
     (using Σ: Signature)
-    : R =
-    action(using ctx)
+    : R
 
   def visitPreTContext
     (tTelescope: List[(Binding[CTerm], Variance)])
@@ -461,13 +459,8 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
 
 trait TermTransformer[C]:
 
-  def withTelescope[T]
-    (telescope: => Telescope)
-    (action: C ?=> T)
-    (using ctx: C)
-    (using Σ: Signature)
-    : T =
-    action(using ctx)
+  def withTelescope[T](telescope: => Telescope)(action: C ?=> T)(using ctx: C)(using Σ: Signature)
+    : T
 
   def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm =
     tm match
@@ -763,8 +756,7 @@ trait Transformer[C] extends TermTransformer[C]:
     (action: C ?=> T)
     (using ctx: C)
     (using Σ: Signature)
-    : T =
-    action(using ctx)
+    : T
 
   def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
     ct match

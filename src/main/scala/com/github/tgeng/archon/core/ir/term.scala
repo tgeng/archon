@@ -568,7 +568,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
     (
       vTy: VTerm,
       effects: VTerm = VTerm.Total()(using SiEmpty),
-      usage: VTerm = VTerm.UsageLiteral(Usage.U1),
+      usage: VTerm = VTerm.Auto(),
     )
     (using sourceInfo: SourceInfo) extends CTerm(sourceInfo), IType
   case Return(v: VTerm, usage: VTerm = VTerm.Auto()(using SiEmpty))(using sourceInfo: SourceInfo)
@@ -720,7 +720,7 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
       case t: Let                     => t.copy()
       case t: Redex                   => t.copy()
       case t: FunctionType            => t.copy()
-      case t: CorecordType              => t.copy()
+      case t: CorecordType            => t.copy()
       case t: OperationCall           => t.copy()
       case c: Continuation            => c
       case h: Handler                 => h.copy()

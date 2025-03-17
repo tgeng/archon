@@ -307,8 +307,7 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
-                h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)
@@ -750,6 +749,13 @@ private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
     (using newTip: VTerm)
     (using Σ: Signature)
     : CTerm = Return(newTip, cct.ty.usage)
+
+  override def withBoundNames[T]
+    (bindingNames: => Seq[Ref[Name]])
+    (action: VTerm ?=> T)
+    (using ctx: VTerm)
+    (using Σ: Signature)
+    : T = action
 
 private def processStackEntryForDisposerCall
   (input: CTerm)

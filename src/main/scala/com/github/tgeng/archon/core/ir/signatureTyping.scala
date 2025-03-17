@@ -46,7 +46,13 @@ def checkDataConstructor
           checkTypes(con.tArgs, data.tIndexTys.weaken(con.paramTys.size, 0))(using tArgsContext)
             .map(ctx.solveTerm(_)(using tArgsContext))
         val violatingVars =
-          VarianceChecker.visitTelescope(con.paramTys)(using data.context, Variance.COVARIANT, 0)
+          VarianceChecker.visitTelescope(con.paramTys)(using
+            data.context,
+            Variance.COVARIANT,
+            0,
+            Γ,
+            ctx,
+          )
         if violatingVars.nonEmpty then throw IllegalVarianceInData(data.qn, violatingVars.toSet)
         Constructor(con.name, paramTys, tArgs)
 
@@ -79,39 +85,59 @@ def checkCorecordCofield
   Σ.getCorecordOption(qn) match
     case None => throw MissingDeclaration(qn)
     case Some(corecord) =>
-      given Context = corecord.context.map(_._1).toIndexedSeq :+ corecord.selfBinding
+      given Γ: Context = corecord.context.map(_._1).toIndexedSeq :+ corecord.selfBinding
 
       ctx.trace(s"checking corecord cofield $qn.${cofield.name}"):
         val ty = ctx.solveTerm(cofield.ty)
         val violatingVars =
           // 1 is to offset self binding.
-          VarianceChecker.visitCTerm(cofield.ty)(using corecord.context, Variance.COVARIANT, 1)
-        if violatingVars.nonEmpty then throw IllegalVarianceInCorecord(corecord.qn, violatingVars.toSet)
+          VarianceChecker.visitCTerm(cofield.ty)(using
+            corecord.context,
+            Variance.COVARIANT,
+            1,
+            Γ,
+            ctx,
+          )
+        if violatingVars.nonEmpty then
+          throw IllegalVarianceInCorecord(corecord.qn, violatingVars.toSet)(using
+            corecord.context.map(_._1).toIndexedSeq,
+          )
         Cofield(cofield.name, ty)
 
-private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Var]]:
+object VarianceChecker
+  extends TermVisitor[(TContext, Variance, Nat, Context, TypingContext), Seq[Var]]:
   override def combine
     (violatedVars: Seq[Var]*)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
     violatedVars.flatten
 
-  override def withBoundNames
-    (bindingNames: => Seq[Ref[Name]])
-    (action: ((TContext, Variance, Nat)) ?=> Seq[Var])
-    (using ctx: (TContext, Variance, Nat))
+  override def withTelescope
+    (telescope: => Telescope)
+    (action: ((TContext, Variance, Nat, Context, TypingContext)) ?=> Seq[VTerm.Var])
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
-    : Seq[Var] =
-    val (tContext, variance, offset) = ctx
-    action(using (tContext, variance, offset + bindingNames.size))
+    : Seq[VTerm.Var] =
+    val (tContext, variance, offset, _Γ, tctx) = ctx
+    action(using (tContext, variance, offset + telescope.size, _Γ, tctx))
+
+  override def visitCollapse
+    (collapse: VTerm.Collapse)
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
+    (using Σ: Signature)
+    : Seq[VTerm.Var] =
+    val (tContext, variance, offset, _Γ, tctx) = ctx
+    collapse.normalized(using _Γ)(using Σ)(using tctx) match
+      case Collapse(ctm) => visitCTerm(ctm)
+      case t             => visitVTerm(t)
 
   override def visitVar
     (v: Var)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, variance, offset) = ctx
+    val (tContext, variance, offset, _Γ, tctx) = ctx
     val index = v.idx - offset
     if index < 0 then return Nil
     tContext.resolve(index)._2 match
@@ -122,54 +148,59 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 
   override def visitVTerm
     (tm: VTerm)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, _, offset) = ctx
+    val (tContext, _, offset, _Γ, tctx) = ctx
     tm match
       case _: (Type | Var | U | DataType) => super.visitVTerm(tm)(using ctx)
-      case _ => super.visitVTerm(tm)(using (tContext, Variance.INVARIANT, offset))
+      case _ => super.visitVTerm(tm)(using (tContext, Variance.INVARIANT, offset, _Γ, tctx))
 
   override def visitDataType
     (dataType: DataType)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, variance, offset) = ctx
+    val (tContext, variance, offset, _Γ, tctx) = ctx
     val data = Σ.getData(dataType.qn)
     (data.context.map(_._2) ++ data.tIndexTys.map(_ => Variance.INVARIANT))
       .zip(dataType.args)
       .flatMap:
         case (Variance.INVARIANT, arg) =>
-          visitVTerm(arg)(using (tContext, Variance.INVARIANT, offset))
+          visitVTerm(arg)(using (tContext, Variance.INVARIANT, offset, _Γ, tctx))
         case (Variance.COVARIANT, arg) => visitVTerm(arg)(using ctx)
         case (Variance.CONTRAVARIANT, arg) =>
-          visitVTerm(arg)(using (tContext, variance.flip, offset))
+          visitVTerm(arg)(using (tContext, variance.flip, offset, _Γ, tctx))
       .toSeq
 
   override def visitCTerm
     (tm: CTerm)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, _, offset) = ctx
+    val (tContext, _, offset, _Γ, tctx) = ctx
     tm match
       case _: (CType | F | FunctionType | CorecordType) => super.visitCTerm(tm)(using ctx)
-      case _ => super.visitCTerm(tm)(using (tContext, Variance.INVARIANT, offset))
+      case _ => super.visitCTerm(tm)(using (tContext, Variance.INVARIANT, offset, _Γ, tctx))
 
   override def visitCType
     (cType: CType)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, _, offset) = ctx
+    val (tContext, _, offset, _Γ, tctx) = ctx
     combine(
       visitCTerm(cType.upperBound),
-      visitVTerm(cType.effects)(using (tContext, Variance.INVARIANT, offset)),
+      visitVTerm(cType.effects)(using (tContext, Variance.INVARIANT, offset, _Γ, tctx)),
     )
-  override def visitF(f: F)(using ctx: (TContext, Variance, Nat))(using Σ: Signature): Seq[Var] =
-    val (tContext, _, offset) = ctx
-    val invariantCtx = (tContext, Variance.INVARIANT, offset)
+
+  override def visitF
+    (f: F)
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
+    (using Σ: Signature)
+    : Seq[Var] =
+    val (tContext, _, offset, _Γ, tctx) = ctx
+    val invariantCtx = (tContext, Variance.INVARIANT, offset, _Γ, tctx)
     combine(
       visitVTerm(f.vTy),
       visitVTerm(f.effects)(using invariantCtx),
@@ -178,35 +209,35 @@ private object VarianceChecker extends Visitor[(TContext, Variance, Nat), Seq[Va
 
   override def visitFunctionType
     (functionType: FunctionType)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, variance, offset) = ctx
-    val invariantCtx = (tContext, Variance.INVARIANT, offset)
-    val contravariantCtx = (tContext, variance.flip, offset)
+    val (tContext, variance, offset, _Γ, tctx) = ctx
+    val invariantCtx = (tContext, Variance.INVARIANT, offset, _Γ, tctx)
+    val contravariantCtx = (tContext, variance.flip, offset, _Γ, tctx)
     combine(
       visitVTerm(functionType.binding.ty)(using contravariantCtx),
-      withBoundNames(Seq(functionType.binding.name)) {
+      withTelescope(List(functionType.binding)) {
         visitCTerm(functionType.bodyTy)
       },
       visitVTerm(functionType.effects)(using invariantCtx),
     )
   override def visitCorecordType
     (corecordType: CorecordType)
-    (using ctx: (TContext, Variance, Nat))
+    (using ctx: (TContext, Variance, Nat, Context, TypingContext))
     (using Σ: Signature)
     : Seq[Var] =
-    val (tContext, variance, offset) = ctx
+    val (tContext, variance, offset, _Γ, tctx) = ctx
     val corecord = Σ.getCorecord(corecordType.qn)
     corecord.context
       .map(_._2)
       .zip(corecordType.args)
       .flatMap:
         case (Variance.INVARIANT, arg) =>
-          visitVTerm(arg)(using (tContext, Variance.INVARIANT, offset))
+          visitVTerm(arg)(using (tContext, Variance.INVARIANT, offset, _Γ, tctx))
         case (Variance.COVARIANT, arg) => visitVTerm(arg)(using ctx)
         case (Variance.CONTRAVARIANT, arg) =>
-          visitVTerm(arg)(using (tContext, variance.flip, offset))
+          visitVTerm(arg)(using (tContext, variance.flip, offset, _Γ, tctx))
       .toSeq
 
 private object PatternEscapeStatusCollector extends Visitor[Nat, Set[Nat]]:
@@ -303,7 +334,7 @@ def checkDef
 
   val newContextEscapeStatuses: Seq[EscapeStatus] =
     clauses.map(checkClause).transpose.map(_.fold(EsLocal)(_ | _))
-  definition.copy(context = definition.context.map(_._1).zip(newContextEscapeStatuses))
+  d.copy(context = definition.context.map(_._1).zip(newContextEscapeStatuses))
 
 @throws(classOf[IrError])
 def checkEffect(effect: Effect)(using Signature)(using ctx: TypingContext): Effect =

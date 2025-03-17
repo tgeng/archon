@@ -560,6 +560,13 @@ private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]():
       case Solved(_, _, value)     => visitCTerm(value)
     )
 
+  override def withBoundNames
+    (bindingNames: => Seq[Ref[Name]])
+    (action: TypingContext ?=> Set[Nat])
+    (using ctx: TypingContext)
+    (using Σ: Signature)
+    : Set[Nat] = action
+
 @throws(classOf[IrError])
 def checkTypes
   (tms: Seq[VTerm], tys: Telescope)
