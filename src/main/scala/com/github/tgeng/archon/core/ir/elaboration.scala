@@ -19,6 +19,10 @@ import com.github.tgeng.archon.core.ir.unifyAll
 import scala.collection.immutable.SeqMap
 import scala.collection.mutable
 
+// TODO(P2): add a final pass that resolves all meta variables at end of processing a module. This
+//  is just to avoid leaky abstraction due to certain meta variables being only resolved later at
+//  a call site. After this is done, all the definitions should be refreshed with all meta-variables
+//  and any reducible pieces reduced.
 @throws(classOf[IrError])
 def elaborateAll
   (declarations: Seq[PreDeclaration])
