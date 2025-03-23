@@ -6,6 +6,8 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.*
 
 import scala.annotation.tailrec
@@ -115,9 +117,9 @@ def unify
     // sought-after feature anyway.
     case (U(_), U(_), _) => UUndecided(u, v, ty)
     case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
-      unifyAll(args1, args2, Σ.getData(qn1).context.map(_._1).toList)
+      unifyAll(args1, args2, Σ.getData(qn1).asRight.context.map(_._1).toList)
     case (Con(name1, args1), Con(name2, args2), DataType(qn, tArgs)) if name1 == name2 =>
-      unifyAll(args1, args2, Σ.getConstructor(qn, name1).paramTys.substLowers(tArgs*))
+      unifyAll(args1, args2, Σ.getConstructor(qn, name1).asRight.paramTys.substLowers(tArgs*))
     // stuck
     case (_: Collapse | _: Thunk, _, _) => UUndecided(u, v, ty)
     case (_, _: Collapse | _: Thunk, _) => UUndecided(u, v, ty)
@@ -141,7 +143,12 @@ private object CycleVisitor
       /* whether a type or value constructor is encountered */ Boolean,
     ), /* cycle found */ Boolean,
   ]:
-  override def combine(rs: Boolean*)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def combine
+    (rs: Boolean*)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean =
     rs.foldLeft(false)(_ || _)
 
   override def withBoundNames
@@ -149,36 +156,64 @@ private object CycleVisitor
     (action: ((Nat, Boolean)) ?=> Boolean)
     (using ctx: (Nat, Boolean))
     (using Σ: Signature)
+    (using TypingContext)
     : Boolean =
     action(using (ctx._1 + 1, ctx._2))
 
-  override def visitVar(v: Var)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitVar
+    (v: Var)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean =
     // Only report true (cyclic) if a type or value has been encountered from root term.
     ctx._2 && v.idx == ctx._1
 
-  override def visitType(ty: Type)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitType
+    (ty: Type)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean =
     super.visitType(ty)(using (ctx._1, true))
 
-  override def visitTop(top: Top)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitTop
+    (top: Top)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean =
     super.visitTop(top)(using (ctx._1, true))
 
-  override def visitU(u: U)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitU
+    (u: U)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean =
     super.visitU(u)(using (ctx._1, true))
 
   override def visitDataType
     (dataType: DataType)
     (using ctx: (Nat, Boolean))
     (using Σ: Signature)
+    (using TypingContext)
     : Boolean =
     super.visitDataType(dataType)(using (ctx._1, true))
 
-  override def visitCon(con: Con)(using ctx: (Nat, Boolean))(using Σ: Signature): Boolean =
+  override def visitCon
+    (con: Con)
+    (using ctx: (Nat, Boolean))
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean =
     super.visitCon(con)(using (ctx._1, true))
 
   override def visitUsageType
     (usageType: UsageType)
     (using ctx: (Nat, Boolean))
     (using Σ: Signature)
+    (using TypingContext)
     : Boolean =
     super.visitUsageType(usageType)(using (ctx._1, true))
 
@@ -186,12 +221,13 @@ private object CycleVisitor
     (effectsType: EffectsType)
     (using ctx: (Nat, Boolean))
     (using Σ: Signature)
+    (using TypingContext)
     : Boolean =
     super.visitEffectsType(effectsType)(using (ctx._1, true))
 
   // visitLevelType and visitHeapType are not needed since Refl does not contain any nested terms.
 
-private def isCyclic(x: Var, t: VTerm)(using Σ: Signature): Boolean =
+private def isCyclic(x: Var, t: VTerm)(using Σ: Signature)(using TypingContext): Boolean =
   CycleVisitor.visitVTerm(t)(using (x.idx, false))
 
 @throws(classOf[IrError])
@@ -208,9 +244,10 @@ private def solution
   val τ = Substitutor.id[Pattern](Γ.size).remove(x.idx)
   UYes(Δ, σ, τ)
 
-private def telescope(tys: VTerm*)(using Signature): Telescope = (0 until tys.size).map { i =>
-  Binding(tys(i).weaken(i, 0), Usage.UAny)(gn"var$i")
-}.toList
+private def telescope(tys: VTerm*)(using Signature)(using TypingContext): Telescope =
+  (0 until tys.size).map { i =>
+    Binding(tys(i).weaken(i, 0), Usage.UAny)(gn"var$i")
+  }.toList
 
 /** Comparing with [0], this function is finding the unifier from `Γ(e̅: u̅ ≡_tys v̅)` to `Δ`.
   * Note,u̅ and v̅ are at the same level as the leftmost element of telescope. That is, processing

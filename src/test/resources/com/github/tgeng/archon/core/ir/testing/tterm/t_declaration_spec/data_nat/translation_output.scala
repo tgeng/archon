@@ -39,6 +39,8 @@ List(
           escapeStatus = EsUnknown
         ) @ "Nat -> Nat"
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

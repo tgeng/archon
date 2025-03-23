@@ -19,7 +19,7 @@ class MutableRef[T](var value: T) extends Ref[T]
 class ImmutableRef[T](val value: T) extends Ref[T]:
   override def value_=(t: T) = throw UnsupportedOperationException()
 
-object Ref:
+package ref:
   given [T]: Conversion[T, Ref[T]] = MutableRef(_)
 
   given [T]: Conversion[Ref[T], T] = _.value
@@ -287,10 +287,19 @@ def groupMap[A, CC[_], C, K, B]
   m.foreach(result)
   result.built
 
-package eitherFilter:
+package eitherUtil:
   extension [L, R](e: Either[L, R])
     inline def withFilter(inline predicate: R => Boolean): Either[L, R] = e match
       case Right(r) if predicate(r) => e
       case Right(_) =>
         throw Exception("please use irrefutable pattern with Either")
       case Left(_) => e
+
+  extension [L <: Throwable, R](e: Either[L, R])
+    def getOrThrow: R = e match
+      case Right(r) => r
+      case Left(e)  => throw e
+
+    def asRight: R = e match
+      case Right(r) => r
+      case Left(e)  => throw IllegalStateException(e)

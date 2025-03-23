@@ -1,7 +1,11 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.ir.CheckVisibilityMode.{IMPLEMENTATION, INTERFACE}
+import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.SourceInfo.*
+
+import scala.math.Ordered.orderingToOrdered
 
 enum Variance:
   case INVARIANT, COVARIANT, CONTRAVARIANT
@@ -21,6 +25,8 @@ enum Declaration:
       tIndexTys: Telescope,
       /* binding: + context */
       level: VTerm,
+      interfaceScope: QualifiedName,
+      implementationScope: QualifiedName,
     )
   case Corecord
     (
@@ -29,18 +35,39 @@ enum Declaration:
       /* binding += context */
       level: VTerm,
       selfBinding: Binding[VTerm],
+      interfaceScope: QualifiedName,
+      implementationScope: QualifiedName,
     )
 
-  case Definition(qn: QualifiedName, context: EContext, ty: CTerm /* binding += context */ )
+  case Definition
+    (
+      qn: QualifiedName,
+      context: EContext,
+      /* binding += context */
+      ty: CTerm,
+      interfaceScope: QualifiedName,
+      implementationScope: QualifiedName,
+    )
 
   case Effect
     (
       qn: QualifiedName,
       context: Context,
-      continuationUsage: VTerm, // binding += tParamTys
+      // binding += context
+      continuationUsage: VTerm,
+      interfaceScope: QualifiedName,
+      implementationScope: QualifiedName,
     )
 
   def qn: QualifiedName
+
+  /** The scope in which the interface of this declaration is visible
+    */
+  def interfaceScope: QualifiedName
+
+  /** The scope in which the implementation of this declaration is visible
+    */
+  def implementationScope: QualifiedName
 
 import com.github.tgeng.archon.core.ir.Declaration.*
 
@@ -90,60 +117,50 @@ trait Signature:
 
   def addOperation(qn: QualifiedName, o: Operation): S
 
-  def getDataOption(qn: QualifiedName): Option[Data]
+  def getDataOptionImpl(qn: QualifiedName): Option[Data]
 
-  def getData(qn: QualifiedName): Data = getDataOption(qn).getOrElse(
-    throw IllegalArgumentException(s"Missing data for '$qn'"),
-  )
+  def getData(qn: QualifiedName)(using TypingContext): Either[IrError, Data] =
+    checkDeclarationHead(qn, getDataOptionImpl(qn))
 
-  def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]]
+  def getConstructorsOptionImpl(qn: QualifiedName): Option[IndexedSeq[Constructor]]
 
-  def getConstructors(qn: QualifiedName): IndexedSeq[Constructor] =
-    getConstructorsOption(qn).getOrElse(
-      throw IllegalArgumentException(s"Missing constructors for '$qn'"),
-    )
+  def getConstructors
+    (qn: QualifiedName)
+    (using TypingContext)
+    : Either[IrError, IndexedSeq[Constructor]] =
+    checkDeclarationBody(qn, getDataOptionImpl(qn), getConstructorsOptionImpl(qn))
 
-  def getConstructorOption(qn: QualifiedName, conName: Name): Option[Constructor] =
-    for
-      constructors <- getConstructorsOption(qn)
-      r <- constructors.collectFirst:
+  def getConstructor
+    (qn: QualifiedName, conName: Name)
+    (using TypingContext)
+    : Either[IrError, Constructor] =
+    getConstructors(qn).flatMap:
+      _.collectFirst:
         case con if con.name == conName => con
-    yield r
+      match
+        case None      => Left(MissingConstructor(conName, qn))
+        case Some(con) => Right(con)
 
-  def getConstructor(qn: QualifiedName, conName: Name): Constructor =
-    getConstructorOption(qn, conName).getOrElse(
-      throw IllegalArgumentException(s"Missing constructor $conName"),
-    )
+  def getCorecordOptionImpl(qn: QualifiedName): Option[Corecord]
 
-  def getConstructorOption(constructorQn: QualifiedName): Option[Constructor] = constructorQn match
-    case QualifiedName.Node(dataQn, conName) => getConstructorOption(dataQn, conName)
-    case _ => throw IllegalArgumentException(s"Not a constructor $constructorQn")
+  def getCorecord(qn: QualifiedName)(using TypingContext): Either[IrError, Corecord] =
+    checkDeclarationHead(qn, getCorecordOptionImpl(qn))
 
-  def getCorecordOption(qn: QualifiedName): Option[Corecord]
+  def getCofieldsOptionImpl(qn: QualifiedName): Option[IndexedSeq[Cofield]]
 
-  def getCorecord(qn: QualifiedName): Corecord =
-    getCorecordOption(qn).getOrElse(throw IllegalArgumentException(s"Missing corecord for '$qn'"))
+  def getCofields(qn: QualifiedName)(using TypingContext): Either[IrError, IndexedSeq[Cofield]] =
+    checkDeclarationBody(qn, getCorecordOptionImpl(qn), getCofieldsOptionImpl(qn))
 
-  def getCofieldsOption(qn: QualifiedName): Option[IndexedSeq[Cofield]]
-
-  def getCofields(qn: QualifiedName): IndexedSeq[Cofield] =
-    getCofieldsOption(qn).getOrElse(throw IllegalArgumentException(s"Missing cofields for '$qn'"))
-
-  def getCofieldOption(qn: QualifiedName, cofieldName: Name): Option[Cofield] =
-    for
-      cofields <- getCofieldsOption(qn)
-      r <- cofields.collectFirst:
+  def getCofield
+    (qn: QualifiedName, cofieldName: Name)
+    (using TypingContext)
+    : Either[IrError, Cofield] =
+    getCofields(qn).flatMap:
+      _.collectFirst:
         case cofield if cofield.name == cofieldName => cofield
-    yield r
-
-  def getCofield(qn: QualifiedName, cofieldName: Name): Cofield =
-    getCofieldOption(qn, cofieldName).getOrElse(
-      throw IllegalArgumentException(s"Missing cofield '$cofieldName' for '$qn'"),
-    )
-
-  def getCofieldOption(cofieldQn: QualifiedName): Option[Cofield] = cofieldQn match
-    case QualifiedName.Node(corecordQn, cofieldName) => getCofieldOption(corecordQn, cofieldName)
-    case _ => throw IllegalArgumentException(s"Not a cofield '$cofieldQn'")
+      match
+        case None          => Left(MissingCofield(cofieldName, qn))
+        case Some(cofield) => Right(cofield)
 
   // In a previous design I had derived definitions for effects, data, and corecord. But that turns
   // out to be not good. Instead, data type and value constructors, corecord type constructors, and
@@ -152,56 +169,128 @@ trait Signature:
   // Also, any name conflicts are caught during parsing. Corecord cofield will have a special syntax for
   // projection. Type class also contributes to the mix-fix parser and it's basically syntax sugar
   // of corecords under the hood.
-  def getDefinitionOption(qn: QualifiedName): Option[Definition] =
-    getDefinitionOptionImpl(qn)
-
   def getDefinitionOptionImpl(qn: QualifiedName): Option[Definition]
 
-  def getDefinition(qn: QualifiedName): Definition = getDefinitionOption(qn).getOrElse(
-    throw IllegalArgumentException(s"Missing definition for '$qn'"),
-  )
-
-  def getClausesOption(qn: QualifiedName): Option[IndexedSeq[Clause]] =
-    getClausesOptionImpl(qn)
+  def getDefinition(qn: QualifiedName)(using TypingContext): Either[IrError, Definition] =
+    checkDeclarationHead(qn, getDefinitionOptionImpl(qn))
 
   def getClausesOptionImpl(qn: QualifiedName): Option[IndexedSeq[Clause]]
 
-  def getClauses(qn: QualifiedName): IndexedSeq[Clause] = getClausesOption(
-    qn,
-  ).getOrElse(throw IllegalArgumentException(s"Missing clauses for '$qn'"))
+  def getClauses(qn: QualifiedName)(using TypingContext): Either[IrError, IndexedSeq[Clause]] =
+    checkDeclarationBody(qn, getDefinitionOptionImpl(qn), getClausesOptionImpl(qn))
 
-  def getCaseTreeOption(qn: QualifiedName): Option[CaseTree]
+  def getCaseTreeOptionImpl(qn: QualifiedName): Option[CaseTree]
 
-  def getCaseTree(qn: QualifiedName): CaseTree = getCaseTreeOption(qn).getOrElse(
-    throw IllegalArgumentException(s"Missing case tree for '$qn'"),
-  )
+  def getCaseTree(qn: QualifiedName)(using TypingContext): Either[IrError, CaseTree] =
+    checkDeclarationBody(qn, getDefinitionOptionImpl(qn), getCaseTreeOptionImpl(qn))
 
-  def getEffectOption(qn: QualifiedName): Option[Effect]
+  def getEffectOptionImpl(qn: QualifiedName): Option[Effect]
+  def getEffect(qn: QualifiedName)(using TypingContext): Either[IrError, Effect] =
+    checkDeclarationHead(qn, getEffectOptionImpl(qn))
 
-  def getEffect(qn: QualifiedName): Effect = getEffectOption(qn).getOrElse(
-    throw IllegalArgumentException(s"Missing effect for '$qn'"),
-  )
+  def getOperationsOptionImpl(qn: QualifiedName): Option[IndexedSeq[Operation]]
+  def getOperations
+    (qn: QualifiedName)
+    (using TypingContext)
+    : Either[IrError, IndexedSeq[Operation]] =
+    checkDeclarationBody(qn, getEffectOptionImpl(qn), getOperationsOptionImpl(qn))
 
-  def getOperationsOption(qn: QualifiedName): Option[IndexedSeq[Operation]]
+  def getOperation
+    (qn: QualifiedName, opName: Name)
+    (using TypingContext)
+    : Either[IrError, Operation] =
+    getOperations(qn).flatMap:
+      _.collectFirst:
+        case operation if operation.name == opName => operation
+      match
+        case None            => Left(MissingOperation(opName, qn))
+        case Some(operation) => Right(operation)
 
-  def getOperations(qn: QualifiedName): IndexedSeq[Operation] =
-    getOperationsOption(qn).getOrElse(
-      throw IllegalArgumentException(s"Missing operations for '$qn'"),
-    )
-
-  def getOperationOption(qn: QualifiedName, opName: Name): Option[Operation] =
-    for
-      operations <- getOperationsOption(qn)
-      r <- operations.collectFirst:
-        case op if op.name == opName => op
-    yield r
-
-  def getOperation(qn: QualifiedName): Operation =
+  def getOperation(qn: QualifiedName)(using TypingContext): Either[IrError, Operation] =
     qn match
       case QualifiedName.Node(qn, name) => getOperation(qn, name)
       case _                            => throw IllegalArgumentException(s"missing operation $qn")
 
-  def getOperation(qn: QualifiedName, opName: Name): Operation =
-    getOperationOption(qn, opName).getOrElse(
-      throw IllegalArgumentException(s"missing operation $opName"),
-    )
+  private def checkDeclarationHead[D <: Declaration]
+    (qn: QualifiedName, decl: Option[D])
+    (using TypingContext)
+    : Either[IrError, D] =
+    decl match
+      case None => Left(MissingDeclaration(qn))
+      case Some(decl) =>
+        checkVisibility(decl, CheckVisibilityMode.INTERFACE) match
+          case None        => Right(decl)
+          case Some(error) => Left(error)
+
+  private def checkDeclarationBody[D <: Declaration, R]
+    (qn: QualifiedName, decl: Option[D], body: => Option[R])
+    (using TypingContext)
+    : Either[IrError, R] =
+    decl match
+      case None => Left(MissingDeclaration(qn))
+      case Some(decl) =>
+        checkVisibility(decl, CheckVisibilityMode.IMPLEMENTATION) match
+          case None =>
+            body match
+              case None       => Left(MissingDeclarationBody(qn))
+              case Some(body) => Right(body)
+          case Some(error) => Left(error)
+
+  /** Visibilities are set on two things: head (interface) and body (implementation), where head
+    * should always have an equal or less restrictive visibility.
+    *
+    * For both head and body, visibility setting controls at which scope the entity is visible,
+    * where scope is basically the fully qualified name of the current declaration that's being
+    * elaborated currently. Note that, this means a "public" function would expose the head and body
+    * of all internal lambda and local functions. This may be undesirable from the perspective of
+    * the user language but would nevertheless align with the idea of a "public" implementation.
+    * It's probably desirable to separately add some mechanism in the user language to prevent
+    * references to lambda and local functions.
+    *
+    * For example, a definition called `baz` in module `foo.bar` has fully qualified name
+    * `foo.bar.baz`. If a declaration is declared to be visible to scope `foo.bar`, then that
+    * declaration can be accessed when * elaborating `foo.bar.baz`.
+    *
+    * This mechanism can be used to model common visibility idioms seen in various programming
+    * languages.
+    *
+    *   - public export in idris: this means a declaration is public for both its head and body (aka
+    *     signature and implementation). That is,
+    *     - head: _root_
+    *     - body: _root_
+    *   - public in idris: this means a declaration's head is public but body is module accessible
+    *     - head: _root_
+    *     - body: %parent% (aka, `foo.bar` for `foo.bar.baz`)
+    *   - opaque type: this means the head is public, yet the body is private to itself (of course
+    *     one can limit the "opaqueness" by setting the appropriate body visibility scope. Note: the
+    *     type is not opaque for member declarations in its scope, this way, one can still create
+    *     helper functions to manipulate this opaque type
+    *     - head: _root_
+    *     - body: %current% (aka `foo.bar.baz` for `foo.bar.baz`)
+    *   - common private in most languages:
+    *     - head: %parent%
+    *     - body: %current%
+    *
+    * In addition, visibility consistency needs to be checked. That is, during elaboration of a head
+    * or a body, the type checker must ensure all the declarations accessed align with the declared
+    * visibility scope of the thing being elaborated. For example, when elaborating head of
+    * `foo.bar.baz`, which has visibility scope `_root_`, in addition to ensure the referenced thing
+    * is visible to scope `foo.bar.baz`, the type checker also needs to ensure it is visible to
+    * `_root_`. Otherwise, `foo.bar.baz` would be exposing things that are not visible to `_root_`.
+    */
+
+  private def checkVisibility
+    (decl: Declaration, mode: CheckVisibilityMode)
+    (using ctx: TypingContext)
+    : Option[IrError] =
+    val visibleScope = mode match
+      case INTERFACE      => decl.interfaceScope
+      case IMPLEMENTATION => decl.implementationScope
+
+    if visibleScope > ctx.contextScope then
+      return Some(DeclarationIsInvisibleError(decl.qn, mode, ctx.contextScope, visibleScope))
+
+    if visibleScope > ctx.exposedScope then
+      return Some(ExposingInvisibleDeclarationError(decl.qn, mode, ctx.exposedScope, visibleScope))
+
+    None

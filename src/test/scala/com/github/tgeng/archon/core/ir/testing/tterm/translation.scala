@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir.testing.tterm
 
 import com.github.tgeng.archon.common.{MutableRef, Nat}
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.{Name, QualifiedName, gn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*

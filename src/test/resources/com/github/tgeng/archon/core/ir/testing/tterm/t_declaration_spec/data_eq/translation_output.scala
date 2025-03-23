@@ -62,6 +62,8 @@ List(
           usage = Collapse(cTm = Def(qn = qn"archon.builtin.type.Usage.u1"))
         ) @ "Eq l A x x"
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

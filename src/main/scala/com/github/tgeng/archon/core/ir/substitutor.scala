@@ -6,22 +6,22 @@ import scala.annotation.targetName
 
 trait DeBruijn[T]:
   def fromIndex(index: Nat): T
-  def weaken(t: T, amount: Nat, bar: Nat)(using Signature): T
-  def subst(t: T, s: Substitutor[T])(using Signature): T
+  def weaken(t: T, amount: Nat, bar: Nat)(using Signature)(using TypingContext): T
+  def subst(t: T, s: Substitutor[T])(using Signature)(using TypingContext): T
 
 given DeBruijnVTerm: DeBruijn[VTerm] with
   override def fromIndex(index: Nat): VTerm = VTerm.Var(index)
-  override def weaken(v: VTerm, amount: Nat, bar: Nat)(using Signature): VTerm =
+  override def weaken(v: VTerm, amount: Nat, bar: Nat)(using Signature)(using TypingContext): VTerm =
     v.weaken(amount, bar)
 
-  override def subst(v: VTerm, s: Substitutor[VTerm])(using Signature): VTerm = v.subst(s)
+  override def subst(v: VTerm, s: Substitutor[VTerm])(using Signature)(using TypingContext): VTerm = v.subst(s)
 
 given DeBruijnPattern: DeBruijn[Pattern] with
   override def fromIndex(index: Nat): Pattern = Pattern.PVar(index)
-  override def weaken(p: Pattern, amount: Nat, bar: Nat)(using Signature): Pattern =
+  override def weaken(p: Pattern, amount: Nat, bar: Nat)(using Signature)(using TypingContext): Pattern =
     p.weaken(amount, bar)
 
-  override def subst(p: Pattern, s: Substitutor[Pattern])(using Signature): Pattern = p.subst(s)
+  override def subst(p: Pattern, s: Substitutor[Pattern])(using Signature)(using TypingContext): Pattern = p.subst(s)
 
 /** Local references are represented as DeBruijn indices so `var 0` points to the right most entry
   * in the context. In this setting, a "trivial" mapping should map `var (sourceContextSize - 1)` to
@@ -79,7 +79,7 @@ class Substitutor[T: DeBruijn]
   )
 
   @targetName("uplus")
-  infix def ⊎(that: Substitutor[T])(using Signature): Substitutor[T] =
+  infix def ⊎(that: Substitutor[T])(using Signature)(using TypingContext): Substitutor[T] =
     that.materialize()
     Substitutor(
       sourceContextSize + that.sourceContextSize,
@@ -109,7 +109,7 @@ class Substitutor[T: DeBruijn]
     )
 
   @targetName("compose")
-  infix def ∘(that: Substitutor[T])(using Signature): Substitutor[T] =
+  infix def ∘(that: Substitutor[T])(using Signature)(using TypingContext): Substitutor[T] =
     assert(this.sourceContextSize == that.targetContextSize)
     this.materialize()
     Substitutor(

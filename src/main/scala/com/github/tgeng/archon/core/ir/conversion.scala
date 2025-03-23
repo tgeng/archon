@@ -1,8 +1,9 @@
 package com.github.tgeng.archon.core.ir
-
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
@@ -64,31 +65,27 @@ def checkIsConvertible
       case (Thunk(c1), Thunk(c2), Some(U(ty))) =>
         checkIsConvertible(c1, c2, Some(ty))
       case (DataType(qn1, args1), DataType(qn2, args2), _) if qn1 == qn2 =>
-        Σ.getDataOption(qn1) match
-          case None => throw MissingDeclaration(qn1)
-          case Some(data) =>
-            args1
-              .zip(args2)
-              .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
-              .zipWithIndex
-              .map { case (((arg1, arg2), (binding, _)), i) =>
-                checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i)*)))
-              }
-              .flatten
-              .toSet
+        val data = Σ.getData(qn1).getOrThrow
+        args1
+          .zip(args2)
+          .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
+          .zipWithIndex
+          .map { case (((arg1, arg2), (binding, _)), i) =>
+            checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i)*)))
+          }
+          .flatten
+          .toSet
       case (Con(name1, args1), Con(name2, args2), Some(DataType(qn, _))) if name1 == name2 =>
-        Σ.getConstructorOption(qn, name1) match
-          case None => throw MissingConstructor(name1, qn)
-          case Some(con) =>
-            args1
-              .zip(args2)
-              .zip(con.paramTys)
-              .zipWithIndex
-              .map { case (((arg1, arg2), binding), i) =>
-                checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i)*)))
-              }
-              .flatten
-              .toSet
+        val con = Σ.getConstructor(qn, name1).getOrThrow
+        args1
+          .zip(args2)
+          .zip(con.paramTys)
+          .zipWithIndex
+          .map { case (((arg1, arg2), binding), i) =>
+            checkIsConvertible(arg1, arg2, Some(binding.ty.substLowers(args1.take(i)*)))
+          }
+          .flatten
+          .toSet
       case (UsageType(Some(u1)), UsageType(Some(u2)), _) =>
         checkIsConvertible(u1, u2, Some(UsageType()))
       case (Collapse(c1), Collapse(c2), ty) => checkIsConvertible(c1, c2, ty.map(F(_, u1)))
@@ -119,19 +116,17 @@ def checkIsConvertible
           Some(bodyTy),
         )(using Γ :+ binding)
       case Some(CorecordType(qn, _, _)) =>
-        Σ.getCofieldsOption(qn) match
-          case None => throw MissingDefinition(qn)
-          case Some(cofields) =>
-            cofields
-              .map { cofield =>
-                checkIsConvertible(
-                  Projection(left, cofield.name),
-                  Projection(right, cofield.name),
-                  Some(cofield.ty),
-                )
-              }
-              .flatten
-              .toSet
+        Σ.getCofields(qn)
+          .getOrThrow
+          .map { cofield =>
+            checkIsConvertible(
+              Projection(left, cofield.name),
+              Projection(right, cofield.name),
+              Some(cofield.ty),
+            )
+          }
+          .flatten
+          .toSet
       case _ =>
         ctx.withMetaResolved2(left, right):
           // If heads are some unsolved meta variable, we can't know for sure that the elims should be the same because
@@ -241,47 +236,45 @@ def checkIsConvertible
                 )
             effConstraint ++ tyConstraint ++ bodyConstraint
           case (CorecordType(qn1, args1, eff1), CorecordType(qn2, args2, eff2)) if qn1 == qn2 =>
-            Σ.getCorecordOption(qn1) match
-              case None => throw MissingDeclaration(qn1)
-              case Some(corecord) =>
-                var args = IndexedSeq[VTerm]()
-                val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
-                val argConstraint = args1
-                  .zip(args2)
-                  .zip(corecord.context)
-                  .map { case ((arg1, arg2), (binding, variance)) =>
-                    variance match
-                      case Variance.INVARIANT =>
-                        val r =
-                          checkIsConvertible(
-                            arg1,
-                            arg2,
-                            Some(binding.ty.substLowers(args*)),
-                          )
-                        args = args :+ arg1
-                        r
-                      case Variance.COVARIANT =>
-                        val r =
-                          checkIsConvertible(
-                            arg1,
-                            arg2,
-                            Some(binding.ty.substLowers(args*)),
-                          )
-                        args = args :+ arg1
-                        r
-                      case Variance.CONTRAVARIANT =>
-                        val r =
-                          checkIsConvertible(
-                            arg2,
-                            arg1,
-                            Some(binding.ty.substLowers(args*)),
-                          )
-                        args = args :+ arg2
-                        r
-                  }
-                  .flatten
-                  .toSet
-                effConstraint ++ argConstraint
+            val corecord = Σ.getCorecord(qn1).getOrThrow
+            var args = IndexedSeq[VTerm]()
+            val effConstraint = checkIsConvertible(eff1, eff2, Some(EffectsType()))
+            val argConstraint = args1
+              .zip(args2)
+              .zip(corecord.context)
+              .map { case ((arg1, arg2), (binding, variance)) =>
+                variance match
+                  case Variance.INVARIANT =>
+                    val r =
+                      checkIsConvertible(
+                        arg1,
+                        arg2,
+                        Some(binding.ty.substLowers(args*)),
+                      )
+                    args = args :+ arg1
+                    r
+                  case Variance.COVARIANT =>
+                    val r =
+                      checkIsConvertible(
+                        arg1,
+                        arg2,
+                        Some(binding.ty.substLowers(args*)),
+                      )
+                    args = args :+ arg1
+                    r
+                  case Variance.CONTRAVARIANT =>
+                    val r =
+                      checkIsConvertible(
+                        arg2,
+                        arg1,
+                        Some(binding.ty.substLowers(args*)),
+                      )
+                    args = args :+ arg2
+                    r
+              }
+              .flatten
+              .toSet
+            effConstraint ++ argConstraint
           case (
               OperationCall(effInstance1, name1, args1),
               op2 @ OperationCall(effInstance2, name2, args2),
@@ -290,7 +283,7 @@ def checkIsConvertible
             val (qn, tArgs) = inferType(effInstance1)._2 match
               case EffectInstanceType(eff, _) => eff
               case _                          => throw ComplexOperationCall(op2)
-            val operation = Σ.getOperation(qn, name1)
+            val operation = Σ.getOperation(qn, name1).asRight
             var args = IndexedSeq[VTerm]()
             val argConstraint =
               args1
@@ -391,7 +384,7 @@ private def checkElimIsConvertible
               Projection(head, leftName),
               lefts,
               rights,
-              Σ.getCofield(qn, leftName).ty.substLowers(args :+ Thunk(head)*),
+              Σ.getCofield(qn, leftName).asRight.ty.substLowers(args :+ Thunk(head)*),
               ty,
             )
           else resultConstraint

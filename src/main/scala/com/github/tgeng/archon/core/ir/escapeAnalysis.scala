@@ -1,6 +1,8 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.Nat
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.gn
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.EscapeStatus.EsLocal
@@ -42,12 +44,14 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
     (action: EscapeStatusContext ?=> Map[Nat, EscapeStatus])
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] = action(using ctx.copy(Γ = ctx.Γ ++ telescope))
 
   override def combine
     (rs: Map[Nat, EscapeStatus]*)
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] =
     val result = collection.mutable.Map[Nat, EscapeStatus]()
     for
@@ -60,6 +64,7 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
     (v: VTerm.Var)
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] =
     val dbNumber = ctx.Γ.size - 1 - v.idx
     if ctx.dbNumbersToTrack(dbNumber) then Map(dbNumber -> EscapeStatus.EsReturned)
@@ -69,6 +74,7 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
     (redex: CTerm.Redex)
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] =
     given Context = ctx.Γ
     given TypingContext = ctx.typingContext
@@ -83,7 +89,10 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
           combine(multiply(es, visitVTerm(arg)), processArgs(ty, elims, processedElims :+ elim))
         case (CorecordType(qn, args, _), (elim @ Elimination.EProj(name)) :: elims) =>
           processArgs(
-            Σ.getCofield(qn, name).ty.substLowers(args :+ Thunk(Redex(redex.t, processedElims))*),
+            Σ.getCofield(qn, name)
+              .asRight
+              .ty
+              .substLowers(args :+ Thunk(Redex(redex.t, processedElims))*),
             elims,
             processedElims :+ elim,
           )
@@ -95,6 +104,7 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
     (let: CTerm.Let)
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] =
     val tEscapeStatuses = visitCTerm(let.t)
     val newCtx =
@@ -109,6 +119,7 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
     (handler: CTerm.Handler)
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] =
     // parameter is passed into handlers and for simplicity we won't track the escape status of it
     val parameterEscapeStatuses = multiply(EscapeStatus.EsUnknown, visitVTerm(handler.parameter))
@@ -162,6 +173,7 @@ private object EscapeStatusVisitor extends TermVisitor[EscapeStatusContext, Map[
     (operationCall: CTerm.OperationCall)
     (using ctx: EscapeStatusContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Map[Nat, EscapeStatus] =
     combine(
       multiply(EscapeStatus.EsLocal, visitVTerm(operationCall.effInstance)),

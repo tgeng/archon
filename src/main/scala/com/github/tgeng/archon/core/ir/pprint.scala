@@ -27,13 +27,18 @@ private class RenamerContext:
 
 object Renamer extends Visitor[RenamerContext, Unit]:
 
-  def rename(tm: VTerm)(using Γ: Context)(using Signature): Unit =
+  def rename(tm: VTerm)(using Γ: Context)(using Signature)(using TypingContext): Unit =
     doRename(visitVTerm(tm))
 
-  def rename(tm: CTerm)(using Γ: Context)(using Signature): Unit =
+  def rename(tm: CTerm)(using Γ: Context)(using Signature)(using TypingContext): Unit =
     doRename(visitCTerm(tm))
 
-  def rename(t: List[Binding[VTerm]])(using Γ: Context)(using Signature): Unit =
+  def rename
+    (t: List[Binding[VTerm]])
+    (using Γ: Context)
+    (using Signature)
+    (using TypingContext)
+    : Unit =
     doRename(visitTelescope(t))
 
   private def createRenamerContext(using Γ: Context) =
@@ -64,13 +69,19 @@ object Renamer extends Visitor[RenamerContext, Unit]:
           )
     }
 
-  override def combine(rs: Unit*)(using ctx: RenamerContext)(using Σ: Signature): Unit = ()
+  override def combine
+    (rs: Unit*)
+    (using ctx: RenamerContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Unit = ()
 
   override def withBoundNames
     (bindingNames: => Seq[Ref[Name]])
     (action: RenamerContext ?=> Unit)
     (using ctx: RenamerContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Unit =
     val names = bindingNames
     ctx.nameStack.appendAll(names)
@@ -78,7 +89,12 @@ object Renamer extends Visitor[RenamerContext, Unit]:
     action(using ctx)
     ctx.nameStack.remove(ctx.nameStack.size - names.size, names.size)
 
-  override def visitVar(v: VTerm.Var)(using ctx: RenamerContext)(using Σ: Signature): Unit =
+  override def visitVar
+    (v: VTerm.Var)
+    (using ctx: RenamerContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Unit =
     val stackIndex = ctx.nameStack.size - v.idx - 1
     if stackIndex < 0 then throw IndexOutOfBoundsException(s"Variable index out of bound: ${v.idx}")
     val refName = ctx.nameStack(stackIndex)
@@ -129,11 +145,16 @@ object PPrintContext:
 import pprint as genericPprint
 
 object PrettyPrinter extends Visitor[PPrintContext, Block]:
-  def pprint(telescope: Telescope)(using Γ: Context)(using Σ: Signature): Block =
+  def pprint
+    (telescope: Telescope)
+    (using Γ: Context)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Renamer.rename(telescope)
     visitTelescope(telescope)(using PPrintContext(Γ))
 
-  def pprint(tm: VTerm | CTerm)(using Γ: Context)(using Σ: Signature): Block =
+  def pprint(tm: VTerm | CTerm)(using Γ: Context)(using Σ: Signature)(using TypingContext): Block =
     try
       tm match
         case tm: VTerm =>
@@ -148,7 +169,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           s"Failed to pretty print:\n${genericPprint.apply(tm)}\nwith context:\n${genericPprint(Γ)}",
         )
 
-  def pprint(any: Any)(using Γ: Context)(using Σ: Signature): Block =
+  def pprint(any: Any)(using Γ: Context)(using Σ: Signature)(using TypingContext): Block =
     Block(
       genericPprint
         .copy(
@@ -160,31 +181,53 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         .toString,
     )
 
-  given (using PPrintContext)(using Signature): Conversion[VTerm, Block] =
+  given (using PPrintContext)(using Signature)(using TypingContext): Conversion[VTerm, Block] =
     visitVTerm(_)
 
-  given (using PPrintContext)(using Signature): Conversion[CTerm, Block] =
+  given (using PPrintContext)(using Signature)(using TypingContext): Conversion[CTerm, Block] =
     visitCTerm(_)
 
-  given (using PPrintContext)(using Signature): Conversion[Binding[VTerm], Block] = visitBinding(
+  given (using PPrintContext)
+    (using Signature)
+    (using TypingContext)
+    : Conversion[Binding[VTerm], Block] = visitBinding(
     _,
   )
 
-  given (using PPrintContext)(using Signature): Conversion[Ref[Name], Block] =
+  given (using PPrintContext)(using Signature)(using TypingContext): Conversion[Ref[Name], Block] =
     n => Block(n.value.toString)
 
-  given (using PPrintContext)(using Signature): Conversion[Name, Block] = n => Block(n.toString)
+  given (using PPrintContext)(using Signature)(using TypingContext): Conversion[Name, Block] = n =>
+    Block(n.toString)
 
-  given (using PPrintContext)(using Signature): Conversion[QualifiedName, Block] =
+  given (using PPrintContext)
+    (using Signature)
+    (using TypingContext)
+    : Conversion[QualifiedName, Block] =
     visitQualifiedName(_)
 
-  override def visitAuto(auto: Auto)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitAuto
+    (auto: Auto)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Block("<auto>")
 
-  override def visitMeta(m: CTerm.Meta)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitMeta
+    (m: CTerm.Meta)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Block(s"<${m.toString}>")
 
-  override def combine(blocks: Block*)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def combine
+    (blocks: Block*)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     if blocks.isEmpty then throw IllegalStateException()
     else Block(Whitespace, Aligned, Wrap, blocks)
 
@@ -193,6 +236,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (action: PPrintContext ?=> Block)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     ctx.withBindings(bindingNames):
       action
@@ -201,8 +245,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (tTelescope: List[(Binding[CTerm], Variance)])
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
-    given (using PPrintContext)(using Signature): Conversion[Binding[CTerm], Block] =
+    given (using PPrintContext)
+      (using Signature)
+      (using TypingContext)
+      : Conversion[Binding[CTerm], Block] =
       visitPreBinding(_)
 
     bracketAndComma(
@@ -217,6 +265,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (usageLiteral: VTerm.UsageLiteral)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(usageLiteral.usage.toString)
 
@@ -224,6 +273,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (usageProd: VTerm.UsageProd)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(usageProd.operands.toSeq.map(visitVTerm).intersperse("*"), Whitespace, Aligned, Wrap)
 
@@ -231,6 +281,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (usageSum: VTerm.UsageSum)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(usageSum.operands.toSeq.map(visitVTerm).intersperse("+"), Whitespace, Aligned, Wrap)
 
@@ -238,6 +289,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (usageJoin: VTerm.UsageJoin)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(usageJoin.operands.toSeq.map(visitVTerm).intersperse("|"), Whitespace, Aligned, Wrap)
 
@@ -245,6 +297,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (tTelescope: List[(Binding[VTerm], Variance)])
     (using PPrintContext)
     (using Signature)
+    (using TypingContext)
     : Block = bracketAndComma(
     telescopeToBlock(tTelescope, _._1.name) {
       case (binding, INVARIANT)     => binding
@@ -257,6 +310,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (telescope: List[Binding[CTerm]])
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     bracketAndComma(
       telescopeToBlock(telescope, _.name)(visitPreBinding),
@@ -266,6 +320,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (telescope: List[Binding[VTerm]])
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     bracketAndComma(
       telescopeToBlock(telescope, _.name)(visitBinding),
@@ -276,6 +331,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (toBlock: PPrintContext ?=> T => Block)
     (using ctx: PPrintContext)
     (using Signature)
+    (using TypingContext)
     : List[Block] = telescope match
     case Nil => Nil
     case t :: rest =>
@@ -286,17 +342,28 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (binding: Binding[CTerm])
     (using PPrintContext)
     (using Signature)
+    (using TypingContext)
     : Block =
     binding.name.value match
       case Unreferenced => Block(binding.ty)
       case n            => Block(n, ":", binding.ty)
 
-  override def visitBinding(binding: Binding[VTerm])(using PPrintContext)(using Signature): Block =
+  override def visitBinding
+    (binding: Binding[VTerm])
+    (using PPrintContext)
+    (using Signature)
+    (using TypingContext)
+    : Block =
     binding.name.value match
       case Unreferenced => Block(binding.ty)
       case n            => Block(n.toString + ":", binding.ty)
 
-  override def visitPVar(pVar: PVar)(using ctx: PPrintContext)(using Σ: Signature): Block = Block(
+  override def visitPVar
+    (pVar: PVar)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block = Block(
     ctx.resolve(pVar.idx).value.toString,
   )
 
@@ -304,6 +371,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (pDataType: PDataType)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     bracketAndSpace(
       pDataType.qn,
@@ -314,62 +382,111 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     (pDataType: PForcedDataType)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     bracketAndSpace(
       Block("." + pDataType.qn.shortName),
       pDataType.args.map(visitPattern),
     )
 
-  override def visitPForced(pForced: PForced)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitPForced
+    (pForced: PForced)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Block(Concat, ".(", pForced.term, ")")
 
-  override def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitPAbsurd
+    (pAbsurd: PAbsurd)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Block("()")
 
   override def visitCProjection
     (p: CProjection)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(Concat, "#", p.name)
 
-  override def visitType(ty: Type)(using ctx: PPrintContext)(using Σ: Signature): Block = ty match
+  override def visitType
+    (ty: Type)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block = ty match
     case Type(Top(Level(l, operands))) if operands.isEmpty =>
       Block("Type" + l.sub)
     case Type(upperBound) => app("TypeOf", upperBound)
 
-  override def visitTop(top: Top)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitTop
+    (top: Top)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     top.level match
       case Level(l, operands) if operands.isEmpty =>
         Block("Top" + l.sub)
       case l => app("Top", l)
 
-  override def visitVar(v: Var)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitVar
+    (v: Var)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Block(ctx.resolve(v.idx).value.toString)
 
   override def visitCollapse
     (collapse: Collapse)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     app(".collapse", collapse.cTm)
 
-  override def visitU(u: U)(using ctx: PPrintContext)(using Σ: Signature): Block = app("U", u.cTy)
+  override def visitU
+    (u: U)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block = app("U", u.cTy)
 
-  override def visitThunk(thunk: Thunk)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitThunk
+    (thunk: Thunk)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     app(".thunk", thunk.c)
 
   override def visitDataType
     (dataType: DataType)
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(Concat, NoWrap, dataType.qn, bracketAndComma(dataType.args.map(visitVTerm)))
 
-  override def visitCon(con: Con)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitCon
+    (con: Con)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     Block(Concat, NoWrap, con.name, bracketAndComma(con.args.map(visitVTerm)))
 
-  override def visitEffects(effects: Effects)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitEffects
+    (effects: Effects)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     if effects.handlerKeys.isEmpty && effects.unionOperands.isEmpty then Block("total")
     else
       ctx.withPrecedence(PPEffOp):
@@ -377,7 +494,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
           (if v then "$" else "") + visitVTerm(k),
         )) sepBy "|"
 
-  override def visitLevel(level: Level)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitLevel
+    (level: Level)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     def toBlock(varAndOffset: (VTerm, Nat)): Block = varAndOffset match
       case (v, 0) => v
       case (v, offset) =>
@@ -396,15 +518,14 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         }
         operands sepBy "∨"
 
-  override def visitHole(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitHole(using ctx: PPrintContext)(using Σ: Signature)(using TypingContext): Block =
     Block("<hole>")
 
   override def visitCType
     (cType: CType)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = cType match
     case CType(CTop(Level(l, operands), tEff), eff) if operands.isEmpty && tEff == Total() =>
       ctype(eff, "CType", l.sub)
@@ -416,9 +537,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitCTop
     (cTop: CTop)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block =
     cTop.level match
       case Level(l, operands) if operands.isEmpty =>
@@ -428,46 +548,46 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitDef
     (d: Def)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block =
     Block(Concat, NoWrap, ".", d.qn.toString)
 
   override def visitForce
     (force: Force)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = app(".force", force.v)
 
-  override def visitF(f: F)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitF
+    (f: F)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     ctype(f.effects, "[", f.usage, "]", f.vTy)
 
   override def visitReturn
     (r: Return)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = app(".return", "[", r.usage, "]", r.v)
 
   override def visitLet
     (let: Let)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block =
     visitStatements(let)
 
   override def visitFunctionType
     (functionType: FunctionType)
-    (using
-      ctx: PPrintContext,
-    )
+    (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block = ctx.withPrecedence(PPFun):
     val (bindings, body) = unroll[(Block, Block), CTerm](functionType):
       case FunctionType(
@@ -495,16 +615,20 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
       body,
     )
 
-  override def visitRedex(redex: Redex)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  override def visitRedex
+    (redex: Redex)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     ctx.withPrecedence(PPApp):
       juxtapose(redex.t, redex.elims.map(visitElim))
 
   override def visitElim
     (elim: Elimination[VTerm])
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = elim match
     case Elimination.ETerm(t) => t
     case Elimination.EProj(n) => Block("#" + n)
@@ -515,6 +639,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block = ctype(
     corecordType.effects,
     Block(Concat, NoWrap, corecordType.qn, bracketAndComma(corecordType.args.map(visitVTerm))),
@@ -526,6 +651,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block = app(
     Block(operationCall.name, "@", visitVTerm(operationCall.effInstance)),
     operationCall.args.map(visitVTerm),
@@ -537,6 +663,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block = Block(
     s"<continuation#${continuation.systemId}>",
   )
@@ -544,9 +671,8 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitHandler
     (handler: Handler)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = visitStatements(handler)
 
   private def visitStatements
@@ -555,6 +681,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     (using ctx: PPrintContext)
     (using Signature)
+    (using TypingContext)
     : Block =
     val (statements, input) = unroll[Block, CTerm](handler):
       // TODO[P2]: print the extra effect and output type annotations
@@ -677,6 +804,7 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
     )
     (using ctx: PPrintContext)
     (using Σ: Signature)
+    (using TypingContext)
     : Block = bracketAndSpace(
     Block(NoWrap, Concat, "𝑒 " + eff._1.shortName),
     eff._2.map(visitVTerm),
@@ -685,25 +813,22 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
   override def visitBigLevel
     (layer: Nat)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = Block("ω" + layer)
 
   override def visitQualifiedName
     (qn: QualifiedName)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = Block(qn.toString)
 
   override def visitName
     (name: Name)
     (using ctx: PPrintContext)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Block = Block(name.toString)
 
   private def ctype
@@ -732,7 +857,12 @@ object PrettyPrinter extends Visitor[PPrintContext, Block]:
         app(blocks*),
       )
 
-  private def eff(tm: VTerm)(using ctx: PPrintContext)(using Σ: Signature): Block =
+  private def eff
+    (tm: VTerm)
+    (using ctx: PPrintContext)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Block =
     ctx.withPrecedence(PPEffOp):
       Block(Concat, NoWrap, "<", tm, ">")
 

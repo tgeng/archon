@@ -1,7 +1,8 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
-import com.github.tgeng.archon.common.eitherFilter.*
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.CaseTree.*
@@ -46,6 +47,7 @@ def elaborate
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
+  ctx.contextScope = decl.qn
   try
     (part, decl) match
       case (DeclarationPart.HEAD, d: PreData)       => elaborateDataHead(d)
@@ -65,6 +67,7 @@ enum DeclarationPart:
 def sortPreDeclarations
   (declarations: Seq[PreDeclaration])
   (using Signature)
+  (using TypingContext)
   : Seq[(DeclarationPart, PreDeclaration)] =
   given Unit = ()
 
@@ -152,15 +155,15 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
   override def combine
     (rs: Set[QualifiedName]*)
     (using ctx: Unit)
-    (using
-      Σ: Signature,
-    )
+    (using Σ: Signature)
+    (using TypingContext)
     : Set[QualifiedName] = rs.flatten.toSet
 
   override def visitQualifiedName
     (qn: QualifiedName)
     (using ctx: Unit)
     (using Σ: Signature)
+    (using TypingContext)
     : Set[QualifiedName] = Set(qn)
 
   override def withBoundNames
@@ -168,6 +171,7 @@ private object QualifiedNameVisitor extends Visitor[Unit, Set[QualifiedName]]:
     (action: Unit ?=> Set[QualifiedName])
     (using ctx: Unit)
     (using Σ: Signature)
+    (using TypingContext)
     : Set[QualifiedName] = action
 
 @throws(classOf[IrError])
@@ -177,7 +181,7 @@ private def elaborateDataHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  if Σ.getDataOption(preData.qn).isDefined then throw DuplicatedDeclaration(preData.qn)
+  if Σ.getData(preData.qn).isRight then throw DuplicatedDeclaration(preData.qn)
   ctx.trace(s"elaborating data signature ${preData.qn}"):
     val tParamTys = elaborateTTelescope(preData.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
@@ -209,6 +213,8 @@ private def elaborateDataHead
       Γ.zip(Iterator.continually(Variance.INVARIANT)) ++ tParamTys,
       tIndices,
       strengthenedLevel,
+      preData.interfaceScope,
+      preData.implementationScope,
     )
     Σ.addDeclaration(data)
 
@@ -218,7 +224,7 @@ private def elaborateDataBody
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  val data = Σ.getData(preData.qn)
+  val data = Σ.getData(preData.qn).asRight
 
   @throws(classOf[IrError])
   def elaborateTy
@@ -267,7 +273,7 @@ private def elaborateCorecordHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  if Σ.getCorecordOption(corecord.qn).isDefined then throw DuplicatedDeclaration(corecord.qn)
+  if Σ.getCorecord(corecord.qn).isRight then throw DuplicatedDeclaration(corecord.qn)
   ctx.trace(s"elaborating corecord signature ${corecord.qn}"):
     val tParamTys = elaborateTTelescope(corecord.tParamTys)(using Γ)
     given Context = Γ ++ tParamTys.map(_._1)
@@ -286,6 +292,8 @@ private def elaborateCorecordHead
             Binding(U(CorecordType(corecord.qn, vars(tParamTys.size - 1))), uAny)(
               corecord.selfName,
             ),
+            corecord.interfaceScope,
+            corecord.implementationScope,
           )
         case t => throw ExpectCType(t)
     Σ.addDeclaration(r)
@@ -296,7 +304,7 @@ private def elaborateCorecordBody
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  val corecord = Σ.getCorecord(preCorecord.qn)
+  val corecord = Σ.getCorecord(preCorecord.qn).asRight
 
   given SourceInfo = SiEmpty
 
@@ -323,7 +331,7 @@ private def elaborateDefHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  if Σ.getDefinitionOption(definition.qn).isDefined then throw DuplicatedDeclaration(definition.qn)
+  if Σ.getDefinition(definition.qn).isRight then throw DuplicatedDeclaration(definition.qn)
   given SourceInfo = SiEmpty
 
   ctx.trace(s"elaborating def signature ${definition.qn}"):
@@ -333,7 +341,13 @@ private def elaborateDefHead
       Γ.map((_, EscapeStatus.EsUnknown)) ++ paramTys.zip(definition.paramTys.map(_._2))
     given Context = newEContext.map(_._1)
     val ty = checkIsCType(definition.ty).normalized(None)
-    val d: Definition = Definition(definition.qn, newEContext, ty)
+    val d: Definition = Definition(
+      definition.qn,
+      newEContext,
+      ty,
+      definition.interfaceScope,
+      definition.implementationScope,
+    )
     Σ.addDeclaration(d)
 
 @throws(classOf[IrError])
@@ -420,7 +434,7 @@ private def elaborateDefBody
       // here all terms are already normalized.
       (v, p) match
         case (DataType(qn, args), PDataType(pQn, pArgs)) if qn == pQn =>
-          val data = Σ.getData(qn)
+          val data = Σ.getData(qn).asRight
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
           assert(
@@ -438,7 +452,7 @@ private def elaborateDefBody
           // TODO[P3]: instead of assert, report a use-friendly error if name doesn't match
           // because such a mismatch means the provided forced pattern is not correct.
           assert(qn == pQn)
-          val data = Σ.getData(qn)
+          val data = Σ.getData(qn).asRight
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
           assert(
@@ -455,7 +469,7 @@ private def elaborateDefBody
           // TODO[P3]: consider changing some of the following runtime error to IrErrors if user input
           // can cause it to happen.
           val dataType = ty.asInstanceOf[DataType]
-          val constructor = Σ.getConstructor(dataType.qn, name)
+          val constructor = Σ.getConstructor(dataType.qn, name).asRight
           val _As = constructor.paramTys.substLowers(dataType.args*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).map(ElabConstraint.apply).toList)
@@ -465,7 +479,7 @@ private def elaborateDefBody
           // because such a mismatch means the provided forced pattern is not correct.
           assert(name == pName)
           val dataType = ty.asInstanceOf[DataType]
-          val constructor = Σ.getConstructor(dataType.qn, name)
+          val constructor = Σ.getConstructor(dataType.qn, name).asRight
           val _As = constructor.paramTys.substLowers(dataType.args*)
           assert(args.size == pArgs.size && pArgs.size == _As.size)
           simplifyAll(args.lazyZip(pArgs).lazyZip(_As.map(_.ty)).map(ElabConstraint.apply).toList)
@@ -510,6 +524,7 @@ private def elaborateDefBody
         ) =>
         val (_Σ, cofields) = Σ
           .getCofields(qn)
+          .asRight
           .foldLeft[(Signature, SeqMap[Name, CaseTree])]((Σ, SeqMap())):
             case ((_Σ, cofields), cofield) =>
               val (_Σmod, ct) = elaborate(
@@ -524,7 +539,7 @@ private def elaborateDefBody
       // Note: here we don't require an absurd pattern like in [1]. Instead, we require no more
       // user (projection) pattern. This seems more natural.
       case (ElabClause(_, Nil, None, source) :: _, CorecordType(qn, _, _)) =>
-        Σ.getCofields(qn).size match
+        Σ.getCofields(qn).asRight.size match
           // There is no need to modify Σ because empty corecord does not have any clause
           case 0 => (Σ, CtCorecord(SeqMap()))
           case _ => throw MissingCofieldsInCoPattern(source)
@@ -602,7 +617,7 @@ private def elaborateDefBody
                   ):
                     // Normal type case
                     case (Right(_, branches, defaultCase), Some(qn)) =>
-                      val data = Σ.getData(qn)
+                      val data = Σ.getData(qn).asRight
                       // in context _Γ1
                       val Δ = data.context.map(_._1)
 
@@ -656,8 +671,9 @@ private def elaborateDefBody
                   binding.ty.weaken(_Γ2.size + 1, 0) == _A,
                   "these types should be identical because they are created by [intro]",
                 )
-                val data = Σ.getData(qn)
+                val data = Σ.getData(qn).asRight
                 Σ.getConstructors(qn)
+                  .asRight
                   .foldLeft[Either[IrError, (Signature, SeqMap[Name, CaseTree])]](
                     Right(Σ, SeqMap()),
                   ):
@@ -725,9 +741,10 @@ private def elaborateDefBody
             case (_, ElabConstraint(x: Var, PAbsurd(), _A)) =>
               _A match
                 case DataType(qn, args) =>
-                  val data = Σ.getData(qn)
+                  val data = Σ.getData(qn).asRight
                   val isEmpty = Σ
                     .getConstructors(qn)
+                    .asRight
                     .forall(constructor => {
                       // all constructor arg unification fails
                       val tParamArgs = args.take(data.context.size)
@@ -783,7 +800,7 @@ private def elaborateDefBody
           case Left(e)  => throw e
       case (Nil, _) => throw IncompleteClauses(preDefinition.qn)
 
-  val definition = Σ.getDefinition(preDefinition.qn)
+  val definition = Σ.getDefinition(preDefinition.qn).asRight
   given Context = definition.context.map(_._1)
 
   ctx.trace(s"elaborating def body ${preDefinition.qn}"):
@@ -800,7 +817,7 @@ private def elaborateDefBody
       // works as long as lambda definitions are APPENDED after the call-site declaration. This is
       // because our topological sort preserves original order of definitions when possible. Hence,
       // the call-site function body would be elaborated before the lambda body.
-      .replaceDeclaration(checkDef(definition, _Σ.getClauses(preDefinition.qn)))
+      .replaceDeclaration(checkDef(definition, _Σ.getClauses(preDefinition.qn).asRight))
 
 @throws(classOf[IrError])
 private def elaborateEffectHead
@@ -809,7 +826,7 @@ private def elaborateEffectHead
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  if Σ.getEffectOption(effect.qn).isDefined then throw DuplicatedDeclaration(effect.qn)
+  if Σ.getEffect(effect.qn).isRight then throw DuplicatedDeclaration(effect.qn)
   ctx.trace(s"elaborating effect signature ${effect.qn}"):
     val tParamTys = elaborateTelescope(effect.tParamTys)(using Γ)
     given Γ2: Context = Γ ++ tParamTys
@@ -817,7 +834,8 @@ private def elaborateEffectHead
       .normalized(Some(F(UsageType()))) match
       case Return(continuationUsage, _) => continuationUsage
       case c                            => throw ExpectReturnAValue(c)
-    val e: Effect = Effect(effect.qn, Γ2, continuationUsage)
+    val e: Effect =
+      Effect(effect.qn, Γ2, continuationUsage, effect.interfaceScope, effect.implementationScope)
     Σ.addDeclaration(e)
 
 @throws(classOf[IrError])
@@ -826,7 +844,7 @@ private def elaborateEffectBody
   (using Σ: Signature)
   (using ctx: TypingContext)
   : Signature =
-  val effect = Σ.getEffect(preEffect.qn)
+  val effect = Σ.getEffect(preEffect.qn).asRight
 
   given Context = effect.context
 

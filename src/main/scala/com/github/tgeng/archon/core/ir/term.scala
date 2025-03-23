@@ -429,10 +429,20 @@ enum VTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[VTerm]:
       case EffectInstance(effect, handlerConstraint, handlerKey) =>
         EffectInstance(effect, handlerConstraint, handlerKey)
 
-  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
+  def visitWith[C, R]
+    (visitor: Visitor[C, R])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     visitor.visitVTerm(this)
 
-  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): VTerm =
+  def transformWith[C]
+    (transformer: Transformer[C])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     transformer.transformVTerm(this)
 
 object VTerm:
@@ -729,10 +739,20 @@ enum CTerm(val sourceInfo: SourceInfo) extends SourceInfoOwner[CTerm]:
   // TODO[P3]: consider adding builtin set and maps with decidable equality because we do not
   //  support quotient type and set semantic is very common in software engineering.
 
-  def visitWith[C, R](visitor: Visitor[C, R])(using ctx: C)(using Σ: Signature): R =
+  def visitWith[C, R]
+    (visitor: Visitor[C, R])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     visitor.visitCTerm(this)
 
-  def transformWith[C](transformer: Transformer[C])(using ctx: C)(using Σ: Signature): CTerm =
+  def transformWith[C]
+    (transformer: Transformer[C])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CTerm =
     transformer.transformCTerm(this)
 
 object CTerm:

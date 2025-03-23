@@ -1,6 +1,6 @@
 package com.github.tgeng.archon.core.ir.typing
 
-import com.github.tgeng.archon.common.Ref.given
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.{n, qn}
 import com.github.tgeng.archon.core.ir.*
 import com.github.tgeng.archon.core.ir.CTerm.*

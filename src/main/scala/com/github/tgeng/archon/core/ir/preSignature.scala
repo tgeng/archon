@@ -2,6 +2,7 @@ package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.common.QualifiedName.Root
 import com.github.tgeng.archon.core.ir.PreDeclaration.{PreDefinition, PreEffect}
 
 type PreTTelescope = List[(Binding[CTerm], Variance)]
@@ -19,6 +20,8 @@ enum PreDeclaration:
       // types with equality types representing the constraints.
       ty: CTerm,
       constructors: List[PreConstructor],
+      interfaceScope: QualifiedName = Root,
+      implementationScope: QualifiedName = Root,
     )
   case PreCorecord
     (
@@ -32,14 +35,26 @@ enum PreDeclaration:
       // There is no difference for cofield
       cofields: List[Cofield],
       selfName: Name = n"self",
+      interfaceScope: QualifiedName = Root,
+      implementationScope: QualifiedName = Root,
     )
-  case PreDefinition(qn: QualifiedName, paramTys: PreDTelescope, ty: CTerm, clauses: List[PreClause])
+  case PreDefinition
+    (
+      qn: QualifiedName,
+      paramTys: PreDTelescope,
+      ty: CTerm,
+      clauses: List[PreClause],
+      interfaceScope: QualifiedName = Root,
+      implementationScope: QualifiedName = Root,
+    )
   case PreEffect
     (
       qn: QualifiedName,
       tParamTys: PreTelescope,
       operations: List[PreOperation],
       continuationUsage: CTerm,
+      interfaceScope: QualifiedName = Root,
+      implementationScope: QualifiedName = Root,
     )
 
   def qn: QualifiedName

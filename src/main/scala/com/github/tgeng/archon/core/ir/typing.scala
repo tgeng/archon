@@ -3,6 +3,8 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
@@ -74,7 +76,7 @@ def inferLevel(ty: VTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
         inferLevel(typeBound.normalized)
       case U(cty) => inferLevel(cty)
       case DataType(qn, args) =>
-        val data = Σ.getData(qn)
+        val data = Σ.getData(qn).asRight
         data.level.substLowers(args.take(data.context.size)*)
       case _: UsageType | _: EffectsType => LevelLiteral(0)
       case LevelType(strictUpperBound)   => LevelLiteral(strictUpperBound)
@@ -133,12 +135,10 @@ def inferType
       val (newC, cty) = inferType(c)
       (Thunk(newC), U(cty))
     case DataType(qn, uncheckedArgs) =>
-      Σ.getDataOption(qn) match
-        case None => throw MissingDeclaration(qn)
-        case Some(data) =>
-          val args = checkTypes(uncheckedArgs, (data.context.map(_._1) ++ data.tIndexTys).toList)
-          val newTm = DataType(qn, args.map(_.normalized))(using tm.sourceInfo)
-          (newTm, Type(newTm))
+      val data = Σ.getData(qn).getOrThrow
+      val args = checkTypes(uncheckedArgs, (data.context.map(_._1) ++ data.tIndexTys).toList)
+      val newTm = DataType(qn, args.map(_.normalized))(using tm.sourceInfo)
+      (newTm, Type(newTm))
     case _: Con          => throw InternalIrError("cannot infer type of raw constructor")
     case u: UsageLiteral => (u, UsageType(Some(u)))
     case UsageProd(uncheckedOperands) =>
@@ -223,22 +223,20 @@ def checkType
     case c @ Con(name, uncheckedArgs) =>
       ty match
         case dataType @ DataType(qn, tArgs) =>
-          Σ.getConstructorOption(qn, name) match
-            case None => throw MissingConstructor(name, qn)
-            case Some(con) =>
-              val data = Σ.getData(qn)
-              val tParamArgs = tArgs.take(data.context.size)
-              val tIndexArgs = tArgs.drop(data.context.size)
-              val args = checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs*))
-              ctx.checkSolved(
-                checkAreConvertible(
-                  con.tArgs.map(_.substLowers(tParamArgs ++ args*)),
-                  tIndexArgs,
-                  data.tIndexTys.substLowers(tParamArgs*),
-                ),
-                UnmatchedDataIndex(c, dataType),
-              )
-              Con(name, args)
+          val con = Σ.getConstructor(qn, name).getOrThrow
+          val data = Σ.getData(qn).asRight
+          val tParamArgs = tArgs.take(data.context.size)
+          val tIndexArgs = tArgs.drop(data.context.size)
+          val args = checkTypes(uncheckedArgs, con.paramTys.substLowers(tParamArgs*))
+          ctx.checkSolved(
+            checkAreConvertible(
+              con.tArgs.map(_.substLowers(tParamArgs ++ args*)),
+              tIndexArgs,
+              data.tIndexTys.substLowers(tParamArgs*),
+            ),
+            UnmatchedDataIndex(c, dataType),
+          )
+          Con(name, args)
         case _ => throw ExpectDataType(ty)
     case Auto() => Collapse(ctx.addUnsolved(F(ty)))
     case _ =>
@@ -265,7 +263,7 @@ def inferLevel(ty: CTerm)(using Γ: Context)(using Σ: Signature)(using ctx: Typ
         // strengthen is always safe because the only case that bodyLevel would reference 0 is when
         // arg is of type Level. But in that case the overall level would be ω.
         LevelMax(argLevel.weakened, bodyLevel).normalized(using Γ :+ binding).strengthened
-      case CorecordType(qn, args, _) => Σ.getCorecord(qn).level.substLowers(args*)
+      case CorecordType(qn, args, _) => Σ.getCorecord(qn).asRight.level.substLowers(args*)
       case Force(ctm) =>
         val (_, cty) = inferType(ctm)
         inferLevel(cty)
@@ -317,28 +315,26 @@ def inferType
         (newTm, CType(newTm, Total()))
       case m: Meta => (m, ctx.resolveMeta(m).contextFreeType)
       case d @ Def(qn) =>
-        Σ.getDefinitionOption(qn) match
-          case None => throw MissingDeclaration(qn)
-          case Some(definition) =>
-            (
-              d,
-              definition.context.foldRight(definition.ty) { case ((binding, es), bodyTy) =>
-                FunctionType(
-                  binding,
-                  bodyTy,
-                  Total(),
-                  es match
-                    // Recursive definition can cause partially elaborated definitions being
-                    // referenced.
-                    // In this case, we just approximate with EsUnknown to avoid further complexity
-                    // in type checking.
-                    // Practically, this should be fine since user can always manually annotate if
-                    // they don't like this default value.
-                    case null => EscapeStatus.EsUnknown
-                    case es   => es,
-                )
-              },
+        val definition = Σ.getDefinition(qn).getOrThrow
+        (
+          d,
+          definition.context.foldRight(definition.ty) { case ((binding, es), bodyTy) =>
+            FunctionType(
+              binding,
+              bodyTy,
+              Total(),
+              es match
+                // Recursive definition can cause partially elaborated definitions being
+                // referenced.
+                // In this case, we just approximate with EsUnknown to avoid further complexity
+                // in type checking.
+                // Practically, this should be fine since user can always manually annotate if
+                // they don't like this default value.
+                case null => EscapeStatus.EsUnknown
+                case es   => es,
             )
+          },
+        )
       case Force(uncheckedV) =>
         val (v, vTy) = inferType(uncheckedV)
         val cTy = vTy match
@@ -427,32 +423,28 @@ def inferType
             case (e @ EProj(name)) :: uncheckedRest =>
               cty match
                 case CorecordType(qn, args, effects) =>
-                  Σ.getCofieldOption(qn, name) match
-                    case None    => throw MissingCofield(name, qn)
-                    case Some(f) =>
-                      // `self` of corecord is only used in type checking. Hence usages of variables
-                      // in the corecord are not counted.
-                      val self = redex(c, checkedElims)
-                      val (rest, checkedCty) = checkElims(
-                        e :: checkedElims,
-                        f.ty.substLowers(args :+ Thunk(self)*).normalized(None),
-                        uncheckedRest,
-                      )
-                      (
-                        EProj(name) :: rest,
-                        augmentEffect(effects, checkedCty),
-                      )
+                  val f = Σ.getCofield(qn, name).getOrThrow
+                  // `self` of corecord is only used in type checking. Hence usages of variables
+                  // in the corecord are not counted.
+                  val self = redex(c, checkedElims)
+                  val (rest, checkedCty) = checkElims(
+                    e :: checkedElims,
+                    f.ty.substLowers(args :+ Thunk(self)*).normalized(None),
+                    uncheckedRest,
+                  )
+                  (
+                    EProj(name) :: rest,
+                    augmentEffect(effects, checkedCty),
+                  )
                 case _ => throw ExpectCorecord(redex(c, checkedElims.reverse))
         val (checkedC, cty) = inferType(c)
         val (_, resultCty) = checkElims(Nil, cty, elims)
         (redex(checkedC, elims), resultCty)
       case CorecordType(qn, uncheckedArgs, uncheckedEffects) =>
-        Σ.getCorecordOption(qn) match
-          case None => throw MissingDeclaration(qn)
-          case Some(corecord) =>
-            val effects = checkType(uncheckedEffects, EffectsType())
-            val args = checkTypes(uncheckedArgs, corecord.context.map(_._1).toList)
-            (CorecordType(qn, args, effects), CType(tm, Total()))
+        val corecord = Σ.getCorecord(qn).getOrThrow
+        val effects = checkType(uncheckedEffects, EffectsType())
+        val args = checkTypes(uncheckedArgs, corecord.context.map(_._1).toList)
+        (CorecordType(qn, args, effects), CType(tm, Total()))
       case OperationCall(effInstance, name, uncheckedArgs) =>
         val (qn, uncheckedTArgs) = inferType(effInstance)._2 match
           case EffectInstanceType(eff, _) => eff
@@ -460,29 +452,25 @@ def inferType
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
             )
-        Σ.getEffectOption(qn) match
-          case None => throw MissingDeclaration(qn)
-          case Some(effect) =>
-            Σ.getOperationOption(qn, name) match
-              case None => throw MissingDefinition(qn)
-              case Some(op) =>
-                val checkedTArgs = checkTypes(uncheckedTArgs, effect.context.toList)
-                val tArgs = checkedTArgs.map(_.normalized)
-                val args = checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs*))
-                val newEff = EffectsLiteral(Set(effInstance))
-                val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
-                val ty = op.resultTy.substLowers(tArgs ++ args*).normalized
-                (
-                  newTm,
-                  F(
-                    ty,
-                    // TODO[p4]: figure out if there is way to better manage divergence for handler
-                    // operations. The dynamic nature of handler dispatching makes it impossible to
-                    // know at compile time whether this would lead to a cyclic reference in
-                    // computations.
-                    EffectsLiteral(Set(effInstance, div)),
-                  ),
-                )
+        val effect = Σ.getEffect(qn).getOrThrow
+        val op = Σ.getOperation(qn, name).getOrThrow
+        val checkedTArgs = checkTypes(uncheckedTArgs, effect.context.toList)
+        val tArgs = checkedTArgs.map(_.normalized)
+        val args = checkTypes(uncheckedArgs, op.paramTys.substLowers(tArgs*))
+        val newEff = EffectsLiteral(Set(effInstance))
+        val newTm = OperationCall(newEff, name, args)(using tm.sourceInfo)
+        val ty = op.resultTy.substLowers(tArgs ++ args*).normalized
+        (
+          newTm,
+          F(
+            ty,
+            // TODO[p4]: figure out if there is way to better manage divergence for handler
+            // operations. The dynamic nature of handler dispatching makes it impossible to
+            // know at compile time whether this would lead to a cyclic reference in
+            // computations.
+            EffectsLiteral(Set(effInstance, div)),
+          ),
+        )
       case Continuation(uncheckedHandler, continuationUsage) =>
         @tailrec
         def findTip(c: CTerm): CapturedContinuationTip = c match
@@ -549,10 +537,21 @@ def checkType
       ctx.checkSolved(checkIsSubtype(tmTy, normalizedTy), NotCSubtype(tmTy, normalizedTy))
       checkedTm
 
-private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]():
-  override def combine(rs: Set[Int]*)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
+private object MetaVarVisitor extends Visitor[Unit, Set[Int]]():
+  override def combine
+    (rs: Set[Int]*)
+    (using Unit)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Set[Int] =
     rs.flatten.to(Set)
-  override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Int] =
+
+  override def visitMeta
+    (m: Meta)
+    (using Unit)
+    (using Σ: Signature)
+    (using ctx: TypingContext)
+    : Set[Int] =
     Set(m.index) ++ (ctx.resolveMeta(m) match
       // bounds in unsolved doesn't need to be checked now. They will be checked when they become solved.
       case _: Unsolved             => Set.empty
@@ -562,9 +561,10 @@ private object MetaVarVisitor extends Visitor[TypingContext, Set[Int]]():
 
   override def withBoundNames
     (bindingNames: => Seq[Ref[Name]])
-    (action: TypingContext ?=> Set[Nat])
-    (using ctx: TypingContext)
+    (action: Unit ?=> Set[Nat])
+    (using Unit)
     (using Σ: Signature)
+    (using ctx: TypingContext)
     : Set[Nat] = action
 
 @throws(classOf[IrError])
@@ -676,7 +676,7 @@ def checkHandler
   (using ctx: TypingContext)
   : (CTerm, CTerm) =
   val eff = checkEff(h.eff)
-  val operations = Σ.getOperations(eff._1).map(op => (eff._1 / op.name, eff._2, op)).toSet
+  val operations = Σ.getOperations(eff._1).asRight.map(op => (eff._1 / op.name, eff._2, op)).toSet
   val expectedOperationNames = operations.map(_._1)
   val actualOperationNames = h.handlers.keySet
   if expectedOperationNames != actualOperationNames then
@@ -778,7 +778,7 @@ def checkHandler
   )(using Γ :+ parameterBinding :+ inputBinding.weakened)
 
   val handlerAndUsages = operations.map { (qn, effArgs, operation) =>
-    val effect = Σ.getEffect(qn.parent)
+    val effect = Σ.getEffect(qn.parent).asRight
     val handlerImpl = h.handlers(qn)
     // Note that usage subsumption check is reversed because this is checking how continuation
     // can be used by handler.
@@ -955,7 +955,7 @@ def checkHandler
 @throws(classOf[IrError])
 private def checkEff(eff: Eff)(using Γ: Context)(using Σ: Signature)(using TypingContext): Eff =
   val (qn, args) = eff
-  val effect = Σ.getEffect(qn)
+  val effect = Σ.getEffect(qn).asRight
   val newArgs = checkTypes(args, effect.context.toList)
   (qn, newArgs)
 
@@ -1077,7 +1077,11 @@ private def augmentEffect(eff: VTerm, cty: CTerm): CTerm = cty match
 // TODO[P3]: in case weakened failed, provide better error message: ctxTy cannot depend on
 //  the bound variable
 @throws(classOf[IrError])
-private def checkVar0Leak[T <: CTerm | VTerm](ty: T, error: => IrError)(using Σ: Signature): T =
+private def checkVar0Leak[T <: CTerm | VTerm]
+  (ty: T, error: => IrError)
+  (using Σ: Signature)
+  (using TypingContext)
+  : T =
   val freeVars = ty match
     case ty: CTerm => FreeVarsVisitor.visitCTerm(ty)(using 0)
     case ty: VTerm => FreeVarsVisitor.visitVTerm(ty)(using 0)

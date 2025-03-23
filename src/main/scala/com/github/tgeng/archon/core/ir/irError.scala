@@ -4,6 +4,9 @@ import com.github.tgeng.archon.common.Nat
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.*
 
+enum CheckVisibilityMode:
+  case INTERFACE, IMPLEMENTATION
+
 enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case CannotFindCTypeUnion(a: CTerm, b: CTerm)(using Γ: Context) extends IrError(Γ)
   case CannotFindVTypeUnion(a: VTerm, b: VTerm)(using Γ: Context) extends IrError(Γ)
@@ -45,11 +48,13 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
   case MissingConstructor(name: Name, qn: QualifiedName) extends IrError(Context.empty)
   case MissingConstructorCase(dataQn: QualifiedName, conName: Name) extends IrError(Context.empty)
   case MissingDeclaration(qn: QualifiedName) extends IrError(Context.empty)
+  case MissingDeclarationBody(qn: QualifiedName) extends IrError(Context.empty)
   case MissingDefaultTypeCase() extends IrError(Context.empty)
   case MissingDefinition(qn: QualifiedName) extends IrError(Context.empty)
   case MissingCofield(name: Name, qn: QualifiedName) extends IrError(Context.empty)
   case MissingCofieldsInCoPattern(clause: PreClause)(using Γ: Context) extends IrError(Γ)
   case MissingUserCoPattern(clause: PreClause)(using Γ: Context) extends IrError(Γ)
+  case MissingOperation(name: Name, qn: QualifiedName) extends IrError(Context.empty)
   case NonEmptyType(ty: VTerm, source: PreClause)(using Γ: Context) extends IrError(Γ)
   case NotCConvertible(sub: CTerm, sup: CTerm, ty: Option[CTerm])(using Γ: Context)
     extends IrError(Γ)
@@ -105,4 +110,18 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
       clause: Clause,
     )
     (using Γ: Context) extends IrError(Γ)
+  case DeclarationIsInvisibleError
+    (
+      declQn: QualifiedName,
+      mode: CheckVisibilityMode,
+      contextScope: QualifiedName,
+      declScope: QualifiedName,
+    ) extends IrError(Context.empty)
+  case ExposingInvisibleDeclarationError
+    (
+      declQn: QualifiedName,
+      mode: CheckVisibilityMode,
+      exposedScope: QualifiedName,
+      declScope: QualifiedName,
+    ) extends IrError(Context.empty)
   override def getMessage: String = verbosePPrinter.apply(this).plainText

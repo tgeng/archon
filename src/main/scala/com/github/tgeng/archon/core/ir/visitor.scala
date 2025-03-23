@@ -1,6 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
 import com.github.tgeng.archon.common.*
+import com.github.tgeng.archon.common.eitherUtil.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.CaseTree.*
@@ -9,14 +10,30 @@ import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.VTerm.*
 
 trait TermVisitor[C, R]:
-  def combine(rs: R*)(using ctx: C)(using Σ: Signature): R
+  def combine(rs: R*)(using ctx: C)(using Σ: Signature)(using TypingContext): R
 
-  def withTelescope(telescope: => Telescope)(action: C ?=> R)(using ctx: C)(using Σ: Signature): R
+  def withTelescope
+    (telescope: => Telescope)
+    (action: C ?=> R)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R
 
-  def visitBinding(binding: Binding[VTerm])(using ctx: C)(using Σ: Signature): R =
+  def visitBinding
+    (binding: Binding[VTerm])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(visitVTerm(binding.ty), visitVTerm(binding.usage))
 
-  def visitTelescope(telescope: List[Binding[VTerm]])(using ctx: C)(using Σ: Signature): R =
+  def visitTelescope
+    (telescope: List[Binding[VTerm]])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     telescope match
       case Nil => combine()
       case binding :: rest =>
@@ -27,7 +44,7 @@ trait TermVisitor[C, R]:
           },
         )
 
-  def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): R = tm match
+  def visitVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature)(using TypingContext): R = tm match
     case ty: Type                               => visitType(ty)
     case top: Top                               => visitTop(top)
     case v: Var                                 => visitVar(v)
@@ -49,66 +66,96 @@ trait TermVisitor[C, R]:
     case effectInstance: EffectInstance         => visitEffectInstance(effectInstance)
     case auto: Auto                             => visitAuto(auto)
 
-  def visitType(ty: Type)(using ctx: C)(using Σ: Signature): R =
+  def visitType(ty: Type)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitVTerm(ty.upperBound)
 
-  def visitTop(top: Top)(using ctx: C)(using Σ: Signature): R = combine(
+  def visitTop(top: Top)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine(
     visitVTerm(top.level),
   )
 
-  def visitVar(v: Var)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitVar(v: Var)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine()
 
-  def visitCollapse(collapse: Collapse)(using ctx: C)(using Σ: Signature): R =
+  def visitCollapse(collapse: Collapse)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitCTerm(collapse.cTm)
 
-  def visitU(u: U)(using ctx: C)(using Σ: Signature): R = visitCTerm(u.cTy)
+  def visitU(u: U)(using ctx: C)(using Σ: Signature)(using TypingContext): R = visitCTerm(u.cTy)
 
-  def visitThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature): R =
+  def visitThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitCTerm(thunk.c)
 
-  def visitDataType(dataType: DataType)(using ctx: C)(using Σ: Signature): R =
+  def visitDataType(dataType: DataType)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       visitQualifiedName(dataType.qn) +:
         dataType.args.map(visitVTerm)*,
     )
 
-  def visitCon(con: Con)(using ctx: C)(using Σ: Signature): R =
+  def visitCon(con: Con)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       visitName(con.name) +:
         con.args.map(visitVTerm)*,
     )
 
-  def visitUsageType(usageType: UsageType)(using ctx: C)(using Σ: Signature): R =
+  def visitUsageType
+    (usageType: UsageType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       (visitQualifiedName(Builtins.UsageQn) +: usageType.upperBound.map(visitVTerm).toSeq)*,
     )
 
-  def visitUsageLiteral(usageLiteral: UsageLiteral)(using ctx: C)(using Σ: Signature): R =
+  def visitUsageLiteral
+    (usageLiteral: UsageLiteral)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine()
 
-  def visitUsageProd(usageProd: UsageProd)(using ctx: C)(using Σ: Signature): R =
+  def visitUsageProd
+    (usageProd: UsageProd)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(usageProd.operands.map(visitVTerm).toSeq*)
 
-  def visitUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): R =
+  def visitUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(usageSum.operands.map(visitVTerm).toSeq*)
 
-  def visitUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): R =
+  def visitUsageJoin
+    (usageJoin: UsageJoin)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(usageJoin.operands.map(visitVTerm).toSeq*)
 
-  def visitEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): R =
+  def visitEffectsType
+    (effectsType: EffectsType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     visitQualifiedName(Builtins.EffectsQn)
 
-  def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature): R =
+  def visitEffects(effects: Effects)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       (effects.handlerKeys.map(visitVTerm) ++ effects.unionOperands.keys.map(
         visitVTerm,
       )).toSeq*,
     )
 
-  def visitLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): R =
+  def visitLevelType
+    (levelType: LevelType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     visitQualifiedName(Builtins.LevelQn)
 
-  def visitLevel(level: Level)(using ctx: C)(using Σ: Signature): R =
+  def visitLevel(level: Level)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       level.maxOperands.map { case (v, _) =>
         visitVTerm(v)
@@ -119,57 +166,64 @@ trait TermVisitor[C, R]:
     (instanceType: EffectInstanceType)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
     visitEff(instanceType.eff)
 
-  def visitEffectInstance(instance: VTerm.EffectInstance)(using ctx: C)(using Σ: Signature): R =
+  def visitEffectInstance
+    (instance: VTerm.EffectInstance)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     visitEff(instance.eff)
 
-  def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitAuto(auto: Auto)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine()
 
-  def visitHole(using ctx: C)(using Σ: Signature): R = combine()
+  def visitHole(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine()
 
   def visitCapturedContinuationTip
     (cct: CapturedContinuationTip)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
     visitF(cct.ty)
 
-  def visitCType(cType: CType)(using ctx: C)(using Σ: Signature): R =
+  def visitCType(cType: CType)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       visitCTerm(cType.upperBound),
       visitVTerm(cType.effects),
     )
 
-  def visitCTop(cTop: CTop)(using ctx: C)(using Σ: Signature): R =
+  def visitCTop(cTop: CTop)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       visitVTerm(cTop.level),
       visitVTerm(cTop.effects),
     )
 
-  def visitMeta(m: Meta)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitMeta(m: Meta)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine()
 
-  def visitDef(d: Def)(using ctx: C)(using Σ: Signature): R =
+  def visitDef(d: Def)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitQualifiedName(d.qn)
 
-  def visitForce(force: Force)(using ctx: C)(using Σ: Signature): R =
+  def visitForce(force: Force)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitVTerm(force.v)
 
-  def visitF(f: F)(using ctx: C)(using Σ: Signature) =
+  def visitF(f: F)(using ctx: C)(using Σ: Signature)(using TypingContext) =
     combine(
       visitVTerm(f.vTy),
       visitVTerm(f.effects),
       visitVTerm(f.usage),
     )
 
-  def visitReturn(r: Return)(using ctx: C)(using Σ: Signature): R =
+  def visitReturn(r: Return)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       visitVTerm(r.v),
       visitVTerm(r.usage),
     )
 
-  def visitLet(let: Let)(using ctx: C)(using Σ: Signature): R = combine(
+  def visitLet(let: Let)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine(
     visitCTerm(let.t),
     visitBinding(let.tBinding),
     visitVTerm(let.eff),
@@ -178,15 +232,25 @@ trait TermVisitor[C, R]:
     },
   )
 
-  def visitRedex(redex: Redex)(using ctx: C)(using Σ: Signature): R = combine(
+  def visitRedex(redex: Redex)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine(
     visitCTerm(redex.t) +: redex.elims.map(visitElim)*,
   )
 
-  def visitElim(elim: Elimination[VTerm])(using ctx: C)(using Σ: Signature): R = elim match
+  def visitElim
+    (elim: Elimination[VTerm])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R = elim match
     case Elimination.EProj(n) => visitName(n)
     case Elimination.ETerm(v) => visitVTerm(v)
 
-  def visitFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): R =
+  def visitFunctionType
+    (functionType: FunctionType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitVTerm(functionType.binding.ty),
       withTelescope(List(functionType.binding)) {
@@ -195,24 +259,39 @@ trait TermVisitor[C, R]:
       visitVTerm(functionType.effects),
     )
 
-  def visitCorecordType(corecordType: CorecordType)(using ctx: C)(using Σ: Signature): R =
+  def visitCorecordType
+    (corecordType: CorecordType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitQualifiedName(corecordType.qn) +:
         corecordType.args.map(visitVTerm) :+
         visitVTerm(corecordType.effects)*,
     )
 
-  def visitOperationCall(operationCall: OperationCall)(using ctx: C)(using Σ: Signature): R =
+  def visitOperationCall
+    (operationCall: OperationCall)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitVTerm(operationCall.effInstance) +:
         visitName(operationCall.name) +:
         operationCall.args.map(visitVTerm)*,
     )
 
-  def visitContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): R =
+  def visitContinuation
+    (continuation: Continuation)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     visitCTerm(continuation.continuationTerm)
 
-  def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature): R =
+  def visitHandler(handler: Handler)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       Seq(
         visitEff(handler.eff),
@@ -242,8 +321,9 @@ trait TermVisitor[C, R]:
     (eff: Eff, parameterBinding: Binding[VTerm], qn: QualifiedName, handlerImpl: HandlerImpl)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
-    val operation = Σ.getOperation(qn)
+    val operation = Σ.getOperation(qn).asRight
     assert(operation.paramTys.size == handlerImpl.boundNames.size)
     val handlerParams = operation.paramTys
       .substLowers(eff._2*)
@@ -256,19 +336,30 @@ trait TermVisitor[C, R]:
       )
     }
 
-  def visitEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): R =
+  def visitEff
+    (eff: (QualifiedName, Arguments))
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitQualifiedName(eff._1) +:
         eff._2.map(visitVTerm)*,
     )
 
-  def visitBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitBigLevel(layer: Nat)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
+    combine()
 
-  def visitQualifiedName(qn: QualifiedName)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitQualifiedName
+    (qn: QualifiedName)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R = combine()
 
-  def visitName(name: Name)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitName(name: Name)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine()
 
-  def visitCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature): R = tm match
+  def visitCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature)(using TypingContext): R = tm match
     case Hole                         => visitHole
     case cct: CapturedContinuationTip => visitCapturedContinuationTip(cct)
     case cType: CType                 => visitCType(cType)
@@ -293,6 +384,7 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
     (action: C ?=> R)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
     withBoundNames(telescope.map(_.name))(action)
 
@@ -301,12 +393,14 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
     (action: C ?=> R)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R
 
   def visitPreTContext
     (tTelescope: List[(Binding[CTerm], Variance)])
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
     tTelescope match
       case Nil => combine()
@@ -322,6 +416,7 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
     (tTelescope: List[(Binding[VTerm], Variance)])
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
     tTelescope match
       case Nil => combine()
@@ -333,7 +428,12 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
           },
         )
 
-  def visitPreContext(telescope: List[Binding[CTerm]])(using ctx: C)(using Σ: Signature): R =
+  def visitPreContext
+    (telescope: List[Binding[CTerm]])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     telescope match
       case Nil => combine()
       case binding :: rest =>
@@ -344,10 +444,15 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
           },
         )
 
-  def visitPreBinding(binding: Binding[CTerm])(using ctx: C)(using Σ: Signature): R =
+  def visitPreBinding
+    (binding: Binding[CTerm])
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(visitCTerm(binding.ty), visitCTerm(binding.usage))
 
-  def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature): R =
+  def visitPattern(pattern: Pattern)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     pattern match
       case pVar: PVar           => visitPVar(pVar)
       case pDataType: PDataType => visitPDataType(pDataType)
@@ -359,21 +464,36 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
       case pForced: PForced => visitPForced(pForced)
       case pAbsurd: PAbsurd => visitPAbsurd(pAbsurd)
 
-  def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature): R = combine()
+  def visitPVar(pVar: PVar)(using ctx: C)(using Σ: Signature)(using TypingContext): R = combine()
 
-  def visitPDataType(pDataType: PDataType)(using ctx: C)(using Σ: Signature): R =
+  def visitPDataType
+    (pDataType: PDataType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitQualifiedName(pDataType.qn) +:
         pDataType.args.map(visitPattern)*,
     )
 
-  def visitPForcedDataType(pForcedDataType: PForcedDataType)(using ctx: C)(using Σ: Signature): R =
+  def visitPForcedDataType
+    (pForcedDataType: PForcedDataType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitQualifiedName(pForcedDataType.qn) +:
         pForcedDataType.args.map(visitPattern)*,
     )
 
-  def visitPConstructor(pConstructor: PConstructor)(using ctx: C)(using Σ: Signature): R =
+  def visitPConstructor
+    (pConstructor: PConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R =
     combine(
       visitName(pConstructor.name) +:
         pConstructor.args.map(visitPattern)*,
@@ -383,63 +503,72 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
     (pForcedConstructor: PForcedConstructor)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : R =
     combine(
       visitName(pForcedConstructor.name) +:
         pForcedConstructor.args.map(visitPattern)*,
     )
 
-  def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature): R =
+  def visitPForced(pForced: PForced)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitVTerm(pForced.term)
 
-  def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: C)(using Σ: Signature): R =
+  def visitPAbsurd(pAbsurd: PAbsurd)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine()
 
-  def visitCoPattern(coPattern: CoPattern)(using ctx: C)(using Σ: Signature): R = coPattern match
+  def visitCoPattern
+    (coPattern: CoPattern)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : R = coPattern match
     case p: CPattern    => visitCPattern(p)
     case p: CProjection => visitCProjection(p)
 
-  def visitCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): R =
+  def visitCPattern(p: CPattern)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitPattern(p.pattern)
 
-  def visitCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): R =
+  def visitCProjection(p: CProjection)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     visitName(p.name)
 
-  def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): R = ct match
-    case t: CtTerm      => visitCtTerm(t)
-    case l: CtLambda    => visitCtLambda(l)
-    case r: CtCorecord  => visitCtCorecord(r)
-    case tc: CtTypeCase => visitCtTypeCase(tc)
-    case dc: CtDataCase => visitCtDataCase(dc)
+  def visitCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
+    ct match
+      case t: CtTerm      => visitCtTerm(t)
+      case l: CtLambda    => visitCtLambda(l)
+      case r: CtCorecord  => visitCtCorecord(r)
+      case tc: CtTypeCase => visitCtTypeCase(tc)
+      case dc: CtDataCase => visitCtDataCase(dc)
 
-  def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature): R = visitCTerm(t.term)
+  def visitCtTerm(t: CtTerm)(using ctx: C)(using Σ: Signature)(using TypingContext): R = visitCTerm(
+    t.term,
+  )
 
-  def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): R =
+  def visitCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     withBoundNames(Seq(l.boundName)):
       visitCaseTree(l.body)
 
-  def visitCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature): R =
+  def visitCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       r.cofields.flatMap { (name, body) =>
         Seq(visitName(name), visitCaseTree(body))
       }.toSeq*,
     )
 
-  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature): R =
+  def visitCtTypeCase(ct: CtTypeCase)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
     combine(
       visitVTerm(ct.operand) +:
         ct.cases.flatMap { (qn, body) =>
           Seq(
             visitQualifiedName(qn),
-            withBoundNames(Σ.getData(qn).context.map(_._1.name).toList) {
+            withBoundNames(Σ.getData(qn).asRight.context.map(_._1.name).toList) {
               visitCaseTree(body)
             },
           )
         }.toSeq :+ visitCaseTree(ct.default)*,
     )
 
-  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature): R =
-    val constructors = Σ.getConstructors(dt.qn)
+  def visitCtDataCase(dt: CtDataCase)(using ctx: C)(using Σ: Signature)(using TypingContext): R =
+    val constructors = Σ.getConstructors(dt.qn).asRight
     combine(
       visitVTerm(dt.operand) +:
         visitQualifiedName(dt.qn) +: dt.cases.flatMap { (name, body) =>
@@ -459,10 +588,15 @@ trait Visitor[C, R] extends TermVisitor[C, R]:
 
 trait TermTransformer[C]:
 
-  def withTelescope[T](telescope: => Telescope)(action: C ?=> T)(using ctx: C)(using Σ: Signature)
+  def withTelescope[T]
+    (telescope: => Telescope)
+    (action: C ?=> T)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
     : T
 
-  def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformVTerm(tm: VTerm)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm =
     tm match
       case ty: Type                   => transformType(ty)
       case top: Top                   => transformTop(top)
@@ -486,65 +620,115 @@ trait TermTransformer[C]:
         transformEffectInstanceType(effectInstanceType)
       case effectInstance: VTerm.EffectInstance => transformEffectInstance(effectInstance)
 
-  def transformType(ty: Type)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformType(ty: Type)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm =
     Type(transformVTerm(ty.upperBound))(using ty.sourceInfo)
 
-  def transformTop(top: Top)(using ctx: C)(using Σ: Signature): VTerm = Top(
+  def transformTop(top: Top)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm = Top(
     transformVTerm(top.level),
   )(using top.sourceInfo)
 
-  def transformVar(v: Var)(using ctx: C)(using Σ: Signature): VTerm = v
+  def transformVar(v: Var)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm = v
 
-  def transformCollapse(collapse: Collapse)(using ctx: C)(using Σ: Signature): VTerm = Collapse(
+  def transformCollapse
+    (collapse: Collapse)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm = Collapse(
     transformCTerm(collapse.cTm),
   )(using collapse.sourceInfo)
 
-  def transformU(u: U)(using ctx: C)(using Σ: Signature): VTerm = U(
+  def transformU(u: U)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm = U(
     transformCTerm(u.cTy),
   )(using u.sourceInfo)
 
-  def transformThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformThunk(thunk: Thunk)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm =
     Thunk(transformCTerm(thunk.c))(using thunk.sourceInfo)
 
-  def transformDataType(dataType: DataType)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformDataType
+    (dataType: DataType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     DataType(
       transformQualifiedName(dataType.qn),
       dataType.args.map(transformVTerm),
     )(using dataType.sourceInfo)
 
-  def transformCon(con: Con)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformCon(con: Con)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm =
     Con(transformName(con.name), con.args.map(transformVTerm))(using con.sourceInfo)
 
-  def transformUsageType(usageType: UsageType)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformUsageType
+    (usageType: UsageType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     usageType
 
-  def transformUsageLiteral(usageLiteral: UsageLiteral)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformUsageLiteral
+    (usageLiteral: UsageLiteral)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     usageLiteral
 
-  def transformUsageProd(usageProd: UsageProd)(using ctx: C)(using Σ: Signature): VTerm = UsageProd(
+  def transformUsageProd
+    (usageProd: UsageProd)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm = UsageProd(
     usageProd.operands.map(transformVTerm),
   )
 
-  def transformUsageSum(usageSum: UsageSum)(using ctx: C)(using Σ: Signature): VTerm = UsageSum(
+  def transformUsageSum
+    (usageSum: UsageSum)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm = UsageSum(
     usageSum.operands.map(transformVTerm),
   )
 
-  def transformUsageJoin(usageJoin: UsageJoin)(using ctx: C)(using Σ: Signature): VTerm = UsageJoin(
+  def transformUsageJoin
+    (usageJoin: UsageJoin)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm = UsageJoin(
     usageJoin.operands.map(transformVTerm),
   )
 
-  def transformEffectsType(effectsType: EffectsType)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformEffectsType
+    (effectsType: EffectsType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     effectsType
 
-  def transformEffects(effects: Effects)(using ctx: C)(using Σ: Signature): VTerm = Effects(
+  def transformEffects
+    (effects: Effects)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm = Effects(
     effects.handlerKeys.map(transformVTerm),
     effects.unionOperands.map((k, v) => (transformVTerm(k), v)),
   )(using effects.sourceInfo)
 
-  def transformLevelType(levelType: LevelType)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformLevelType
+    (levelType: LevelType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     levelType
 
-  def transformLevel(level: Level)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformLevel(level: Level)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm =
     Level(
       level.literal,
       level.maxOperands.map((k, v) => (transformVTerm(k), v)),
@@ -554,60 +738,67 @@ trait TermTransformer[C]:
     (instanceType: EffectInstanceType)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : VTerm =
     EffectInstanceType(
       transformEff(instanceType.eff),
       instanceType.handlerConstraint,
     )
 
-  def transformEffectInstance(instance: EffectInstance)(using ctx: C)(using Σ: Signature): VTerm =
+  def transformEffectInstance
+    (instance: EffectInstance)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : VTerm =
     EffectInstance(
       transformEff(instance.eff),
       instance.handlerConstraint,
       instance.handlerKey,
     )
 
-  def transformAuto(auto: Auto)(using ctx: C)(using Σ: Signature): VTerm = auto
+  def transformAuto(auto: Auto)(using ctx: C)(using Σ: Signature)(using TypingContext): VTerm = auto
 
-  def transformHole(using ctx: C)(using Σ: Signature): CTerm = Hole
+  def transformHole(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm = Hole
 
   def transformCapturedContinuationTip
     (cct: CapturedContinuationTip)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : CTerm =
     CapturedContinuationTip(transformF(cct.ty))
 
-  def transformCType(cType: CType)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformCType(cType: CType)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     CType(transformCTerm(cType.upperBound), transformVTerm(cType.effects))(using cType.sourceInfo)
 
-  def transformCTop(cTop: CTop)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformCTop(cTop: CTop)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     CTop(
       transformVTerm(cTop.level),
       transformVTerm(cTop.effects),
     )(using cTop.sourceInfo)
 
-  def transformMeta(m: Meta)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformMeta(m: Meta)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     Meta(m.index)(using m.sourceInfo)
 
-  def transformDef(d: Def)(using ctx: C)(using Σ: Signature): CTerm = Def(
+  def transformDef(d: Def)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm = Def(
     transformQualifiedName(d.qn),
   )(using d.sourceInfo)
 
-  def transformForce(force: Force)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformForce(force: Force)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     Force(transformVTerm(force.v))(using force.sourceInfo)
 
-  def transformF(f: F)(using ctx: C)(using Σ: Signature): F =
+  def transformF(f: F)(using ctx: C)(using Σ: Signature)(using TypingContext): F =
     F(
       transformVTerm(f.vTy),
       transformVTerm(f.effects),
       transformVTerm(f.usage),
     )(using f.sourceInfo)
 
-  def transformReturn(r: Return)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformReturn(r: Return)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     Return(transformVTerm(r.v), transformVTerm(r.usage))(using r.sourceInfo)
 
-  def transformLet(let: Let)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformLet(let: Let)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     Let(
       transformCTerm(let.t),
       Binding(transformVTerm(let.tBinding.ty), transformVTerm(let.tBinding.usage))(
@@ -619,7 +810,7 @@ trait TermTransformer[C]:
       },
     )(using let.sourceInfo)
 
-  def transformRedex(redex: Redex)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformRedex(redex: Redex)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     Redex(
       transformCTerm(redex.t),
       redex.elims.map(transformElim),
@@ -629,11 +820,17 @@ trait TermTransformer[C]:
     (elim: Elimination[VTerm])
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : Elimination[VTerm] = elim match
     case Elimination.EProj(n) => Elimination.EProj(transformName(n))(using elim.sourceInfo)
     case Elimination.ETerm(v) => Elimination.ETerm(transformVTerm(v))(using elim.sourceInfo)
 
-  def transformFunctionType(functionType: FunctionType)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformFunctionType
+    (functionType: FunctionType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CTerm =
     FunctionType(
       Binding(
         transformVTerm(functionType.binding.ty),
@@ -645,7 +842,12 @@ trait TermTransformer[C]:
       transformVTerm(functionType.effects),
     )(using functionType.sourceInfo)
 
-  def transformCorecordType(corecordType: CorecordType)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformCorecordType
+    (corecordType: CorecordType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CTerm =
     CorecordType(
       transformQualifiedName(corecordType.qn),
       corecordType.args.map(transformVTerm),
@@ -656,6 +858,7 @@ trait TermTransformer[C]:
     (operationCall: OperationCall)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : CTerm =
     OperationCall(
       transformVTerm(operationCall.effInstance),
@@ -663,10 +866,20 @@ trait TermTransformer[C]:
       operationCall.args.map(transformVTerm),
     )(using operationCall.sourceInfo)
 
-  def transformContinuation(continuation: Continuation)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformContinuation
+    (continuation: Continuation)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CTerm =
     Continuation(transformHandler(continuation.continuationTerm), continuation.continuationUsage)
 
-  def transformHandler(handler: Handler)(using ctx: C)(using Σ: Signature): Handler =
+  def transformHandler
+    (handler: Handler)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Handler =
     Handler(
       transformEff(handler.eff),
       transformVTerm(handler.otherEffects),
@@ -704,8 +917,9 @@ trait TermTransformer[C]:
     (eff: Eff, qn: QualifiedName, handlerImpl: HandlerImpl)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : HandlerImpl =
-    val operation = Σ.getOperation(qn)
+    val operation = Σ.getOperation(qn).asRight
     assert(operation.paramTys.size == handlerImpl.boundNames.size)
     val handlerParams = operation.paramTys
       .substLowers(eff._2*)
@@ -715,15 +929,25 @@ trait TermTransformer[C]:
       handlerImpl.copy(body = transformCTerm(handlerImpl.body))(handlerImpl.boundNames)
     }
 
-  def transformEff(eff: (QualifiedName, Arguments))(using ctx: C)(using Σ: Signature): Eff =
+  def transformEff
+    (eff: (QualifiedName, Arguments))
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Eff =
     (transformQualifiedName(eff._1), eff._2.map(transformVTerm))
 
-  def transformQualifiedName(qn: QualifiedName)(using ctx: C)(using Σ: Signature): QualifiedName =
+  def transformQualifiedName
+    (qn: QualifiedName)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : QualifiedName =
     qn
 
-  def transformName(name: Name)(using ctx: C)(using Σ: Signature): Name = name
+  def transformName(name: Name)(using ctx: C)(using Σ: Signature)(using TypingContext): Name = name
 
-  def transformCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature): CTerm =
+  def transformCTerm(tm: CTerm)(using ctx: C)(using Σ: Signature)(using TypingContext): CTerm =
     tm match
       case Hole                         => transformHole
       case cct: CapturedContinuationTip => transformCapturedContinuationTip(cct)
@@ -749,6 +973,7 @@ trait Transformer[C] extends TermTransformer[C]:
     (action: C ?=> T)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : T = withBoundNames(telescope.map(_.name))(action)
 
   def withBoundNames[T]
@@ -756,9 +981,15 @@ trait Transformer[C] extends TermTransformer[C]:
     (action: C ?=> T)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : T
 
-  def transformCaseTree(ct: CaseTree)(using ctx: C)(using Σ: Signature): CaseTree =
+  def transformCaseTree
+    (ct: CaseTree)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CaseTree =
     ct match
       case t: CtTerm      => transformCtTerm(t)
       case l: CtLambda    => transformCtLambda(l)
@@ -766,28 +997,43 @@ trait Transformer[C] extends TermTransformer[C]:
       case tc: CtTypeCase => transformCtTypeCase(tc)
       case dc: CtDataCase => transformCtDataCase(dc)
 
-  def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature): CaseTree =
+  def transformCtTerm(ct: CtTerm)(using ctx: C)(using Σ: Signature)(using TypingContext): CaseTree =
     CtTerm(transformCTerm(ct.term))
 
-  def transformCtLambda(l: CtLambda)(using ctx: C)(using Σ: Signature): CaseTree =
+  def transformCtLambda
+    (l: CtLambda)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CaseTree =
     CtLambda(
       withBoundNames(Seq(l.boundName)) {
         transformCaseTree(l.body)
       },
     )(l.boundName)
 
-  def transformCtCorecord(r: CtCorecord)(using ctx: C)(using Σ: Signature): CaseTree =
+  def transformCtCorecord
+    (r: CtCorecord)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CaseTree =
     CtCorecord(
       r.cofields.map { (name, cofield) =>
         (name, transformCaseTree(cofield))
       },
     )
 
-  def transformCtTypeCase(tc: CtTypeCase)(using ctx: C)(using Σ: Signature): CaseTree =
+  def transformCtTypeCase
+    (tc: CtTypeCase)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CaseTree =
     CtTypeCase(
       transformVTerm(tc.operand),
       tc.cases.map { (qn, body) =>
-        val data = Σ.getData(qn)
+        val data = Σ.getData(qn).asRight
         (
           qn,
           withBoundNames((data.context.map(_._1.name) ++ data.tIndexTys.map(_.name)).toList) {
@@ -798,8 +1044,13 @@ trait Transformer[C] extends TermTransformer[C]:
       transformCaseTree(tc.default),
     )
 
-  def transformCtDataCase(dc: CtDataCase)(using ctx: C)(using Σ: Signature): CaseTree =
-    val constructors = Σ.getConstructors(dc.qn)
+  def transformCtDataCase
+    (dc: CtDataCase)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CaseTree =
+    val constructors = Σ.getConstructors(dc.qn).asRight
     CtDataCase(
       transformVTerm(dc.operand),
       dc.qn,
@@ -811,18 +1062,33 @@ trait Transformer[C] extends TermTransformer[C]:
       },
     )
 
-  def transformCoPattern(q: CoPattern)(using ctx: C)(using Σ: Signature): CoPattern =
+  def transformCoPattern
+    (q: CoPattern)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CoPattern =
     q match
       case p: CPattern    => transformCPattern(p)
       case p: CProjection => transformCProjection(p)
 
-  def transformCPattern(p: CPattern)(using ctx: C)(using Σ: Signature): CoPattern =
+  def transformCPattern
+    (p: CPattern)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CoPattern =
     CPattern(transformPattern(p.pattern))
 
-  def transformCProjection(p: CProjection)(using ctx: C)(using Σ: Signature): CoPattern =
+  def transformCProjection
+    (p: CProjection)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : CoPattern =
     CProjection(transformName(p.name))(using p.sourceInfo)
 
-  def transformPattern(p: Pattern)(using ctx: C)(using Σ: Signature): Pattern =
+  def transformPattern(p: Pattern)(using ctx: C)(using Σ: Signature)(using TypingContext): Pattern =
     p match
       case v: PVar               => transformPVar(v)
       case d: PDataType          => transformPDataType(d)
@@ -832,25 +1098,42 @@ trait Transformer[C] extends TermTransformer[C]:
       case f: PForced            => transformPForced(f)
       case a: PAbsurd            => transformPAbsurd(a)
 
-  def transformPVar(v: PVar)(using ctx: C)(using Σ: Signature): Pattern = v
+  def transformPVar(v: PVar)(using ctx: C)(using Σ: Signature)(using TypingContext): Pattern = v
 
-  def transformPDataType(d: PDataType)(using ctx: C)(using Σ: Signature): Pattern =
+  def transformPDataType
+    (d: PDataType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Pattern =
     PDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
 
-  def transformPForcedDataType(d: PForcedDataType)(using ctx: C)(using Σ: Signature): Pattern =
+  def transformPForcedDataType
+    (d: PForcedDataType)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Pattern =
     PForcedDataType(transformQualifiedName(d.qn), d.args.map(transformPattern))(using d.sourceInfo)
 
-  def transformPConstructor(d: PConstructor)(using ctx: C)(using Σ: Signature): Pattern =
+  def transformPConstructor
+    (d: PConstructor)
+    (using ctx: C)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Pattern =
     PConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
 
   def transformPForcedConstructor
     (d: PForcedConstructor)
     (using ctx: C)
     (using Σ: Signature)
+    (using TypingContext)
     : Pattern =
     PForcedConstructor(transformName(d.name), d.args.map(transformPattern))(using d.sourceInfo)
 
-  def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature): Pattern =
+  def transformPForced(f: PForced)(using ctx: C)(using Σ: Signature)(using TypingContext): Pattern =
     PForced(transformVTerm(f.term))(using f.sourceInfo)
 
-  def transformPAbsurd(a: PAbsurd)(using ctx: C)(using Σ: Signature): Pattern = a
+  def transformPAbsurd(a: PAbsurd)(using ctx: C)(using Σ: Signature)(using TypingContext): Pattern =
+    a

@@ -5,6 +5,7 @@ import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
 import com.github.tgeng.archon.core.common.*
+import com.github.tgeng.archon.core.common.QualifiedName.Root
 import com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Elimination.*
@@ -69,7 +70,11 @@ enum UnsolvedMetaVariableConstraint:
     case UmcVSubtype(lowerBounds) => assert(lowerBounds.nonEmpty)
     case _                        =>
 
-  def substLowers(args: VTerm*)(using Signature): UnsolvedMetaVariableConstraint = this match
+  def substLowers
+    (args: VTerm*)
+    (using Signature)
+    (using TypingContext)
+    : UnsolvedMetaVariableConstraint = this match
     case UmcNothing => UmcNothing
     case UmcCSubtype(lowerBounds) =>
       UmcCSubtype(lowerBounds.map(_.substLowers(args*)))
@@ -120,7 +125,7 @@ enum MetaVariable(val context: Context, val ty: CTerm):
     case _                               => true,
   )
 
-  def substLowers(args: VTerm*)(using Signature): MetaVariable =
+  def substLowers(args: VTerm*)(using Signature)(using TypingContext): MetaVariable =
     require(context.size >= args.size)
     this match
       case Unsolved(context, ty, constraint) =>
@@ -161,10 +166,23 @@ enum ResolvedMetaVariable:
   case RGuarded(ty: CTerm)
   case RSolved(ty: CTerm, value: CTerm)
 
+/** @param contextScope
+  *   context scope is the qualified name of the current declaration being checked. This is used to
+  *   determine if a referenced declaration is accessible in the scope of this current declaration.
+  *   This is like the basic visiblity check in mainstream languages.
+  * @param exposedScope
+  *   exposing scope is the interface scope or implementation scope of the current declaration
+  *   component being checked. This is used to ensure the referenced declaration can indeed be
+  *   exposed to this scope so that the users of the current declaration can safely reference the
+  *   exposed declarations. This is like the visibility consistency check in Kotlin, where, for
+  *   example, a public method cannot declare a private class in the parameter type.
+  */
 class TypingContext
   (
     var traceLevel: Int = 0,
     var enableDebugging: Boolean = false,
+    var contextScope: QualifiedName = Root,
+    var exposedScope: QualifiedName = Root,
   ):
 
   private val metaVars: mutable.ArrayBuffer[MetaVariable] = mutable.ArrayBuffer()
@@ -335,6 +353,7 @@ class TypingContext
     (f: Context ?=> Option[CTerm] => T)
     : T =
     given Context = metaVars(m.index).context
+    given Unit = ()
     // Make sure meta variable assignment won't cause cyclic meta variable references.
     if MetaVarVisitor.visitCTerm(value)(m.index) then return f(None)
 
@@ -352,6 +371,7 @@ class TypingContext
     (f: Context ?=> Option[VTerm] => T)
     : T =
     given Context = metaVars(m.index).context
+    given Unit = ()
     // Make sure meta variable assignment won't cause cyclic meta variable references.
     if MetaVarVisitor.visitVTerm(value)(m.index) then return f(None)
     if (FreeVarsVisitor
@@ -407,11 +427,17 @@ class TypingContext
 
   @throws(classOf[IrError])
   def solveTerm(term: VTerm)(using Context)(using Σ: Signature): VTerm =
-    solveTermImpl(term)(term => solveOnce(MetaVarCollector.visitVTerm, _.normalized)(term, true))
+    solveTermImpl(term)(term =>
+      given Unit = ()
+      solveOnce(MetaVarCollector.visitVTerm, _.normalized)(term, true),
+    )
 
   @throws(classOf[IrError])
   def solveTerm(term: CTerm)(using Context)(using Σ: Signature): CTerm =
-    solveTermImpl(term)(term => solveOnce(MetaVarCollector.visitCTerm, _.normalized)(term, true))
+    solveTermImpl(term)(term =>
+      given Unit = ()
+      solveOnce(MetaVarCollector.visitCTerm, _.normalized)(term, true),
+    )
 
   @throws(classOf[IrError])
   inline def solveTermImpl[T](term: T)(solveStep: T => T)(using Context)(using Σ: Signature): T =
@@ -438,6 +464,7 @@ class TypingContext
       Block(ChopDown, Aligned, pprint(constraints)),
       constraints => Block(ChopDown, Aligned, pprint(constraints)),
     ):
+      given Unit = ()
       val solveStep = solveOnce(MetaVarCollector.visitConstraints, solveConstraints)
       var currentConstraints = constraints
       while solvedVersion != version do
@@ -521,8 +548,13 @@ class TypingContext
           else updateGuarded(index, Guarded(context, ty, value, newConstraints))
         case _ =>
 
-  private object MetaVarCollector extends Visitor[TypingContext, Set[Nat]]:
-    override def visitMeta(m: Meta)(using ctx: TypingContext)(using Σ: Signature): Set[Nat] =
+  private object MetaVarCollector extends Visitor[Unit, Set[Nat]]:
+    override def visitMeta
+      (m: Meta)
+      (using Unit)
+      (using Σ: Signature)
+      (using ctx: TypingContext)
+      : Set[Nat] =
       val rest = ctx.resolveMeta(m) match
         // Include all meta variables in the constraints of guarded meta-variables so that solving
         // these can potentially turn guarded meta-variables to solved ones.
@@ -532,15 +564,17 @@ class TypingContext
 
     override def combine
       (freeVars: Set[Nat]*)
-      (using ctx: TypingContext)
+      (using Unit)
       (using Σ: Signature)
+      (using ctx: TypingContext)
       : Set[Nat] =
       freeVars.flatten.toSet
 
     def visitConstraints
       (constraints: Set[Constraint])
-      (using ctx: TypingContext)
+      (using Unit)
       (using Signature)
+      (using ctx: TypingContext)
       : Set[Nat] =
       constraints.flatMap:
         case Constraint.Conversions(_, lhs, rhs, _) =>
@@ -555,9 +589,10 @@ class TypingContext
 
     override def withBoundNames
       (bindingNames: => Seq[Ref[Name]])
-      (action: TypingContext ?=> Set[Nat])
-      (using ctx: TypingContext)
+      (action: Unit ?=> Set[Nat])
+      (using Unit)
       (using Σ: Signature)
+      (using ctx: TypingContext)
       : Set[Nat] = action
 
   @throws(classOf[IrError])

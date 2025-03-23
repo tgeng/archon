@@ -39,6 +39,8 @@ List(
           ) @ "ε"
         )
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

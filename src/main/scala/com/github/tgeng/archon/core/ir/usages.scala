@@ -1,5 +1,7 @@
 package com.github.tgeng.archon.core.ir
 
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
@@ -59,13 +61,13 @@ def collectUsages
           },
         )
       case DataType(qn, args) =>
-        val data = Σ.getData(qn)
+        val data = Σ.getData(qn).asRight
         collectArgsUsages(args, (data.context.map(_._1) ++ data.tIndexTys).toList)
       case Con(name, args) =>
         ty.map(ctx.solveTerm) match
           case Some(DataType(qn, dArgs)) =>
-            val data = Σ.getData(qn)
-            val constructor = Σ.getConstructor(qn, name)
+            val data = Σ.getData(qn).asRight
+            val constructor = Σ.getConstructor(qn, name).asRight
             val telescope =
               constructor.paramTys.map(_.substLowers(dArgs.take(data.context.size)*))
             collectArgsUsages(args, telescope)
@@ -168,7 +170,7 @@ def collectUsages
           (ty, elims) match
             case (_, Nil) => Usages.zero
             case (r @ CorecordType(qn, args, _), Elimination.EProj(name) :: elims) =>
-              val cofield = Σ.getCofield(qn, name)
+              val cofield = Σ.getCofield(qn, name).asRight
               val cofieldTy = cofield.ty.substLowers(args :+ Thunk(r)*)
               impl(cofieldTy, elims)
             case (FunctionType(binding, bodyTy, _, _), Elimination.ETerm(arg) :: elims) =>
@@ -192,7 +194,7 @@ def collectUsages
           )
         bindingUsages + effectsUsages + bodyUsages
       case CorecordType(qn, args, effects) =>
-        val corecord = Σ.getCorecord(qn)
+        val corecord = Σ.getCorecord(qn).asRight
         collectArgsUsages(args, corecord.context.map(_._1).toList) +
           collectUsages(effects, Some(EffectsType()))
       case OperationCall(effectInstance, name, args) =>
@@ -202,7 +204,7 @@ def collectUsages
             throw IllegalStateException(
               "operation should have been type checked and verified to be simple before reduction",
             )
-        val operation = Σ.getOperation(qn, name)
+        val operation = Σ.getOperation(qn, name).asRight
         collectArgsUsages(args, operation.paramTys.substLowers(tArgs*))
       case Continuation(_, _) => Usages.zero
       case Handler(
@@ -224,6 +226,7 @@ def collectUsages
         val (qn, tArgs) = eff
         val handlerUsages = Σ
           .getOperations(qn)
+          .asRight
           .map { (op: Operation) =>
             val opTelescope = op.paramTys.substLowers(tArgs*)
             val opQn = qn / op.name
@@ -324,7 +327,7 @@ private def collectEffUsages
   (using TypingContext)
   : Usages =
   val (qn, args) = eff
-  val effect = Σ.getEffect(qn)
+  val effect = Σ.getEffect(qn).asRight
   collectArgsUsages(args, effect.context.toList)
 
 private def collectArgsUsages
@@ -368,109 +371,3 @@ def partiallyVerifyUsages
         // Any usages corresponding to inner bindings are approximated with uAny
         case _: StrengthenException => uAny,
     )
-
-// TODO: delete things below
-private object UsagesCollector extends TermVisitor[(Context, TypingContext), Usages]:
-  // TODO: do not count usages in type!! Also take continuation usage into account. Also do use
-  // usage multiplication when handling function args.
-
-  override def combine
-    (rs: Usages*)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages =
-    rs.fold(Usages.zero(using ctx._1))(_ + _)
-
-  override def visitDataType
-    (dataType: VTerm.DataType)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = ???
-
-  override def visitCon
-    (con: VTerm.Con)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = ???
-
-  override def withTelescope
-    (telescope: => Telescope)
-    (action: ((Context, TypingContext)) ?=> Usages)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages =
-    given tCtx: TypingContext = ctx._2
-    val usages = action(using (ctx._1 ++ telescope, ctx._2))
-    def verifyUsages(usages: Usages, telescope: Telescope)(using Context): Unit =
-      (usages, telescope) match
-        case (Nil, Nil) =>
-        case (usage :: usages, binding :: telescope) =>
-          tCtx.checkSolved(
-            checkUsageSubsumption(usage, binding.usage),
-            NotUsageSubsumption(usage, binding.usage),
-          )
-          verifyUsages(usages, telescope)(using summon[Context] :+ binding)
-        case _ => throw IllegalArgumentException("mismatched length")
-    verifyUsages(usages.takeRight(telescope.size), telescope)(using ctx._1)
-    usages.dropRight(telescope.size)
-
-  override def visitVar
-    (v: VTerm.Var)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = Usages.single(v)(using ctx._1)
-
-  override def visitBinding
-    (binding: Binding[VTerm])
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = Usages.zero(using ctx._1)
-
-  override def visitTelescope
-    (telescope: List[Binding[VTerm]])
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = Usages.zero(using ctx._1)
-
-  override def visitAuto
-    (auto: VTerm.Auto)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = throw IllegalStateException(
-    "all auto should have been replaced during type checking",
-  )
-
-  override def visitHole(using ctx: (Context, TypingContext))(using Σ: Signature): Usages =
-    throw IllegalStateException("hole should only exist temporarily during reduction")
-
-  override def visitCapturedContinuationTip
-    (cct: CTerm.CapturedContinuationTip)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = Usages.zero(using ctx._1)
-
-  override def visitMeta
-    (m: CTerm.Meta)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages =
-    visitCTerm(ctx._2.solveTerm(m)(using ctx._1)(using Σ))(using ctx)(using Σ)
-
-  override def visitF(f: CTerm.F)(using ctx: (Context, TypingContext))(using Σ: Signature): Usages =
-    visitVTerm(f.vTy)
-
-  override def visitReturn
-    (r: CTerm.Return)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages = visitVTerm(r.v)
-
-  override def visitLet
-    (let: CTerm.Let)
-    (using ctx: (Context, TypingContext))
-    (using Σ: Signature)
-    : Usages =
-    visitCTerm(let.t)
-    withTelescope(List(let.tBinding)) {
-      visitCTerm(let.body)
-    }

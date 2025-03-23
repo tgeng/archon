@@ -58,6 +58,8 @@ List(
         ) @ "m: Nat -> Eq Nat m (head self) -> CStream"
       )
     ),
-    selfName = n"self"
+    selfName = n"self",
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

@@ -3,6 +3,8 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
+import com.github.tgeng.archon.common.eitherUtil.*
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.CoPattern.*
@@ -176,10 +178,10 @@ private final class StackMachine
           case Some(t) => run(t)
           case None    => reconstructTermFromStack(pc)
       case Def(qn) =>
-        Σ.getClausesOption(qn) match
-          // This is allowed because it could be that the body is not defined yet.
-          case None => reconstructTermFromStack(pc)
-          case Some(clauses) =>
+        Σ.getClauses(qn) match
+          // This is allowed because it could be that the body is not defined yet or its implementation is invisible
+          case Left(_) => reconstructTermFromStack(pc)
+          case Right(clauses) =>
             clauses.first { case Clause(_, lhs, rhs, _) =>
               val mapping = mutable.SeqMap[Nat, VTerm]()
               matchCoPattern(
@@ -195,7 +197,7 @@ private final class StackMachine
                 mapping,
               ) match
                 case MatchingStatus.Matched =>
-                  val defContext = Σ.getDefinition(qn).context
+                  val defContext = Σ.getDefinition(qn).asRight.context
                   stack.dropRightInPlace(lhs.length)
                   val partiallySubstituted = rhs.subst(mapping.get)
 
@@ -244,44 +246,42 @@ private final class StackMachine
           case EffectInstance(eff, handlerType, handlerKey) => (eff, handlerType, handlerKey)
           case _ => throw IllegalStateException(s"Bad operation call with effInstance $effInstance")
         val (effQn, rawEffArgs) = effAndArgs
-        Σ.getEffectOption(effQn) match
-          case None => throw MissingDeclaration(effQn)
-          case Some(eff) =>
-            val effArgs = rawEffArgs.normalized
-            val args = rawArgs.normalized
-            val matchingHandler = getMatchingHandler(handlerKey)
-            val matchingHandlerIdx = matchingHandler.index
-            val handler = matchingHandler.handler
-            val handlerImpl = handler.handlers(effQn / name)
-            val operation = Σ.getOperation(effQn, name)
-            val restoredHandlerEntry = this.currentHandlerEntry
-            this.currentHandlerEntry = matchingHandler.previous
-            run(handlerImpl.handlerConstraint match
-              case HandlerConstraint(usage, HandlerType.Simple) =>
-                preConstructedTerm = Some(reconstructTermFromStack(pc))
-                stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
-                handlerImpl.body.substLowers(handler.parameter :: args*)
-              case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
-                val allOperationArgs = effArgs ++ args
-                val tip = CapturedContinuationTip(
-                  F(
-                    operation.resultTy.substLowers(allOperationArgs*),
-                    Total(),
-                    operation.resultUsage.substLowers(allOperationArgs*),
-                  ),
-                )
-                val continuationTerm = stack
-                  .slice(matchingHandlerIdx, stack.size)
-                  .foldRight(tip):
-                    case (entry: Elimination[VTerm], term) => redex(term, entry)
-                    case (entry: Let, term)                => entry.copy(t = term)
-                    case (HandlerEntry(_, entry, _), term) => entry.copy(input = term)
-                    case _ => throw IllegalStateException("type error")
-                stack.dropRightInPlace(stack.size - matchingHandlerIdx)
-                val continuation =
-                  Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
-                handlerImpl.body.substLowers(handler.parameter +: args :+ continuation*),
+        val eff = Σ.getEffect(effQn).getOrThrow
+        val effArgs = rawEffArgs.normalized
+        val args = rawArgs.normalized
+        val matchingHandler = getMatchingHandler(handlerKey)
+        val matchingHandlerIdx = matchingHandler.index
+        val handler = matchingHandler.handler
+        val handlerImpl = handler.handlers(effQn / name)
+        val operation = Σ.getOperation(effQn, name).asRight
+        val restoredHandlerEntry = this.currentHandlerEntry
+        this.currentHandlerEntry = matchingHandler.previous
+        run(handlerImpl.handlerConstraint match
+          case HandlerConstraint(usage, HandlerType.Simple) =>
+            preConstructedTerm = Some(reconstructTermFromStack(pc))
+            stack.push(FinishSimpleOperation(matchingHandlerIdx, usage, restoredHandlerEntry))
+            handlerImpl.body.substLowers(handler.parameter :: args*)
+          case HandlerConstraint(continuationUsage, HandlerType.Complex) =>
+            val allOperationArgs = effArgs ++ args
+            val tip = CapturedContinuationTip(
+              F(
+                operation.resultTy.substLowers(allOperationArgs*),
+                Total(),
+                operation.resultUsage.substLowers(allOperationArgs*),
+              ),
             )
+            val continuationTerm = stack
+              .slice(matchingHandlerIdx, stack.size)
+              .foldRight(tip):
+                case (entry: Elimination[VTerm], term) => redex(term, entry)
+                case (entry: Let, term)                => entry.copy(t = term)
+                case (HandlerEntry(_, entry, _), term) => entry.copy(input = term)
+                case _                                 => throw IllegalStateException("type error")
+            stack.dropRightInPlace(stack.size - matchingHandlerIdx)
+            val continuation =
+              Thunk(Continuation(continuationTerm.asInstanceOf[Handler], continuationUsage))
+            handlerImpl.body.substLowers(handler.parameter +: args :+ continuation*),
+        )
       case Continuation(continuationTerm, continuationUsage) =>
         stack.pop() match
           case EProj(name) if name == n"resume" =>
@@ -485,18 +485,20 @@ private final class StackMachine
 extension (c: CTerm)
   @throws(classOf[IrError])
   def normalized(using Γ: Context)(using Signature)(using ctx: TypingContext): CTerm =
-    val transformer = new TermTransformer[(TypingContext, Context)]():
+    val transformer = new TermTransformer[Context]():
       override def withTelescope[T]
         (telescope: => Telescope)
-        (action: ((TypingContext, Context)) ?=> T)
-        (using ctx: (TypingContext, Context))
+        (action: Context ?=> T)
+        (using ctx: Context)
         (using Σ: Signature)
-        : T = action(using (ctx._1, ctx._2 ++ telescope))
+        (using TypingContext)
+        : T = action(using ctx ++ telescope)
 
       override def transformRedex
         (r: Redex)
-        (using ctx: (TypingContext, Context))
+        (using ctx: Context)
         (using Σ: Signature)
+        (using TypingContext)
         : CTerm =
         redex(
           transformCTerm(r.t),
@@ -505,8 +507,9 @@ extension (c: CTerm)
 
       override def transformCollapse
         (c: Collapse)
-        (using ctx: (TypingContext, Context))
+        (using ctx: Context)
         (using Σ: Signature)
+        (using TypingContext)
         : VTerm = transformCTerm(
         c.cTm,
       ) match
@@ -515,12 +518,12 @@ extension (c: CTerm)
 
       override def transformVTerm
         (tm: VTerm)
-        (using ctx: (TypingContext, Context))
+        (using ctx: Context)
         (using Σ: Signature)
+        (using TypingContext)
         : VTerm =
-        tm.normalized(using ctx._2)
-
-    transformer.transformCTerm(c)(using (ctx, Γ)) match
+        tm.normalized
+    transformer.transformCTerm(c) match
       case Redex(t, elims) => redex(t, elims.map(_.map(_.normalized)))
       case t               => t
 
@@ -575,7 +578,7 @@ extension (v: VTerm)
                     case EffectInstanceType(eff, _) => eff
                     case t => throw IllegalStateException(s"Expect EffectInstanceType but got $t")
                   if retainSimpleLinearOnly then {
-                    val effect = Σ.getEffect(qn)
+                    val effect = Σ.getEffect(qn).asRight
                     effect.continuationUsage
                       .substLowers(args*)
                       .normalized == UsageLiteral(U1)
@@ -740,7 +743,11 @@ def matchCoPattern
         case _ => return MatchingStatus.Mismatch
       matchCoPattern(rest, mapping, matchingStatus)
 
-private def replaceTip(continuationTerm: CTerm, newTip: VTerm)(using Σ: Signature): CTerm =
+private def replaceTip
+  (continuationTerm: CTerm, newTip: VTerm)
+  (using Σ: Signature)
+  (using TypingContext)
+  : CTerm =
   CapturedContinuationTipReplacer.transformCTerm(continuationTerm)(using newTip)
 
 private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
@@ -748,6 +755,7 @@ private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
     (cct: CapturedContinuationTip)
     (using newTip: VTerm)
     (using Σ: Signature)
+    (using TypingContext)
     : CTerm = Return(newTip, cct.ty.usage)
 
   override def withBoundNames[T]
@@ -755,12 +763,14 @@ private object CapturedContinuationTipReplacer extends Transformer[VTerm]:
     (action: VTerm ?=> T)
     (using ctx: VTerm)
     (using Σ: Signature)
+    (using TypingContext)
     : T = action
 
 private def processStackEntryForDisposerCall
   (input: CTerm)
   (handler: Handler)
   (using Signature)
+  (using TypingContext)
   : Handler =
   // retain all handlers for two reasons
   // 1. if it contains a parameter disposer, the disposer needs to be invoked

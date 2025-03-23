@@ -1,5 +1,6 @@
 package com.github.tgeng.archon.core.ir
 
+import com.github.tgeng.archon.common.ref.given
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.*
 import com.github.tgeng.archon.core.ir.CTerm.*
@@ -45,19 +46,19 @@ private case class SimpleSignature
     declarations.get(qn).collect { case d: Definition => d }
   override def getClausesOptionImpl(qn: QualifiedName): Option[IndexedSeq[Clause]] =
     clauses.get(qn)
-  override def getCaseTreeOption(qn: QualifiedName): Option[CaseTree] =
+  override def getCaseTreeOptionImpl(qn: QualifiedName): Option[CaseTree] =
     caseTrees.get(qn)
-  override def getDataOption(qn: QualifiedName): Option[Data] =
+  override def getDataOptionImpl(qn: QualifiedName): Option[Data] =
     declarations.get(qn).collect { case d: Data => d }
-  override def getConstructorsOption(qn: QualifiedName): Option[IndexedSeq[Constructor]] =
+  override def getConstructorsOptionImpl(qn: QualifiedName): Option[IndexedSeq[Constructor]] =
     constructors.get(qn)
-  override def getCorecordOption(qn: QualifiedName): Option[Corecord] =
+  override def getCorecordOptionImpl(qn: QualifiedName): Option[Corecord] =
     declarations.get(qn).collect { case d: Corecord => d }
-  override def getCofieldsOption(qn: QualifiedName): Option[IndexedSeq[Cofield]] =
+  override def getCofieldsOptionImpl(qn: QualifiedName): Option[IndexedSeq[Cofield]] =
     cofields.get(qn)
-  override def getEffectOption(qn: QualifiedName): Option[Effect] =
+  override def getEffectOptionImpl(qn: QualifiedName): Option[Effect] =
     declarations.get(qn).collect { case d: Effect => d }
-  override def getOperationsOption(qn: QualifiedName): Option[IndexedSeq[Operation]] =
+  override def getOperationsOptionImpl(qn: QualifiedName): Option[IndexedSeq[Operation]] =
     operations.get(qn)
 
 object Builtins:

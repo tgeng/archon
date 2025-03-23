@@ -63,6 +63,8 @@ List(
         ),
         rhs = Some(value = Return(v = Var(idx = 1) @ "b", usage = Auto()) @ "b")
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

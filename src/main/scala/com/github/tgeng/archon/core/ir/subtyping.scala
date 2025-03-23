@@ -3,6 +3,7 @@ package com.github.tgeng.archon.core.ir
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
+import com.github.tgeng.archon.common.eitherUtil.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.Declaration.*
@@ -48,38 +49,36 @@ def checkIsSubtype
     case (ty: VTerm, Top(level2))               => checkLevelSubsumption(inferLevel(ty), level2)
     case (U(cty1), U(cty2))                     => checkIsSubtype(cty1, cty2)
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
-      Σ.getDataOption(qn1) match
-        case None => throw MissingDeclaration(qn1)
-        case Some(data) =>
-          val args = ArrayBuffer[VTerm]()
-          args1
-            .zip(args2)
-            .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
-            .map { case ((arg1, arg2), (binding, variance)) =>
-              variance match
-                case Variance.INVARIANT =>
-                  val r = checkIsConvertible(
-                    arg1,
-                    arg2,
-                    Some(binding.ty.substLowers(args.toSeq*)),
-                  )
-                  args += arg1
-                  r
-                case Variance.COVARIANT =>
-                  val checkedArg1 = checkIsType(arg1)
-                  val checkedArg2 = checkIsType(arg2)
-                  val r = checkIsSubtype(checkedArg1, checkedArg2)
-                  args += checkedArg1
-                  r
-                case Variance.CONTRAVARIANT =>
-                  val checkedArg1 = checkIsType(arg1)
-                  val checkedArg2 = checkIsType(arg2)
-                  val r = checkIsSubtype(checkedArg1, checkedArg2)
-                  args += checkedArg2
-                  r
-            }
-            .flatten
-            .toSet
+      val data = Σ.getData(qn1).getOrThrow
+      val args = ArrayBuffer[VTerm]()
+      args1
+        .zip(args2)
+        .zip(data.context ++ data.tIndexTys.map((_, Variance.INVARIANT)))
+        .map { case ((arg1, arg2), (binding, variance)) =>
+          variance match
+            case Variance.INVARIANT =>
+              val r = checkIsConvertible(
+                arg1,
+                arg2,
+                Some(binding.ty.substLowers(args.toSeq*)),
+              )
+              args += arg1
+              r
+            case Variance.COVARIANT =>
+              val checkedArg1 = checkIsType(arg1)
+              val checkedArg2 = checkIsType(arg2)
+              val r = checkIsSubtype(checkedArg1, checkedArg2)
+              args += checkedArg1
+              r
+            case Variance.CONTRAVARIANT =>
+              val checkedArg1 = checkIsType(arg1)
+              val checkedArg2 = checkIsType(arg2)
+              val r = checkIsSubtype(checkedArg1, checkedArg2)
+              args += checkedArg2
+              r
+        }
+        .flatten
+        .toSet
     case (EffectsType(continuationUsage1), EffectsType(continuationUsage2)) =>
       // Note that subsumption checking is reversed because the effect of the computation
       // marks how the continuation can be invoked. Normally, checking usage is checking
@@ -100,7 +99,7 @@ def checkIsSubtype
       ) =>
       if handlerConstraint1 > handlerConstraint2 || qn1 != qn2 then
         throw ExpectEffectInstanceTypeSubsumption(sub, sup)
-      else checkAreConvertible(args1, args2, Σ.getEffect(qn1).context.toList)
+      else checkAreConvertible(args1, args2, Σ.getEffect(qn1).asRight.context.toList)
     case _ => checkIsConvertible(sub, sup, None)
 
 /** Preconditions: sub and sup are both types
@@ -174,40 +173,38 @@ def checkIsSubtype
           )
       effConstraint ++ tyConstraint ++ usageConstraint ++ bodyConstraint
     case (CorecordType(qn1, args1, eff1), CorecordType(qn2, args2, eff2)) if qn1 == qn2 =>
-      Σ.getCorecordOption(qn1) match
-        case None => throw MissingDeclaration(qn1)
-        case Some(corecord) =>
-          val args = ArrayBuffer[VTerm]()
-          val effConstraint = checkEffectSubsumption(eff1, eff2)
-          val argConstraint = args1
-            .zip(args2)
-            .zip(corecord.context)
-            .map { case ((arg1, arg2), (binding, variance)) =>
-              variance match
-                case Variance.INVARIANT =>
-                  val r = checkIsConvertible(
-                    arg1,
-                    arg2,
-                    Some(binding.ty.substLowers(args.toSeq*)),
-                  )
-                  args += arg1
-                  r
-                case Variance.COVARIANT =>
-                  val checkedArg1 = checkIsType(arg1)
-                  val checkedArg2 = checkIsType(arg2)
-                  val r = checkIsSubtype(checkedArg1, checkedArg2)
-                  args += checkedArg1
-                  r
-                case Variance.CONTRAVARIANT =>
-                  val checkedArg1 = checkIsType(arg1)
-                  val checkedArg2 = checkIsType(arg2)
-                  val r = checkIsSubtype(checkedArg1, checkedArg2)
-                  args += checkedArg2
-                  r
-            }
-            .flatten
-            .toSet
-          effConstraint ++ argConstraint
+      val corecord = Σ.getCorecord(qn1).getOrThrow
+      val args = ArrayBuffer[VTerm]()
+      val effConstraint = checkEffectSubsumption(eff1, eff2)
+      val argConstraint = args1
+        .zip(args2)
+        .zip(corecord.context)
+        .map { case ((arg1, arg2), (binding, variance)) =>
+          variance match
+            case Variance.INVARIANT =>
+              val r = checkIsConvertible(
+                arg1,
+                arg2,
+                Some(binding.ty.substLowers(args.toSeq*)),
+              )
+              args += arg1
+              r
+            case Variance.COVARIANT =>
+              val checkedArg1 = checkIsType(arg1)
+              val checkedArg2 = checkIsType(arg2)
+              val r = checkIsSubtype(checkedArg1, checkedArg2)
+              args += checkedArg1
+              r
+            case Variance.CONTRAVARIANT =>
+              val checkedArg1 = checkIsType(arg1)
+              val checkedArg2 = checkIsType(arg2)
+              val r = checkIsSubtype(checkedArg1, checkedArg2)
+              args += checkedArg2
+              r
+        }
+        .flatten
+        .toSet
+      effConstraint ++ argConstraint
     case _ => checkIsConvertible(sub, sup, None)
 
 private type StuckComputationType = Redex | Force | Meta | Def | Let | Handler
@@ -245,7 +242,7 @@ def typeUnion
         FunctionType(binding1, body, effects, es1 | es2)
       case (r1 @ CorecordType(qn1, args1, effects1), r2 @ CorecordType(qn2, args2, effects2))
         if qn1 == qn2 =>
-        val corecord = Σ.getCorecord(qn1)
+        val corecord = Σ.getCorecord(qn1).asRight
         val effects = EffectsUnion(effects1, effects2).normalized
         val args = args1
           .zip(args2)
@@ -295,7 +292,7 @@ def typeUnion
     case (Top(level1), Top(level2))             => Top(LevelMax(level1, level2).normalized)
     case (U(cty1), U(cty2))                     => U(typeUnion(cty1, cty2))
     case (DataType(qn1, args1), DataType(qn2, args2)) if qn1 == qn2 =>
-      val data = Σ.getData(qn1)
+      val data = Σ.getData(qn1).asRight
       val args = args1
         .zip(args2)
         .zip(data.context)

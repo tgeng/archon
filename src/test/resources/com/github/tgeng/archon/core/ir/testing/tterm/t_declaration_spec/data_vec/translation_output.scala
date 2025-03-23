@@ -96,6 +96,8 @@ List(
           escapeStatus = EsUnknown
         ) @ "n: Nat -> t -> Vec l t n -> Vec l t (Succ n)"
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

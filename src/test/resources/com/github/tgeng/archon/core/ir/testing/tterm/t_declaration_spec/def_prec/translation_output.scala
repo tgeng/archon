@@ -39,7 +39,9 @@ List(
           escapeStatus = EsUnknown
         ) @ "Nat -> Nat"
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   ),
   PreDefinition(
     qn = qn"test.prec",
@@ -70,6 +72,8 @@ List(
         lhs = List(CPattern(pattern = PConstructor(name = n"Succ", args = List(PVar(idx = 0))))),
         rhs = Some(value = Return(v = Var(idx = 0) @ "m", usage = Auto()) @ "m")
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )

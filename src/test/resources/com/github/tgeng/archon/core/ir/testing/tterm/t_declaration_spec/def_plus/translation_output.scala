@@ -39,7 +39,9 @@ List(
           escapeStatus = EsUnknown
         ) @ "Nat -> Nat"
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   ),
   PreDefinition(
     qn = qn"test.plus",
@@ -95,6 +97,8 @@ List(
           ) @ "ε"
         )
       )
-    )
+    ),
+    interfaceScope = qn"<root>",
+    implementationScope = qn"<root>"
   )
 )
