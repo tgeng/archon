@@ -9,7 +9,6 @@ import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.ir.CTerm.*
 import com.github.tgeng.archon.core.ir.CoPattern.*
 import com.github.tgeng.archon.core.ir.Elimination.*
-import com.github.tgeng.archon.core.ir.IrError.*
 import com.github.tgeng.archon.core.ir.MetaVariable.*
 import com.github.tgeng.archon.core.ir.Pattern.*
 import com.github.tgeng.archon.core.ir.PrettyPrinter.pprint
@@ -307,7 +306,8 @@ private final class StackMachine
             val ETerm(param) = stack.pop(): @unchecked
             val baseStackHeight = stack.size
             val (stackToDuplicate, handlerEntry) =
-              expandTermToStack(continuationTerm.copy(parameter = param))(h => h.copy(input = Hole),
+              expandTermToStack(continuationTerm.copy(parameter = param))(h =>
+                h.copy(input = Hole),
               ):
                 case t: Redex => t.copy(t = Hole)
                 case t: Let   => t.copy(t = Hole)
@@ -640,6 +640,36 @@ extension (vs: List[VTerm])
   def normalized(using ctx: Context)(using Signature)(using TypingContext): List[VTerm] =
     vs.map(_.normalized)
 
+private object ContinuationAndEffectInstanceDetector extends TermVisitor[Unit, Boolean]:
+  override def combine
+    (rs: Boolean*)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean = rs.fold(false)(_ || _)
+
+  override def withTelescope
+    (telescope: => Telescope)
+    (action: Unit ?=> Boolean)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean = action
+
+  override def visitCapturedContinuationTip
+    (cct: CTerm.CapturedContinuationTip)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean = true
+
+  override def visitEffectInstance
+    (instance: VTerm.EffectInstance)
+    (using ctx: Unit)
+    (using Σ: Signature)
+    (using TypingContext)
+    : Boolean = true
+
 given Reducible[CTerm] with
 
   /** It's assumed that `t` is effect-free.
@@ -650,11 +680,15 @@ given Reducible[CTerm] with
     (using ctx: Context)
     (using signature: Signature)
     (using TypingContext)
-    : CTerm =
-    // TODO[P1]: if the reduced term contains `Continuation` or `EffectInstance`, then throw away
-    //  the reduced term and simply return t as it is. This is needed because `Continuation` is too
+    : CTerm = {
+    val result = StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
+    // If the reduced term contains `Continuation` or `EffectInstance`, then we throw away
+    //  the reduced term and just return t as it is. This is needed because `Continuation` is too
     //  hard to be lowered.
     StackMachine(mutable.ArrayBuffer()).run(t).withSourceInfo(t.sourceInfo)
+    if ContinuationAndEffectInstanceDetector.visitCTerm(result)(using ()) then t
+    else result
+  }
 
 object Reducible:
   @throws(classOf[IrError])
