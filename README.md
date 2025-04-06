@@ -40,7 +40,7 @@ checker.
         * [💡] Nominal subtyping of corecords and effects
     * [✅] Function elaboration
 * [🚧] Low-level IR
-    * [🚧] LIR ([Archon VM](https://github.com/tgeng/archon-vm)) - need to adopt lexical effects
+    * [✅] LIR ([Archon VM](https://github.com/tgeng/archon-vm))
     * [💡] IR -> LIR lowering
     * [💡] Primitives
 * [💡] Frontend IR (User language)
