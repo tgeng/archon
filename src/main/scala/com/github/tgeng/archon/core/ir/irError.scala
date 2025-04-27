@@ -124,4 +124,11 @@ enum IrError(val Γ: Context, e: Throwable | Null = null) extends Exception(e):
       exposedScope: QualifiedName,
       declScope: QualifiedName,
     ) extends IrError(Context.empty)
+  case AmbiguousImplicitCofieldError
+    (
+      targetTy: VTerm,
+      supplyingRecordType: VTerm,
+      ambiguousFields: Seq[Cofield],
+    )
+    (using Γ: Context) extends IrError(Γ)
   override def getMessage: String = verbosePPrinter.apply(this).plainText

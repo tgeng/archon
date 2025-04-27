@@ -4,6 +4,7 @@ import _root_.pprint.Tree
 import com.github.tgeng.archon.common.*
 import com.github.tgeng.archon.common.IndentPolicy.*
 import com.github.tgeng.archon.common.WrapPolicy.*
+import com.github.tgeng.archon.common.eitherUtil.*
 import com.github.tgeng.archon.core.common.*
 import com.github.tgeng.archon.core.common.QualifiedName.Root
 import com.github.tgeng.archon.core.ir
@@ -166,19 +167,27 @@ enum ResolvedMetaVariable:
   case RGuarded(ty: CTerm)
   case RSolved(ty: CTerm, value: CTerm)
 
+case class CandidateConstructor(Γ: Context, constructor: CTerm, ty: CTerm)
+
 /** @param contextScope
   *   context scope is the qualified name of the current declaration being checked. This is used to
   *   determine if a referenced declaration is accessible in the scope of this current declaration.
-  *   This is like the basic visiblity check in mainstream languages.
+  *   This is like the basic visibility check in mainstream languages.
   * @param exposedScope
   *   exposing scope is the interface scope or implementation scope of the current declaration
   *   component being checked. This is used to ensure the referenced declaration can indeed be
   *   exposed to this scope so that the users of the current declaration can safely reference the
   *   exposed declarations. This is like the visibility consistency check in Kotlin, where, for
   *   example, a public method cannot declare a private class in the parameter type.
+  * @param candidateConstructors
+  *   a sequence of candidate constructors available to construct implicitly required. The key is
+  *   the qualified name of the corecord or data being constructed. These constructors are only
+  *   considered when there are no implicitly available bindings in the current context.
   */
 class TypingContext
   (
+    // TODO[P1]: In user language this would need to be populated somehow.
+    val candidateConstructors: Map[QualifiedName, Seq[CandidateConstructor]] = Map(),
     var traceLevel: Int = 0,
     var enableDebugging: Boolean = false,
     var contextScope: QualifiedName = Root,
@@ -388,11 +397,11 @@ class TypingContext
         metaVars(u.index) = Unsolved(context, ty, constraint)
       case _ => throw IllegalStateException("updateConstraint called on non-unsolved meta variable")
 
-  private def assignValue(index: Nat, value: CTerm)(using Context)(using Signature): Unit =
+  private def assignValue(index: Nat, value: CTerm)(using Signature): Unit =
     val existing = metaVars(index)
     version += 1
     metaVars(index) = Solved(existing.context, existing.ty, value)
-    debugPrint(s"#$index := ${pprint(value)}")
+    debugPrint(s"#$index := ${pprint(value)(using existing.context)}")
 
   private def updateGuarded(index: Nat, guarded: Guarded): Unit =
     version += 1
@@ -479,15 +488,8 @@ class TypingContext
 
   @throws(classOf[IrError])
   private def solveOnce[T]
-    (
-      metaVarExtractor: T => Set[Nat],
-      iterator: T => T,
-    )
-    (
-      t: T,
-      proactivelySolveAmbiguousMetaVars: Boolean,
-    )
-    (using Context)
+    (metaVarExtractor: T => Set[Nat], iterator: T => T)
+    (t: T, proactivelySolveAmbiguousMetaVars: Boolean)
     (using Signature)
     : T =
     val metaVarIndexes = metaVarExtractor(t)
@@ -501,7 +503,6 @@ class TypingContext
 
   private def solveAllMetaVars
     (metaVarIndexes: Set[Nat], proactivelySolveAmbiguousMetaVars: Boolean)
-    (using Context)
     (using Signature)
     : Unit =
     for index <- metaVarIndexes.toSeq.sorted do
@@ -511,12 +512,16 @@ class TypingContext
 
           val solution: CTerm | Unit = constraint match
             case UmcNothing =>
-              ty match
-                case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
-                case F(UsageType(_), _, u)                        => Return(uAny, u)
-                case F(EffectsType(_), _, u)                      => Return(total, u)
-                // TODO[P2]: implement proof/instance search here.
-                case _ => ()
+              solveByImplicit(ty) match
+                case Some(solution) => solution
+                case _ =>
+                  ty match
+                    case F(LevelType(l), _, u) if l > LevelOrder.zero => Return(l0, u)
+                    case F(UsageType(_), _, u)                        => Return(uAny, u)
+                    case F(EffectsType(_), _, u)                      => Return(total, u)
+                    // TODO[P1]: implement proof/instance search here using `candidateConstructors` in
+                    // typing context.
+                    case _ => ()
             case UmcCSubtype(lowerBounds)        => lowerBounds.reduce(typeUnion)
             case UmcVSubtype(lowerBounds)        => Return(lowerBounds.reduce(typeUnion), uAny)
             case UmcEffSubsumption(lowerBound)   => Return(lowerBound, uAny)
@@ -547,6 +552,45 @@ class TypingContext
           if newConstraints.isEmpty then assignValue(index, value)
           else updateGuarded(index, Guarded(context, ty, value, newConstraints))
         case _ =>
+
+  private def solveByImplicit(ty: CTerm)(using Γ: Context)(using Σ: Signature): Option[CTerm] =
+    ty match
+      case F(ty, _, u) =>
+        Γ.reverseIterator.zipWithIndex.first:
+          case (binding, i) =>
+            val bindingTy = binding.ty.weaken(i + 1, 0)
+            if bindingTy == ty
+            then Some(Return(Var(i), u))
+            else {
+              // Below we handle implicitly available fields. This is to support "inheritance" of
+              // type classes. A "sub" type class is represented as a corecord with cofields for
+              // each of the "super" type class, where the field has
+              // `isAutomaticallyImplicitlyAvailable` set to true. Hence, for each corecord, we
+              // just traverse the cofields and see if any projection can be applied to match
+              // the target type. Note that we don't do real subtyping here. Composition is
+              // used instead. And if there are multiple cofields matching the target type, we
+              // just throw a failure.
+              bindingTy match
+                case U(CorecordType(qn, args, _)) =>
+                  val fieldArgs = args :+ Var(i) // Var(i) for self binding
+                  val matchingFields = Σ
+                    .getCofields(qn)
+                    .getOrThrow
+                    .filter:
+                      case field if field.isAutomaticallyImplicitlyAvailable =>
+                        field.ty.substLowers(fieldArgs*) == ty
+                      case _ => false
+                  if matchingFields.size > 1 then
+                    throw AmbiguousImplicitCofieldError(ty, bindingTy, matchingFields)
+                  else if matchingFields.isEmpty then None
+                  else
+                    val cofieldName = matchingFields(0).name
+                    // Note that this implementation only support cofield that projects to another
+                    // corecord due to using `thunk` wrapping the thing.
+                    Some(Return(Thunk(projection(Force(Var(i)), cofieldName)), u))
+                case _ => None
+            }
+      case _ => None
 
   private object MetaVarCollector extends Visitor[Unit, Set[Nat]]:
     override def visitMeta

@@ -16,7 +16,9 @@ type TTelescope = List[(Binding[VTerm], Variance)]
 type Context = collection.IndexedSeq[Binding[VTerm]]
 
 extension (ctx: collection.IndexedSeq[Binding[VTerm]])
-  def resolve(ref: VTerm.Var)(using Signature)(using TypingContext): Binding[VTerm] = resolve(ref.idx)
+  def resolve(ref: VTerm.Var)(using Signature)(using TypingContext): Binding[VTerm] = resolve(
+    ref.idx,
+  )
 
   def resolve(idx: Nat)(using Signature)(using TypingContext): Binding[VTerm] =
     val offset = idx + 1
@@ -38,7 +40,8 @@ type EContext = collection.IndexedSeq[(Binding[VTerm], EscapeStatus | Null)]
 
 extension (ctx: collection.IndexedSeq[(Binding[VTerm], Variance)])
   @targetName("resolveT")
-  def resolve(ref: VTerm.Var)(using Signature)(using TypingContext): (Binding[VTerm], Variance) = resolve(ref.idx)
+  def resolve(ref: VTerm.Var)(using Signature)(using TypingContext): (Binding[VTerm], Variance) =
+    resolve(ref.idx)
 
   @targetName("resolveT")
   def resolve(idx: Nat)(using Signature)(using TypingContext): (Binding[VTerm], Variance) =

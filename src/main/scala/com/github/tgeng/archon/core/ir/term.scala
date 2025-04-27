@@ -16,6 +16,8 @@ import scala.collection.immutable.{MultiSet, SeqMap}
 // graded with type of effects, which then affects type checking: any computation that has side
 // effects would not reduce during type checking.
 
+/** This is to aid escape analysis of effect instance variables.
+  */
 enum EscapeStatus extends Ordered[EscapeStatus]:
   /** The variable is consumed locally */
   case EsLocal
@@ -43,15 +45,18 @@ enum EscapeStatus extends Ordered[EscapeStatus]:
 
   override def compare(that: EscapeStatus): Nat = this.ordinal - that.ordinal
 
-case class Binding[+T](ty: T, usage: T)(val name: Ref[Name]):
+case class Binding[+T](ty: T, usage: T)(val name: Ref[Name], val isImplicitlyAvailable: Boolean):
   def map[S](f: T => S): Binding[S] = Binding(f(ty), f(usage))(name)
 
 object Binding:
   def apply[T](ty: T, usage: T)(name: Ref[Name]): Binding[T] =
-    new Binding(ty, usage)(name)
+    new Binding(ty, usage)(name, false)
+
+  def apply[T](ty: T, usage: T)(name: Ref[Name], isImplicitlyAvailable: Boolean): Binding[T] =
+    new Binding(ty, usage)(name, isImplicitlyAvailable)
 
   def apply(ty: VTerm, usage: Usage = Usage.UAny)(name: Ref[Name]): Binding[VTerm] =
-    new Binding(ty, VTerm.UsageLiteral(usage))(name)
+    new Binding(ty, VTerm.UsageLiteral(usage))(name, false)
 
 /** Heap key is simply a unique value that identifies a handler.
   */
@@ -777,7 +782,7 @@ object CTerm:
   def redex(c: CTerm, args: VTerm*)(using SourceInfo): CTerm = redex(c, args)
 
   @targetName("redexFromProjection")
-  def redex(c: CTerm, cofieldName: Name)(using SourceInfo): CTerm =
+  def projection(c: CTerm, cofieldName: Name)(using SourceInfo): CTerm =
     redex(c, Elimination.EProj(cofieldName))
 
   def Application(fun: CTerm, arg: VTerm)(using SourceInfo): CTerm =

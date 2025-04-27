@@ -689,6 +689,7 @@ private def elaborateDefBody
                           // Here we need to multiply the component usage by the usage of X at the split
                           binding.copy(usage = UsageProd(xUsage.weaken(i, 0), binding.usage))(
                             binding.name,
+                            binding.isImplicitlyAvailable,
                           ),
                         )
 

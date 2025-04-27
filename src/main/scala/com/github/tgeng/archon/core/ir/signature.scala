@@ -21,9 +21,9 @@ enum Declaration:
     (
       qn: QualifiedName,
       context: TContext,
-      /* binding: + context */
+      // binding: + context
       tIndexTys: Telescope,
-      /* binding: + context */
+      // binding: + context
       level: VTerm,
       interfaceScope: QualifiedName,
       implementationScope: QualifiedName,
@@ -32,7 +32,7 @@ enum Declaration:
     (
       qn: QualifiedName,
       context: TContext,
-      /* binding += context */
+      // binding += context
       level: VTerm,
       selfBinding: Binding[VTerm],
       interfaceScope: QualifiedName,
@@ -43,7 +43,7 @@ enum Declaration:
     (
       qn: QualifiedName,
       context: EContext,
-      /* binding += context */
+      // binding += context
       ty: CTerm,
       interfaceScope: QualifiedName,
       implementationScope: QualifiedName,
@@ -74,16 +74,34 @@ import com.github.tgeng.archon.core.ir.Declaration.*
 case class Constructor
   (
     name: Name,
-    paramTys: Telescope = Nil, /* binding += context */
+    // binding += context
+    paramTys: Telescope = Nil,
     /** Arguments passed to the data type constructor. The length should be identical with
       * `tIndexTys`. Hence, for non-indexed type this should just be `Nil`. For indexed families,
       * the argument here can be any expressions. For example, for `Vec (A: Type) : (n: Nat) ->
       * Type`, this would be [0] for constructor `Nil` and `[n + 1]` for constructor `Cons`.
       */
-    tArgs: Arguments = Nil, /* binding += context + paramTys */
+    // binding += context + paramTys
+    tArgs: Arguments = Nil,
   )
 
-case class Cofield(name: Name, /* binding += context + 1 for self */ ty: CTerm)
+/** @param isImplicit
+  *   true if this field should be made implicitly available automatically when the record is made
+  *   implicitly available. This is useful in implementing interface dependencies. For example,
+  *   things like `interface Monad m => MonadState s (m: Type -> Type) | m` in Idris is represented
+  *   as a corecord MonadState with the following 3 fields, where the first one is just a projection
+  *   exposing the underlying Monad implementation. This special cofield would have
+  *   `isAutomaticallyImplicitlyAvailable` set to true.
+  *
+  *   - _implicit_monad_1: Monad m
+  *   - get: m s
+  *   - put: s -> m ()
+  */
+case class Cofield
+  (
+    name: Name, /* binding += context + 1 for self */ ty: CTerm,
+    isAutomaticallyImplicitlyAvailable: Boolean = false,
+  )
 
 case class Clause
   (

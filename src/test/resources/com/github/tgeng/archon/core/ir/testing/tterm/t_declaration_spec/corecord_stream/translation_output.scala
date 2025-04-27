@@ -12,7 +12,11 @@ List(
       ) @ "CType l"
     ) @ "ε",
     cofields = List(
-      Cofield(name = n"head", ty = Def(qn = qn"__unresolved__.Nat") @ "Nat"),
+      Cofield(
+        name = n"head",
+        ty = Def(qn = qn"__unresolved__.Nat") @ "Nat",
+        isAutomaticallyImplicitlyAvailable = false
+      ),
       Cofield(
         name = n"tail",
         ty = FunctionType(
@@ -55,7 +59,8 @@ List(
           ) @ "Eq Nat m (head self) -> CStream",
           effects = Collapse(cTm = Def(qn = qn"archon.builtin.effects.total")),
           escapeStatus = EsUnknown
-        ) @ "m: Nat -> Eq Nat m (head self) -> CStream"
+        ) @ "m: Nat -> Eq Nat m (head self) -> CStream",
+        isAutomaticallyImplicitlyAvailable = false
       )
     ),
     selfName = n"self",

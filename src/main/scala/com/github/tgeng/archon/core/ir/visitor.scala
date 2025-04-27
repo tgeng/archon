@@ -328,7 +328,7 @@ trait TermVisitor[C, R]:
     val handlerParams = operation.paramTys
       .substLowers(eff._2*)
       .zip(handlerImpl.boundNames)
-      .map((binding, name) => binding.copy()(name))
+      .map((binding, name) => binding.copy()(name, binding.isImplicitlyAvailable))
     withTelescope(parameterBinding +: handlerParams) {
       combine(
         (Seq(visitCTerm(handlerImpl.body), visitCTerm(handlerImpl.bodyTy)) ++
@@ -924,7 +924,7 @@ trait TermTransformer[C]:
     val handlerParams = operation.paramTys
       .substLowers(eff._2*)
       .zip(handlerImpl.boundNames)
-      .map((binding, name) => binding.copy()(name))
+      .map((binding, name) => binding.copy()(name, binding.isImplicitlyAvailable))
     withTelescope(handlerParams) {
       handlerImpl.copy(body = transformCTerm(handlerImpl.body))(handlerImpl.boundNames)
     }
